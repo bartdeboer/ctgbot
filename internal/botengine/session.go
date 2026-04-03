@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -59,14 +60,13 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 		"--label", fmt.Sprintf("codextgbot.thread_id=%d", threadID),
 		"--env", "HOME=" + e.Config.ContainerHomePath(),
 		"--env", "CODEX_HOME=" + e.Config.ContainerHomePath(),
+		"--env", "HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
 		"--workdir", e.Config.ContainerWorkspacePath(),
 		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", workspaceHostPath, e.Config.ContainerWorkspacePath()),
 		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", homeDir, e.Config.ContainerHomePath()),
 	}
-
-	hostbridgeSocket := e.Config.HostbridgeSocketPath()
-	if hostbridgeSocket != "" {
-		args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", hostbridgeSocket, e.Config.ContainerHostbridgeSocketPath()))
+	if runtime.GOOS == "linux" {
+		args = append(args, "--add-host", "host.docker.internal:host-gateway")
 	}
 
 	args = append(args, e.Config.DockerImage(), "tail", "-f", "/dev/null")
@@ -118,6 +118,7 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *Conversation, pr
 		"exec",
 		"-e", "HOME=" + conv.ContainerHome,
 		"-e", "CODEX_HOME=" + conv.ContainerHome,
+		"-e", "HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
 		"-w", conv.ContainerWorkspace,
 		conv.ContainerName,
 		"codex",
@@ -144,11 +145,8 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *Conversation, pr
 	lastMessage = strings.TrimSpace(lastMessage)
 
 	if err != nil {
-		if lastMessage != "" {
+		if readErr == nil && lastMessage != "" {
 			return lastMessage, fmt.Errorf("codex exec: %w", err)
-		}
-		if readErr == nil && strings.TrimSpace(lastMessage) != "" {
-			return strings.TrimSpace(lastMessage), fmt.Errorf("codex exec: %w", err)
 		}
 		return "", fmt.Errorf("codex exec: %w: %s", err, strings.TrimSpace(cmdOut))
 	}
@@ -162,10 +160,7 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *Conversation, pr
 }
 
 func (e *SessionExecutor) bootstrapPrompt(conv *Conversation, userPrompt string) string {
-	hostbridge := "The `hostbridge` command is not mounted in this container."
-	if e.Config.HostbridgeSocketPath() != "" {
-		hostbridge = fmt.Sprintf("If you need host-system access, use the `hostbridge` CLI via the mounted socket at %s.", e.Config.ContainerHostbridgeSocketPath())
-	}
+	hostbridge := fmt.Sprintf("If you need host-system access, the `hostbridge` CLI is available and is configured to try TCP at %s. It is still experimental in Telegram sessions.", e.Config.ContainerHostbridgeTCPAddr())
 
 	return strings.TrimSpace(fmt.Sprintf(
 		"You are replying to a user through a Telegram bot.\nKeep responses concise and practical because long replies will be chunked into Telegram messages.\nYour workspace is mounted at %s.\n%s\n\nUser message:\n%s",
@@ -219,11 +214,14 @@ sandbox_mode = "workspace-write"
 approval_policy = "never"
 project_root_markers = []
 
+[tools]
+web_search = false
+
 [sandbox_workspace_write]
 exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 writable_roots = [%q]
-network_access = false
+network_access = true
 `, cfg.ContainerWorkspacePath())) + "\n"
 	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
 		return err

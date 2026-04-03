@@ -27,11 +27,11 @@ func main() {
 
 	r := clir.New()
 	r.Routes(func(b *clir.Builder) {
-		b.Handle("serve", "Serve the hostbridge controller over a Unix socket", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("hostbridge-controller serve", flag.ContinueOnError)
+		b.Handle("serve", "Serve the hostbridge controller over TCP", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("tcphostbridge serve", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 
-			socketPath := fs.String("socket", getenv("HOSTBRIDGE_SOCKET", "/run/hostbridge/bridge.sock"), "Unix socket path")
+			addr := fs.String("addr", getenv("HOSTBRIDGE_ADDR", "127.0.0.1:4567"), "TCP listen address")
 			timeoutSec := fs.Int("default-timeout-sec", 30, "Default timeout in seconds")
 			var allow allowFlag
 			fs.Var(&allow, "allow", "Additional allowed command mapping in the form name=/absolute/path")
@@ -42,10 +42,9 @@ func main() {
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			defer func() { _ = hostbridge.CleanupUnixSocket(*socketPath) }()
 
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			return hostbridge.Serve(ctx, "unix", *socketPath, *timeoutSec, allow.Commands(), logger)
+			return hostbridge.Serve(ctx, "tcp", *addr, *timeoutSec, allow.Commands(), logger)
 		})
 	})
 
@@ -107,9 +106,9 @@ func getenv(key, fallback string) string {
 }
 
 func printHelp() {
-	fmt.Fprintln(os.Stdout, "usage: hostbridge-controller serve [--socket PATH] [--allow name=/absolute/path]")
+	fmt.Fprintln(os.Stdout, "usage: tcphostbridge serve [--addr HOST:PORT] [--allow name=/absolute/path]")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "examples:")
-	fmt.Fprintln(os.Stdout, "  hostbridge-controller serve")
-	fmt.Fprintln(os.Stdout, "  hostbridge-controller serve --allow ls=/bin/ls")
+	fmt.Fprintln(os.Stdout, "  tcphostbridge serve")
+	fmt.Fprintln(os.Stdout, "  tcphostbridge serve --addr 127.0.0.1:4567 --allow ls=/bin/ls")
 }

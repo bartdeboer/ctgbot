@@ -59,7 +59,7 @@ func main() {
 				return fmt.Errorf("project_dir not configured; run `go run ./cmd/codextgbot install` from the codextgbot source repo first")
 			}
 
-			cmd := exec.Command("go", "install", "./cmd/codextgbot", "./cmd/hostbridge", "./cmd/hostbridge-controller")
+			cmd := exec.Command("go", "install", "./cmd/codextgbot", "./cmd/hostbridge", "./cmd/hostbridge-controller", "./cmd/tcphostbridge")
 			cmd.Dir = projectDir
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			return cmd.Run()

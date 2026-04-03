@@ -9,11 +9,11 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} go build -o /out/hostbr
 
 FROM node:22-alpine
 
-RUN apk add --no-cache ca-certificates git ripgrep curl libc6-compat \
+RUN apk add --no-cache ca-certificates git ripgrep curl libc6-compat bubblewrap \
     && npm install -g @openai/codex \
     && npm cache clean --force
 
-COPY --from=hostbridge-build /out/hostbridge /usr/local/bin/hostbridge
+COPY --from=hostbridge-build /out/hostbridge /usr/bin/hostbridge
 
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]

@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 	"github.com/bartdeboer/go-codextgbot/internal/botengine"
+	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
 )
 
 func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
@@ -65,7 +68,35 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			return tb.Run(context.Background())
+			runCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			ln, err := hostbridge.Listen("tcp", cfg.HostbridgeTCPListenAddr())
+			if err != nil {
+				return fmt.Errorf("start tcphostbridge listener: %w", err)
+			}
+
+			bridgeErrCh := make(chan error, 1)
+			go func() {
+				bridgeErrCh <- hostbridge.ServeListener(runCtx, ln, 30, nil, logger)
+			}()
+
+			botErrCh := make(chan error, 1)
+			go func() {
+				botErrCh <- tb.Run(runCtx)
+			}()
+
+			select {
+			case err := <-bridgeErrCh:
+				stop()
+				if err != nil {
+					return fmt.Errorf("tcphostbridge runtime: %w", err)
+				}
+				return nil
+			case err := <-botErrCh:
+				stop()
+				return err
+			}
 		})
 	})
 }

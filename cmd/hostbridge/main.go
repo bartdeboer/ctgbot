@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/gob"
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -28,25 +27,21 @@ func main() {
 	r := clir.New()
 	r.Routes(func(b *clir.Builder) {
 		b.Handle("run <command>", "Run a whitelisted host command over the bridge socket", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("hostbridge run", flag.ContinueOnError)
-			fs.SetOutput(os.Stdout)
-
-			socketPath := fs.String("socket", getenv("HOSTBRIDGE_SOCKET", "/run/hostbridge/bridge.sock"), "Unix socket path")
-			timeoutSec := fs.Int("timeout-sec", 30, "Command timeout in seconds")
-			cwd := fs.String("cwd", "", "Optional working directory on the host")
-
-			if err := fs.Parse(req.Extra); err != nil {
-				return err
-			}
-
 			stdinData, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				return fmt.Errorf("read stdin: %w", err)
 			}
 
-			conn, err := net.Dial("unix", *socketPath)
+			network := "unix"
+			address := getenv("HOSTBRIDGE_SOCKET", "/run/hostbridge/bridge.sock")
+			if tcpAddr := getenv("HOSTBRIDGE_ADDR", ""); tcpAddr != "" {
+				network = "tcp"
+				address = tcpAddr
+			}
+
+			conn, err := net.Dial(network, address)
 			if err != nil {
-				return fmt.Errorf("connect socket %s: %w", *socketPath, err)
+				return fmt.Errorf("connect %s %s: %w", network, address, err)
 			}
 			defer conn.Close()
 
@@ -55,10 +50,9 @@ func main() {
 
 			payload := hostbridge.Request{
 				Command: req.Params["command"],
-				Args:    fs.Args(),
+				Args:    req.Extra,
 				Stdin:   stdinData,
-				Cwd:     strings.TrimSpace(*cwd),
-				Timeout: *timeoutSec,
+				Timeout: 30,
 			}
 
 			if err := enc.Encode(payload); err != nil {
@@ -112,9 +106,12 @@ func isHostbridgeManagementCommand(arg string) bool {
 func printHostbridgeHelp() {
 	fmt.Fprintln(os.Stdout, "usage: hostbridge <command> [args...]")
 	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "environment:")
+	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_ADDR     TCP address (for example host.docker.internal:4567)")
+	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_SOCKET   Unix socket path (default /run/hostbridge/bridge.sock)")
+	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "examples:")
 	fmt.Fprintln(os.Stdout, "  hostbridge ls -la")
-	fmt.Fprintln(os.Stdout, "  hostbridge run --socket /run/hostbridge/bridge.sock ls -la")
 }
 
 func getenv(key, fallback string) string {

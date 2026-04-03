@@ -8,15 +8,17 @@ The project has three major responsibilities:
 
 - run Codex in a reusable standalone Docker profile via `codextgbot codex`
 - run Codex conversations per Telegram chat/thread via `codextgbot telegram monitor`
-- provide a host-command bridge via `hostbridge` and `hostbridge-controller`
+- provide a host-command bridge via `hostbridge`, `hostbridge-controller`, and `tcphostbridge`
 
 ## Repo Shape
 
 - `cmd/codextgbot`: main CLI entrypoint
 - `cmd/hostbridge`: container-side hostbridge client
 - `cmd/hostbridge-controller`: host-side socket controller
+- `cmd/tcphostbridge`: host-side TCP controller
 - `cmd/pack`: generates the embedded Docker build context tarball
 - `internal/botengine`: Telegram bot, config, session runtime, Codex runner, image builder
+- `internal/hostbridge`: shared hostbridge protocol and controller runtime
 - `internal/containerassets`: embeds `src.tar.gz` for Docker image builds
 - `docker/Dockerfile`: source Dockerfile for the embedded image build context
 
@@ -33,6 +35,10 @@ The project has three major responsibilities:
 
 - `go run ./cmd/codextgbot telegram monitor`
   Starts the Telegram bot loop.
+  This now also starts an in-process TCP hostbridge controller for Telegram conversations.
+
+- `go run ./cmd/tcphostbridge`
+  Starts the hostbridge controller over TCP.
 
 - `go run ./cmd/codextgbot image build --no-cache`
   Rebuilds the Docker image.
@@ -83,6 +89,9 @@ Telegram conversations currently rely on:
 - Codex `workspace-write` mode inside the container
 - explicit chat `config.toml` written into `./chats/<id>/.codex/config.toml`
 - `writable_roots = ["/workspace"]`
+- TCP hostbridge access via `HOSTBRIDGE_ADDR=host.docker.internal:4567`
+- `network_access = true` so the TCP hostbridge path can be reached from Telegram sessions
+- the container installs `hostbridge` in `/usr/bin/hostbridge` because that location works with Codex's shell runner
 
 The conversation container currently runs with:
 
