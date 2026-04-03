@@ -71,7 +71,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			runCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			ln, err := hostbridge.Listen("tcp", cfg.HostbridgeTCPListenAddr())
+			ln, err := hostbridge.Listen(cfg.HostbridgeTCPListenAddr())
 			if err != nil {
 				return fmt.Errorf("start tcphostbridge listener: %w", err)
 			}

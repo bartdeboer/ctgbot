@@ -133,9 +133,6 @@ func (m *CodexManager) RunCLI(ctx context.Context, workdir string, args []string
 	if isTerminal(os.Stdin) && isTerminal(os.Stdout) {
 		dockerArgs = append(dockerArgs, "-t")
 	}
-	if hostbridgeSocket := m.Config.HostbridgeSocketPath(); hostbridgeSocket != "" {
-		dockerArgs = append(dockerArgs, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", hostbridgeSocket, m.Config.ContainerHostbridgeSocketPath()))
-	}
 	if term := strings.TrimSpace(os.Getenv("TERM")); term != "" {
 		dockerArgs = append(dockerArgs, "--env", "TERM="+term)
 	}

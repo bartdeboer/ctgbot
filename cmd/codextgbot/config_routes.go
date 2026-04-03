@@ -28,7 +28,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			setDockerImage := fs.String("set-docker-image", "", "Persist docker.image into config")
 			setDockerCLIContainerName := fs.String("set-docker-cli-container-name", "", "Persist docker.cli_container_name into config")
 			setWorkspaceHostPath := fs.String("set-workspace-host-path", "", "Persist docker.workspace_host_path into config")
-			setHostbridgeSocketPath := fs.String("set-hostbridge-socket-path", "", "Persist docker.hostbridge_socket_path into config")
+			setHostbridgeTCPListenAddr := fs.String("set-hostbridge-tcp-listen-addr", "", "Persist hostbridge.tcp_listen_addr into config")
+			setContainerHostbridgeTCPAddr := fs.String("set-container-hostbridge-tcp-addr", "", "Persist docker.container_hostbridge_tcp_addr into config")
 			setCodexModel := fs.String("set-codex-model", "", "Persist codex.model into config")
 			setCodexCLIHomePath := fs.String("set-codex-cli-home-path", "", "Persist codex.cli_home_host_path into config")
 			setCodexSharedHomePath := fs.String("set-codex-shared-home-path", "", "Deprecated alias for --set-codex-cli-home-path")
@@ -47,7 +48,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				*setDockerImage == "" &&
 				*setDockerCLIContainerName == "" &&
 				*setWorkspaceHostPath == "" &&
-				*setHostbridgeSocketPath == "" &&
+				*setHostbridgeTCPListenAddr == "" &&
+				*setContainerHostbridgeTCPAddr == "" &&
 				*setCodexModel == "" &&
 				*setCodexCLIHomePath == "" &&
 				*setCodexSharedHomePath == "" &&
@@ -67,7 +69,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				fmt.Printf("  docker.image: %q\n", cfg.DockerImage())
 				fmt.Printf("  docker.cli_container_name: %q\n", cfg.DockerCLIContainerName())
 				fmt.Printf("  docker.workspace_host_path: %q\n", cfg.DefaultWorkspaceHostPath())
-				fmt.Printf("  docker.hostbridge_socket_path: %q\n", cfg.HostbridgeSocketPath())
+				fmt.Printf("  hostbridge.tcp_listen_addr: %q\n", cfg.HostbridgeTCPListenAddr())
+				fmt.Printf("  docker.container_hostbridge_tcp_addr: %q\n", cfg.ContainerHostbridgeTCPAddr())
 				fmt.Printf("  codex.model: %q\n", cfg.CodexModel())
 				fmt.Printf("  codex.cli_home_host_path: %q\n", cfg.CodexCLIHomeRoot())
 				fmt.Printf("  codex.login_callback_port: %d (fixed)\n", botengine.CodexLoginCallbackPort)
@@ -113,9 +116,14 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					return fmt.Errorf("persist docker.workspace_host_path: %w", err)
 				}
 			}
-			if *setHostbridgeSocketPath != "" {
-				if err := store.PersistString("docker.hostbridge_socket_path", *setHostbridgeSocketPath); err != nil {
-					return fmt.Errorf("persist docker.hostbridge_socket_path: %w", err)
+			if *setHostbridgeTCPListenAddr != "" {
+				if err := store.PersistString("hostbridge.tcp_listen_addr", *setHostbridgeTCPListenAddr); err != nil {
+					return fmt.Errorf("persist hostbridge.tcp_listen_addr: %w", err)
+				}
+			}
+			if *setContainerHostbridgeTCPAddr != "" {
+				if err := store.PersistString("docker.container_hostbridge_tcp_addr", *setContainerHostbridgeTCPAddr); err != nil {
+					return fmt.Errorf("persist docker.container_hostbridge_tcp_addr: %w", err)
 				}
 			}
 			if *setCodexModel != "" {

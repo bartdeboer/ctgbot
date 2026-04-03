@@ -44,7 +44,7 @@ func main() {
 			defer stop()
 
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			return hostbridge.Serve(ctx, "tcp", *addr, *timeoutSec, allow.Commands(), logger)
+			return hostbridge.Serve(ctx, *addr, *timeoutSec, allow.Commands(), logger)
 		})
 	})
 

@@ -11,11 +11,9 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -24,10 +22,7 @@ type AllowedCommand struct {
 	ArgPolicy func([]string) error
 }
 
-func Serve(ctx context.Context, network, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, logger *log.Logger) error {
-	if strings.TrimSpace(network) == "" {
-		return fmt.Errorf("missing network")
-	}
+func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, logger *log.Logger) error {
 	if strings.TrimSpace(address) == "" {
 		return fmt.Errorf("missing address")
 	}
@@ -41,7 +36,7 @@ func Serve(ctx context.Context, network, address string, defaultTimeoutSec int, 
 		allowed = DefaultAllowedCommands()
 	}
 
-	ln, err := Listen(network, address)
+	ln, err := Listen(address)
 	if err != nil {
 		return err
 	}
@@ -84,31 +79,12 @@ func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, 
 	}
 }
 
-func Listen(network, address string) (net.Listener, error) {
-	switch network {
-	case "unix":
-		if err := os.MkdirAll(filepath.Dir(address), 0o750); err != nil {
-			return nil, fmt.Errorf("mkdir socket dir: %w", err)
-		}
-		_ = os.Remove(address)
-		ln, err := net.Listen("unix", address)
-		if err != nil {
-			return nil, fmt.Errorf("listen on %s: %w", address, err)
-		}
-		if err := os.Chmod(address, 0o660); err != nil {
-			_ = ln.Close()
-			return nil, fmt.Errorf("chmod socket: %w", err)
-		}
-		return ln, nil
-	case "tcp":
-		ln, err := net.Listen("tcp", address)
-		if err != nil {
-			return nil, fmt.Errorf("listen on %s: %w", address, err)
-		}
-		return ln, nil
-	default:
-		return nil, fmt.Errorf("unsupported network: %s", network)
+func Listen(address string) (net.Listener, error) {
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		return nil, fmt.Errorf("listen on %s: %w", address, err)
 	}
+	return ln, nil
 }
 
 func handleConn(conn net.Conn, allowed map[string]AllowedCommand, defaultTimeoutSec int, logger *log.Logger) {
@@ -297,18 +273,4 @@ func (s *safeEncoder) Encode(v any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.enc.Encode(v)
-}
-
-func CleanupUnixSocket(path string) error {
-	if strings.TrimSpace(path) == "" {
-		return nil
-	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
-}
-
-func IsPermissionDenied(err error) bool {
-	return errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES)
 }

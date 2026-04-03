@@ -32,16 +32,10 @@ func main() {
 				return fmt.Errorf("read stdin: %w", err)
 			}
 
-			network := "unix"
-			address := getenv("HOSTBRIDGE_SOCKET", "/run/hostbridge/bridge.sock")
-			if tcpAddr := getenv("HOSTBRIDGE_ADDR", ""); tcpAddr != "" {
-				network = "tcp"
-				address = tcpAddr
-			}
-
-			conn, err := net.Dial(network, address)
+			address := getenv("HOSTBRIDGE_ADDR", "host.docker.internal:4567")
+			conn, err := net.Dial("tcp", address)
 			if err != nil {
-				return fmt.Errorf("connect %s %s: %w", network, address, err)
+				return fmt.Errorf("connect tcp %s: %w", address, err)
 			}
 			defer conn.Close()
 
@@ -107,8 +101,7 @@ func printHostbridgeHelp() {
 	fmt.Fprintln(os.Stdout, "usage: hostbridge <command> [args...]")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "environment:")
-	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_ADDR     TCP address (for example host.docker.internal:4567)")
-	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_SOCKET   Unix socket path (default /run/hostbridge/bridge.sock)")
+	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_ADDR     TCP address (default host.docker.internal:4567)")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "examples:")
 	fmt.Fprintln(os.Stdout, "  hostbridge ls -la")

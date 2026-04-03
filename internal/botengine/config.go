@@ -157,13 +157,6 @@ func (c *Config) DefaultWorkspaceHostPath() string {
 	return absOrEmpty(c.Store.GetString("docker.workspace_host_path", ""))
 }
 
-func (c *Config) HostbridgeSocketPath() string {
-	if c == nil || c.Store == nil {
-		return "/run/hostbridge/bridge.sock"
-	}
-	return absOrEmpty(c.Store.GetString("docker.hostbridge_socket_path", "/run/hostbridge/bridge.sock"))
-}
-
 func (c *Config) HostbridgeTCPListenAddr() string {
 	if c == nil || c.Store == nil {
 		return "127.0.0.1:4567"
@@ -204,17 +197,6 @@ func (c *Config) ContainerHomePath() string {
 	v := strings.TrimSpace(c.Store.GetString("docker.container_home_path", "/codex-home"))
 	if v == "" {
 		return "/codex-home"
-	}
-	return v
-}
-
-func (c *Config) ContainerHostbridgeSocketPath() string {
-	if c == nil || c.Store == nil {
-		return "/run/hostbridge/bridge.sock"
-	}
-	v := strings.TrimSpace(c.Store.GetString("docker.container_hostbridge_socket_path", "/run/hostbridge/bridge.sock"))
-	if v == "" {
-		return "/run/hostbridge/bridge.sock"
 	}
 	return v
 }
