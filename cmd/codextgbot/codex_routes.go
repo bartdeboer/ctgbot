@@ -26,7 +26,7 @@ func registerCodexRoutes(r *clir.Router, store *clistate.Store) {
 		b.Handle("codex signin", "Sign in to Codex inside the bot image and persist auth on the host", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("codex signin", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			deviceAuth := fs.Bool("device-auth", true, "Use device auth flow")
+			deviceAuth := fs.Bool("device-auth", false, "Use device auth flow")
 			withAPIKey := fs.Bool("with-api-key", false, "Read OPENAI_API_KEY from stdin")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err

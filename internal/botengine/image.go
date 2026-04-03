@@ -30,15 +30,11 @@ func (b *ImageBuilder) Build(ctx context.Context, noCache bool) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
-	buildDir, err := os.MkdirTemp("", "codextgbot-image-*")
+	buildContext, err := containerassets.BuildContextTar()
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(buildDir)
-
-	if err := containerassets.WriteBuildContext(buildDir); err != nil {
-		return fmt.Errorf("write embedded build context: %w", err)
-	}
+	defer buildContext.Close()
 
 	args := []string{
 		"build",
@@ -48,13 +44,14 @@ func (b *ImageBuilder) Build(ctx context.Context, noCache bool) error {
 	if noCache {
 		args = append(args, "--no-cache")
 	}
-	args = append(args, buildDir)
+	args = append(args, "-")
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdin = buildContext
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	b.logf("building docker image=%s build_context=%s", b.Config.DockerImage(), buildDir)
+	b.logf("building docker image=%s build_context=embedded_tar", b.Config.DockerImage())
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("docker build: %w", err)
 	}

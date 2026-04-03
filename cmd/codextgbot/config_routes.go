@@ -26,10 +26,12 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 
 			setTelegramToken := fs.String("set-telegram-token", "", "Persist telegram.token into config")
 			setDockerImage := fs.String("set-docker-image", "", "Persist docker.image into config")
+			setDockerCLIContainerName := fs.String("set-docker-cli-container-name", "", "Persist docker.cli_container_name into config")
 			setWorkspaceHostPath := fs.String("set-workspace-host-path", "", "Persist docker.workspace_host_path into config")
 			setHostbridgeSocketPath := fs.String("set-hostbridge-socket-path", "", "Persist docker.hostbridge_socket_path into config")
 			setCodexModel := fs.String("set-codex-model", "", "Persist codex.model into config")
-			setCodexSharedHomePath := fs.String("set-codex-shared-home-path", "", "Persist codex.shared_home_host_path into config")
+			setCodexCLIHomePath := fs.String("set-codex-cli-home-path", "", "Persist codex.cli_home_host_path into config")
+			setCodexSharedHomePath := fs.String("set-codex-shared-home-path", "", "Deprecated alias for --set-codex-cli-home-path")
 			setSessionTimeoutMin := fs.Int("set-session-timeout-min", 0, "Persist session.timeout_min into config")
 			setPollTimeoutSec := fs.Int("set-poll-timeout-sec", 0, "Persist telegram.defaults.poll_timeout_sec into config")
 			setFullAuto := fs.Bool("set-codex-full-auto", true, "Persist codex.full_auto into config")
@@ -43,9 +45,11 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 
 			if *setTelegramToken == "" &&
 				*setDockerImage == "" &&
+				*setDockerCLIContainerName == "" &&
 				*setWorkspaceHostPath == "" &&
 				*setHostbridgeSocketPath == "" &&
 				*setCodexModel == "" &&
+				*setCodexCLIHomePath == "" &&
 				*setCodexSharedHomePath == "" &&
 				*setSessionTimeoutMin == 0 &&
 				*setPollTimeoutSec == 0 &&
@@ -61,10 +65,12 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				fmt.Printf("  project_dir: %q\n", globalStore.GetString("project_dir", ""))
 				fmt.Printf("  telegram.token: %q\n", store.GetString("telegram.token", ""))
 				fmt.Printf("  docker.image: %q\n", cfg.DockerImage())
+				fmt.Printf("  docker.cli_container_name: %q\n", cfg.DockerCLIContainerName())
 				fmt.Printf("  docker.workspace_host_path: %q\n", cfg.DefaultWorkspaceHostPath())
 				fmt.Printf("  docker.hostbridge_socket_path: %q\n", cfg.HostbridgeSocketPath())
 				fmt.Printf("  codex.model: %q\n", cfg.CodexModel())
-				fmt.Printf("  codex.shared_home_host_path: %q\n", cfg.SharedCodexRoot())
+				fmt.Printf("  codex.cli_home_host_path: %q\n", cfg.CodexCLIHomeRoot())
+				fmt.Printf("  codex.login_callback_port: %d (fixed)\n", botengine.CodexLoginCallbackPort)
 				fmt.Printf("  codex.full_auto: %t\n", cfg.CodexFullAuto())
 				fmt.Printf("  telegram.defaults.poll_timeout_sec: %d\n", int(cfg.PollTimeout().Seconds()))
 				fmt.Printf("  session.timeout_min: %d\n", int(cfg.SessionTimeout().Minutes()))
@@ -97,6 +103,11 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					return fmt.Errorf("persist docker.image: %w", err)
 				}
 			}
+			if *setDockerCLIContainerName != "" {
+				if err := store.PersistString("docker.cli_container_name", *setDockerCLIContainerName); err != nil {
+					return fmt.Errorf("persist docker.cli_container_name: %w", err)
+				}
+			}
 			if *setWorkspaceHostPath != "" {
 				if err := store.PersistString("docker.workspace_host_path", *setWorkspaceHostPath); err != nil {
 					return fmt.Errorf("persist docker.workspace_host_path: %w", err)
@@ -112,9 +123,13 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					return fmt.Errorf("persist codex.model: %w", err)
 				}
 			}
-			if *setCodexSharedHomePath != "" {
-				if err := store.PersistString("codex.shared_home_host_path", *setCodexSharedHomePath); err != nil {
-					return fmt.Errorf("persist codex.shared_home_host_path: %w", err)
+			codexHomeOverride := *setCodexCLIHomePath
+			if codexHomeOverride == "" {
+				codexHomeOverride = *setCodexSharedHomePath
+			}
+			if codexHomeOverride != "" {
+				if err := store.PersistString("codex.cli_home_host_path", codexHomeOverride); err != nil {
+					return fmt.Errorf("persist codex.cli_home_host_path: %w", err)
 				}
 			}
 			if *setSessionTimeoutMin != 0 {

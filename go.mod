@@ -20,6 +20,6 @@ require (
 	golang.org/x/text v0.20.0 // indirect
 )
 
-replace github.com/bartdeboer/go-clir => ../go-clir
+// replace github.com/bartdeboer/go-clir => ../go-clir
 
 replace github.com/bartdeboer/go-clistate => ../go-clistate

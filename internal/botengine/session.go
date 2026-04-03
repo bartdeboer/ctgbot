@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
-	"time"
 )
 
 type SessionExecutor struct {
@@ -19,7 +19,10 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 	if e.Config == nil {
 		return nil, fmt.Errorf("missing config")
 	}
-	if err := e.Config.EnsureSharedCodexPaths(); err != nil {
+	if err := e.Config.EnsurePaths(); err != nil {
+		return nil, err
+	}
+	if err := e.Config.EnsureCodexCLIHome(); err != nil {
 		return nil, err
 	}
 	builder := &ImageBuilder{Config: e.Config, Logger: e.Logger}
@@ -27,37 +30,38 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 		return nil, err
 	}
 
-	workspaceHostPath, err := e.Config.ResolveWorkspaceHostPath(workspaceHostPath)
+	workspaceHostPath, err := e.Config.ResolveChatWorkspaceHostPath(chatID, threadID, workspaceHostPath)
 	if err != nil {
 		return nil, err
 	}
 
-	name := fmt.Sprintf("codextgbot-%d-%d-%d", chatID, threadID, time.Now().UTC().Unix())
-	rootDir := e.Config.ConversationRoot(name)
-	homeDir := e.Config.ConversationHomeDir(name)
-	logDir := e.Config.ConversationLogDir(name)
-
-	for _, dir := range []string{rootDir, homeDir, logDir} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, err
-		}
+	folderName, err := e.Config.EnsureChatRuntimePaths(chatID, threadID)
+	if err != nil {
+		return nil, err
+	}
+	containerName := e.Config.ChatContainerName(chatID, threadID)
+	homeDir := e.Config.ChatCodexHomeDir(folderName)
+	if err := ensureConversationCodexHome(e.Config, homeDir); err != nil {
+		return nil, err
+	}
+	if _, err := runCommand(ctx, "", "docker", "rm", "-f", containerName); err != nil {
+		e.logf("ignoring stale container cleanup error for %s: %v", containerName, err)
 	}
 
 	args := []string{
 		"run",
 		"-d",
-		"--name", name,
-		"--hostname", name,
+		"--security-opt", "seccomp=unconfined",
+		"--name", containerName,
+		"--hostname", containerName,
 		"--label", "codextgbot.managed=true",
 		"--label", fmt.Sprintf("codextgbot.chat_id=%d", chatID),
 		"--label", fmt.Sprintf("codextgbot.thread_id=%d", threadID),
 		"--env", "HOME=" + e.Config.ContainerHomePath(),
 		"--env", "CODEX_HOME=" + e.Config.ContainerHomePath(),
-		"--env", "CODEX_SHARED_HOME=" + e.Config.ContainerSharedCodexPath(),
 		"--workdir", e.Config.ContainerWorkspacePath(),
 		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", workspaceHostPath, e.Config.ContainerWorkspacePath()),
 		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", homeDir, e.Config.ContainerHomePath()),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", e.Config.SharedCodexRoot(), e.Config.ContainerSharedCodexPath()),
 	}
 
 	hostbridgeSocket := e.Config.HostbridgeSocketPath()
@@ -65,20 +69,20 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 		args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", hostbridgeSocket, e.Config.ContainerHostbridgeSocketPath()))
 	}
 
-	args = append(args, e.Config.DockerImage(), "/usr/local/bin/codextgbot-init", "tail", "-f", "/dev/null")
+	args = append(args, e.Config.DockerImage(), "tail", "-f", "/dev/null")
 
 	out, err := runCommand(ctx, "", "docker", args...)
 	if err != nil {
 		return nil, fmt.Errorf("docker run: %w: %s", err, strings.TrimSpace(out))
 	}
 
-	e.logf("conversation container started name=%s workspace=%s docker=%s", name, workspaceHostPath, strings.TrimSpace(out))
+	e.logf("conversation container started name=%s workspace=%s docker=%s", containerName, workspaceHostPath, strings.TrimSpace(out))
 
 	return &Conversation{
 		ChatID:             chatID,
 		ThreadID:           threadID,
 		Status:             "active",
-		ContainerName:      name,
+		ContainerName:      containerName,
 		WorkspaceHost:      workspaceHostPath,
 		HomeHost:           homeDir,
 		ContainerWorkspace: e.Config.ContainerWorkspacePath(),
@@ -117,17 +121,17 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *Conversation, pr
 		"-w", conv.ContainerWorkspace,
 		conv.ContainerName,
 		"codex",
+		"-a", "never",
+		"-s", "workspace-write",
 		"exec",
 		"--skip-git-repo-check",
+		"--add-dir", conv.ContainerWorkspace,
 		"--output-last-message", outputPath,
 		"-C", conv.ContainerWorkspace,
 	}
 
 	if model := e.Config.CodexModel(); model != "" {
 		args = append(args, "-m", model)
-	}
-	if e.Config.CodexFullAuto() {
-		args = append(args, "--full-auto")
 	}
 	if conv.Initialized {
 		args = append(args, "resume", "--last", prompt)
@@ -189,4 +193,40 @@ func runCommand(ctx context.Context, dir string, name string, args ...string) (s
 func cleanTextForTelegram(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	return strings.TrimSpace(text)
+}
+
+func ensureConversationCodexHome(cfg *Config, homeDir string) error {
+	if cfg == nil {
+		return fmt.Errorf("missing config")
+	}
+	if err := cfg.EnsureCodexCLIHome(); err != nil {
+		return err
+	}
+	for _, dir := range []string{homeDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	target := filepath.Join(homeDir, "auth.json")
+	if !fileExistsAndNonEmpty(target) && fileExistsAndNonEmpty(cfg.CodexCLIHomeAuthPath()) {
+		if err := copyFile(cfg.CodexCLIHomeAuthPath(), target); err != nil {
+			return err
+		}
+	}
+	configPath := filepath.Join(homeDir, "config.toml")
+	configBody := strings.TrimSpace(fmt.Sprintf(`
+sandbox_mode = "workspace-write"
+approval_policy = "never"
+project_root_markers = []
+
+[sandbox_workspace_write]
+exclude_tmpdir_env_var = false
+exclude_slash_tmp = false
+writable_roots = [%q]
+network_access = false
+`, cfg.ContainerWorkspacePath())) + "\n"
+	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
+		return err
+	}
+	return nil
 }

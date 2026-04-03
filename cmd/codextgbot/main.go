@@ -30,6 +30,25 @@ func main() {
 	registerSessionRoutes(r, store)
 
 	r.Routes(func(b *clir.Builder) {
+		b.Handle("go-generate", "Run go generate for embedded container assets", func(req *clir.Request) error {
+			projectDir := ""
+			if globalStore != nil {
+				projectDir = globalStore.GetProjectDir()
+			}
+			if projectDir == "" {
+				cwd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				projectDir = cwd
+			}
+
+			cmd := exec.CommandContext(req.Context(), "go", "generate", "./internal/containerassets")
+			cmd.Dir = projectDir
+			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+			return cmd.Run()
+		})
+
 		b.Handle("install", "Install codextgbot from project_dir", func(req *clir.Request) error {
 			if globalStore == nil {
 				return fmt.Errorf("global config store is not available")
