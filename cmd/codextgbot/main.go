@@ -1,0 +1,57 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+
+	"github.com/bartdeboer/go-clir"
+	"github.com/bartdeboer/go-clistate"
+)
+
+func main() {
+	store, err := clistate.NewCwd("codextgbot", "config")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: cannot open cwd config: %v\n", err)
+	}
+
+	globalStore, err := clistate.NewGlobal("codextgbot", "config")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: cannot open global config: %v\n", err)
+	}
+
+	r := clir.New()
+
+	registerConfigRoutes(r, store, globalStore)
+	registerImageRoutes(r, store)
+	registerCodexRoutes(r, store)
+	registerTelegramRoutes(r, store)
+	registerSessionRoutes(r, store)
+
+	r.Routes(func(b *clir.Builder) {
+		b.Handle("install", "Install codextgbot from project_dir", func(req *clir.Request) error {
+			if globalStore == nil {
+				return fmt.Errorf("global config store is not available")
+			}
+
+			projectDir := globalStore.GetProjectDir()
+			if projectDir == "" {
+				return fmt.Errorf("project_dir not configured; run `go run ./cmd/codextgbot install` from the codextgbot source repo first")
+			}
+
+			cmd := exec.Command("go", "install", "./cmd/codextgbot", "./cmd/hostbridge", "./cmd/hostbridge-controller")
+			cmd.Dir = projectDir
+			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+			return cmd.Run()
+		})
+	})
+
+	if err := r.Run(context.Background(), os.Args[1:]); err != nil {
+		fmt.Println("error:", err)
+		fmt.Println("usage: codextgbot <command>... [args]")
+		fmt.Println("available commands:")
+		r.PrintHelp(os.Stdout)
+		os.Exit(1)
+	}
+}
