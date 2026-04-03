@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} go build -o /out/hostbr
 
 FROM node:22-alpine
 
-RUN apk add --no-cache ca-certificates git ripgrep curl libc6-compat bubblewrap \
+RUN apk add --no-cache ca-certificates git ripgrep curl libc6-compat \
     && npm install -g @openai/codex \
     && npm cache clean --force
 

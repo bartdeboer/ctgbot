@@ -85,9 +85,6 @@ func (a *TelegramAPIV2) SendMessage(ctx context.Context, chatID int64, threadID 
 		MessageThreadID: threadID,
 		Text:            text,
 	}
-	if replyTo != 0 {
-		p.ReplyParameters = &models.ReplyParameters{MessageID: replyTo}
-	}
 
 	_, err := b.SendMessage(ctx, p)
 	return err
