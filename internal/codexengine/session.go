@@ -49,7 +49,7 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 	containerName := e.Config.ChatContainerName(chatID, threadID)
 	homeDir := e.Config.ChatCodexHomeDir(folderName)
 	chatTLSDir := e.Config.ChatTLSDir(folderName)
-	if err := ensureConversationCodexHome(e.Config, homeDir); err != nil {
+	if err := ensureConversationCodexHome(e.Config, homeDir, e.renderBootstrapInstructions(chatID)); err != nil {
 		return nil, err
 	}
 	if err := hostbridgetls.EnsureChatClientMaterials(e.Config.HostbridgeTLSRoot(), chatTLSDir, containerName); err != nil {
@@ -150,7 +150,7 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 	if conv.Initialized {
 		args = append(args, "resume", "--last", prompt)
 	} else {
-		args = append(args, e.bootstrapPrompt(conv, prompt))
+		args = append(args, strings.TrimSpace(prompt))
 	}
 
 	cmdOut, err := runCommand(ctx, "", "docker", args...)
@@ -172,28 +172,22 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 	return lastMessage, nil
 }
 
-func (e *SessionExecutor) bootstrapPrompt(conv *ChatSession, userPrompt string) string {
-	allowedCommands := strings.Join(hostbridge.AllowedCommandNames(hostbridge.MergeAllowedCommandSpecs(e.Config.ChatHostbridgeAllowedCommandSpecs(conv.ChatID))), ", ")
+func (e *SessionExecutor) renderBootstrapInstructions(chatID int64) string {
+	allowedCommands := strings.Join(hostbridge.AllowedCommandNames(hostbridge.MergeAllowedCommandSpecs(e.Config.ChatHostbridgeAllowedCommandSpecs(chatID))), ", ")
 	if strings.TrimSpace(allowedCommands) == "" {
 		allowedCommands = "<none>"
 	}
 	bootstrapText, err := bootstrapassets.Text(bootstrapassets.TemplateData{
-		Workspace:          conv.ContainerWorkspace,
-		CodexHome:          conv.ContainerHome,
-		HostbridgeAddr:     e.Config.ContainerHostbridgeTCPAddr(),
-		HostbridgeCommands: allowedCommands,
+		Workspace:      e.Config.ContainerWorkspacePath(),
+		CodexHome:      e.Config.ContainerHomePath(),
+		HostbridgeAddr: e.Config.ContainerHostbridgeTCPAddr(),
+		Binaries:       allowedCommands,
 	})
 	if err != nil {
-		bootstrapText = ""
 		e.logf("render bootstrap template failed: %v", err)
+		return ""
 	}
-
-	parts := []string{}
-	if bootstrapText != "" {
-		parts = append(parts, bootstrapText)
-	}
-	parts = append(parts, "User message:\n"+strings.TrimSpace(userPrompt))
-	return strings.Join(parts, "\n\n")
+	return strings.TrimSpace(bootstrapText)
 }
 
 func (e *SessionExecutor) logf(format string, args ...any) {
@@ -216,7 +210,7 @@ func cleanTextForTelegram(text string) string {
 	return strings.TrimSpace(text)
 }
 
-func ensureConversationCodexHome(cfg *appconfig.Config, homeDir string) error {
+func ensureConversationCodexHome(cfg *appconfig.Config, homeDir string, bootstrapText string) error {
 	if cfg == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -234,11 +228,16 @@ func ensureConversationCodexHome(cfg *appconfig.Config, homeDir string) error {
 			return err
 		}
 	}
+	bootstrapPath := filepath.Join(homeDir, "codextgbot-bootstrap.md")
+	if err := os.WriteFile(bootstrapPath, []byte(strings.TrimSpace(bootstrapText)+"\n"), 0o600); err != nil {
+		return err
+	}
 	configPath := filepath.Join(homeDir, "config.toml")
 	configBody := strings.TrimSpace(fmt.Sprintf(`
 sandbox_mode = "workspace-write"
 approval_policy = "never"
 project_root_markers = []
+model_instructions_file = %q
 
 [tools]
 web_search = false
@@ -248,7 +247,7 @@ exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 writable_roots = [%q]
 network_access = true
-`, cfg.ContainerWorkspacePath())) + "\n"
+`, filepath.Join(cfg.ContainerHomePath(), "codextgbot-bootstrap.md"), cfg.ContainerWorkspacePath())) + "\n"
 	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
 		return err
 	}

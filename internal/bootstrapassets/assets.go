@@ -11,10 +11,10 @@ import (
 var bootstrapText string
 
 type TemplateData struct {
-	Workspace          string
-	CodexHome          string
-	HostbridgeAddr     string
-	HostbridgeCommands string
+	Workspace      string
+	CodexHome      string
+	HostbridgeAddr string
+	Binaries       string
 }
 
 func Text(data TemplateData) (string, error) {
