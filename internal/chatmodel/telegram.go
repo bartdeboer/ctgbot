@@ -1,12 +1,13 @@
-package botengine
+package chatmodel
 
 import (
-	"context"
 	"strings"
 	"time"
 )
 
 type TelegramUpdate struct {
+	ID uint `gorm:"primaryKey"`
+
 	ChatID    int64
 	ChatTitle string
 	MessageID int
@@ -16,6 +17,11 @@ type TelegramUpdate struct {
 	LastName  string
 	Username  string
 	UserID    int64
+
+	ResponseText string
+	ErrorText    string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 func (t *TelegramUpdate) UserLabel() string {
@@ -23,9 +29,4 @@ func (t *TelegramUpdate) UserLabel() string {
 		return "@" + t.Username
 	}
 	return strings.TrimSpace(t.FirstName + " " + t.LastName)
-}
-
-type TelegramAPI interface {
-	Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(ctx context.Context, u TelegramUpdate)) error
-	SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string) error
 }

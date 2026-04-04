@@ -1,4 +1,4 @@
-package botengine
+package codexengine
 
 import (
 	"context"
@@ -8,11 +8,12 @@ import (
 	"os/exec"
 	"runtime"
 
+	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
 	"github.com/bartdeboer/go-codextgbot/internal/containerassets"
 )
 
 type ImageBuilder struct {
-	Config *Config
+	Config *appconfig.Config
 	Logger *log.Logger
 }
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -12,8 +11,10 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-codextgbot/internal/botengine"
+	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
+	"github.com/bartdeboer/go-codextgbot/internal/codexengine"
 	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-codextgbot/internal/telegramengine"
 )
 
 func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
@@ -37,7 +38,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			logger := log.New(os.Stdout, "", log.LstdFlags)
 
-			cfg, err := botengine.NewConfig(*stateRoot, store)
+			cfg, err := appconfig.NewConfig(*stateRoot, store)
 			if err != nil {
 				return err
 			}
@@ -50,25 +51,26 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 				resolvedDBPath = cfg.DBPath()
 			}
 
-			db, err := botengine.OpenDB(resolvedDBPath, logger)
+			db, err := codexengine.OpenDB(resolvedDBPath, logger)
 			if err != nil {
 				return err
 			}
 
-			api, err := botengine.NewTelegramAPIV2(token)
+			api, err := telegramengine.NewTelegramAPIV2(token)
 			if err != nil {
 				return err
 			}
 
-			storage := botengine.NewConversationStorage(db)
-			sessions := &botengine.SessionExecutor{Config: cfg, Logger: logger}
-			tb := botengine.NewTelegramBot(api, storage, sessions, cfg, logger)
+			updates := telegramengine.NewUpdateStorage(db)
+			sessions := codexengine.NewSessionStorage(db)
+			executor := &codexengine.SessionExecutor{Config: cfg, Logger: logger}
+			tb := telegramengine.NewTelegramBot(api, updates, sessions, executor, cfg, logger)
 
-			if err := tb.AutoMigrate(context.Background()); err != nil {
+			if err := tb.AutoMigrate(req.Context()); err != nil {
 				return err
 			}
 
-			runCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
 			ln, err := hostbridge.Listen(cfg.HostbridgeTCPListenAddr())

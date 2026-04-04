@@ -16,7 +16,10 @@ The project has three major responsibilities:
 - `cmd/hostbridge`: container-side hostbridge client
 - `cmd/tcphostbridge`: host-side TCP controller
 - `cmd/pack`: generates the embedded Docker build context tarball
-- `internal/botengine`: Telegram bot, config, session runtime, Codex runner, image builder
+- `internal/appconfig`: typed config access and local/global state helpers
+- `internal/chatmodel`: shared conversation and Telegram update types
+- `internal/telegramengine`: Telegram API integration, bot routing, and Telegram event logging
+- `internal/codexengine`: Codex runtime, Docker session execution, image builder, and Codex chat-session state
 - `internal/hostbridge`: shared hostbridge protocol and controller runtime
 - `internal/containerassets`: embeds `src.tar.gz` for Docker image builds
 - `docker/Dockerfile`: source Dockerfile for the embedded image build context
@@ -69,6 +72,11 @@ There are three important state locations:
 
 `chats/` and `./.codextgbot/` are runtime data and are gitignored.
 
+The SQLite DB now has two distinct responsibilities:
+
+- Telegram-side event logging for inbound messages and bot responses/errors
+- Codex-side chat session tracking for active runtime/container state
+
 ## Telegram Model
 
 - All chats are disabled by default until explicitly enabled in config.
@@ -109,13 +117,15 @@ This was needed to get Codex file writes working in the Dockerized Telegram setu
   1. `go run ./cmd/codextgbot go-generate`
   2. `go run ./cmd/codextgbot image build --no-cache`
 
-- `codex signin` depends on the host-side callback relay implemented in `internal/botengine/signin_relay.go`.
+- `codex signin` depends on the host-side callback relay implemented in `internal/codexengine/signin_relay.go`.
   The callback port is fixed at `127.0.0.1:1455`.
 
 ## Editing Guidance
 
 - Keep `cmd/` files focused on `clir` routing.
-- Put logic in `internal/botengine` unless there is a strong reason to split further.
+- Put Telegram transport logic in `internal/telegramengine`.
+- Put Docker/Codex/runtime logic in `internal/codexengine`.
+- Keep config/state access in `internal/appconfig` and shared types in `internal/chatmodel`.
 - Prefer updating the embedded build-context source files and then regenerating `internal/containerassets/src.tar.gz`.
 - Do not commit runtime chat data from `chats/` or local control data from `./.codextgbot/`.
 

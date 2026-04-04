@@ -1,4 +1,4 @@
-package botengine
+package telegramengine
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bartdeboer/go-codextgbot/internal/chatmodel"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
@@ -27,7 +28,7 @@ func NewTelegramAPIV2(token string) (*TelegramAPIV2, error) {
 	return &TelegramAPIV2{token: token}, nil
 }
 
-func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(ctx context.Context, u TelegramUpdate)) error {
+func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(ctx context.Context, u chatmodel.TelegramUpdate)) error {
 	if onUpdate == nil {
 		return fmt.Errorf("onUpdate is nil")
 	}
@@ -38,7 +39,7 @@ func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUp
 				return
 			}
 			msg := upd.Message
-			tupd := TelegramUpdate{
+			tupd := chatmodel.TelegramUpdate{
 				ChatID:    msg.Chat.ID,
 				ChatTitle: msg.Chat.Title,
 				ThreadID:  msg.MessageThreadID,

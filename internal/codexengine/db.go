@@ -1,4 +1,4 @@
-package botengine
+package codexengine
 
 import (
 	"fmt"

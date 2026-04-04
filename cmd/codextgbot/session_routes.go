@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -9,7 +8,8 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-codextgbot/internal/botengine"
+	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
+	"github.com/bartdeboer/go-codextgbot/internal/codexengine"
 )
 
 func registerSessionRoutes(r *clir.Router, store *clistate.Store) {
@@ -23,7 +23,7 @@ func registerSessionRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			cfg, err := botengine.NewConfig("", store)
+			cfg, err := appconfig.NewConfig("", store)
 			if err != nil {
 				return err
 			}
@@ -32,8 +32,8 @@ func registerSessionRoutes(r *clir.Router, store *clistate.Store) {
 			}
 
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			exec := &botengine.SessionExecutor{Config: cfg, Logger: logger}
-			conv, err := exec.StartConversation(context.Background(), 1, 0, *workspace)
+			exec := &codexengine.SessionExecutor{Config: cfg, Logger: logger}
+			conv, err := exec.StartConversation(req.Context(), 1, 0, *workspace)
 			if err != nil {
 				return err
 			}

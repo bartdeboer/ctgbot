@@ -1,4 +1,4 @@
-package botengine
+package telegramengine
 
 import (
 	"context"
@@ -7,31 +7,47 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/go-clir"
+	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
+	"github.com/bartdeboer/go-codextgbot/internal/chatmodel"
+	"github.com/bartdeboer/go-codextgbot/internal/codexengine"
 )
 
 type tgUpdateKey struct{}
+type tgEventKey struct{}
 
 type TelegramBot struct {
 	API      TelegramAPI
-	Storage  *ConversationStorage
-	Sessions *SessionExecutor
-	Config   *Config
+	Updates  *UpdateStorage
+	Sessions *codexengine.SessionStorage
+	Executor *codexengine.SessionExecutor
+	Config   *appconfig.Config
 	Logger   *log.Logger
 	router   *clir.Router
 }
 
-func NewTelegramBot(api TelegramAPI, storage *ConversationStorage, sessions *SessionExecutor, cfg *Config, logger *log.Logger) *TelegramBot {
+func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, sessions *codexengine.SessionStorage, executor *codexengine.SessionExecutor, cfg *appconfig.Config, logger *log.Logger) *TelegramBot {
 	return &TelegramBot{
 		API:      api,
-		Storage:  storage,
+		Updates:  updates,
 		Sessions: sessions,
+		Executor: executor,
 		Config:   cfg,
 		Logger:   logger,
 	}
 }
 
 func (tb *TelegramBot) AutoMigrate(ctx context.Context) error {
-	return tb.Storage.AutoMigrate(ctx)
+	if tb.Updates != nil {
+		if err := tb.Updates.AutoMigrate(ctx); err != nil {
+			return err
+		}
+	}
+	if tb.Sessions != nil {
+		if err := tb.Sessions.AutoMigrate(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (tb *TelegramBot) Run(ctx context.Context) error {
@@ -43,7 +59,7 @@ func (tb *TelegramBot) Run(ctx context.Context) error {
 	}
 
 	tb.router = tb.buildRouter()
-	return tb.API.Run(ctx, tb.Config.PollTimeout(), func(cbCtx context.Context, u TelegramUpdate) {
+	return tb.API.Run(ctx, tb.Config.PollTimeout(), func(cbCtx context.Context, u chatmodel.TelegramUpdate) {
 		tb.handleUpdate(cbCtx, u)
 	})
 }
@@ -52,16 +68,16 @@ func (tb *TelegramBot) buildRouter() *clir.Router {
 	r := clir.New()
 
 	r.Routes(func(b *clir.Builder) {
-		tg := clir.WithContext(b, func(req *clir.Request) (TelegramUpdate, error) {
+		tg := clir.WithContext(b, func(req *clir.Request) (chatmodel.TelegramUpdate, error) {
 			v := req.Context().Value(tgUpdateKey{})
-			u, ok := v.(TelegramUpdate)
+			u, ok := v.(chatmodel.TelegramUpdate)
 			if !ok {
-				return TelegramUpdate{}, fmt.Errorf("missing TelegramUpdate in context")
+				return chatmodel.TelegramUpdate{}, fmt.Errorf("missing TelegramUpdate in context")
 			}
 			return u, nil
 		})
 
-		tg.Handle("new", "Start a new Codex conversation", func(req *clir.Request, u TelegramUpdate) error {
+		tg.Handle("new", "Start a new Codex conversation", func(req *clir.Request, u chatmodel.TelegramUpdate) error {
 			workspace := ""
 			if len(req.Extra) > 0 {
 				workspace = req.Extra[0]
@@ -69,15 +85,15 @@ func (tb *TelegramBot) buildRouter() *clir.Router {
 			return tb.handleNewConversation(req.Context(), u, workspace)
 		})
 
-		tg.Handle("stop", "Stop the active Codex conversation", func(req *clir.Request, u TelegramUpdate) error {
+		tg.Handle("stop", "Stop the active Codex conversation", func(req *clir.Request, u chatmodel.TelegramUpdate) error {
 			return tb.handleStopConversation(req.Context(), u)
 		})
 
-		tg.Handle("status", "Show the active Codex conversation", func(req *clir.Request, u TelegramUpdate) error {
+		tg.Handle("status", "Show the active Codex conversation", func(req *clir.Request, u chatmodel.TelegramUpdate) error {
 			return tb.handleStatus(req.Context(), u)
 		})
 
-		tg.Handle("help", "Show available commands", func(req *clir.Request, u TelegramUpdate) error {
+		tg.Handle("help", "Show available commands", func(req *clir.Request, u chatmodel.TelegramUpdate) error {
 			return tb.replyText(req.Context(), u, "Commands:\n/new [absolute-host-path]\n/status\n/stop\n/help\n\nAny non-command message is sent to the active Codex conversation.")
 		})
 	})
@@ -85,11 +101,20 @@ func (tb *TelegramBot) buildRouter() *clir.Router {
 	return r
 }
 
-func (tb *TelegramBot) handleUpdate(ctx context.Context, u TelegramUpdate) {
+func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpdate) {
 	text := strings.TrimSpace(u.Text)
 	if text == "" {
 		return
 	}
+
+	event := u
+	if tb.Updates != nil {
+		if err := tb.Updates.Create(ctx, &event); err != nil {
+			tb.logf("persisting telegram event failed (chat=%d msg=%d): %v", u.ChatID, u.MessageID, err)
+		}
+	}
+	ctx = context.WithValue(ctx, tgEventKey{}, &event)
+	defer tb.persistEvent(ctx)
 
 	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q text=%q", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), text)
 
@@ -112,32 +137,34 @@ func (tb *TelegramBot) handleUpdate(ctx context.Context, u TelegramUpdate) {
 		}
 		cmdCtx := context.WithValue(ctx, tgUpdateKey{}, u)
 		if err := tb.router.Run(cmdCtx, args); err != nil {
+			tb.recordEventError(ctx, err)
 			_ = tb.replyText(ctx, u, fmt.Sprintf("command error: %v", err))
 		}
 		return
 	}
 
 	if err := tb.handlePrompt(ctx, u, text); err != nil {
+		tb.recordEventError(ctx, err)
 		_ = tb.replyText(ctx, u, fmt.Sprintf("conversation error: %v", err))
 	}
 }
 
-func (tb *TelegramBot) handleNewConversation(ctx context.Context, u TelegramUpdate, workspace string) error {
-	current, err := tb.Storage.GetActive(ctx, u.ChatID, u.ThreadID)
+func (tb *TelegramBot) handleNewConversation(ctx context.Context, u chatmodel.TelegramUpdate, workspace string) error {
+	current, err := tb.Sessions.GetActive(ctx, u.ChatID, u.ThreadID)
 	if err != nil {
 		return err
 	}
 	if current != nil {
-		_ = tb.Sessions.StopConversation(ctx, current)
-		_ = tb.Storage.MarkStopped(ctx, current.ID, "replaced by /new")
+		_ = tb.Executor.StopConversation(ctx, current)
+		_ = tb.Sessions.MarkStopped(ctx, current.ID, "replaced by /new")
 	}
 
-	conv, err := tb.Sessions.StartConversation(ctx, u.ChatID, u.ThreadID, workspace)
+	conv, err := tb.Executor.StartConversation(ctx, u.ChatID, u.ThreadID, workspace)
 	if err != nil {
 		return err
 	}
-	if err := tb.Storage.Create(ctx, conv); err != nil {
-		_ = tb.Sessions.StopConversation(ctx, conv)
+	if err := tb.Sessions.Create(ctx, conv); err != nil {
+		_ = tb.Executor.StopConversation(ctx, conv)
 		return err
 	}
 
@@ -145,25 +172,25 @@ func (tb *TelegramBot) handleNewConversation(ctx context.Context, u TelegramUpda
 	return tb.replyText(ctx, u, msg)
 }
 
-func (tb *TelegramBot) handleStopConversation(ctx context.Context, u TelegramUpdate) error {
-	conv, err := tb.Storage.GetActive(ctx, u.ChatID, u.ThreadID)
+func (tb *TelegramBot) handleStopConversation(ctx context.Context, u chatmodel.TelegramUpdate) error {
+	conv, err := tb.Sessions.GetActive(ctx, u.ChatID, u.ThreadID)
 	if err != nil {
 		return err
 	}
 	if conv == nil {
 		return tb.replyText(ctx, u, "no active conversation")
 	}
-	if err := tb.Sessions.StopConversation(ctx, conv); err != nil {
+	if err := tb.Executor.StopConversation(ctx, conv); err != nil {
 		return err
 	}
-	if err := tb.Storage.MarkStopped(ctx, conv.ID, "stopped by /stop"); err != nil {
+	if err := tb.Sessions.MarkStopped(ctx, conv.ID, "stopped by /stop"); err != nil {
 		return err
 	}
 	return tb.replyText(ctx, u, "conversation stopped")
 }
 
-func (tb *TelegramBot) handleStatus(ctx context.Context, u TelegramUpdate) error {
-	conv, err := tb.Storage.GetActive(ctx, u.ChatID, u.ThreadID)
+func (tb *TelegramBot) handleStatus(ctx context.Context, u chatmodel.TelegramUpdate) error {
+	conv, err := tb.Sessions.GetActive(ctx, u.ChatID, u.ThreadID)
 	if err != nil {
 		return err
 	}
@@ -182,8 +209,8 @@ func (tb *TelegramBot) handleStatus(ctx context.Context, u TelegramUpdate) error
 	return tb.replyText(ctx, u, msg)
 }
 
-func (tb *TelegramBot) handlePrompt(ctx context.Context, u TelegramUpdate, prompt string) error {
-	conv, err := tb.Storage.GetActive(ctx, u.ChatID, u.ThreadID)
+func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpdate, prompt string) error {
+	conv, err := tb.Sessions.GetActive(ctx, u.ChatID, u.ThreadID)
 	if err != nil {
 		return err
 	}
@@ -191,21 +218,21 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u TelegramUpdate, promp
 		return tb.replyText(ctx, u, "no active conversation. Start one with /new")
 	}
 
-	reply, runErr := tb.Sessions.SendPrompt(ctx, conv, prompt)
+	reply, runErr := tb.Executor.SendPrompt(ctx, conv, prompt)
 	if reply != "" {
 		reply = cleanTextForTelegram(reply)
 	}
 
 	if conv.ID != 0 && !conv.Initialized && runErr == nil {
 		conv.Initialized = true
-		_ = tb.Storage.MarkInitialized(ctx, conv.ID)
+		_ = tb.Sessions.MarkInitialized(ctx, conv.ID)
 	}
 	if conv.ID != 0 {
 		lastErr := ""
 		if runErr != nil {
 			lastErr = runErr.Error()
 		}
-		_ = tb.Storage.MarkError(ctx, conv.ID, lastErr)
+		_ = tb.Sessions.MarkError(ctx, conv.ID, lastErr)
 	}
 
 	if reply != "" {
@@ -216,11 +243,12 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u TelegramUpdate, promp
 	return runErr
 }
 
-func (tb *TelegramBot) replyText(ctx context.Context, u TelegramUpdate, text string) error {
+func (tb *TelegramBot) replyText(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
 	text = cleanTextForTelegram(text)
 	if text == "" {
 		text = "(empty response)"
 	}
+	tb.appendEventResponse(ctx, text)
 
 	for _, chunk := range splitTelegramText(text, 3500) {
 		if err := tb.API.SendMessage(ctx, u.ChatID, u.ThreadID, u.MessageID, chunk); err != nil {
@@ -266,4 +294,48 @@ func splitTelegramText(text string, limit int) []string {
 		chunks = append(chunks, text)
 	}
 	return chunks
+}
+
+func cleanTextForTelegram(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	return strings.TrimSpace(text)
+}
+
+func (tb *TelegramBot) appendEventResponse(ctx context.Context, text string) {
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	event, ok := ctx.Value(tgEventKey{}).(*chatmodel.TelegramUpdate)
+	if !ok || event == nil {
+		return
+	}
+	if strings.TrimSpace(event.ResponseText) == "" {
+		event.ResponseText = text
+		return
+	}
+	event.ResponseText += "\n\n" + text
+}
+
+func (tb *TelegramBot) recordEventError(ctx context.Context, err error) {
+	if err == nil {
+		return
+	}
+	event, ok := ctx.Value(tgEventKey{}).(*chatmodel.TelegramUpdate)
+	if !ok || event == nil {
+		return
+	}
+	event.ErrorText = err.Error()
+}
+
+func (tb *TelegramBot) persistEvent(ctx context.Context) {
+	if tb.Updates == nil {
+		return
+	}
+	event, ok := ctx.Value(tgEventKey{}).(*chatmodel.TelegramUpdate)
+	if !ok || event == nil || event.ID == 0 {
+		return
+	}
+	if err := tb.Updates.Save(ctx, event); err != nil {
+		tb.logf("persisting telegram event result failed (id=%d): %v", event.ID, err)
+	}
 }

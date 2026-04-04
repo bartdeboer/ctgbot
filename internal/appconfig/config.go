@@ -1,4 +1,4 @@
-package botengine
+package appconfig
 
 import (
 	"fmt"

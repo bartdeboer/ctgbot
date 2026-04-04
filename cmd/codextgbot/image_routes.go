@@ -1,14 +1,14 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"log"
 	"os"
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-codextgbot/internal/botengine"
+	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
+	"github.com/bartdeboer/go-codextgbot/internal/codexengine"
 )
 
 func registerImageRoutes(r *clir.Router, store *clistate.Store) {
@@ -21,13 +21,13 @@ func registerImageRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			cfg, err := botengine.NewConfig("", store)
+			cfg, err := appconfig.NewConfig("", store)
 			if err != nil {
 				return err
 			}
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			builder := &botengine.ImageBuilder{Config: cfg, Logger: logger}
-			return builder.Build(context.Background(), *noCache)
+			builder := &codexengine.ImageBuilder{Config: cfg, Logger: logger}
+			return builder.Build(req.Context(), *noCache)
 		})
 	})
 }

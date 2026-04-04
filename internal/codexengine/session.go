@@ -1,22 +1,25 @@
-package botengine
+package codexengine
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
 )
 
 type SessionExecutor struct {
-	Config *Config
+	Config *appconfig.Config
 	Logger *log.Logger
 }
 
-func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, threadID int, workspaceHostPath string) (*Conversation, error) {
+func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, threadID int, workspaceHostPath string) (*ChatSession, error) {
 	if e.Config == nil {
 		return nil, fmt.Errorf("missing config")
 	}
@@ -78,10 +81,10 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 
 	e.logf("conversation container started name=%s workspace=%s docker=%s", containerName, workspaceHostPath, strings.TrimSpace(out))
 
-	return &Conversation{
+	return &ChatSession{
 		ChatID:             chatID,
 		ThreadID:           threadID,
-		Status:             "active",
+		Active:             true,
 		ContainerName:      containerName,
 		WorkspaceHost:      workspaceHostPath,
 		HomeHost:           homeDir,
@@ -90,7 +93,7 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 	}, nil
 }
 
-func (e *SessionExecutor) StopConversation(ctx context.Context, conv *Conversation) error {
+func (e *SessionExecutor) StopConversation(ctx context.Context, conv *ChatSession) error {
 	if conv == nil {
 		return nil
 	}
@@ -98,7 +101,7 @@ func (e *SessionExecutor) StopConversation(ctx context.Context, conv *Conversati
 	return err
 }
 
-func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *Conversation, prompt string) (string, error) {
+func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, prompt string) (string, error) {
 	if conv == nil {
 		return "", fmt.Errorf("missing conversation")
 	}
@@ -159,7 +162,7 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *Conversation, pr
 	return lastMessage, nil
 }
 
-func (e *SessionExecutor) bootstrapPrompt(conv *Conversation, userPrompt string) string {
+func (e *SessionExecutor) bootstrapPrompt(conv *ChatSession, userPrompt string) string {
 	hostbridge := fmt.Sprintf("If you need host-system access, the `hostbridge` CLI is available and is configured to try TCP at %s. It is still experimental in Telegram sessions.", e.Config.ContainerHostbridgeTCPAddr())
 
 	return strings.TrimSpace(fmt.Sprintf(
@@ -190,7 +193,7 @@ func cleanTextForTelegram(text string) string {
 	return strings.TrimSpace(text)
 }
 
-func ensureConversationCodexHome(cfg *Config, homeDir string) error {
+func ensureConversationCodexHome(cfg *appconfig.Config, homeDir string) error {
 	if cfg == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -227,4 +230,42 @@ network_access = true
 		return err
 	}
 	return nil
+}
+
+func fileExistsAndNonEmpty(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	return info.Size() > 0
+}
+
+func copyFile(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("expected file, got directory: %s", src)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return os.Chmod(dst, info.Mode().Perm())
 }

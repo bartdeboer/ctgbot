@@ -8,7 +8,7 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-codextgbot/internal/botengine"
+	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
 )
 
 func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *clistate.Store) {
@@ -58,7 +58,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				*enableChatID == 0 &&
 				*disableChatID == 0 &&
 				!*writeFullAuto {
-				cfg, err := botengine.NewConfig("", store)
+				cfg, err := appconfig.NewConfig("", store)
 				if err != nil {
 					return err
 				}
@@ -73,7 +73,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				fmt.Printf("  docker.container_hostbridge_tcp_addr: %q\n", cfg.ContainerHostbridgeTCPAddr())
 				fmt.Printf("  codex.model: %q\n", cfg.CodexModel())
 				fmt.Printf("  codex.cli_home_host_path: %q\n", cfg.CodexCLIHomeRoot())
-				fmt.Printf("  codex.login_callback_port: %d (fixed)\n", botengine.CodexLoginCallbackPort)
+				fmt.Printf("  codex.login_callback_port: %d (fixed)\n", appconfig.CodexLoginCallbackPort)
 				fmt.Printf("  codex.full_auto: %t\n", cfg.CodexFullAuto())
 				fmt.Printf("  telegram.defaults.poll_timeout_sec: %d\n", int(cfg.PollTimeout().Seconds()))
 				fmt.Printf("  session.timeout_min: %d\n", int(cfg.SessionTimeout().Minutes()))
@@ -156,7 +156,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				}
 			}
 			if *enableChatID != 0 {
-				cfg, err := botengine.NewConfig("", store)
+				cfg, err := appconfig.NewConfig("", store)
 				if err != nil {
 					return err
 				}
@@ -165,7 +165,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				}
 			}
 			if *disableChatID != 0 {
-				cfg, err := botengine.NewConfig("", store)
+				cfg, err := appconfig.NewConfig("", store)
 				if err != nil {
 					return err
 				}
