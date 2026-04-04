@@ -59,10 +59,17 @@ func main() {
 				return fmt.Errorf("project_dir not configured; run `go run ./cmd/codextgbot install` from the codextgbot source repo first")
 			}
 
-			cmd := exec.Command("go", "install", "./cmd/codextgbot", "./cmd/hostbridge", "./cmd/tcphostbridge")
-			cmd.Dir = projectDir
-			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-			return cmd.Run()
+			generateCmd := exec.CommandContext(req.Context(), "go", "generate", "./internal/containerassets")
+			generateCmd.Dir = projectDir
+			generateCmd.Stdout, generateCmd.Stderr = os.Stdout, os.Stderr
+			if err := generateCmd.Run(); err != nil {
+				return err
+			}
+
+			installCmd := exec.CommandContext(req.Context(), "go", "install", "./cmd/codextgbot", "./cmd/hostbridge", "./cmd/tcphostbridge")
+			installCmd.Dir = projectDir
+			installCmd.Stdout, installCmd.Stderr = os.Stdout, os.Stderr
+			return installCmd.Run()
 		})
 	})
 
