@@ -22,4 +22,4 @@ require (
 
 // replace github.com/bartdeboer/go-clir => ../go-clir
 
-replace github.com/bartdeboer/go-clistate => ../go-clistate
+// replace github.com/bartdeboer/go-clistate => ../go-clistate

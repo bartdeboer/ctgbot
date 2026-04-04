@@ -20,17 +20,20 @@ type TelegramBot struct {
 	Updates  *UpdateStorage
 	Sessions *codexengine.SessionStorage
 	Executor *codexengine.SessionExecutor
+	Dispatch *Dispatcher
 	Config   *appconfig.Config
 	Logger   *log.Logger
 	router   *clir.Router
 }
 
 func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, sessions *codexengine.SessionStorage, executor *codexengine.SessionExecutor, cfg *appconfig.Config, logger *log.Logger) *TelegramBot {
+	dispatcher := NewDispatcher()
 	return &TelegramBot{
 		API:      api,
 		Updates:  updates,
 		Sessions: sessions,
 		Executor: executor,
+		Dispatch: dispatcher,
 		Config:   cfg,
 		Logger:   logger,
 	}
@@ -116,6 +119,17 @@ func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpd
 	ctx = context.WithValue(ctx, tgEventKey{}, &event)
 	defer tb.persistEvent(ctx)
 
+	key := chatmodel.ChatKey{ChatID: u.ChatID, ThreadID: u.ThreadID}
+	if err := tb.Dispatch.Run(ctx, key, func(runCtx context.Context) error {
+		return tb.handleUpdateSerialized(runCtx, u, text)
+	}); err != nil {
+		tb.recordEventError(ctx, err)
+		tb.logf("telegram update handling failed chat=%d thread=%d msg=%d err=%v", u.ChatID, u.ThreadID, u.MessageID, err)
+	}
+}
+
+func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
+
 	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q text=%q", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), text)
 
 	chatLabel := strings.TrimSpace(u.ChatTitle)
@@ -127,26 +141,27 @@ func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpd
 	}
 	if !tb.Config.ChatEnabled(u.ChatID) {
 		tb.logf("ignoring update from disabled chat=%d title=%q", u.ChatID, chatLabel)
-		return
+		return nil
 	}
 
 	if strings.HasPrefix(text, "/") {
 		args := normalizeTelegramCommand(text)
 		if len(args) == 0 {
-			return
+			return nil
 		}
 		cmdCtx := context.WithValue(ctx, tgUpdateKey{}, u)
 		if err := tb.router.Run(cmdCtx, args); err != nil {
 			tb.recordEventError(ctx, err)
 			_ = tb.replyText(ctx, u, fmt.Sprintf("command error: %v", err))
 		}
-		return
+		return nil
 	}
 
 	if err := tb.handlePrompt(ctx, u, text); err != nil {
 		tb.recordEventError(ctx, err)
 		_ = tb.replyText(ctx, u, fmt.Sprintf("conversation error: %v", err))
 	}
+	return nil
 }
 
 func (tb *TelegramBot) handleNewConversation(ctx context.Context, u chatmodel.TelegramUpdate, workspace string) error {

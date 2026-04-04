@@ -102,6 +102,14 @@ func (c *Config) ChatLogDir(name string) string {
 	return filepath.Join(c.ChatRoot(name), "logs")
 }
 
+func (c *Config) ChatTLSDir(name string) string {
+	return filepath.Join(c.ChatRoot(name), "tls")
+}
+
+func (c *Config) HostbridgeTLSRoot() string {
+	return filepath.Join(c.Root(), "tls")
+}
+
 func (c *Config) TelegramToken() string {
 	if c == nil || c.Store == nil {
 		return ""
@@ -197,6 +205,17 @@ func (c *Config) ContainerHomePath() string {
 	v := strings.TrimSpace(c.Store.GetString("docker.container_home_path", "/codex-home"))
 	if v == "" {
 		return "/codex-home"
+	}
+	return v
+}
+
+func (c *Config) ContainerHostbridgeTLSDir() string {
+	if c == nil || c.Store == nil {
+		return "/etc/codextgbot/hostbridge-tls"
+	}
+	v := strings.TrimSpace(c.Store.GetString("docker.container_hostbridge_tls_dir", "/etc/codextgbot/hostbridge-tls"))
+	if v == "" {
+		return "/etc/codextgbot/hostbridge-tls"
 	}
 	return v
 }
@@ -317,6 +336,7 @@ func (c *Config) EnsureChatRuntimePaths(chatID int64, threadID int) (string, err
 		c.ChatCodexHomeDir(name),
 		c.ChatWorkspaceDir(name),
 		c.ChatLogDir(name),
+		c.ChatTLSDir(name),
 	} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return "", err

@@ -54,8 +54,7 @@ func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUp
 			}
 			onUpdate(hctx, tupd)
 		}),
-		bot.WithNotAsyncHandlers(),
-		bot.WithWorkers(1),
+		bot.WithWorkers(16),
 	}
 
 	if pollTimeout > 0 {

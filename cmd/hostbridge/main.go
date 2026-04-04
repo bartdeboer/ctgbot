@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
 )
 
 func main() {
@@ -33,8 +35,12 @@ func main() {
 			}
 
 			address := getenv("HOSTBRIDGE_ADDR", "host.docker.internal:4567")
-			conn, err := net.Dial("tcp", address)
+			tlsDir := getenv("HOSTBRIDGE_TLS_DIR", "")
+			conn, err := connectHostbridge(address, tlsDir)
 			if err != nil {
+				if strings.TrimSpace(tlsDir) != "" {
+					return fmt.Errorf("connect tls %s: %w", address, err)
+				}
 				return fmt.Errorf("connect tcp %s: %w", address, err)
 			}
 			defer conn.Close()
@@ -102,6 +108,7 @@ func printHostbridgeHelp() {
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "environment:")
 	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_ADDR     TCP address (default host.docker.internal:4567)")
+	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_TLS_DIR  Optional directory containing ca.crt, client.crt, client.key")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "examples:")
 	fmt.Fprintln(os.Stdout, "  hostbridge ls -la")
@@ -112,4 +119,15 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func connectHostbridge(address string, tlsDir string) (net.Conn, error) {
+	if strings.TrimSpace(tlsDir) == "" {
+		return net.Dial("tcp", address)
+	}
+	tlsConfig, err := hostbridgetls.LoadClientTLSConfig(tlsDir)
+	if err != nil {
+		return nil, err
+	}
+	return tls.Dial("tcp", address, tlsConfig)
 }

@@ -1,5 +1,7 @@
 github.com/bartdeboer/go-clir v0.0.5 h1:yUPU8qEMQ9diZCKAGADuS7mR/rVT9aLfRVkey6n5PpA=
 github.com/bartdeboer/go-clir v0.0.5/go.mod h1:lkwboeLVJIle5KeU9oHbdM8fsy+CDfgejVrwLhAW7XY=
+github.com/bartdeboer/go-clistate v0.0.4 h1:imJdL6NXNfsPJvGzS0zW5H3XgTupMPJntA7D1ckp88s=
+github.com/bartdeboer/go-clistate v0.0.4/go.mod h1:aokoc6hgbN5JryA3kfyF60CZacZyLmKNaPYu3qVbllg=
 github.com/bartdeboer/words v0.0.3 h1:kcTX6Go4p4WYNp3l7887YbPMuV/vRIhiMKDuxEdM/to=
 github.com/bartdeboer/words v0.0.3/go.mod h1:PZTW5H9DV7Fsy6ap/78IrcMRZ7/lwsAAtow2aFXHj9A=
 github.com/go-telegram/bot v1.17.0 h1:Hs0kGxSj97QFqOQP0zxduY/4tSx8QDzvNI9uVRS+zmY=

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
+	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
 )
 
 type SessionExecutor struct {
@@ -45,8 +46,12 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 	}
 	containerName := e.Config.ChatContainerName(chatID, threadID)
 	homeDir := e.Config.ChatCodexHomeDir(folderName)
+	chatTLSDir := e.Config.ChatTLSDir(folderName)
 	if err := ensureConversationCodexHome(e.Config, homeDir); err != nil {
 		return nil, err
+	}
+	if err := hostbridgetls.EnsureChatClientMaterials(e.Config.HostbridgeTLSRoot(), chatTLSDir, containerName); err != nil {
+		return nil, fmt.Errorf("ensure hostbridge tls client materials: %w", err)
 	}
 	if _, err := runCommand(ctx, "", "docker", "rm", "-f", containerName); err != nil {
 		e.logf("ignoring stale container cleanup error for %s: %v", containerName, err)
@@ -64,9 +69,11 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 		"--env", "HOME=" + e.Config.ContainerHomePath(),
 		"--env", "CODEX_HOME=" + e.Config.ContainerHomePath(),
 		"--env", "HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
+		"--env", "HOSTBRIDGE_TLS_DIR=" + e.Config.ContainerHostbridgeTLSDir(),
 		"--workdir", e.Config.ContainerWorkspacePath(),
 		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", workspaceHostPath, e.Config.ContainerWorkspacePath()),
 		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", homeDir, e.Config.ContainerHomePath()),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", chatTLSDir, e.Config.ContainerHostbridgeTLSDir()),
 	}
 	if runtime.GOOS == "linux" {
 		args = append(args, "--add-host", "host.docker.internal:host-gateway")
@@ -122,6 +129,7 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 		"-e", "HOME=" + conv.ContainerHome,
 		"-e", "CODEX_HOME=" + conv.ContainerHome,
 		"-e", "HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
+		"-e", "HOSTBRIDGE_TLS_DIR=" + e.Config.ContainerHostbridgeTLSDir(),
 		"-w", conv.ContainerWorkspace,
 		conv.ContainerName,
 		"codex",

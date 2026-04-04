@@ -14,6 +14,7 @@ import (
 	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
 	"github.com/bartdeboer/go-codextgbot/internal/codexengine"
 	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
 	"github.com/bartdeboer/go-codextgbot/internal/telegramengine"
 )
 
@@ -73,7 +74,15 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			ln, err := hostbridge.Listen(cfg.HostbridgeTCPListenAddr())
+			if err := hostbridgetls.EnsureServerMaterials(cfg.HostbridgeTLSRoot()); err != nil {
+				return fmt.Errorf("ensure hostbridge tls server materials: %w", err)
+			}
+			tlsConfig, err := hostbridgetls.LoadServerTLSConfig(cfg.HostbridgeTLSRoot())
+			if err != nil {
+				return fmt.Errorf("load hostbridge tls server config: %w", err)
+			}
+
+			ln, err := hostbridge.ListenTLS(cfg.HostbridgeTCPListenAddr(), tlsConfig)
 			if err != nil {
 				return fmt.Errorf("start tcphostbridge listener: %w", err)
 			}

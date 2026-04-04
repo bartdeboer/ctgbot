@@ -3,6 +3,7 @@ package hostbridge
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -20,6 +21,11 @@ import (
 type AllowedCommand struct {
 	Path      string
 	ArgPolicy func([]string) error
+}
+
+type securityTaggedListener struct {
+	net.Listener
+	securityMode string
 }
 
 func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, logger *log.Logger) error {
@@ -59,7 +65,7 @@ func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, 
 		allowed = DefaultAllowedCommands()
 	}
 
-	logger.Printf("hostbridge controller listening on %s://%s", ln.Addr().Network(), ln.Addr().String())
+	logger.Printf("hostbridge controller listening on %s://%s security=%s", ln.Addr().Network(), ln.Addr().String(), listenerSecurityMode(ln))
 
 	go func() {
 		<-ctx.Done()
@@ -80,11 +86,43 @@ func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, 
 }
 
 func Listen(address string) (net.Listener, error) {
+	// Keep hostbridge physically local to the machine. This controller is a
+	// privileged host-command bridge for containers, so binding it anywhere other
+	// than the host loopback interface would expose host command execution beyond
+	// the local machine.
+	if err := validateLoopbackListenAddress(address); err != nil {
+		return nil, err
+	}
 	ln, err := net.Listen("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", address, err)
 	}
-	return ln, nil
+	return &securityTaggedListener{Listener: ln, securityMode: "plain-tcp"}, nil
+}
+
+func ListenTLS(address string, tlsConfig *tls.Config) (net.Listener, error) {
+	if err := validateLoopbackListenAddress(address); err != nil {
+		return nil, err
+	}
+	if tlsConfig == nil {
+		return nil, fmt.Errorf("missing tls config")
+	}
+	ln, err := tls.Listen("tcp", address, tlsConfig)
+	if err != nil {
+		return nil, fmt.Errorf("listen tls on %s: %w", address, err)
+	}
+	return &securityTaggedListener{Listener: ln, securityMode: "tls-mtls"}, nil
+}
+
+func validateLoopbackListenAddress(address string) error {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(address))
+	if err != nil {
+		return fmt.Errorf("invalid listen address %q: %w", address, err)
+	}
+	if host != "127.0.0.1" {
+		return fmt.Errorf("hostbridge must listen on 127.0.0.1 only, got %q", host)
+	}
+	return nil
 }
 
 func handleConn(conn net.Conn, allowed map[string]AllowedCommand, defaultTimeoutSec int, logger *log.Logger) {
@@ -153,7 +191,7 @@ func handleConn(conn net.Conn, allowed map[string]AllowedCommand, defaultTimeout
 		return
 	}
 
-	logger.Printf("hostbridge command=%s args=%q cwd=%q", req.Command, req.Args, req.Cwd)
+	logger.Printf("hostbridge command=%s args=%q cwd=%q security=%s client=%q", req.Command, req.Args, req.Cwd, connectionSecurityMode(conn), connectionClientIdentity(conn))
 
 	go func() {
 		defer stdin.Close()
@@ -262,6 +300,32 @@ func sanitizedEnv(extra map[string]string) []string {
 		base = append(base, k+"="+v)
 	}
 	return base
+}
+
+func listenerSecurityMode(ln net.Listener) string {
+	if tagged, ok := ln.(*securityTaggedListener); ok {
+		return tagged.securityMode
+	}
+	return "unknown"
+}
+
+func connectionSecurityMode(conn net.Conn) string {
+	if _, ok := conn.(*tls.Conn); ok {
+		return "tls-mtls"
+	}
+	return "plain-tcp"
+}
+
+func connectionClientIdentity(conn net.Conn) string {
+	tlsConn, ok := conn.(*tls.Conn)
+	if !ok {
+		return ""
+	}
+	state := tlsConn.ConnectionState()
+	if len(state.PeerCertificates) == 0 {
+		return ""
+	}
+	return state.PeerCertificates[0].Subject.CommonName
 }
 
 type safeEncoder struct {

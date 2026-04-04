@@ -53,6 +53,7 @@ func SelectedFiles() []FileSpec {
 		{Source: "go.sum", Target: "go.sum"},
 		{Source: "cmd/hostbridge/main.go", Target: "cmd/hostbridge/main.go"},
 		{Source: "internal/hostbridge/protocol.go", Target: "internal/hostbridge/protocol.go"},
+		{Source: "internal/hostbridgetls/tls.go", Target: "internal/hostbridgetls/tls.go"},
 	}
 }
 

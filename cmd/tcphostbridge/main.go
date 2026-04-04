@@ -13,6 +13,7 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
 )
 
 func main() {
@@ -32,6 +33,7 @@ func main() {
 			fs.SetOutput(os.Stdout)
 
 			addr := fs.String("addr", getenv("HOSTBRIDGE_ADDR", "127.0.0.1:4567"), "TCP listen address")
+			tlsDir := fs.String("tls-dir", "", "Optional TLS material directory containing ca.crt, ca.key, server.crt, server.key")
 			timeoutSec := fs.Int("default-timeout-sec", 30, "Default timeout in seconds")
 			var allow allowFlag
 			fs.Var(&allow, "allow", "Additional allowed command mapping in the form name=/absolute/path")
@@ -44,7 +46,22 @@ func main() {
 			defer stop()
 
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			return hostbridge.Serve(ctx, *addr, *timeoutSec, allow.Commands(), logger)
+			if strings.TrimSpace(*tlsDir) == "" {
+				return hostbridge.Serve(ctx, *addr, *timeoutSec, allow.Commands(), logger)
+			}
+
+			if err := hostbridgetls.EnsureServerMaterials(*tlsDir); err != nil {
+				return err
+			}
+			tlsConfig, err := hostbridgetls.LoadServerTLSConfig(*tlsDir)
+			if err != nil {
+				return err
+			}
+			ln, err := hostbridge.ListenTLS(*addr, tlsConfig)
+			if err != nil {
+				return err
+			}
+			return hostbridge.ServeListener(ctx, ln, *timeoutSec, allow.Commands(), logger)
 		})
 	})
 
@@ -106,9 +123,12 @@ func getenv(key, fallback string) string {
 }
 
 func printHelp() {
-	fmt.Fprintln(os.Stdout, "usage: tcphostbridge serve [--addr HOST:PORT] [--allow name=/absolute/path]")
+	fmt.Fprintln(os.Stdout, "usage: tcphostbridge serve [--addr 127.0.0.1:PORT] [--tls-dir DIR] [--allow name=/absolute/path]")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, "note: hostbridge enforces loopback-only binds and rejects non-127.0.0.1 addresses.")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "examples:")
 	fmt.Fprintln(os.Stdout, "  tcphostbridge serve")
+	fmt.Fprintln(os.Stdout, "  tcphostbridge serve --tls-dir ./.codextgbot/tls")
 	fmt.Fprintln(os.Stdout, "  tcphostbridge serve --addr 127.0.0.1:4567 --allow ls=/bin/ls")
 }
