@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -74,7 +75,7 @@ func main() {
 						return err
 					}
 				case hostbridge.StreamError:
-					return fmt.Errorf(frame.Message)
+					return errors.New(frame.Message)
 				case hostbridge.StreamExit:
 					if frame.ExitCode != 0 {
 						os.Exit(frame.ExitCode)

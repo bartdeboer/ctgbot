@@ -12,21 +12,24 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 )
 
 type AllowedCommand struct {
-	Path      string
-	ArgPolicy func([]string) error
+	Path string
 }
 
 type securityTaggedListener struct {
 	net.Listener
 	securityMode string
 }
+
+type AllowedCommandResolver func(clientIdentity string) map[string]AllowedCommand
 
 func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, logger *log.Logger) error {
 	if strings.TrimSpace(address) == "" {
@@ -48,10 +51,10 @@ func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed m
 	}
 	defer ln.Close()
 
-	return ServeListener(ctx, ln, defaultTimeoutSec, allowed, logger)
+	return ServeListener(ctx, ln, defaultTimeoutSec, StaticAllowedCommandResolver(allowed), logger)
 }
 
-func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, allowed map[string]AllowedCommand, logger *log.Logger) error {
+func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, resolve AllowedCommandResolver, logger *log.Logger) error {
 	if ln == nil {
 		return fmt.Errorf("missing listener")
 	}
@@ -61,8 +64,8 @@ func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, 
 	if defaultTimeoutSec <= 0 {
 		defaultTimeoutSec = 30
 	}
-	if allowed == nil {
-		allowed = DefaultAllowedCommands()
+	if resolve == nil {
+		resolve = StaticAllowedCommandResolver(nil)
 	}
 
 	logger.Printf("hostbridge controller listening on %s://%s security=%s", ln.Addr().Network(), ln.Addr().String(), listenerSecurityMode(ln))
@@ -81,7 +84,7 @@ func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, 
 			logger.Printf("accept error: %v", err)
 			continue
 		}
-		go handleConn(conn, allowed, defaultTimeoutSec, logger)
+		go handleConn(conn, resolve, defaultTimeoutSec, logger)
 	}
 }
 
@@ -125,7 +128,7 @@ func validateLoopbackListenAddress(address string) error {
 	return nil
 }
 
-func handleConn(conn net.Conn, allowed map[string]AllowedCommand, defaultTimeoutSec int, logger *log.Logger) {
+func handleConn(conn net.Conn, resolve AllowedCommandResolver, defaultTimeoutSec int, logger *log.Logger) {
 	defer conn.Close()
 
 	dec := gob.NewDecoder(conn)
@@ -138,16 +141,16 @@ func handleConn(conn net.Conn, allowed map[string]AllowedCommand, defaultTimeout
 		return
 	}
 
+	clientIdentity := connectionClientIdentity(conn)
+	allowed := resolve(clientIdentity)
+	if allowed == nil {
+		allowed = DefaultAllowedCommands()
+	}
+
 	spec, ok := allowed[req.Command]
 	if !ok {
 		_ = send.Encode(Frame{Kind: StreamError, Message: "command not allowed: " + req.Command})
 		return
-	}
-	if spec.ArgPolicy != nil {
-		if err := spec.ArgPolicy(req.Args); err != nil {
-			_ = send.Encode(Frame{Kind: StreamError, Message: "arg validation failed: " + err.Error()})
-			return
-		}
 	}
 
 	timeout := time.Duration(defaultTimeoutSec) * time.Second
@@ -191,7 +194,7 @@ func handleConn(conn net.Conn, allowed map[string]AllowedCommand, defaultTimeout
 		return
 	}
 
-	logger.Printf("hostbridge command=%s args=%q cwd=%q security=%s client=%q", req.Command, req.Args, req.Cwd, connectionSecurityMode(conn), connectionClientIdentity(conn))
+	logger.Printf("hostbridge command=%s args=%q cwd=%q security=%s client=%q", req.Command, req.Args, req.Cwd, connectionSecurityMode(conn), clientIdentity)
 
 	go func() {
 		defer stdin.Close()
@@ -250,14 +253,6 @@ func DefaultAllowedCommands() map[string]AllowedCommand {
 	if runtime.GOOS == "windows" {
 		allowed["dir"] = AllowedCommand{
 			Path: `C:\Windows\System32\cmd.exe`,
-			ArgPolicy: func(args []string) error {
-				for _, a := range args {
-					if strings.ContainsAny(a, "&|;<>") {
-						return fmt.Errorf("disallowed metacharacter in arg: %q", a)
-					}
-				}
-				return nil
-			},
 		}
 		return allowed
 	}
@@ -272,20 +267,11 @@ func DefaultAllowedCommands() map[string]AllowedCommand {
 		{name: "uname", path: "/usr/bin/uname"},
 	} {
 		if _, err := os.Stat(pair.path); err == nil {
-			allowed[pair.name] = AllowedCommand{Path: pair.path, ArgPolicy: DefaultArgPolicy}
+			allowed[pair.name] = AllowedCommand{Path: pair.path}
 		}
 	}
 
 	return allowed
-}
-
-func DefaultArgPolicy(args []string) error {
-	for _, a := range args {
-		if strings.ContainsAny(a, ";&|<>") {
-			return fmt.Errorf("disallowed metacharacter in arg: %q", a)
-		}
-	}
-	return nil
 }
 
 func sanitizedEnv(extra map[string]string) []string {
@@ -300,6 +286,65 @@ func sanitizedEnv(extra map[string]string) []string {
 		base = append(base, k+"="+v)
 	}
 	return base
+}
+
+func MergeAllowedCommands(extra map[string]string) map[string]AllowedCommand {
+	allowed := DefaultAllowedCommands()
+	for name, path := range extra {
+		name = strings.TrimSpace(name)
+		path = strings.TrimSpace(path)
+		if name == "" || path == "" {
+			continue
+		}
+		allowed[name] = AllowedCommand{Path: path}
+	}
+	return allowed
+}
+
+func MergeAllowedCommandSpecs(specs []string) map[string]AllowedCommand {
+	allowed := DefaultAllowedCommands()
+	for name, spec := range AllowedCommandsFromSpecs(specs) {
+		allowed[name] = spec
+	}
+	return allowed
+}
+
+func AllowedCommandsFromSpecs(specs []string) map[string]AllowedCommand {
+	allowed := map[string]AllowedCommand{}
+	for _, spec := range specs {
+		spec = strings.TrimSpace(spec)
+		if spec == "" {
+			continue
+		}
+		name := filepath.Base(spec)
+		name = strings.TrimSpace(name)
+		if name == "" || name == "." || name == string(filepath.Separator) {
+			continue
+		}
+		allowed[name] = AllowedCommand{Path: spec}
+	}
+	return allowed
+}
+
+func AllowedCommandNames(allowed map[string]AllowedCommand) []string {
+	if len(allowed) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(allowed))
+	for name := range allowed {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func StaticAllowedCommandResolver(allowed map[string]AllowedCommand) AllowedCommandResolver {
+	if allowed == nil {
+		allowed = DefaultAllowedCommands()
+	}
+	return func(string) map[string]AllowedCommand {
+		return allowed
+	}
 }
 
 func listenerSecurityMode(ln net.Listener) string {

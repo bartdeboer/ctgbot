@@ -61,7 +61,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			return hostbridge.ServeListener(ctx, ln, *timeoutSec, allow.Commands(), logger)
+			return hostbridge.ServeListener(ctx, ln, *timeoutSec, hostbridge.StaticAllowedCommandResolver(allow.Commands()), logger)
 		})
 	})
 
@@ -108,11 +108,7 @@ func (f *allowFlag) Set(v string) error {
 }
 
 func (f *allowFlag) Commands() map[string]hostbridge.AllowedCommand {
-	allowed := hostbridge.DefaultAllowedCommands()
-	for name, path := range f.values {
-		allowed[name] = hostbridge.AllowedCommand{Path: path, ArgPolicy: hostbridge.DefaultArgPolicy}
-	}
-	return allowed
+	return hostbridge.MergeAllowedCommands(f.values)
 }
 
 func getenv(key, fallback string) string {

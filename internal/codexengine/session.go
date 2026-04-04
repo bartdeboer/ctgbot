@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
+	"github.com/bartdeboer/go-codextgbot/internal/bootstrapassets"
+	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
 	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
 )
 
@@ -171,14 +173,27 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 }
 
 func (e *SessionExecutor) bootstrapPrompt(conv *ChatSession, userPrompt string) string {
-	hostbridge := fmt.Sprintf("If you need host-system access, the `hostbridge` CLI is available and is configured to try TCP at %s. It is still experimental in Telegram sessions.", e.Config.ContainerHostbridgeTCPAddr())
+	allowedCommands := strings.Join(hostbridge.AllowedCommandNames(hostbridge.MergeAllowedCommandSpecs(e.Config.ChatHostbridgeAllowedCommandSpecs(conv.ChatID))), ", ")
+	if strings.TrimSpace(allowedCommands) == "" {
+		allowedCommands = "<none>"
+	}
+	bootstrapText, err := bootstrapassets.Text(bootstrapassets.TemplateData{
+		Workspace:          conv.ContainerWorkspace,
+		CodexHome:          conv.ContainerHome,
+		HostbridgeAddr:     e.Config.ContainerHostbridgeTCPAddr(),
+		HostbridgeCommands: allowedCommands,
+	})
+	if err != nil {
+		bootstrapText = ""
+		e.logf("render bootstrap template failed: %v", err)
+	}
 
-	return strings.TrimSpace(fmt.Sprintf(
-		"You are replying to a user through a Telegram bot.\nKeep responses concise and practical because long replies will be chunked into Telegram messages.\nYour workspace is mounted at %s.\n%s\n\nUser message:\n%s",
-		conv.ContainerWorkspace,
-		hostbridge,
-		userPrompt,
-	))
+	parts := []string{}
+	if bootstrapText != "" {
+		parts = append(parts, bootstrapText)
+	}
+	parts = append(parts, "User message:\n"+strings.TrimSpace(userPrompt))
+	return strings.Join(parts, "\n\n")
 }
 
 func (e *SessionExecutor) logf(format string, args ...any) {

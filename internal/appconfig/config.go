@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,6 +85,26 @@ func (c *Config) ChatFolderName(chatID int64, threadID int) string {
 
 func (c *Config) ChatContainerName(chatID int64, threadID int) string {
 	return fmt.Sprintf("codextgbot-%d-%d", chatID, threadID)
+}
+
+func (c *Config) ParseChatContainerName(name string) (chatID int64, threadID int, ok bool) {
+	raw := strings.TrimPrefix(strings.TrimSpace(name), "codextgbot-")
+	if raw == "" || raw == name {
+		return 0, 0, false
+	}
+	idx := strings.LastIndex(raw, "-")
+	if idx <= 0 || idx == len(raw)-1 {
+		return 0, 0, false
+	}
+	chatID, err := strconv.ParseInt(raw[:idx], 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	thread64, err := strconv.ParseInt(raw[idx+1:], 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	return chatID, int(thread64), true
 }
 
 func (c *Config) ChatRoot(name string) string {
@@ -185,6 +206,74 @@ func (c *Config) ContainerHostbridgeTCPAddr() string {
 		return "host.docker.internal:4567"
 	}
 	return v
+}
+
+func (c *Config) ChatHostbridgeAllowedCommandSpecs(chatID int64) []string {
+	if c == nil || c.Store == nil {
+		return nil
+	}
+	var out []string
+	if !c.Store.GetStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), &out) {
+		return nil
+	}
+	cleaned := make([]string, 0, len(out))
+	for _, spec := range out {
+		spec = strings.TrimSpace(spec)
+		if spec == "" {
+			continue
+		}
+		cleaned = append(cleaned, spec)
+	}
+	return cleaned
+}
+
+func (c *Config) SetChatHostbridgeAllowedCommand(chatID int64, spec string) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	if chatID == 0 {
+		return fmt.Errorf("chatID is 0")
+	}
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return fmt.Errorf("hostbridge allowed command spec is empty")
+	}
+	if c.Store.GetInt(c.ChatKey(chatID, "chat_id"), 0) == 0 {
+		if err := c.Store.PersistInt(c.ChatKey(chatID, "chat_id"), int(chatID)); err != nil {
+			return err
+		}
+	}
+	commands := c.ChatHostbridgeAllowedCommandSpecs(chatID)
+	for _, existing := range commands {
+		if existing == spec {
+			return nil
+		}
+	}
+	commands = append(commands, spec)
+	sort.Strings(commands)
+	return c.Store.PersistStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), commands)
+}
+
+func (c *Config) RemoveChatHostbridgeAllowedCommand(chatID int64, name string) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("hostbridge allowed command name is empty")
+	}
+	commands := c.ChatHostbridgeAllowedCommandSpecs(chatID)
+	if len(commands) == 0 {
+		return nil
+	}
+	filtered := make([]string, 0, len(commands))
+	for _, spec := range commands {
+		if strings.EqualFold(filepath.Base(spec), name) {
+			continue
+		}
+		filtered = append(filtered, spec)
+	}
+	return c.Store.PersistStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), filtered)
 }
 
 func (c *Config) ContainerWorkspacePath() string {

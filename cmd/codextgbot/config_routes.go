@@ -4,11 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
+	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
 )
 
 func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *clistate.Store) {
@@ -30,6 +32,10 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			setWorkspaceHostPath := fs.String("set-workspace-host-path", "", "Persist docker.workspace_host_path into config")
 			setHostbridgeTCPListenAddr := fs.String("set-hostbridge-tcp-listen-addr", "", "Persist hostbridge.tcp_listen_addr into config")
 			setContainerHostbridgeTCPAddr := fs.String("set-container-hostbridge-tcp-addr", "", "Persist docker.container_hostbridge_tcp_addr into config")
+			var allowChatHostbridgeCommand chatCommandFlag
+			var removeChatHostbridgeCommand chatCommandFlag
+			fs.Var(&allowChatHostbridgeCommand, "allow-chat-hostbridge-command", "Persist a chat-local hostbridge command in the form <chat-id>:<command-or-absolute-path>")
+			fs.Var(&removeChatHostbridgeCommand, "remove-chat-hostbridge-command", "Remove a chat-local hostbridge command by basename in the form <chat-id>:<name>")
 			setCodexModel := fs.String("set-codex-model", "", "Persist codex.model into config")
 			setCodexCLIHomePath := fs.String("set-codex-cli-home-path", "", "Persist codex.cli_home_host_path into config")
 			setCodexSharedHomePath := fs.String("set-codex-shared-home-path", "", "Deprecated alias for --set-codex-cli-home-path")
@@ -50,6 +56,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				*setWorkspaceHostPath == "" &&
 				*setHostbridgeTCPListenAddr == "" &&
 				*setContainerHostbridgeTCPAddr == "" &&
+				len(allowChatHostbridgeCommand.values) == 0 &&
+				len(removeChatHostbridgeCommand.values) == 0 &&
 				*setCodexModel == "" &&
 				*setCodexCLIHomePath == "" &&
 				*setCodexSharedHomePath == "" &&
@@ -88,11 +96,19 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 							title = "<untitled>"
 						}
 						fmt.Printf("    - id=%d scope=%s enabled=%t title=%q\n", chat.ChatID, chat.Scope, chat.Enabled, title)
+						specs := cfg.ChatHostbridgeAllowedCommandSpecs(chat.ChatID)
+						if len(specs) == 0 {
+							fmt.Println("      hostbridge.allowed_commands: <defaults only>")
+							continue
+						}
+						names := hostbridge.AllowedCommandNames(hostbridge.AllowedCommandsFromSpecs(specs))
+						fmt.Printf("      hostbridge.allowed_commands: names=%v specs=%v\n", names, specs)
 					}
 				}
 				fmt.Println("  help:")
 				fmt.Println("    enable a chat with: codextgbot config --enable-chat-id <chat-id>")
 				fmt.Println("    disable a chat with: codextgbot config --disable-chat-id <chat-id>")
+				fmt.Println("    allow a chat hostbridge command with: codextgbot config --allow-chat-hostbridge-command <chat-id>:<command-or-absolute-path>")
 				return nil
 			}
 
@@ -124,6 +140,26 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			if *setContainerHostbridgeTCPAddr != "" {
 				if err := store.PersistString("docker.container_hostbridge_tcp_addr", *setContainerHostbridgeTCPAddr); err != nil {
 					return fmt.Errorf("persist docker.container_hostbridge_tcp_addr: %w", err)
+				}
+			}
+			if len(allowChatHostbridgeCommand.values) > 0 || len(removeChatHostbridgeCommand.values) > 0 {
+				cfg, err := appconfig.NewConfig("", store)
+				if err != nil {
+					return err
+				}
+				for chatID, specs := range allowChatHostbridgeCommand.values {
+					for _, spec := range specs {
+						if err := cfg.SetChatHostbridgeAllowedCommand(chatID, spec); err != nil {
+							return fmt.Errorf("persist hostbridge allowed command for chat %d (%q): %w", chatID, spec, err)
+						}
+					}
+				}
+				for chatID, names := range removeChatHostbridgeCommand.values {
+					for _, name := range names {
+						if err := cfg.RemoveChatHostbridgeAllowedCommand(chatID, name); err != nil {
+							return fmt.Errorf("remove hostbridge allowed command for chat %d (%q): %w", chatID, name, err)
+						}
+					}
 				}
 			}
 			if *setCodexModel != "" {
@@ -181,6 +217,16 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			if *disableChatID != 0 {
 				updates = append(updates, fmt.Sprintf("disabled chat %d", *disableChatID))
 			}
+			for chatID, specs := range allowChatHostbridgeCommand.values {
+				for _, spec := range specs {
+					updates = append(updates, fmt.Sprintf("allowed chat %d hostbridge command %s", chatID, spec))
+				}
+			}
+			for chatID, names := range removeChatHostbridgeCommand.values {
+				for _, name := range names {
+					updates = append(updates, fmt.Sprintf("removed chat %d hostbridge command %s", chatID, name))
+				}
+			}
 			if len(updates) == 0 {
 				fmt.Println("config updated")
 			} else {
@@ -189,4 +235,42 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			return nil
 		})
 	})
+}
+
+type chatCommandFlag struct {
+	values map[int64][]string
+}
+
+func (f *chatCommandFlag) String() string {
+	if len(f.values) == 0 {
+		return ""
+	}
+	var parts []string
+	for chatID, values := range f.values {
+		for _, value := range values {
+			parts = append(parts, fmt.Sprintf("%d:%s", chatID, value))
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
+func (f *chatCommandFlag) Set(v string) error {
+	if f.values == nil {
+		f.values = map[int64][]string{}
+	}
+	chatRaw, value, ok := strings.Cut(v, ":")
+	if !ok {
+		return fmt.Errorf("expected <chat-id>:<command-or-absolute-path>")
+	}
+	chatRaw = strings.TrimSpace(chatRaw)
+	value = strings.TrimSpace(value)
+	if chatRaw == "" || value == "" {
+		return fmt.Errorf("expected <chat-id>:<command-or-absolute-path>")
+	}
+	chatID, err := strconv.ParseInt(chatRaw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid chat id %q", chatRaw)
+	}
+	f.values[chatID] = append(f.values[chatID], value)
+	return nil
 }

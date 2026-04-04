@@ -89,7 +89,14 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			bridgeErrCh := make(chan error, 1)
 			go func() {
-				bridgeErrCh <- hostbridge.ServeListener(runCtx, ln, 30, nil, logger)
+				resolveAllowed := func(clientIdentity string) map[string]hostbridge.AllowedCommand {
+					chatID, _, ok := cfg.ParseChatContainerName(clientIdentity)
+					if !ok {
+						return hostbridge.DefaultAllowedCommands()
+					}
+					return hostbridge.MergeAllowedCommandSpecs(cfg.ChatHostbridgeAllowedCommandSpecs(chatID))
+				}
+				bridgeErrCh <- hostbridge.ServeListener(runCtx, ln, 30, resolveAllowed, logger)
 			}()
 
 			botErrCh := make(chan error, 1)
