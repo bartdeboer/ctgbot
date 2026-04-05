@@ -23,92 +23,49 @@ type SessionExecutor struct {
 	Logger *log.Logger
 }
 
+type containerState string
+
+const (
+	containerMissing containerState = ""
+	containerCreated containerState = "created"
+	containerRunning containerState = "running"
+	containerExited  containerState = "exited"
+)
+
 func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, threadID int, workspaceHostPath string) (*ChatSession, error) {
 	if e.Config == nil {
 		return nil, fmt.Errorf("missing config")
 	}
-	if err := e.Config.EnsurePaths(); err != nil {
-		return nil, err
-	}
-	if err := e.Config.EnsureCodexCLIHome(); err != nil {
-		return nil, err
-	}
-	builder := &ImageBuilder{Config: e.Config, Logger: e.Logger}
-	if err := builder.EnsureImage(ctx); err != nil {
-		return nil, err
-	}
-
 	workspaceHostPath, err := e.Config.ResolveChatWorkspaceHostPath(chatID, threadID, workspaceHostPath)
 	if err != nil {
 		return nil, err
 	}
 
-	folderName, err := e.Config.EnsureChatRuntimePaths(chatID, threadID)
-	if err != nil {
-		return nil, err
-	}
-	containerName := e.Config.ChatContainerName(chatID, threadID)
-	homeDir := e.Config.ChatCodexHomeDir(folderName)
-	chatTLSDir := e.Config.ChatTLSDir(folderName)
-	if err := ensureConversationCodexHome(e.Config, homeDir, e.renderBootstrapInstructions(chatID)); err != nil {
-		return nil, err
-	}
-	if err := hostbridgetls.EnsureChatClientMaterials(e.Config.HostbridgeTLSRoot(), chatTLSDir, containerName); err != nil {
-		return nil, fmt.Errorf("ensure hostbridge tls client materials: %w", err)
-	}
-	if _, err := runCommand(ctx, "", "docker", "rm", "-f", containerName); err != nil {
-		e.logf("ignoring stale container cleanup error for %s: %v", containerName, err)
-	}
-
-	args := []string{
-		"run",
-		"-d",
-		"--security-opt", "seccomp=unconfined",
-		"--name", containerName,
-		"--hostname", containerName,
-		"--label", "ctgbot.managed=true",
-		"--label", fmt.Sprintf("ctgbot.chat_id=%d", chatID),
-		"--label", fmt.Sprintf("ctgbot.thread_id=%d", threadID),
-		"--env", "HOME=" + e.Config.ContainerHomePath(),
-		"--env", "CODEX_HOME=" + e.Config.ContainerHomePath(),
-		"--env", "HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
-		"--env", "HOSTBRIDGE_TLS_DIR=" + e.Config.ContainerHostbridgeTLSDir(),
-		"--workdir", e.Config.ContainerWorkspacePath(),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", workspaceHostPath, e.Config.ContainerWorkspacePath()),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", homeDir, e.Config.ContainerHomePath()),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", chatTLSDir, e.Config.ContainerHostbridgeTLSDir()),
-	}
-	if runtime.GOOS == "linux" {
-		args = append(args, "--add-host", "host.docker.internal:host-gateway")
-	}
-
-	args = append(args, e.Config.DockerImage(), "tail", "-f", "/dev/null")
-
-	out, err := runCommand(ctx, "", "docker", args...)
-	if err != nil {
-		return nil, fmt.Errorf("docker run: %w: %s", err, strings.TrimSpace(out))
-	}
-
-	e.logf("conversation container started name=%s workspace=%s docker=%s", containerName, workspaceHostPath, strings.TrimSpace(out))
-
-	return &ChatSession{
+	conv := &ChatSession{
 		ChatID:             chatID,
 		ThreadID:           threadID,
 		Active:             true,
-		ContainerName:      containerName,
+		ContainerName:      e.Config.ChatContainerName(chatID, threadID),
 		WorkspaceHost:      workspaceHostPath,
-		HomeHost:           homeDir,
 		ContainerWorkspace: e.Config.ContainerWorkspacePath(),
 		ContainerHome:      e.Config.ContainerHomePath(),
-	}, nil
+	}
+	if err := e.prepareConversationState(ctx, conv); err != nil {
+		return nil, err
+	}
+	conv.HomeHost = e.Config.ChatCodexHomeDir(e.Config.ChatFolderName(chatID, threadID))
+	if err := e.removeContainer(ctx, conv.ContainerName); err != nil {
+		e.logf("ignoring stale container cleanup error for %s: %v", conv.ContainerName, err)
+	}
+	e.logf("conversation session prepared name=%s workspace=%s", conv.ContainerName, conv.WorkspaceHost)
+	return conv, nil
 }
 
 func (e *SessionExecutor) StopConversation(ctx context.Context, conv *ChatSession) error {
 	if conv == nil {
 		return nil
 	}
-	_, err := runCommand(ctx, "", "docker", "rm", "-f", conv.ContainerName)
-	return err
+	return e.removeContainer(ctx, conv.ContainerName)
 }
 
 func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, prompt string) (string, error) {
@@ -118,6 +75,17 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 	if strings.TrimSpace(prompt) == "" {
 		return "", fmt.Errorf("missing prompt")
 	}
+	if err := e.prepareConversationState(ctx, conv); err != nil {
+		return "", err
+	}
+	if err := e.ensureContainerRunning(ctx, conv); err != nil {
+		return "", err
+	}
+	defer func() {
+		if err := e.stopContainer(context.Background(), conv.ContainerName); err != nil {
+			e.logf("stop conversation container %s failed: %v", conv.ContainerName, err)
+		}
+	}()
 
 	timeout := e.Config.SessionTimeout()
 	if timeout > 0 {
@@ -171,6 +139,160 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 		return "", fmt.Errorf("codex returned an empty response")
 	}
 	return lastMessage, nil
+}
+
+func (e *SessionExecutor) prepareConversationState(ctx context.Context, conv *ChatSession) error {
+	if e.Config == nil {
+		return fmt.Errorf("missing config")
+	}
+	if conv == nil {
+		return fmt.Errorf("missing conversation")
+	}
+	if err := e.Config.EnsurePaths(); err != nil {
+		return err
+	}
+	if err := e.Config.EnsureCodexCLIHome(); err != nil {
+		return err
+	}
+	builder := &ImageBuilder{Config: e.Config, Logger: e.Logger}
+	if err := builder.EnsureImage(ctx); err != nil {
+		return err
+	}
+	folderName, err := e.Config.EnsureChatRuntimePaths(conv.ChatID, conv.ThreadID)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(conv.WorkspaceHost) == "" {
+		workspaceHostPath, err := e.Config.ResolveChatWorkspaceHostPath(conv.ChatID, conv.ThreadID, "")
+		if err != nil {
+			return err
+		}
+		conv.WorkspaceHost = workspaceHostPath
+	}
+	conv.HomeHost = e.Config.ChatCodexHomeDir(folderName)
+	if strings.TrimSpace(conv.ContainerName) == "" {
+		conv.ContainerName = e.Config.ChatContainerName(conv.ChatID, conv.ThreadID)
+	}
+	if strings.TrimSpace(conv.ContainerWorkspace) == "" {
+		conv.ContainerWorkspace = e.Config.ContainerWorkspacePath()
+	}
+	if strings.TrimSpace(conv.ContainerHome) == "" {
+		conv.ContainerHome = e.Config.ContainerHomePath()
+	}
+	if err := ensureConversationCodexHome(e.Config, conv.HomeHost, e.renderBootstrapInstructions(conv.ChatID)); err != nil {
+		return err
+	}
+	if err := hostbridgetls.EnsureChatClientMaterials(e.Config.HostbridgeTLSRoot(), e.chatTLSDir(conv), conv.ContainerName); err != nil {
+		return fmt.Errorf("ensure hostbridge tls client materials: %w", err)
+	}
+	return nil
+}
+
+func (e *SessionExecutor) ensureContainerRunning(ctx context.Context, conv *ChatSession) error {
+	state, err := e.inspectContainerState(ctx, conv.ContainerName)
+	if err != nil {
+		return err
+	}
+	switch state {
+	case containerRunning:
+		return nil
+	case containerCreated, containerExited:
+		if _, err := runCommand(ctx, "", "docker", "start", conv.ContainerName); err != nil {
+			return fmt.Errorf("docker start %s: %w", conv.ContainerName, err)
+		}
+		e.logf("conversation container started name=%s", conv.ContainerName)
+		return nil
+	case containerMissing:
+		if err := e.createContainer(ctx, conv); err != nil {
+			return err
+		}
+		if _, err := runCommand(ctx, "", "docker", "start", conv.ContainerName); err != nil {
+			return fmt.Errorf("docker start %s: %w", conv.ContainerName, err)
+		}
+		e.logf("conversation container recreated and started name=%s", conv.ContainerName)
+		return nil
+	default:
+		return fmt.Errorf("unsupported container state %q for %s", state, conv.ContainerName)
+	}
+}
+
+func (e *SessionExecutor) createContainer(ctx context.Context, conv *ChatSession) error {
+	args := []string{
+		"create",
+		"--security-opt", "seccomp=unconfined",
+		"--name", conv.ContainerName,
+		"--hostname", conv.ContainerName,
+		"--label", "ctgbot.managed=true",
+		"--label", fmt.Sprintf("ctgbot.chat_id=%d", conv.ChatID),
+		"--label", fmt.Sprintf("ctgbot.thread_id=%d", conv.ThreadID),
+		"--env", "HOME=" + conv.ContainerHome,
+		"--env", "CODEX_HOME=" + conv.ContainerHome,
+		"--env", "HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
+		"--env", "HOSTBRIDGE_TLS_DIR=" + e.Config.ContainerHostbridgeTLSDir(),
+		"--workdir", conv.ContainerWorkspace,
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", conv.WorkspaceHost, conv.ContainerWorkspace),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", conv.HomeHost, conv.ContainerHome),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", e.chatTLSDir(conv), e.Config.ContainerHostbridgeTLSDir()),
+	}
+	if runtime.GOOS == "linux" {
+		args = append(args, "--add-host", "host.docker.internal:host-gateway")
+	}
+	args = append(args, e.Config.DockerImage(), "tail", "-f", "/dev/null")
+	out, err := runCommand(ctx, "", "docker", args...)
+	if err != nil {
+		return fmt.Errorf("docker create: %w: %s", err, strings.TrimSpace(out))
+	}
+	e.logf("conversation container created name=%s docker=%s", conv.ContainerName, strings.TrimSpace(out))
+	return nil
+}
+
+func (e *SessionExecutor) inspectContainerState(ctx context.Context, containerName string) (containerState, error) {
+	out, err := runCommand(ctx, "", "docker", "inspect", "-f", "{{.State.Status}}", containerName)
+	if err != nil {
+		trimmed := strings.TrimSpace(out)
+		if strings.Contains(trimmed, "No such object") {
+			return containerMissing, nil
+		}
+		return containerMissing, fmt.Errorf("docker inspect %s: %w: %s", containerName, err, trimmed)
+	}
+	return containerState(strings.TrimSpace(out)), nil
+}
+
+func (e *SessionExecutor) stopContainer(ctx context.Context, containerName string) error {
+	state, err := e.inspectContainerState(ctx, containerName)
+	if err != nil {
+		return err
+	}
+	if state == containerMissing || state == containerCreated || state == containerExited {
+		return nil
+	}
+	if _, err := runCommand(ctx, "", "docker", "stop", "-t", "1", containerName); err != nil {
+		return fmt.Errorf("docker stop %s: %w", containerName, err)
+	}
+	e.logf("conversation container stopped name=%s", containerName)
+	return nil
+}
+
+func (e *SessionExecutor) removeContainer(ctx context.Context, containerName string) error {
+	state, err := e.inspectContainerState(ctx, containerName)
+	if err != nil {
+		return err
+	}
+	if state == containerMissing {
+		return nil
+	}
+	if _, err := runCommand(ctx, "", "docker", "rm", "-f", containerName); err != nil {
+		return fmt.Errorf("docker rm -f %s: %w", containerName, err)
+	}
+	e.logf("conversation container removed name=%s", containerName)
+	return nil
+}
+
+func (e *SessionExecutor) chatTLSDir(conv *ChatSession) string {
+	if conv == nil || strings.TrimSpace(conv.HomeHost) == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(conv.HomeHost), "tls")
 }
 
 func (e *SessionExecutor) renderBootstrapInstructions(chatID int64) string {

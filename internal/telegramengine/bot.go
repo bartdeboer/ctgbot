@@ -15,18 +15,33 @@ import (
 type tgUpdateKey struct{}
 type tgEventKey struct{}
 
+type SessionStore interface {
+	AutoMigrate(ctx context.Context) error
+	GetActive(ctx context.Context, chatID int64, threadID int) (*codexengine.ChatSession, error)
+	Create(ctx context.Context, sess *codexengine.ChatSession) error
+	MarkStopped(ctx context.Context, id uint, lastErr string) error
+	MarkInitialized(ctx context.Context, id uint) error
+	MarkError(ctx context.Context, id uint, lastErr string) error
+}
+
+type SessionRunner interface {
+	StartConversation(ctx context.Context, chatID int64, threadID int, workspaceHostPath string) (*codexengine.ChatSession, error)
+	StopConversation(ctx context.Context, conv *codexengine.ChatSession) error
+	SendPrompt(ctx context.Context, conv *codexengine.ChatSession, prompt string) (string, error)
+}
+
 type TelegramBot struct {
 	API      TelegramAPI
 	Updates  *UpdateStorage
-	Sessions *codexengine.SessionStorage
-	Executor *codexengine.SessionExecutor
+	Sessions SessionStore
+	Executor SessionRunner
 	Dispatch *Dispatcher
 	Config   *appconfig.Config
 	Logger   *log.Logger
 	router   *clir.Router
 }
 
-func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, sessions *codexengine.SessionStorage, executor *codexengine.SessionExecutor, cfg *appconfig.Config, logger *log.Logger) *TelegramBot {
+func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, sessions SessionStore, executor SessionRunner, cfg *appconfig.Config, logger *log.Logger) *TelegramBot {
 	dispatcher := NewDispatcher()
 	return &TelegramBot{
 		API:      api,
@@ -165,21 +180,8 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 }
 
 func (tb *TelegramBot) handleNewConversation(ctx context.Context, u chatmodel.TelegramUpdate, workspace string) error {
-	current, err := tb.Sessions.GetActive(ctx, u.ChatID, u.ThreadID)
+	conv, err := tb.startConversation(ctx, u.ChatID, u.ThreadID, workspace, true)
 	if err != nil {
-		return err
-	}
-	if current != nil {
-		_ = tb.Executor.StopConversation(ctx, current)
-		_ = tb.Sessions.MarkStopped(ctx, current.ID, "replaced by /new")
-	}
-
-	conv, err := tb.Executor.StartConversation(ctx, u.ChatID, u.ThreadID, workspace)
-	if err != nil {
-		return err
-	}
-	if err := tb.Sessions.Create(ctx, conv); err != nil {
-		_ = tb.Executor.StopConversation(ctx, conv)
 		return err
 	}
 
@@ -230,7 +232,14 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpd
 		return err
 	}
 	if conv == nil {
-		return tb.replyText(ctx, u, "no active conversation. Start one with /new")
+		conv, err = tb.startConversation(ctx, u.ChatID, u.ThreadID, "", false)
+		if err != nil {
+			return err
+		}
+		msg := fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName, conv.WorkspaceHost)
+		if err := tb.replyText(ctx, u, msg); err != nil {
+			return err
+		}
 	}
 
 	reply, runErr := tb.Executor.SendPrompt(ctx, conv, prompt)
@@ -256,6 +265,30 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpd
 		}
 	}
 	return runErr
+}
+
+func (tb *TelegramBot) startConversation(ctx context.Context, chatID int64, threadID int, workspace string, replace bool) (*codexengine.ChatSession, error) {
+	current, err := tb.Sessions.GetActive(ctx, chatID, threadID)
+	if err != nil {
+		return nil, err
+	}
+	if current != nil {
+		if !replace {
+			return current, nil
+		}
+		_ = tb.Executor.StopConversation(ctx, current)
+		_ = tb.Sessions.MarkStopped(ctx, current.ID, "replaced by /new")
+	}
+
+	conv, err := tb.Executor.StartConversation(ctx, chatID, threadID, workspace)
+	if err != nil {
+		return nil, err
+	}
+	if err := tb.Sessions.Create(ctx, conv); err != nil {
+		_ = tb.Executor.StopConversation(ctx, conv)
+		return nil, err
+	}
+	return conv, nil
 }
 
 func (tb *TelegramBot) replyText(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
