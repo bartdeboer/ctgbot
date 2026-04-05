@@ -6,10 +6,10 @@ import (
 	"log"
 	"strings"
 
-	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 	"github.com/bartdeboer/ctgbot/internal/codexengine"
+	"github.com/bartdeboer/go-clir"
 )
 
 type tgUpdateKey struct{}
@@ -22,6 +22,7 @@ type SessionStore interface {
 	MarkStopped(ctx context.Context, id uint, lastErr string) error
 	MarkInitialized(ctx context.Context, id uint) error
 	MarkError(ctx context.Context, id uint, lastErr string) error
+	MarkCodexThreadID(ctx context.Context, id uint, threadID string) error
 }
 
 type SessionRunner interface {
@@ -252,6 +253,9 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpd
 		_ = tb.Sessions.MarkInitialized(ctx, conv.ID)
 	}
 	if conv.ID != 0 {
+		if strings.TrimSpace(conv.CodexThreadID) != "" {
+			_ = tb.Sessions.MarkCodexThreadID(ctx, conv.ID, conv.CodexThreadID)
+		}
 		lastErr := ""
 		if runErr != nil {
 			lastErr = runErr.Error()

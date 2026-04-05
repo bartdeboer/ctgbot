@@ -1,6 +1,7 @@
 package codexengine
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -107,6 +108,7 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 		"-a", "never",
 		"-s", "workspace-write",
 		"exec",
+		"--json",
 		"--skip-git-repo-check",
 		"--add-dir", conv.ContainerWorkspace,
 		"--output-last-message", outputPath,
@@ -117,12 +119,28 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 		args = append(args, "-m", model)
 	}
 	if conv.Initialized {
-		args = append(args, "resume", "--last", prompt)
+		if strings.TrimSpace(conv.CodexThreadID) != "" {
+			args = append(args, "resume", conv.CodexThreadID, prompt)
+		} else {
+			args = append(args, "resume", "--last", prompt)
+		}
 	} else {
 		args = append(args, strings.TrimSpace(prompt))
 	}
 
-	cmdOut, err := runCommand(ctx, "", "docker", args...)
+	var stdoutBuf bytes.Buffer
+	var stderrBuf bytes.Buffer
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
+	err := cmd.Run()
+
+	if conv.CodexThreadID == "" {
+		if threadID := extractCodexThreadID(stdoutBuf.String()); threadID != "" {
+			conv.CodexThreadID = threadID
+			e.logf("codex thread started chat=%d thread=%d codex_thread_id=%s", conv.ChatID, conv.ThreadID, threadID)
+		}
+	}
 	lastMessage, readErr := runCommand(ctx, "", "docker", "exec", conv.ContainerName, "cat", outputPath)
 	lastMessage = strings.TrimSpace(lastMessage)
 
@@ -130,7 +148,11 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 		if readErr == nil && lastMessage != "" {
 			return lastMessage, fmt.Errorf("codex exec: %w", err)
 		}
-		return "", fmt.Errorf("codex exec: %w: %s", err, strings.TrimSpace(cmdOut))
+		detail := strings.TrimSpace(stderrBuf.String())
+		if detail == "" {
+			detail = strings.TrimSpace(stdoutBuf.String())
+		}
+		return "", fmt.Errorf("codex exec: %w: %s", err, detail)
 	}
 	if readErr != nil {
 		return "", fmt.Errorf("read last message: %w", readErr)
@@ -250,7 +272,8 @@ func (e *SessionExecutor) inspectContainerState(ctx context.Context, containerNa
 	out, err := runCommand(ctx, "", "docker", "inspect", "-f", "{{.State.Status}}", containerName)
 	if err != nil {
 		trimmed := strings.TrimSpace(out)
-		if strings.Contains(trimmed, "No such object") {
+		lower := strings.ToLower(trimmed)
+		if strings.Contains(lower, "no such object") || strings.Contains(lower, "no such container") {
 			return containerMissing, nil
 		}
 		return containerMissing, fmt.Errorf("docker inspect %s: %w: %s", containerName, err, trimmed)

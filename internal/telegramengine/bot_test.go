@@ -39,6 +39,7 @@ type fakeSessionStore struct {
 	created           *codexengine.ChatSession
 	markInitializedID uint
 	markErrorValue    string
+	markCodexThreadID string
 }
 
 func (f *fakeSessionStore) AutoMigrate(ctx context.Context) error { return nil }
@@ -51,13 +52,19 @@ func (f *fakeSessionStore) Create(ctx context.Context, sess *codexengine.ChatSes
 	f.active = sess
 	return nil
 }
-func (f *fakeSessionStore) MarkStopped(ctx context.Context, id uint, lastErr string) error { return nil }
+func (f *fakeSessionStore) MarkStopped(ctx context.Context, id uint, lastErr string) error {
+	return nil
+}
 func (f *fakeSessionStore) MarkInitialized(ctx context.Context, id uint) error {
 	f.markInitializedID = id
 	return nil
 }
 func (f *fakeSessionStore) MarkError(ctx context.Context, id uint, lastErr string) error {
 	f.markErrorValue = lastErr
+	return nil
+}
+func (f *fakeSessionStore) MarkCodexThreadID(ctx context.Context, id uint, threadID string) error {
+	f.markCodexThreadID = threadID
 	return nil
 }
 

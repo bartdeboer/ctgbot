@@ -20,6 +20,7 @@ type ChatSession struct {
 
 	ContainerWorkspace string
 	ContainerHome      string
+	CodexThreadID      string
 
 	Initialized bool
 	LastError   string
@@ -80,4 +81,11 @@ func (s *SessionStorage) MarkError(ctx context.Context, id uint, lastErr string)
 		Model(&ChatSession{}).
 		Where("id = ?", id).
 		Update("last_error", lastErr).Error
+}
+
+func (s *SessionStorage) MarkCodexThreadID(ctx context.Context, id uint, threadID string) error {
+	return s.DB.WithContext(ctx).
+		Model(&ChatSession{}).
+		Where("id = ?", id).
+		Update("codex_thread_id", threadID).Error
 }

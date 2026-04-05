@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bartdeboer/go-clistate"
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/go-clistate"
 )
 
 func TestEnsureConversationCodexHomeWritesPosixModelInstructionsPath(t *testing.T) {
@@ -52,5 +52,56 @@ func TestEnsureConversationCodexHomeWritesPosixModelInstructionsPath(t *testing.
 	}
 	if strings.Contains(text, `\codex-home\ctgbot-bootstrap.md`) {
 		t.Fatalf("config.toml still contains a windows-style model_instructions_file:\n%s", text)
+	}
+}
+
+func TestExtractCodexThreadID(t *testing.T) {
+	t.Parallel()
+
+	jsonl := strings.Join([]string{
+		`{"type":"turn.started"}`,
+		`{"type":"thread.started","thread_id":"0199a213-81c0-7800-8aa1-bbab2a035a53"}`,
+		`{"type":"turn.completed"}`,
+	}, "\n")
+
+	got := extractCodexThreadID(jsonl)
+	want := "0199a213-81c0-7800-8aa1-bbab2a035a53"
+	if got != want {
+		t.Fatalf("extractCodexThreadID() = %q, want %q", got, want)
+	}
+}
+
+func TestExtractCodexThreadIDIgnoresInvalidLines(t *testing.T) {
+	t.Parallel()
+
+	jsonl := strings.Join([]string{
+		`not-json`,
+		`{"type":"item.started"}`,
+		`{"type":"thread.started","thread_id":"abc-123"}`,
+	}, "\n")
+
+	if got := extractCodexThreadID(jsonl); got != "abc-123" {
+		t.Fatalf("extractCodexThreadID() = %q, want %q", got, "abc-123")
+	}
+}
+
+func TestDockerMissingObjectDetectionIsCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
+	cases := []string{
+		"Error response from daemon: No such object: ctgbot-test",
+		"error: no such object: ctgbot-test",
+		"Error response from daemon: No such container: ctgbot-test",
+	}
+
+	for _, msg := range cases {
+		msg := msg
+		t.Run(msg, func(t *testing.T) {
+			t.Parallel()
+			lower := strings.ToLower(strings.TrimSpace(msg))
+			if !strings.Contains(lower, "no such object") && !strings.Contains(lower, "no such container") {
+				t.Fatalf("expected %q to be treated as missing container", msg)
+			}
+		})
 	}
 }
