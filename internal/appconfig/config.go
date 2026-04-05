@@ -192,6 +192,32 @@ func (c *Config) DefaultWorkspaceHostPath() string {
 	return absOrEmpty(c.Store.GetString("docker.workspace_host_path", ""))
 }
 
+func (c *Config) ChatWorkspaceHostPath(chatID int64) string {
+	if c == nil || c.Store == nil {
+		return ""
+	}
+	return absOrEmpty(c.Store.GetString(c.ChatKey(chatID, "workspace_host_path"), ""))
+}
+
+func (c *Config) SetChatWorkspaceHostPath(chatID int64, raw string) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	if chatID == 0 {
+		return fmt.Errorf("chatID is 0")
+	}
+	resolved, err := c.ResolveWorkspaceHostPath(raw)
+	if err != nil {
+		return err
+	}
+	if c.Store.GetInt(c.ChatKey(chatID, "chat_id"), 0) == 0 {
+		if err := c.Store.PersistInt(c.ChatKey(chatID, "chat_id"), int(chatID)); err != nil {
+			return err
+		}
+	}
+	return c.Store.PersistString(c.ChatKey(chatID, "workspace_host_path"), resolved)
+}
+
 func (c *Config) HostbridgeTCPListenAddr() string {
 	if c == nil || c.Store == nil {
 		return "127.0.0.1:4567"
@@ -400,14 +426,21 @@ func (c *Config) CodexCLIHomeAuthPath() string {
 
 func (c *Config) ResolveChatWorkspaceHostPath(chatID int64, threadID int, raw string) (string, error) {
 	name := c.ChatFolderName(chatID, threadID)
-	if strings.TrimSpace(raw) == "" {
-		workspace := c.ChatWorkspaceDir(name)
-		if err := os.MkdirAll(workspace, 0o755); err != nil {
-			return "", err
-		}
-		return workspace, nil
+	candidate := strings.TrimSpace(raw)
+	if candidate == "" {
+		candidate = c.ChatWorkspaceHostPath(chatID)
 	}
-	return c.ResolveWorkspaceHostPath(raw)
+	if candidate == "" {
+		candidate = c.DefaultWorkspaceHostPath()
+	}
+	if candidate != "" {
+		return c.ResolveWorkspaceHostPath(candidate)
+	}
+	workspace := c.ChatWorkspaceDir(name)
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		return "", err
+	}
+	return workspace, nil
 }
 
 func (c *Config) EnsureChatRuntimePaths(chatID int64, threadID int) (string, error) {
