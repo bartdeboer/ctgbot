@@ -3,7 +3,7 @@ package telegramengine
 import (
 	"context"
 
-	"github.com/bartdeboer/go-codextgbot/internal/chatmodel"
+	"github.com/bartdeboer/go-ctgbot/internal/chatmodel"
 	"gorm.io/gorm"
 )
 

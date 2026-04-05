@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/bartdeboer/go-codextgbot/internal/chatmodel"
+	"github.com/bartdeboer/go-ctgbot/internal/chatmodel"
 )
 
 type TelegramAPI interface {

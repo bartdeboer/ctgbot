@@ -11,11 +11,11 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
-	"github.com/bartdeboer/go-codextgbot/internal/codexengine"
-	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
-	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
-	"github.com/bartdeboer/go-codextgbot/internal/telegramengine"
+	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
+	"github.com/bartdeboer/go-ctgbot/internal/codexengine"
+	"github.com/bartdeboer/go-ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/go-ctgbot/internal/telegramengine"
 )
 
 func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
@@ -25,8 +25,8 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			fs.SetOutput(os.Stdout)
 
 			tokenFlag := fs.String("token", "", "Telegram bot token")
-			stateRoot := fs.String("state-root", "", "State root (default: <cwd>/.codextgbot)")
-			dbPath := fs.String("db-path", "", "SQLite DB path (default: <state-root>/codextgbot.db)")
+			stateRoot := fs.String("state-root", "", "State root (default: <cwd>/.ctgbot)")
+			dbPath := fs.String("db-path", "", "SQLite DB path (default: <state-root>/ctgbot.db)")
 
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
@@ -34,7 +34,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			token := resolveTelegramToken(*tokenFlag, store)
 			if token == "" {
-				return fmt.Errorf("missing telegram token (use --token, TELEGRAM_BOT_TOKEN, or codextgbot config --set-telegram-token)")
+				return fmt.Errorf("missing telegram token (use --token, TELEGRAM_BOT_TOKEN, or ctgbot config --set-telegram-token)")
 			}
 
 			logger := log.New(os.Stdout, "", log.LstdFlags)

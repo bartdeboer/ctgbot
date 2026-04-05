@@ -21,6 +21,11 @@ type Config struct {
 
 const CodexLoginCallbackPort = 1455
 
+const (
+	stateDirName = ".ctgbot"
+	namePrefix   = "ctgbot-"
+)
+
 type ChatConfigEntry struct {
 	ChatID    int64
 	ChatTitle string
@@ -34,7 +39,7 @@ func NewConfig(root string, store *clistate.Store) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		root = filepath.Join(cwd, ".codextgbot")
+		root = filepath.Join(cwd, stateDirName)
 	}
 
 	absRoot, err := filepath.Abs(root)
@@ -72,7 +77,7 @@ func (c *Config) EnsurePaths() error {
 }
 
 func (c *Config) DBPath() string {
-	return filepath.Join(c.Root(), "codextgbot.db")
+	return filepath.Join(c.Root(), "ctgbot.db")
 }
 
 func (c *Config) ChatsRoot() string {
@@ -84,11 +89,11 @@ func (c *Config) ChatFolderName(chatID int64, threadID int) string {
 }
 
 func (c *Config) ChatContainerName(chatID int64, threadID int) string {
-	return fmt.Sprintf("codextgbot-%d-%d", chatID, threadID)
+	return fmt.Sprintf("%s%d-%d", namePrefix, chatID, threadID)
 }
 
 func (c *Config) ParseChatContainerName(name string) (chatID int64, threadID int, ok bool) {
-	raw := strings.TrimPrefix(strings.TrimSpace(name), "codextgbot-")
+	raw := strings.TrimPrefix(strings.TrimSpace(name), namePrefix)
 	if raw == "" || raw == name {
 		return 0, 0, false
 	}
@@ -156,18 +161,18 @@ func (c *Config) SessionTimeout() time.Duration {
 
 func (c *Config) DockerImage() string {
 	if c == nil || c.Store == nil {
-		return "codextgbot-codex:latest"
+		return "ctgbot-codex:latest"
 	}
-	return strings.TrimSpace(c.Store.GetString("docker.image", "codextgbot-codex:latest"))
+	return strings.TrimSpace(c.Store.GetString("docker.image", "ctgbot-codex:latest"))
 }
 
 func (c *Config) DockerCLIContainerName() string {
 	if c == nil || c.Store == nil {
-		return "codextgbot"
+		return "ctgbot"
 	}
-	name := strings.TrimSpace(c.Store.GetString("docker.cli_container_name", "codextgbot"))
+	name := strings.TrimSpace(c.Store.GetString("docker.cli_container_name", "ctgbot"))
 	if name == "" {
-		return "codextgbot"
+		return "ctgbot"
 	}
 	return name
 }
@@ -300,11 +305,11 @@ func (c *Config) ContainerHomePath() string {
 
 func (c *Config) ContainerHostbridgeTLSDir() string {
 	if c == nil || c.Store == nil {
-		return "/etc/codextgbot/hostbridge-tls"
+		return "/etc/ctgbot/hostbridge-tls"
 	}
-	v := strings.TrimSpace(c.Store.GetString("docker.container_hostbridge_tls_dir", "/etc/codextgbot/hostbridge-tls"))
+	v := strings.TrimSpace(c.Store.GetString("docker.container_hostbridge_tls_dir", "/etc/ctgbot/hostbridge-tls"))
 	if v == "" {
-		return "/etc/codextgbot/hostbridge-tls"
+		return "/etc/ctgbot/hostbridge-tls"
 	}
 	return v
 }
@@ -339,15 +344,7 @@ func (c *Config) CodexCLIHomeRoot() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".codextgbot", ".codex")
-}
-
-func (c *Config) LegacySharedCodexRoot() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".codextgbot", "codex-shared")
+	return filepath.Join(home, stateDirName, ".codex")
 }
 
 func (c *Config) HostCodexRoot() string {
@@ -366,12 +363,6 @@ func (c *Config) EnsureCodexCLIHome() error {
 	if err := os.MkdirAll(filepath.Dir(root), 0o755); err != nil {
 		return err
 	}
-	legacy := c.LegacySharedCodexRoot()
-	if legacy != "" && legacy != root && !pathExists(root) && pathExists(legacy) {
-		if err := os.Rename(legacy, root); err != nil {
-			return fmt.Errorf("migrate legacy codex home: %w", err)
-		}
-	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return err
 	}
@@ -388,7 +379,7 @@ func (c *Config) importAuthIfNeeded() error {
 		return nil
 	}
 	for _, src := range []string{
-		filepath.Join(c.LegacySharedCodexRoot(), "auth.json"),
+		filepath.Join(filepath.Dir(c.CodexCLIHomeRoot()), "codex-shared", "auth.json"),
 		filepath.Join(c.HostCodexRoot(), "auth.json"),
 	} {
 		if !fileExistsAndNonEmpty(src) {
@@ -455,7 +446,7 @@ func (c *Config) migrateLegacyLocalLayout() error {
 			continue
 		}
 		name := entry.Name()
-		key := strings.TrimPrefix(name, "codextgbot-")
+		key := strings.TrimPrefix(name, namePrefix)
 		if key == name {
 			continue
 		}

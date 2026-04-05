@@ -7,13 +7,13 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
-	"github.com/bartdeboer/go-codextgbot/internal/codexengine"
+	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
+	"github.com/bartdeboer/go-ctgbot/internal/codexengine"
 )
 
 func registerImageRoutes(r *clir.Router, store *clistate.Store) {
 	r.Routes(func(b *clir.Builder) {
-		b.Handle("image build", "Build the codextgbot Docker image", func(req *clir.Request) error {
+		b.Handle("image build", "Build the ctgbot Docker image", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("image build", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			noCache := fs.Bool("no-cache", false, "Build without Docker layer cache")

@@ -1,4 +1,4 @@
-module github.com/bartdeboer/go-codextgbot
+module github.com/bartdeboer/go-ctgbot
 
 go 1.24.0
 

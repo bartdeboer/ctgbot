@@ -17,7 +17,7 @@ func TestEnsureServerAndClientMaterials(t *testing.T) {
 		t.Fatalf("LoadServerTLSConfig: %v", err)
 	}
 
-	if err := EnsureChatClientMaterials(serverRoot, chatDir, "codextgbot-chat-1"); err != nil {
+	if err := EnsureChatClientMaterials(serverRoot, chatDir, "ctgbot-chat-1"); err != nil {
 		t.Fatalf("EnsureChatClientMaterials: %v", err)
 	}
 	if _, err := LoadClientTLSConfig(chatDir); err != nil {

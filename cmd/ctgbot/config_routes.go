@@ -9,13 +9,13 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
-	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
+	"github.com/bartdeboer/go-ctgbot/internal/hostbridge"
 )
 
 func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *clistate.Store) {
 	r.Routes(func(b *clir.Builder) {
-		b.Handle("config", "Show or update codextgbot config", func(req *clir.Request) error {
+		b.Handle("config", "Show or update ctgbot config", func(req *clir.Request) error {
 			if store == nil {
 				return fmt.Errorf("no cwd config store available")
 			}
@@ -106,9 +106,9 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					}
 				}
 				fmt.Println("  help:")
-				fmt.Println("    enable a chat with: codextgbot config --enable-chat-id <chat-id>")
-				fmt.Println("    disable a chat with: codextgbot config --disable-chat-id <chat-id>")
-				fmt.Println("    allow a chat hostbridge command with: codextgbot config --allow-chat-hostbridge-command <chat-id>:<command-or-absolute-path>")
+				fmt.Println("    enable a chat with: ctgbot config --enable-chat-id <chat-id>")
+				fmt.Println("    disable a chat with: ctgbot config --disable-chat-id <chat-id>")
+				fmt.Println("    allow a chat hostbridge command with: ctgbot config --allow-chat-hostbridge-command <chat-id>:<command-or-absolute-path>")
 				return nil
 			}
 

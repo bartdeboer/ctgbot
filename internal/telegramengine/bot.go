@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/go-clir"
-	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
-	"github.com/bartdeboer/go-codextgbot/internal/chatmodel"
-	"github.com/bartdeboer/go-codextgbot/internal/codexengine"
+	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
+	"github.com/bartdeboer/go-ctgbot/internal/chatmodel"
+	"github.com/bartdeboer/go-ctgbot/internal/codexengine"
 )
 
 type tgUpdateKey struct{}

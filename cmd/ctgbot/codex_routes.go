@@ -7,13 +7,13 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
-	"github.com/bartdeboer/go-codextgbot/internal/codexengine"
+	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
+	"github.com/bartdeboer/go-ctgbot/internal/codexengine"
 )
 
 func registerCodexRoutes(r *clir.Router, store *clistate.Store) {
 	r.Routes(func(b *clir.Builder) {
-		b.Handle("codex", "Run the normal Codex CLI inside the codextgbot Docker image", func(req *clir.Request) error {
+		b.Handle("codex", "Run the normal Codex CLI inside the ctgbot Docker image", func(req *clir.Request) error {
 			cfg, err := appconfig.NewConfig("", store)
 			if err != nil {
 				return err

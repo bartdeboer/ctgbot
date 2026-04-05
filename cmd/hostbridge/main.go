@@ -12,8 +12,8 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/go-clir"
-	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
-	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/go-ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-ctgbot/internal/hostbridgetls"
 )
 
 func main() {

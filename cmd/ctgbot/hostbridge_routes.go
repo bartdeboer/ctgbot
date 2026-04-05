@@ -12,9 +12,9 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
-	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
-	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
+	"github.com/bartdeboer/go-ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-ctgbot/internal/hostbridgetls"
 )
 
 func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {

@@ -53,7 +53,7 @@ func EnsureServerMaterials(root string) error {
 	tpl := &x509.Certificate{
 		SerialNumber: serialNumber(),
 		Subject: pkix.Name{
-			CommonName: "codextgbot-hostbridge-server",
+			CommonName: "ctgbot-hostbridge-server",
 		},
 		NotBefore:             now.Add(-5 * time.Minute),
 		NotAfter:              now.AddDate(5, 0, 0),
@@ -186,7 +186,7 @@ func ensureCA(certPath, keyPath string) (*x509.Certificate, *ecdsa.PrivateKey, e
 	tpl := &x509.Certificate{
 		SerialNumber: serialNumber(),
 		Subject: pkix.Name{
-			CommonName: "codextgbot-hostbridge-ca",
+			CommonName: "ctgbot-hostbridge-ca",
 		},
 		NotBefore:             now.Add(-5 * time.Minute),
 		NotAfter:              now.AddDate(10, 0, 0),

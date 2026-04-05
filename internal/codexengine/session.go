@@ -11,10 +11,10 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
-	"github.com/bartdeboer/go-codextgbot/internal/bootstrapassets"
-	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
-	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
+	"github.com/bartdeboer/go-ctgbot/internal/bootstrapassets"
+	"github.com/bartdeboer/go-ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-ctgbot/internal/hostbridgetls"
 )
 
 type SessionExecutor struct {
@@ -65,9 +65,9 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 		"--security-opt", "seccomp=unconfined",
 		"--name", containerName,
 		"--hostname", containerName,
-		"--label", "codextgbot.managed=true",
-		"--label", fmt.Sprintf("codextgbot.chat_id=%d", chatID),
-		"--label", fmt.Sprintf("codextgbot.thread_id=%d", threadID),
+		"--label", "ctgbot.managed=true",
+		"--label", fmt.Sprintf("ctgbot.chat_id=%d", chatID),
+		"--label", fmt.Sprintf("ctgbot.thread_id=%d", threadID),
 		"--env", "HOME=" + e.Config.ContainerHomePath(),
 		"--env", "CODEX_HOME=" + e.Config.ContainerHomePath(),
 		"--env", "HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
@@ -125,7 +125,7 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 		defer cancel()
 	}
 
-	outputPath := "/tmp/codextgbot-last-message.txt"
+	outputPath := "/tmp/ctgbot-last-message.txt"
 	args := []string{
 		"exec",
 		"-e", "HOME=" + conv.ContainerHome,
@@ -230,7 +230,7 @@ func ensureConversationCodexHome(cfg *appconfig.Config, homeDir string, bootstra
 			return err
 		}
 	}
-	bootstrapPath := filepath.Join(homeDir, "codextgbot-bootstrap.md")
+	bootstrapPath := filepath.Join(homeDir, "ctgbot-bootstrap.md")
 	if err := os.WriteFile(bootstrapPath, []byte(strings.TrimSpace(bootstrapText)+"\n"), 0o600); err != nil {
 		return err
 	}
@@ -249,7 +249,7 @@ exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 writable_roots = [%q]
 network_access = true
-`, filepath.Join(cfg.ContainerHomePath(), "codextgbot-bootstrap.md"), cfg.ContainerWorkspacePath())) + "\n"
+`, filepath.Join(cfg.ContainerHomePath(), "ctgbot-bootstrap.md"), cfg.ContainerWorkspacePath())) + "\n"
 	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
 		return err
 	}

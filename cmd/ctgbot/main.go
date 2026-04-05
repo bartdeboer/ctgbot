@@ -11,12 +11,12 @@ import (
 )
 
 func main() {
-	store, err := clistate.NewCwd("codextgbot", "config")
+	store, err := clistate.NewCwd("ctgbot", "config")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: cannot open cwd config: %v\n", err)
 	}
 
-	globalStore, err := clistate.NewGlobal("codextgbot", "config")
+	globalStore, err := clistate.NewGlobal("ctgbot", "config")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: cannot open global config: %v\n", err)
 	}
@@ -50,14 +50,14 @@ func main() {
 			return cmd.Run()
 		})
 
-		b.Handle("install", "Install codextgbot from project_dir", func(req *clir.Request) error {
+		b.Handle("install", "Install ctgbot from project_dir", func(req *clir.Request) error {
 			if globalStore == nil {
 				return fmt.Errorf("global config store is not available")
 			}
 
 			projectDir := globalStore.GetProjectDir()
 			if projectDir == "" {
-				return fmt.Errorf("project_dir not configured; run `go run ./cmd/codextgbot install` from the codextgbot source repo first")
+				return fmt.Errorf("project_dir not configured; run `go run ./cmd/ctgbot install` from the ctgbot source repo first")
 			}
 
 			generateCmd := exec.CommandContext(req.Context(), "go", "generate", "./internal/containerassets")
@@ -67,7 +67,7 @@ func main() {
 				return err
 			}
 
-			installCmd := exec.CommandContext(req.Context(), "go", "install", "./cmd/codextgbot", "./cmd/hostbridge")
+			installCmd := exec.CommandContext(req.Context(), "go", "install", "./cmd/ctgbot", "./cmd/hostbridge")
 			installCmd.Dir = projectDir
 			installCmd.Stdout, installCmd.Stderr = os.Stdout, os.Stderr
 			return installCmd.Run()
@@ -76,7 +76,7 @@ func main() {
 
 	if err := r.Run(context.Background(), os.Args[1:]); err != nil {
 		fmt.Println("error:", err)
-		fmt.Println("usage: codextgbot <command>... [args]")
+		fmt.Println("usage: ctgbot <command>... [args]")
 		fmt.Println("available commands:")
 		r.PrintHelp(os.Stdout)
 		os.Exit(1)
