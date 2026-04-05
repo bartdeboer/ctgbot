@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
-	"github.com/bartdeboer/go-ctgbot/internal/containerassets"
+	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/containerassets"
 )
 
 type ImageBuilder struct {

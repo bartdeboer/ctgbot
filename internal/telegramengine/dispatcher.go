@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/bartdeboer/go-ctgbot/internal/chatmodel"
+	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 )
 
 type Dispatcher struct {

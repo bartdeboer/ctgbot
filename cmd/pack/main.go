@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/bartdeboer/go-ctgbot/internal/containerassets"
+	"github.com/bartdeboer/ctgbot/internal/containerassets"
 )
 
 func main() {

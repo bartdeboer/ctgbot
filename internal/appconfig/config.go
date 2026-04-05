@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -283,35 +284,35 @@ func (c *Config) RemoveChatHostbridgeAllowedCommand(chatID int64, name string) e
 
 func (c *Config) ContainerWorkspacePath() string {
 	if c == nil || c.Store == nil {
-		return "/workspace"
+		return normalizeContainerPath("", "/workspace")
 	}
-	v := strings.TrimSpace(c.Store.GetString("docker.container_workspace_path", "/workspace"))
-	if v == "" {
-		return "/workspace"
-	}
-	return v
+	return normalizeContainerPath(c.Store.GetString("docker.container_workspace_path", "/workspace"), "/workspace")
 }
 
 func (c *Config) ContainerHomePath() string {
 	if c == nil || c.Store == nil {
-		return "/codex-home"
+		return normalizeContainerPath("", "/codex-home")
 	}
-	v := strings.TrimSpace(c.Store.GetString("docker.container_home_path", "/codex-home"))
-	if v == "" {
-		return "/codex-home"
-	}
-	return v
+	return normalizeContainerPath(c.Store.GetString("docker.container_home_path", "/codex-home"), "/codex-home")
 }
 
 func (c *Config) ContainerHostbridgeTLSDir() string {
 	if c == nil || c.Store == nil {
-		return "/etc/ctgbot/hostbridge-tls"
+		return normalizeContainerPath("", "/etc/ctgbot/hostbridge-tls")
 	}
-	v := strings.TrimSpace(c.Store.GetString("docker.container_hostbridge_tls_dir", "/etc/ctgbot/hostbridge-tls"))
+	return normalizeContainerPath(c.Store.GetString("docker.container_hostbridge_tls_dir", "/etc/ctgbot/hostbridge-tls"), "/etc/ctgbot/hostbridge-tls")
+}
+
+func normalizeContainerPath(raw string, fallback string) string {
+	v := strings.TrimSpace(raw)
 	if v == "" {
-		return "/etc/ctgbot/hostbridge-tls"
+		v = fallback
 	}
-	return v
+	v = strings.ReplaceAll(v, "\\", "/")
+	if !strings.HasPrefix(v, "/") {
+		v = "/" + v
+	}
+	return path.Clean(v)
 }
 
 func (c *Config) CodexModel() string {

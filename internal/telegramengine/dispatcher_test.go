@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bartdeboer/go-ctgbot/internal/chatmodel"
+	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 )
 
 func TestDispatcherSerializesSameChat(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
-	"github.com/bartdeboer/go-ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 )
 
 func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *clistate.Store) {

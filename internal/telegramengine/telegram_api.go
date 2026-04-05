@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bartdeboer/go-ctgbot/internal/chatmodel"
+	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )

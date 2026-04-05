@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appconfig"
 )
 
 type CodexManager struct {

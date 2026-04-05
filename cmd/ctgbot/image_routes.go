@@ -7,8 +7,8 @@ import (
 
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
-	"github.com/bartdeboer/go-ctgbot/internal/codexengine"
+	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/codexengine"
 )
 
 func registerImageRoutes(r *clir.Router, store *clistate.Store) {

@@ -7,14 +7,15 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/bartdeboer/go-ctgbot/internal/appconfig"
-	"github.com/bartdeboer/go-ctgbot/internal/bootstrapassets"
-	"github.com/bartdeboer/go-ctgbot/internal/hostbridge"
-	"github.com/bartdeboer/go-ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
 )
 
 type SessionExecutor struct {
@@ -249,7 +250,7 @@ exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 writable_roots = [%q]
 network_access = true
-`, filepath.Join(cfg.ContainerHomePath(), "ctgbot-bootstrap.md"), cfg.ContainerWorkspacePath())) + "\n"
+`, path.Join(cfg.ContainerHomePath(), "ctgbot-bootstrap.md"), cfg.ContainerWorkspacePath())) + "\n"
 	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
 		return err
 	}
