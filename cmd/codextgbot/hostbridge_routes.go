@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -12,48 +11,52 @@ import (
 	"syscall"
 
 	"github.com/bartdeboer/go-clir"
+	"github.com/bartdeboer/go-clistate"
+	"github.com/bartdeboer/go-codextgbot/internal/appconfig"
 	"github.com/bartdeboer/go-codextgbot/internal/hostbridge"
 	"github.com/bartdeboer/go-codextgbot/internal/hostbridgetls"
 )
 
-func main() {
-	args := os.Args[1:]
-	if len(args) == 1 && args[0] == "help" {
-		printHelp()
-		return
-	}
-	if len(args) == 0 {
-		args = []string{"serve"}
-	}
-
-	r := clir.New()
+func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 	r.Routes(func(b *clir.Builder) {
-		b.Handle("serve", "Serve the hostbridge controller over TCP", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("tcphostbridge serve", flag.ContinueOnError)
+		b.Handle("hostbridge serve", "Serve the hostbridge controller over TCP", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("hostbridge serve", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 
 			addr := fs.String("addr", getenv("HOSTBRIDGE_ADDR", "127.0.0.1:4567"), "TCP listen address")
 			tlsDir := fs.String("tls-dir", "", "Optional TLS material directory containing ca.crt, ca.key, server.crt, server.key")
 			timeoutSec := fs.Int("default-timeout-sec", 30, "Default timeout in seconds")
-			var allow allowFlag
+			var allow allowHostbridgeServeFlag
 			fs.Var(&allow, "allow", "Additional allowed command mapping in the form name=/absolute/path")
 
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			logger := log.New(os.Stdout, "", log.LstdFlags)
+			ctx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			logger := log.New(os.Stdout, "", log.LstdFlags)
-			if strings.TrimSpace(*tlsDir) == "" {
+			resolvedTLSDir := strings.TrimSpace(*tlsDir)
+			if resolvedTLSDir == "" {
+				cfg, err := appconfig.NewConfig("", store)
+				if err != nil {
+					return err
+				}
+				if err := cfg.EnsurePaths(); err != nil {
+					return err
+				}
+				resolvedTLSDir = cfg.HostbridgeTLSRoot()
+			}
+
+			if strings.TrimSpace(resolvedTLSDir) == "" {
 				return hostbridge.Serve(ctx, *addr, *timeoutSec, allow.Commands(), logger)
 			}
 
-			if err := hostbridgetls.EnsureServerMaterials(*tlsDir); err != nil {
+			if err := hostbridgetls.EnsureServerMaterials(resolvedTLSDir); err != nil {
 				return err
 			}
-			tlsConfig, err := hostbridgetls.LoadServerTLSConfig(*tlsDir)
+			tlsConfig, err := hostbridgetls.LoadServerTLSConfig(resolvedTLSDir)
 			if err != nil {
 				return err
 			}
@@ -64,19 +67,13 @@ func main() {
 			return hostbridge.ServeListener(ctx, ln, *timeoutSec, hostbridge.StaticAllowedCommandResolver(allow.Commands()), logger)
 		})
 	})
-
-	if err := r.Run(context.Background(), args); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		printHelp()
-		os.Exit(1)
-	}
 }
 
-type allowFlag struct {
+type allowHostbridgeServeFlag struct {
 	values map[string]string
 }
 
-func (f *allowFlag) String() string {
+func (f *allowHostbridgeServeFlag) String() string {
 	if len(f.values) == 0 {
 		return ""
 	}
@@ -87,7 +84,7 @@ func (f *allowFlag) String() string {
 	return strings.Join(parts, ",")
 }
 
-func (f *allowFlag) Set(v string) error {
+func (f *allowHostbridgeServeFlag) Set(v string) error {
 	if f.values == nil {
 		f.values = map[string]string{}
 	}
@@ -107,7 +104,7 @@ func (f *allowFlag) Set(v string) error {
 	return nil
 }
 
-func (f *allowFlag) Commands() map[string]hostbridge.AllowedCommand {
+func (f *allowHostbridgeServeFlag) Commands() map[string]hostbridge.AllowedCommand {
 	return hostbridge.MergeAllowedCommands(f.values)
 }
 
@@ -116,15 +113,4 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
-}
-
-func printHelp() {
-	fmt.Fprintln(os.Stdout, "usage: tcphostbridge serve [--addr 127.0.0.1:PORT] [--tls-dir DIR] [--allow name=/absolute/path]")
-	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "note: hostbridge enforces loopback-only binds and rejects non-127.0.0.1 addresses.")
-	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "examples:")
-	fmt.Fprintln(os.Stdout, "  tcphostbridge serve")
-	fmt.Fprintln(os.Stdout, "  tcphostbridge serve --tls-dir ./.codextgbot/tls")
-	fmt.Fprintln(os.Stdout, "  tcphostbridge serve --addr 127.0.0.1:4567 --allow ls=/bin/ls")
 }

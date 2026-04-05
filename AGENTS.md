@@ -8,13 +8,12 @@ The project has three major responsibilities:
 
 - run Codex in a reusable standalone Docker profile via `codextgbot codex`
 - run Codex conversations per Telegram chat/thread via `codextgbot telegram monitor`
-- provide a host-command bridge via `hostbridge` and `tcphostbridge`
+- provide a host-command bridge via `hostbridge` and `codextgbot hostbridge serve`
 
 ## Repo Shape
 
 - `cmd/codextgbot`: main CLI entrypoint
 - `cmd/hostbridge`: container-side hostbridge client
-- `cmd/tcphostbridge`: host-side TCP controller
 - `cmd/pack`: generates the embedded Docker build context tarball
 - `internal/appconfig`: typed config access and local/global state helpers
 - `internal/chatmodel`: shared conversation and Telegram update types
@@ -39,7 +38,7 @@ The project has three major responsibilities:
   Starts the Telegram bot loop.
   This now also starts an in-process TCP hostbridge controller for Telegram conversations.
 
-- `go run ./cmd/tcphostbridge`
+- `go run ./cmd/codextgbot hostbridge serve`
   Starts the hostbridge controller over TCP.
 
 - `go run ./cmd/codextgbot image build --no-cache`

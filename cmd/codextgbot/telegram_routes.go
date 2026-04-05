@@ -84,7 +84,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			ln, err := hostbridge.ListenTLS(cfg.HostbridgeTCPListenAddr(), tlsConfig)
 			if err != nil {
-				return fmt.Errorf("start tcphostbridge listener: %w", err)
+				return fmt.Errorf("start hostbridge listener: %w", err)
 			}
 
 			bridgeErrCh := make(chan error, 1)
@@ -108,7 +108,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			case err := <-bridgeErrCh:
 				stop()
 				if err != nil {
-					return fmt.Errorf("tcphostbridge runtime: %w", err)
+					return fmt.Errorf("hostbridge runtime: %w", err)
 				}
 				return nil
 			case err := <-botErrCh:

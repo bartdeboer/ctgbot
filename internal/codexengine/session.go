@@ -180,6 +180,8 @@ func (e *SessionExecutor) renderBootstrapInstructions(chatID int64) string {
 	bootstrapText, err := bootstrapassets.Text(bootstrapassets.TemplateData{
 		Workspace:      e.Config.ContainerWorkspacePath(),
 		CodexHome:      e.Config.ContainerHomePath(),
+		ContainerOS:    "linux",
+		HostOS:         runtime.GOOS,
 		HostbridgeAddr: e.Config.ContainerHostbridgeTCPAddr(),
 		Binaries:       allowedCommands,
 	})

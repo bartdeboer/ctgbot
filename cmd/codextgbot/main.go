@@ -27,6 +27,7 @@ func main() {
 	registerImageRoutes(r, store)
 	registerCodexRoutes(r, store)
 	registerTelegramRoutes(r, store)
+	registerHostbridgeRoutes(r, store)
 	registerSessionRoutes(r, store)
 
 	r.Routes(func(b *clir.Builder) {
@@ -66,7 +67,7 @@ func main() {
 				return err
 			}
 
-			installCmd := exec.CommandContext(req.Context(), "go", "install", "./cmd/codextgbot", "./cmd/hostbridge", "./cmd/tcphostbridge")
+			installCmd := exec.CommandContext(req.Context(), "go", "install", "./cmd/codextgbot", "./cmd/hostbridge")
 			installCmd.Dir = projectDir
 			installCmd.Stdout, installCmd.Stderr = os.Stdout, os.Stderr
 			return installCmd.Run()
