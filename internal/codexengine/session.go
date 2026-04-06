@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -15,8 +14,10 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
+	"github.com/bartdeboer/ctgbot/internal/conversationmodel"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
 type SessionExecutor struct {
@@ -24,54 +25,47 @@ type SessionExecutor struct {
 	Logger *log.Logger
 }
 
-type containerState string
-
-const (
-	containerMissing containerState = ""
-	containerCreated containerState = "created"
-	containerRunning containerState = "running"
-	containerExited  containerState = "exited"
-)
-
-func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, threadID int, workspaceHostPath string) (*ChatSession, error) {
-	if e.Config == nil {
-		return nil, fmt.Errorf("missing config")
-	}
-	workspaceHostPath, err := e.Config.ResolveChatWorkspaceHostPath(chatID, threadID, workspaceHostPath)
-	if err != nil {
-		return nil, err
-	}
-
-	conv := &ChatSession{
-		ChatID:             chatID,
-		ThreadID:           threadID,
-		Active:             true,
-		ContainerName:      e.Config.ChatContainerName(chatID, threadID),
-		WorkspaceHost:      workspaceHostPath,
-		ContainerWorkspace: e.Config.ContainerWorkspacePath(),
-		ContainerHome:      e.Config.ContainerHomePath(),
-	}
-	if err := e.prepareConversationState(ctx, conv); err != nil {
-		return nil, err
-	}
-	conv.HomeHost = e.Config.ChatCodexHomeDirByID(chatID)
-	if err := e.removeContainer(ctx, conv.ContainerName); err != nil {
-		e.logf("ignoring stale container cleanup error for %s: %v", conv.ContainerName, err)
-	}
-	e.logf("conversation session prepared name=%s workspace=%s", conv.ContainerName, conv.WorkspaceHost)
-	return conv, nil
+func (e *SessionExecutor) PrepareConversation(ctx context.Context, conv *conversationmodel.ChatSession) error {
+	return e.prepareConversationState(ctx, conv)
 }
 
-func (e *SessionExecutor) StopConversation(ctx context.Context, conv *ChatSession) error {
-	if conv == nil {
-		return nil
+func (e *SessionExecutor) SandboxSpec(conv *conversationmodel.ChatSession) sandboxengine.Spec {
+	spec := sandboxengine.Spec{
+		Name:         conv.ContainerName,
+		Hostname:     conv.ContainerName,
+		Image:        e.Config.DockerImage(),
+		Workdir:      conv.ContainerWorkspace,
+		SecurityOpts: []string{"seccomp=unconfined"},
+		Labels: map[string]string{
+			"ctgbot.managed":   "true",
+			"ctgbot.chat_id":   fmt.Sprintf("%d", conv.ChatID),
+			"ctgbot.thread_id": fmt.Sprintf("%d", conv.ThreadID),
+		},
+		Env: []string{
+			"HOME=" + conv.ContainerHome,
+			"CODEX_HOME=" + conv.ContainerHome,
+			"HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
+			"HOSTBRIDGE_TLS_DIR=" + e.Config.ContainerHostbridgeTLSDir(),
+		},
+		Mounts: []sandboxengine.Mount{
+			{Source: conv.WorkspaceHost, Target: conv.ContainerWorkspace},
+			{Source: conv.HomeHost, Target: conv.ContainerHome},
+			{Source: e.chatTLSDir(conv), Target: e.Config.ContainerHostbridgeTLSDir(), ReadOnly: true},
+		},
+		Cmd: []string{"tail", "-f", "/dev/null"},
 	}
-	return e.removeContainer(ctx, conv.ContainerName)
+	if runtime.GOOS == "linux" {
+		spec.AddHosts = []string{"host.docker.internal:host-gateway"}
+	}
+	return spec
 }
 
-func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, prompt string) (string, error) {
+func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *conversationmodel.ChatSession, prompt string, sbx sandboxengine.Sandbox) (string, error) {
 	if conv == nil {
 		return "", fmt.Errorf("missing conversation")
+	}
+	if sbx == nil {
+		return "", fmt.Errorf("missing sandbox")
 	}
 	if strings.TrimSpace(prompt) == "" {
 		return "", fmt.Errorf("missing prompt")
@@ -79,14 +73,6 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 	if err := e.prepareConversationState(ctx, conv); err != nil {
 		return "", err
 	}
-	if err := e.ensureContainerRunning(ctx, conv); err != nil {
-		return "", err
-	}
-	defer func() {
-		if err := e.stopContainer(context.Background(), conv.ContainerName); err != nil {
-			e.logf("stop conversation container %s failed: %v", conv.ContainerName, err)
-		}
-	}()
 
 	timeout := e.Config.SessionTimeout()
 	if timeout > 0 {
@@ -97,13 +83,6 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 
 	outputPath := "/tmp/ctgbot-last-message.txt"
 	args := []string{
-		"exec",
-		"-e", "HOME=" + conv.ContainerHome,
-		"-e", "CODEX_HOME=" + conv.ContainerHome,
-		"-e", "HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
-		"-e", "HOSTBRIDGE_TLS_DIR=" + e.Config.ContainerHostbridgeTLSDir(),
-		"-w", conv.ContainerWorkspace,
-		conv.ContainerName,
 		"codex",
 		"-a", "never",
 		"-s", "workspace-write",
@@ -119,8 +98,8 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 		args = append(args, "-m", model)
 	}
 	if conv.Initialized {
-		if strings.TrimSpace(conv.CodexThreadID) != "" {
-			args = append(args, "resume", conv.CodexThreadID, prompt)
+		if strings.TrimSpace(conv.ProviderThreadID) != "" {
+			args = append(args, "resume", conv.ProviderThreadID, prompt)
 		} else {
 			args = append(args, "resume", "--last", prompt)
 		}
@@ -130,18 +109,18 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd := sbx.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 	err := cmd.Run()
 
-	if conv.CodexThreadID == "" {
+	if conv.ProviderThreadID == "" {
 		if threadID := extractCodexThreadID(stdoutBuf.String()); threadID != "" {
-			conv.CodexThreadID = threadID
+			conv.ProviderThreadID = threadID
 			e.logf("codex thread started chat=%d thread=%d codex_thread_id=%s", conv.ChatID, conv.ThreadID, threadID)
 		}
 	}
-	lastMessage, readErr := runCommand(ctx, "", "docker", "exec", conv.ContainerName, "cat", outputPath)
+	lastMessage, readErr := runSandboxCommand(ctx, sbx, "cat", outputPath)
 	lastMessage = strings.TrimSpace(lastMessage)
 
 	if err != nil {
@@ -163,7 +142,7 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *ChatSession, pro
 	return lastMessage, nil
 }
 
-func (e *SessionExecutor) prepareConversationState(ctx context.Context, conv *ChatSession) error {
+func (e *SessionExecutor) prepareConversationState(ctx context.Context, conv *conversationmodel.ChatSession) error {
 	if e.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -210,108 +189,7 @@ func (e *SessionExecutor) prepareConversationState(ctx context.Context, conv *Ch
 	return nil
 }
 
-func (e *SessionExecutor) ensureContainerRunning(ctx context.Context, conv *ChatSession) error {
-	state, err := e.inspectContainerState(ctx, conv.ContainerName)
-	if err != nil {
-		return err
-	}
-	switch state {
-	case containerRunning:
-		return nil
-	case containerCreated, containerExited:
-		if _, err := runCommand(ctx, "", "docker", "start", conv.ContainerName); err != nil {
-			return fmt.Errorf("docker start %s: %w", conv.ContainerName, err)
-		}
-		e.logf("conversation container started name=%s", conv.ContainerName)
-		return nil
-	case containerMissing:
-		if err := e.createContainer(ctx, conv); err != nil {
-			return err
-		}
-		if _, err := runCommand(ctx, "", "docker", "start", conv.ContainerName); err != nil {
-			return fmt.Errorf("docker start %s: %w", conv.ContainerName, err)
-		}
-		e.logf("conversation container recreated and started name=%s", conv.ContainerName)
-		return nil
-	default:
-		return fmt.Errorf("unsupported container state %q for %s", state, conv.ContainerName)
-	}
-}
-
-func (e *SessionExecutor) createContainer(ctx context.Context, conv *ChatSession) error {
-	args := []string{
-		"create",
-		"--security-opt", "seccomp=unconfined",
-		"--name", conv.ContainerName,
-		"--hostname", conv.ContainerName,
-		"--label", "ctgbot.managed=true",
-		"--label", fmt.Sprintf("ctgbot.chat_id=%d", conv.ChatID),
-		"--label", fmt.Sprintf("ctgbot.thread_id=%d", conv.ThreadID),
-		"--env", "HOME=" + conv.ContainerHome,
-		"--env", "CODEX_HOME=" + conv.ContainerHome,
-		"--env", "HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
-		"--env", "HOSTBRIDGE_TLS_DIR=" + e.Config.ContainerHostbridgeTLSDir(),
-		"--workdir", conv.ContainerWorkspace,
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", conv.WorkspaceHost, conv.ContainerWorkspace),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", conv.HomeHost, conv.ContainerHome),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", e.chatTLSDir(conv), e.Config.ContainerHostbridgeTLSDir()),
-	}
-	if runtime.GOOS == "linux" {
-		args = append(args, "--add-host", "host.docker.internal:host-gateway")
-	}
-	args = append(args, e.Config.DockerImage(), "tail", "-f", "/dev/null")
-	out, err := runCommand(ctx, "", "docker", args...)
-	if err != nil {
-		return fmt.Errorf("docker create: %w: %s", err, strings.TrimSpace(out))
-	}
-	e.logf("conversation container created name=%s docker=%s", conv.ContainerName, strings.TrimSpace(out))
-	return nil
-}
-
-func (e *SessionExecutor) inspectContainerState(ctx context.Context, containerName string) (containerState, error) {
-	out, err := runCommand(ctx, "", "docker", "inspect", "-f", "{{.State.Status}}", containerName)
-	if err != nil {
-		trimmed := strings.TrimSpace(out)
-		lower := strings.ToLower(trimmed)
-		if strings.Contains(lower, "no such object") || strings.Contains(lower, "no such container") {
-			return containerMissing, nil
-		}
-		return containerMissing, fmt.Errorf("docker inspect %s: %w: %s", containerName, err, trimmed)
-	}
-	return containerState(strings.TrimSpace(out)), nil
-}
-
-func (e *SessionExecutor) stopContainer(ctx context.Context, containerName string) error {
-	state, err := e.inspectContainerState(ctx, containerName)
-	if err != nil {
-		return err
-	}
-	if state == containerMissing || state == containerCreated || state == containerExited {
-		return nil
-	}
-	if _, err := runCommand(ctx, "", "docker", "stop", "-t", "1", containerName); err != nil {
-		return fmt.Errorf("docker stop %s: %w", containerName, err)
-	}
-	e.logf("conversation container stopped name=%s", containerName)
-	return nil
-}
-
-func (e *SessionExecutor) removeContainer(ctx context.Context, containerName string) error {
-	state, err := e.inspectContainerState(ctx, containerName)
-	if err != nil {
-		return err
-	}
-	if state == containerMissing {
-		return nil
-	}
-	if _, err := runCommand(ctx, "", "docker", "rm", "-f", containerName); err != nil {
-		return fmt.Errorf("docker rm -f %s: %w", containerName, err)
-	}
-	e.logf("conversation container removed name=%s", containerName)
-	return nil
-}
-
-func (e *SessionExecutor) chatTLSDir(conv *ChatSession) string {
+func (e *SessionExecutor) chatTLSDir(conv *conversationmodel.ChatSession) string {
 	if conv == nil || e.Config == nil || strings.TrimSpace(conv.ContainerName) == "" {
 		return ""
 	}
@@ -344,11 +222,8 @@ func (e *SessionExecutor) logf(format string, args ...any) {
 	}
 }
 
-func runCommand(ctx context.Context, dir string, name string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, name, args...)
-	if dir != "" {
-		cmd.Dir = dir
-	}
+func runSandboxCommand(ctx context.Context, sbx sandboxengine.Sandbox, name string, args ...string) (string, error) {
+	cmd := sbx.CommandContext(ctx, name, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

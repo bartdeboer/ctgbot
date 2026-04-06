@@ -2,11 +2,17 @@ package telegramengine
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
-	"github.com/bartdeboer/ctgbot/internal/codexengine"
+	"github.com/bartdeboer/ctgbot/internal/conversationmodel"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+	"github.com/bartdeboer/go-clistate"
 )
 
 type fakeTelegramAPI struct {
@@ -35,18 +41,18 @@ func (f *fakeTelegramAPI) SendMessage(ctx context.Context, chatID int64, threadI
 }
 
 type fakeSessionStore struct {
-	active            *codexengine.ChatSession
-	created           *codexengine.ChatSession
-	markInitializedID uint
-	markErrorValue    string
-	markCodexThreadID string
+	active               *conversationmodel.ChatSession
+	created              *conversationmodel.ChatSession
+	markInitializedID    uint
+	markErrorValue       string
+	markProviderThreadID string
 }
 
 func (f *fakeSessionStore) AutoMigrate(ctx context.Context) error { return nil }
-func (f *fakeSessionStore) GetActive(ctx context.Context, chatID int64, threadID int) (*codexengine.ChatSession, error) {
+func (f *fakeSessionStore) GetActive(ctx context.Context, chatID int64, threadID int) (*conversationmodel.ChatSession, error) {
 	return f.active, nil
 }
-func (f *fakeSessionStore) Create(ctx context.Context, sess *codexengine.ChatSession) error {
+func (f *fakeSessionStore) Create(ctx context.Context, sess *conversationmodel.ChatSession) error {
 	sess.ID = 1
 	f.created = sess
 	f.active = sess
@@ -63,8 +69,8 @@ func (f *fakeSessionStore) MarkError(ctx context.Context, id uint, lastErr strin
 	f.markErrorValue = lastErr
 	return nil
 }
-func (f *fakeSessionStore) MarkCodexThreadID(ctx context.Context, id uint, threadID string) error {
-	f.markCodexThreadID = threadID
+func (f *fakeSessionStore) MarkProviderThreadID(ctx context.Context, id uint, threadID string) error {
+	f.markProviderThreadID = threadID
 	return nil
 }
 
@@ -74,37 +80,78 @@ type fakeSessionRunner struct {
 	sentPrompt      string
 }
 
-func (f *fakeSessionRunner) StartConversation(ctx context.Context, chatID int64, threadID int, workspaceHostPath string) (*codexengine.ChatSession, error) {
-	f.startedChatID = chatID
-	f.startedThreadID = threadID
-	return &codexengine.ChatSession{
-		ChatID:        chatID,
-		ThreadID:      threadID,
-		Active:        true,
-		ContainerName: "ctgbot-test",
-		WorkspaceHost: "/tmp/workspace",
-	}, nil
-}
-
-func (f *fakeSessionRunner) StopConversation(ctx context.Context, conv *codexengine.ChatSession) error {
+func (f *fakeSessionRunner) PrepareConversation(ctx context.Context, conv *conversationmodel.ChatSession) error {
+	f.startedChatID = conv.ChatID
+	f.startedThreadID = conv.ThreadID
 	return nil
 }
 
-func (f *fakeSessionRunner) SendPrompt(ctx context.Context, conv *codexengine.ChatSession, prompt string) (string, error) {
+func (f *fakeSessionRunner) SandboxSpec(conv *conversationmodel.ChatSession) sandboxengine.Spec {
+	return sandboxengine.Spec{Name: conv.ContainerName}
+}
+
+func (f *fakeSessionRunner) SendPrompt(ctx context.Context, conv *conversationmodel.ChatSession, prompt string, sbx sandboxengine.Sandbox) (string, error) {
 	f.sentPrompt = prompt
 	return "reply text", nil
+}
+
+type fakeSandbox struct{}
+
+func (f fakeSandbox) CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
+	return exec.CommandContext(ctx, name, args...)
+}
+
+type fakeSandboxManager struct{}
+
+func (f fakeSandboxManager) InspectState(ctx context.Context, name string) (sandboxengine.State, error) {
+	return sandboxengine.StateMissing, nil
+}
+
+func (f fakeSandboxManager) Ensure(ctx context.Context, spec sandboxengine.Spec) (sandboxengine.Sandbox, error) {
+	return fakeSandbox{}, nil
+}
+
+func (f fakeSandboxManager) Stop(ctx context.Context, name string) error {
+	return nil
+}
+
+func (f fakeSandboxManager) Remove(ctx context.Context, name string) error {
+	return nil
 }
 
 func TestHandlePromptAutoStartsConversation(t *testing.T) {
 	t.Parallel()
 
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
 	api := &fakeTelegramAPI{}
 	sessions := &fakeSessionStore{}
 	executor := &fakeSessionRunner{}
 	tb := &TelegramBot{
-		API:      api,
-		Sessions: sessions,
-		Executor: executor,
+		API:       api,
+		Sessions:  sessions,
+		Executor:  executor,
+		Sandboxes: fakeSandboxManager{},
+		Config:    cfg,
 	}
 
 	u := chatmodel.TelegramUpdate{
@@ -132,7 +179,8 @@ func TestHandlePromptAutoStartsConversation(t *testing.T) {
 	if len(api.messages) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(api.messages))
 	}
-	if api.messages[0].text != "conversation started\ncontainer: ctgbot-test\nworkspace: /tmp/workspace" {
+	wantStart := "conversation started\ncontainer: ctgbot-42-7\nworkspace: " + filepath.Join(root, "chats", "42", "workspace")
+	if api.messages[0].text != wantStart {
 		t.Fatalf("unexpected first message: %q", api.messages[0].text)
 	}
 	if api.messages[1].text != "reply text" {

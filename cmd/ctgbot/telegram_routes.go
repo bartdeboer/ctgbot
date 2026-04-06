@@ -9,13 +9,14 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bartdeboer/go-clir"
-	"github.com/bartdeboer/go-clistate"
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/telegramengine"
+	"github.com/bartdeboer/go-clir"
+	"github.com/bartdeboer/go-clistate"
 )
 
 func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
@@ -63,9 +64,10 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			}
 
 			updates := telegramengine.NewUpdateStorage(db)
-			sessions := codexengine.NewSessionStorage(db)
+			sessions := telegramengine.NewSessionStorage(db)
 			executor := &codexengine.SessionExecutor{Config: cfg, Logger: logger}
-			tb := telegramengine.NewTelegramBot(api, updates, sessions, executor, cfg, logger)
+			sandboxes := &sandboxengine.DockerManager{Logger: logger}
+			tb := telegramengine.NewTelegramBot(api, updates, sessions, executor, sandboxes, cfg, logger)
 
 			if err := tb.AutoMigrate(req.Context()); err != nil {
 				return err

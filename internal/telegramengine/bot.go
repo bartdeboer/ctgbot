@@ -8,7 +8,8 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
-	"github.com/bartdeboer/ctgbot/internal/codexengine"
+	"github.com/bartdeboer/ctgbot/internal/conversationmodel"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -17,41 +18,46 @@ type tgEventKey struct{}
 
 type SessionStore interface {
 	AutoMigrate(ctx context.Context) error
-	GetActive(ctx context.Context, chatID int64, threadID int) (*codexengine.ChatSession, error)
-	Create(ctx context.Context, sess *codexengine.ChatSession) error
+	GetActive(ctx context.Context, chatID int64, threadID int) (*conversationmodel.ChatSession, error)
+	Create(ctx context.Context, sess *conversationmodel.ChatSession) error
 	MarkStopped(ctx context.Context, id uint, lastErr string) error
 	MarkInitialized(ctx context.Context, id uint) error
 	MarkError(ctx context.Context, id uint, lastErr string) error
-	MarkCodexThreadID(ctx context.Context, id uint, threadID string) error
+	MarkProviderThreadID(ctx context.Context, id uint, threadID string) error
 }
 
 type SessionRunner interface {
-	StartConversation(ctx context.Context, chatID int64, threadID int, workspaceHostPath string) (*codexengine.ChatSession, error)
-	StopConversation(ctx context.Context, conv *codexengine.ChatSession) error
-	SendPrompt(ctx context.Context, conv *codexengine.ChatSession, prompt string) (string, error)
+	PrepareConversation(ctx context.Context, conv *conversationmodel.ChatSession) error
+	SandboxSpec(conv *conversationmodel.ChatSession) sandboxengine.Spec
+	SendPrompt(ctx context.Context, conv *conversationmodel.ChatSession, prompt string, sbx sandboxengine.Sandbox) (string, error)
 }
 
 type TelegramBot struct {
-	API      TelegramAPI
-	Updates  *UpdateStorage
-	Sessions SessionStore
-	Executor SessionRunner
-	Dispatch *Dispatcher
-	Config   *appconfig.Config
-	Logger   *log.Logger
-	router   *clir.Router
+	API       TelegramAPI
+	Updates   *UpdateStorage
+	Sessions  SessionStore
+	Executor  SessionRunner
+	Sandboxes sandboxengine.Manager
+	Dispatch  *Dispatcher
+	Config    *appconfig.Config
+	Logger    *log.Logger
+	router    *clir.Router
 }
 
-func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, sessions SessionStore, executor SessionRunner, cfg *appconfig.Config, logger *log.Logger) *TelegramBot {
+func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, sessions SessionStore, executor SessionRunner, sandboxes sandboxengine.Manager, cfg *appconfig.Config, logger *log.Logger) *TelegramBot {
 	dispatcher := NewDispatcher()
+	if sandboxes == nil {
+		sandboxes = &sandboxengine.DockerManager{Logger: logger}
+	}
 	return &TelegramBot{
-		API:      api,
-		Updates:  updates,
-		Sessions: sessions,
-		Executor: executor,
-		Dispatch: dispatcher,
-		Config:   cfg,
-		Logger:   logger,
+		API:       api,
+		Updates:   updates,
+		Sessions:  sessions,
+		Executor:  executor,
+		Sandboxes: sandboxes,
+		Dispatch:  dispatcher,
+		Config:    cfg,
+		Logger:    logger,
 	}
 }
 
@@ -198,7 +204,7 @@ func (tb *TelegramBot) handleStopConversation(ctx context.Context, u chatmodel.T
 	if conv == nil {
 		return tb.replyText(ctx, u, "no active conversation")
 	}
-	if err := tb.Executor.StopConversation(ctx, conv); err != nil {
+	if err := tb.sandboxManager().Remove(ctx, conv.ContainerName); err != nil {
 		return err
 	}
 	if err := tb.Sessions.MarkStopped(ctx, conv.ID, "stopped by /stop"); err != nil {
@@ -243,7 +249,20 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpd
 		}
 	}
 
-	reply, runErr := tb.Executor.SendPrompt(ctx, conv, prompt)
+	if err := tb.Executor.PrepareConversation(ctx, conv); err != nil {
+		return err
+	}
+	sbx, err := tb.sandboxManager().Ensure(ctx, tb.Executor.SandboxSpec(conv))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := tb.sandboxManager().Stop(context.Background(), conv.ContainerName); err != nil {
+			tb.logf("stop conversation sandbox %s failed: %v", conv.ContainerName, err)
+		}
+	}()
+
+	reply, runErr := tb.Executor.SendPrompt(ctx, conv, prompt, sbx)
 	if reply != "" {
 		reply = cleanTextForTelegram(reply)
 	}
@@ -253,8 +272,8 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpd
 		_ = tb.Sessions.MarkInitialized(ctx, conv.ID)
 	}
 	if conv.ID != 0 {
-		if strings.TrimSpace(conv.CodexThreadID) != "" {
-			_ = tb.Sessions.MarkCodexThreadID(ctx, conv.ID, conv.CodexThreadID)
+		if strings.TrimSpace(conv.ProviderThreadID) != "" {
+			_ = tb.Sessions.MarkProviderThreadID(ctx, conv.ID, conv.ProviderThreadID)
 		}
 		lastErr := ""
 		if runErr != nil {
@@ -271,7 +290,7 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpd
 	return runErr
 }
 
-func (tb *TelegramBot) startConversation(ctx context.Context, chatID int64, threadID int, workspace string, replace bool) (*codexengine.ChatSession, error) {
+func (tb *TelegramBot) startConversation(ctx context.Context, chatID int64, threadID int, workspace string, replace bool) (*conversationmodel.ChatSession, error) {
 	current, err := tb.Sessions.GetActive(ctx, chatID, threadID)
 	if err != nil {
 		return nil, err
@@ -280,19 +299,61 @@ func (tb *TelegramBot) startConversation(ctx context.Context, chatID int64, thre
 		if !replace {
 			return current, nil
 		}
-		_ = tb.Executor.StopConversation(ctx, current)
+		_ = tb.sandboxManager().Remove(ctx, current.ContainerName)
 		_ = tb.Sessions.MarkStopped(ctx, current.ID, "replaced by /new")
 	}
 
-	conv, err := tb.Executor.StartConversation(ctx, chatID, threadID, workspace)
+	conv, err := tb.newConversationSession(ctx, chatID, threadID, workspace)
 	if err != nil {
 		return nil, err
 	}
 	if err := tb.Sessions.Create(ctx, conv); err != nil {
-		_ = tb.Executor.StopConversation(ctx, conv)
+		_ = tb.sandboxManager().Remove(ctx, conv.ContainerName)
 		return nil, err
 	}
 	return conv, nil
+}
+
+func (tb *TelegramBot) newConversationSession(ctx context.Context, chatID int64, threadID int, workspace string) (*conversationmodel.ChatSession, error) {
+	if tb.Config == nil {
+		return nil, fmt.Errorf("missing config")
+	}
+	if err := tb.Config.EnsurePaths(); err != nil {
+		return nil, err
+	}
+	if _, err := tb.Config.EnsureChatRuntimePaths(chatID); err != nil {
+		return nil, err
+	}
+	workspaceHostPath, err := tb.Config.ResolveChatWorkspaceHostPath(chatID, threadID, workspace)
+	if err != nil {
+		return nil, err
+	}
+	conv := &conversationmodel.ChatSession{
+		ChatID:             chatID,
+		ThreadID:           threadID,
+		Active:             true,
+		ProviderType:       "codex",
+		ContainerName:      tb.Config.ChatContainerName(chatID, threadID),
+		WorkspaceHost:      workspaceHostPath,
+		HomeHost:           tb.Config.ChatCodexHomeDirByID(chatID),
+		ContainerWorkspace: tb.Config.ContainerWorkspacePath(),
+		ContainerHome:      tb.Config.ContainerHomePath(),
+	}
+	if err := tb.Executor.PrepareConversation(ctx, conv); err != nil {
+		return nil, err
+	}
+	if err := tb.sandboxManager().Remove(ctx, conv.ContainerName); err != nil {
+		tb.logf("ignoring stale sandbox cleanup error for %s: %v", conv.ContainerName, err)
+	}
+	tb.logf("conversation session prepared name=%s workspace=%s", conv.ContainerName, conv.WorkspaceHost)
+	return conv, nil
+}
+
+func (tb *TelegramBot) sandboxManager() sandboxengine.Manager {
+	if tb.Sandboxes == nil {
+		tb.Sandboxes = &sandboxengine.DockerManager{Logger: tb.Logger}
+	}
+	return tb.Sandboxes
 }
 
 func (tb *TelegramBot) replyText(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
