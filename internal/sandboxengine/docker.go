@@ -29,32 +29,32 @@ func (m *DockerManager) InspectState(ctx context.Context, name string) (State, e
 	return State(state), nil
 }
 
-func (m *DockerManager) Ensure(ctx context.Context, spec Spec) (Sandbox, error) {
+func (m *DockerManager) Ensure(ctx context.Context, spec Spec) (Sandbox, bool, error) {
 	if strings.TrimSpace(spec.Name) == "" {
-		return nil, fmt.Errorf("missing sandbox name")
+		return nil, false, fmt.Errorf("missing sandbox name")
 	}
 	state, err := m.InspectState(ctx, spec.Name)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	switch state {
 	case StateRunning:
-		return DockerSandbox{ContainerName: spec.Name, Workdir: spec.Workdir, Env: append([]string{}, spec.Env...)}, nil
+		return DockerSandbox{ContainerName: spec.Name, Workdir: spec.Workdir, Env: append([]string{}, spec.Env...)}, false, nil
 	case StateCreated, StateExited:
 		if err := m.containerManager().Start(ctx, spec.Name); err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return DockerSandbox{ContainerName: spec.Name, Workdir: spec.Workdir, Env: append([]string{}, spec.Env...)}, nil
+		return DockerSandbox{ContainerName: spec.Name, Workdir: spec.Workdir, Env: append([]string{}, spec.Env...)}, false, nil
 	case StateMissing:
 		if err := m.containerManager().Create(ctx, m.toContainerSpec(spec)); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if err := m.containerManager().Start(ctx, spec.Name); err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return DockerSandbox{ContainerName: spec.Name, Workdir: spec.Workdir, Env: append([]string{}, spec.Env...)}, nil
+		return DockerSandbox{ContainerName: spec.Name, Workdir: spec.Workdir, Env: append([]string{}, spec.Env...)}, true, nil
 	default:
-		return nil, fmt.Errorf("unsupported sandbox state %q for %s", state, spec.Name)
+		return nil, false, fmt.Errorf("unsupported sandbox state %q for %s", state, spec.Name)
 	}
 }
 

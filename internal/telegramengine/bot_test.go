@@ -10,7 +10,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
-	"github.com/bartdeboer/ctgbot/internal/conversationmodel"
+	"github.com/bartdeboer/ctgbot/internal/providerengine"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -41,18 +41,18 @@ func (f *fakeTelegramAPI) SendMessage(ctx context.Context, chatID int64, threadI
 }
 
 type fakeSessionStore struct {
-	active               *conversationmodel.ChatSession
-	created              *conversationmodel.ChatSession
+	active               *ChatSession
+	created              *ChatSession
 	markInitializedID    uint
 	markErrorValue       string
 	markProviderThreadID string
 }
 
 func (f *fakeSessionStore) AutoMigrate(ctx context.Context) error { return nil }
-func (f *fakeSessionStore) GetActive(ctx context.Context, chatID int64, threadID int) (*conversationmodel.ChatSession, error) {
+func (f *fakeSessionStore) GetActive(ctx context.Context, chatID int64, threadID int) (*ChatSession, error) {
 	return f.active, nil
 }
-func (f *fakeSessionStore) Create(ctx context.Context, sess *conversationmodel.ChatSession) error {
+func (f *fakeSessionStore) Create(ctx context.Context, sess *ChatSession) error {
 	sess.ID = 1
 	f.created = sess
 	f.active = sess
@@ -75,24 +75,20 @@ func (f *fakeSessionStore) MarkProviderThreadID(ctx context.Context, id uint, th
 }
 
 type fakeSessionRunner struct {
-	startedChatID   int64
-	startedThreadID int
-	sentPrompt      string
+	sentPrompt string
 }
 
-func (f *fakeSessionRunner) PrepareConversation(ctx context.Context, conv *conversationmodel.ChatSession) error {
-	f.startedChatID = conv.ChatID
-	f.startedThreadID = conv.ThreadID
+func (f *fakeSessionRunner) PrepareSandbox(req providerengine.PrepareSandboxRequest) error {
 	return nil
 }
 
-func (f *fakeSessionRunner) SandboxSpec(conv *conversationmodel.ChatSession) sandboxengine.Spec {
-	return sandboxengine.Spec{Name: conv.ContainerName}
+func (f *fakeSessionRunner) SandboxSpec(req providerengine.SandboxSpecRequest) sandboxengine.Spec {
+	return sandboxengine.Spec{Name: req.SandboxName}
 }
 
-func (f *fakeSessionRunner) SendPrompt(ctx context.Context, conv *conversationmodel.ChatSession, prompt string, sbx sandboxengine.Sandbox) (string, error) {
-	f.sentPrompt = prompt
-	return "reply text", nil
+func (f *fakeSessionRunner) SendPrompt(req providerengine.PromptRequest, sbx sandboxengine.Sandbox) (providerengine.PromptResult, error) {
+	f.sentPrompt = req.Prompt
+	return providerengine.PromptResult{Reply: "reply text"}, nil
 }
 
 type fakeSandbox struct{}
@@ -107,8 +103,8 @@ func (f fakeSandboxManager) InspectState(ctx context.Context, name string) (sand
 	return sandboxengine.StateMissing, nil
 }
 
-func (f fakeSandboxManager) Ensure(ctx context.Context, spec sandboxengine.Spec) (sandboxengine.Sandbox, error) {
-	return fakeSandbox{}, nil
+func (f fakeSandboxManager) Ensure(ctx context.Context, spec sandboxengine.Spec) (sandboxengine.Sandbox, bool, error) {
+	return fakeSandbox{}, true, nil
 }
 
 func (f fakeSandboxManager) Stop(ctx context.Context, name string) error {
@@ -164,14 +160,14 @@ func TestHandlePromptAutoStartsConversation(t *testing.T) {
 		t.Fatalf("handlePrompt returned error: %v", err)
 	}
 
-	if executor.startedChatID != 42 || executor.startedThreadID != 7 {
-		t.Fatalf("auto-started wrong conversation: chat=%d thread=%d", executor.startedChatID, executor.startedThreadID)
-	}
 	if executor.sentPrompt != "hello there" {
 		t.Fatalf("sent prompt = %q, want %q", executor.sentPrompt, "hello there")
 	}
 	if sessions.created == nil {
 		t.Fatalf("expected session to be created")
+	}
+	if sessions.created.ChatID != 42 || sessions.created.ThreadID != 7 {
+		t.Fatalf("auto-started wrong conversation: chat=%d thread=%d", sessions.created.ChatID, sessions.created.ThreadID)
 	}
 	if sessions.markInitializedID != 1 {
 		t.Fatalf("expected session to be marked initialized, got %d", sessions.markInitializedID)

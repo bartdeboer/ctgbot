@@ -8,8 +8,10 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/codexengine"
-	"github.com/bartdeboer/ctgbot/internal/conversationmodel"
+	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/ctgbot/internal/providerengine"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+	"github.com/bartdeboer/ctgbot/internal/telegramengine"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -42,7 +44,7 @@ func registerSessionRoutes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			conv := &conversationmodel.ChatSession{
+			conv := &telegramengine.ChatSession{
 				ChatID:             1,
 				ThreadID:           0,
 				Active:             true,
@@ -50,17 +52,46 @@ func registerSessionRoutes(r *clir.Router, store *clistate.Store) {
 				ContainerName:      cfg.ChatContainerName(1, 0),
 				WorkspaceHost:      workspaceHostPath,
 				HomeHost:           cfg.ChatCodexHomeDirByID(1),
+				ThreadRuntimeHost:  cfg.ChatThreadsRoot(1),
 				ContainerWorkspace: cfg.ContainerWorkspacePath(),
 				ContainerHome:      cfg.ContainerHomePath(),
 			}
-			if err := exec.PrepareConversation(req.Context(), conv); err != nil {
+			if err := hostbridgetls.EnsureChatClientMaterials(cfg.HostbridgeTLSRoot(), cfg.ChatThreadTLSDir(conv.ChatID, conv.ThreadID), conv.ContainerName); err != nil {
+				return err
+			}
+			if err := exec.PrepareSandbox(providerengine.PrepareSandboxRequest{
+				ProfilePath:         conv.HomeHost,
+				WorkspacePath:       conv.WorkspaceHost,
+				ContainerHome:       conv.ContainerHome,
+				ContainerWorkspace:  conv.ContainerWorkspace,
+				HostOS:              "darwin",
+				HostbridgeAddr:      cfg.ContainerHostbridgeTCPAddr(),
+				AllowedHostCommands: nil,
+			}); err != nil {
 				return err
 			}
 			sandboxes := &sandboxengine.DockerManager{Logger: logger}
 			if err := sandboxes.Remove(req.Context(), conv.ContainerName); err != nil {
 				logger.Printf("ignoring stale sandbox cleanup error for %s: %v", conv.ContainerName, err)
 			}
-			if _, err := sandboxes.Ensure(req.Context(), exec.SandboxSpec(conv)); err != nil {
+			spec := exec.SandboxSpec(providerengine.SandboxSpecRequest{
+				SandboxName:        conv.ContainerName,
+				ProfilePath:        conv.HomeHost,
+				WorkspacePath:      conv.WorkspaceHost,
+				ContainerHome:      conv.ContainerHome,
+				ContainerWorkspace: conv.ContainerWorkspace,
+			})
+			spec.SecurityOpts = append(spec.SecurityOpts, "seccomp=unconfined")
+			spec.Env = append(spec.Env,
+				"HOSTBRIDGE_ADDR="+cfg.ContainerHostbridgeTCPAddr(),
+				"HOSTBRIDGE_TLS_DIR="+cfg.ContainerHostbridgeTLSDir(),
+			)
+			spec.Mounts = append(spec.Mounts, sandboxengine.Mount{
+				Source:   cfg.ChatThreadTLSDir(conv.ChatID, conv.ThreadID),
+				Target:   cfg.ContainerHostbridgeTLSDir(),
+				ReadOnly: true,
+			})
+			if _, _, err := sandboxes.Ensure(req.Context(), spec); err != nil {
 				return err
 			}
 			if err := sandboxes.Stop(req.Context(), conv.ContainerName); err != nil {

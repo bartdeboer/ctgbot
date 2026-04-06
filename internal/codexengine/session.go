@@ -9,14 +9,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
-	"github.com/bartdeboer/ctgbot/internal/conversationmodel"
-	"github.com/bartdeboer/ctgbot/internal/hostbridge"
-	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/ctgbot/internal/providerengine"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -25,55 +22,65 @@ type SessionExecutor struct {
 	Logger *log.Logger
 }
 
-func (e *SessionExecutor) PrepareConversation(ctx context.Context, conv *conversationmodel.ChatSession) error {
-	return e.prepareConversationState(ctx, conv)
+func (e *SessionExecutor) PrepareSandbox(req providerengine.PrepareSandboxRequest) error {
+	if e.Config == nil {
+		return fmt.Errorf("missing config")
+	}
+	if err := e.Config.EnsurePaths(); err != nil {
+		return err
+	}
+	if err := e.Config.EnsureCodexCLIHome(); err != nil {
+		return err
+	}
+	if err := (&ImageBuilder{Config: e.Config, Logger: e.Logger}).EnsureImage(context.Background()); err != nil {
+		return err
+	}
+	allowedCommands := strings.Join(req.AllowedHostCommands, ", ")
+	if strings.TrimSpace(allowedCommands) == "" {
+		allowedCommands = "<none>"
+	}
+	bootstrapText, err := bootstrapassets.Text(bootstrapassets.TemplateData{
+		Workspace:      req.ContainerWorkspace,
+		CodexHome:      req.ContainerHome,
+		ContainerOS:    "linux",
+		HostOS:         req.HostOS,
+		HostbridgeAddr: req.HostbridgeAddr,
+		Binaries:       allowedCommands,
+	})
+	if err != nil {
+		e.logf("render bootstrap template failed: %v", err)
+		bootstrapText = ""
+	}
+	return ensureConversationCodexHome(e.Config, req.ProfilePath, req.ContainerHome, req.ContainerWorkspace, bootstrapText)
 }
 
-func (e *SessionExecutor) SandboxSpec(conv *conversationmodel.ChatSession) sandboxengine.Spec {
-	spec := sandboxengine.Spec{
-		Name:         conv.ContainerName,
-		Hostname:     conv.ContainerName,
-		Image:        e.Config.DockerImage(),
-		Workdir:      conv.ContainerWorkspace,
-		SecurityOpts: []string{"seccomp=unconfined"},
-		Labels: map[string]string{
-			"ctgbot.managed":   "true",
-			"ctgbot.chat_id":   fmt.Sprintf("%d", conv.ChatID),
-			"ctgbot.thread_id": fmt.Sprintf("%d", conv.ThreadID),
-		},
+func (e *SessionExecutor) SandboxSpec(req providerengine.SandboxSpecRequest) sandboxengine.Spec {
+	return sandboxengine.Spec{
+		Name:     req.SandboxName,
+		Hostname: req.SandboxName,
+		Image:    e.Config.DockerImage(),
+		Workdir:  req.ContainerWorkspace,
 		Env: []string{
-			"HOME=" + conv.ContainerHome,
-			"CODEX_HOME=" + conv.ContainerHome,
-			"HOSTBRIDGE_ADDR=" + e.Config.ContainerHostbridgeTCPAddr(),
-			"HOSTBRIDGE_TLS_DIR=" + e.Config.ContainerHostbridgeTLSDir(),
+			"HOME=" + req.ContainerHome,
+			"CODEX_HOME=" + req.ContainerHome,
 		},
 		Mounts: []sandboxengine.Mount{
-			{Source: conv.WorkspaceHost, Target: conv.ContainerWorkspace},
-			{Source: conv.HomeHost, Target: conv.ContainerHome},
-			{Source: e.chatTLSDir(conv), Target: e.Config.ContainerHostbridgeTLSDir(), ReadOnly: true},
+			{Source: req.WorkspacePath, Target: req.ContainerWorkspace},
+			{Source: req.ProfilePath, Target: req.ContainerHome},
 		},
 		Cmd: []string{"tail", "-f", "/dev/null"},
 	}
-	if runtime.GOOS == "linux" {
-		spec.AddHosts = []string{"host.docker.internal:host-gateway"}
-	}
-	return spec
 }
 
-func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *conversationmodel.ChatSession, prompt string, sbx sandboxengine.Sandbox) (string, error) {
-	if conv == nil {
-		return "", fmt.Errorf("missing conversation")
-	}
+func (e *SessionExecutor) SendPrompt(req providerengine.PromptRequest, sbx sandboxengine.Sandbox) (providerengine.PromptResult, error) {
 	if sbx == nil {
-		return "", fmt.Errorf("missing sandbox")
+		return providerengine.PromptResult{}, fmt.Errorf("missing sandbox")
 	}
-	if strings.TrimSpace(prompt) == "" {
-		return "", fmt.Errorf("missing prompt")
-	}
-	if err := e.prepareConversationState(ctx, conv); err != nil {
-		return "", err
+	if strings.TrimSpace(req.Prompt) == "" {
+		return providerengine.PromptResult{}, fmt.Errorf("missing prompt")
 	}
 
+	ctx := context.Background()
 	timeout := e.Config.SessionTimeout()
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -89,22 +96,18 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *conversationmode
 		"exec",
 		"--json",
 		"--skip-git-repo-check",
-		"--add-dir", conv.ContainerWorkspace,
+		"--add-dir", req.ContainerWorkspace,
 		"--output-last-message", outputPath,
-		"-C", conv.ContainerWorkspace,
+		"-C", req.ContainerWorkspace,
 	}
 
 	if model := e.Config.CodexModel(); model != "" {
 		args = append(args, "-m", model)
 	}
-	if conv.Initialized {
-		if strings.TrimSpace(conv.ProviderThreadID) != "" {
-			args = append(args, "resume", conv.ProviderThreadID, prompt)
-		} else {
-			args = append(args, "resume", "--last", prompt)
-		}
+	if strings.TrimSpace(req.ProviderThreadID) != "" {
+		args = append(args, "resume", req.ProviderThreadID, req.Prompt)
 	} else {
-		args = append(args, strings.TrimSpace(prompt))
+		args = append(args, strings.TrimSpace(req.Prompt))
 	}
 
 	var stdoutBuf bytes.Buffer
@@ -114,106 +117,33 @@ func (e *SessionExecutor) SendPrompt(ctx context.Context, conv *conversationmode
 	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 	err := cmd.Run()
 
-	if conv.ProviderThreadID == "" {
-		if threadID := extractCodexThreadID(stdoutBuf.String()); threadID != "" {
-			conv.ProviderThreadID = threadID
-			e.logf("codex thread started chat=%d thread=%d codex_thread_id=%s", conv.ChatID, conv.ThreadID, threadID)
-		}
+	providerThreadID := strings.TrimSpace(req.ProviderThreadID)
+	if providerThreadID == "" {
+		providerThreadID = extractCodexThreadID(stdoutBuf.String())
+	}
+	if providerThreadID != "" {
+		e.logf("codex thread started provider_thread_id=%s", providerThreadID)
 	}
 	lastMessage, readErr := runSandboxCommand(ctx, sbx, "cat", outputPath)
 	lastMessage = strings.TrimSpace(lastMessage)
 
 	if err != nil {
 		if readErr == nil && lastMessage != "" {
-			return lastMessage, fmt.Errorf("codex exec: %w", err)
+			return providerengine.PromptResult{Reply: lastMessage, ProviderThreadID: providerThreadID}, fmt.Errorf("codex exec: %w", err)
 		}
 		detail := strings.TrimSpace(stderrBuf.String())
 		if detail == "" {
 			detail = strings.TrimSpace(stdoutBuf.String())
 		}
-		return "", fmt.Errorf("codex exec: %w: %s", err, detail)
+		return providerengine.PromptResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
 	}
 	if readErr != nil {
-		return "", fmt.Errorf("read last message: %w", readErr)
+		return providerengine.PromptResult{}, fmt.Errorf("read last message: %w", readErr)
 	}
 	if lastMessage == "" {
-		return "", fmt.Errorf("codex returned an empty response")
+		return providerengine.PromptResult{}, fmt.Errorf("codex returned an empty response")
 	}
-	return lastMessage, nil
-}
-
-func (e *SessionExecutor) prepareConversationState(ctx context.Context, conv *conversationmodel.ChatSession) error {
-	if e.Config == nil {
-		return fmt.Errorf("missing config")
-	}
-	if conv == nil {
-		return fmt.Errorf("missing conversation")
-	}
-	if err := e.Config.EnsurePaths(); err != nil {
-		return err
-	}
-	if err := e.Config.EnsureCodexCLIHome(); err != nil {
-		return err
-	}
-	builder := &ImageBuilder{Config: e.Config, Logger: e.Logger}
-	if err := builder.EnsureImage(ctx); err != nil {
-		return err
-	}
-	_, err := e.Config.EnsureChatRuntimePaths(conv.ChatID)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(conv.WorkspaceHost) == "" {
-		workspaceHostPath, err := e.Config.ResolveChatWorkspaceHostPath(conv.ChatID, conv.ThreadID, "")
-		if err != nil {
-			return err
-		}
-		conv.WorkspaceHost = workspaceHostPath
-	}
-	conv.HomeHost = e.Config.ChatCodexHomeDirByID(conv.ChatID)
-	if strings.TrimSpace(conv.ContainerName) == "" {
-		conv.ContainerName = e.Config.ChatContainerName(conv.ChatID, conv.ThreadID)
-	}
-	if strings.TrimSpace(conv.ContainerWorkspace) == "" {
-		conv.ContainerWorkspace = e.Config.ContainerWorkspacePath()
-	}
-	if strings.TrimSpace(conv.ContainerHome) == "" {
-		conv.ContainerHome = e.Config.ContainerHomePath()
-	}
-	if err := ensureConversationCodexHome(e.Config, conv.HomeHost, e.renderBootstrapInstructions(conv.ChatID)); err != nil {
-		return err
-	}
-	if err := hostbridgetls.EnsureChatClientMaterials(e.Config.HostbridgeTLSRoot(), e.chatTLSDir(conv), conv.ContainerName); err != nil {
-		return fmt.Errorf("ensure hostbridge tls client materials: %w", err)
-	}
-	return nil
-}
-
-func (e *SessionExecutor) chatTLSDir(conv *conversationmodel.ChatSession) string {
-	if conv == nil || e.Config == nil || strings.TrimSpace(conv.ContainerName) == "" {
-		return ""
-	}
-	return e.Config.ChatThreadTLSDir(conv.ChatID, conv.ThreadID)
-}
-
-func (e *SessionExecutor) renderBootstrapInstructions(chatID int64) string {
-	allowedCommands := strings.Join(hostbridge.AllowedCommandNames(hostbridge.MergeAllowedCommandSpecs(e.Config.ChatHostbridgeAllowedCommandSpecs(chatID))), ", ")
-	if strings.TrimSpace(allowedCommands) == "" {
-		allowedCommands = "<none>"
-	}
-	bootstrapText, err := bootstrapassets.Text(bootstrapassets.TemplateData{
-		Workspace:      e.Config.ContainerWorkspacePath(),
-		CodexHome:      e.Config.ContainerHomePath(),
-		ContainerOS:    "linux",
-		HostOS:         runtime.GOOS,
-		HostbridgeAddr: e.Config.ContainerHostbridgeTCPAddr(),
-		Binaries:       allowedCommands,
-	})
-	if err != nil {
-		e.logf("render bootstrap template failed: %v", err)
-		return ""
-	}
-	return strings.TrimSpace(bootstrapText)
+	return providerengine.PromptResult{Reply: lastMessage, ProviderThreadID: providerThreadID}, nil
 }
 
 func (e *SessionExecutor) logf(format string, args ...any) {
@@ -228,12 +158,7 @@ func runSandboxCommand(ctx context.Context, sbx sandboxengine.Sandbox, name stri
 	return string(out), err
 }
 
-func cleanTextForTelegram(text string) string {
-	text = strings.ReplaceAll(text, "\r\n", "\n")
-	return strings.TrimSpace(text)
-}
-
-func ensureConversationCodexHome(cfg *appconfig.Config, homeDir string, bootstrapText string) error {
+func ensureConversationCodexHome(cfg *appconfig.Config, homeDir string, containerHome string, containerWorkspace string, bootstrapText string) error {
 	if cfg == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -270,7 +195,7 @@ exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 writable_roots = [%q]
 network_access = true
-`, path.Join(cfg.ContainerHomePath(), "ctgbot-bootstrap.md"), cfg.ContainerWorkspacePath())) + "\n"
+`, path.Join(containerHome, "ctgbot-bootstrap.md"), containerWorkspace)) + "\n"
 	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
 		return err
 	}

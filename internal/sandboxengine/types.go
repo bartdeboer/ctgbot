@@ -39,7 +39,7 @@ type Sandbox interface {
 
 type Manager interface {
 	InspectState(ctx context.Context, name string) (State, error)
-	Ensure(ctx context.Context, spec Spec) (Sandbox, error)
+	Ensure(ctx context.Context, spec Spec) (Sandbox, bool, error)
 	Stop(ctx context.Context, name string) error
 	Remove(ctx context.Context, name string) error
 }

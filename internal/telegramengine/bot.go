@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"runtime"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
-	"github.com/bartdeboer/ctgbot/internal/conversationmodel"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/ctgbot/internal/providerengine"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clir"
 )
@@ -18,8 +21,8 @@ type tgEventKey struct{}
 
 type SessionStore interface {
 	AutoMigrate(ctx context.Context) error
-	GetActive(ctx context.Context, chatID int64, threadID int) (*conversationmodel.ChatSession, error)
-	Create(ctx context.Context, sess *conversationmodel.ChatSession) error
+	GetActive(ctx context.Context, chatID int64, threadID int) (*ChatSession, error)
+	Create(ctx context.Context, sess *ChatSession) error
 	MarkStopped(ctx context.Context, id uint, lastErr string) error
 	MarkInitialized(ctx context.Context, id uint) error
 	MarkError(ctx context.Context, id uint, lastErr string) error
@@ -27,9 +30,9 @@ type SessionStore interface {
 }
 
 type SessionRunner interface {
-	PrepareConversation(ctx context.Context, conv *conversationmodel.ChatSession) error
-	SandboxSpec(conv *conversationmodel.ChatSession) sandboxengine.Spec
-	SendPrompt(ctx context.Context, conv *conversationmodel.ChatSession, prompt string, sbx sandboxengine.Sandbox) (string, error)
+	PrepareSandbox(req providerengine.PrepareSandboxRequest) error
+	SandboxSpec(req providerengine.SandboxSpecRequest) sandboxengine.Spec
+	SendPrompt(req providerengine.PromptRequest, sbx sandboxengine.Sandbox) (providerengine.PromptResult, error)
 }
 
 type TelegramBot struct {
@@ -249,12 +252,18 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpd
 		}
 	}
 
-	if err := tb.Executor.PrepareConversation(ctx, conv); err != nil {
+	if err := tb.ensureSandboxRuntime(ctx, conv); err != nil {
 		return err
 	}
-	sbx, err := tb.sandboxManager().Ensure(ctx, tb.Executor.SandboxSpec(conv))
+	spec := tb.decorateSandboxSpec(conv, tb.Executor.SandboxSpec(tb.sandboxSpecRequest(conv)))
+	sbx, created, err := tb.sandboxManager().Ensure(ctx, spec)
 	if err != nil {
 		return err
+	}
+	if created {
+		if err := tb.Executor.PrepareSandbox(tb.prepareSandboxRequest(conv)); err != nil {
+			return err
+		}
 	}
 	defer func() {
 		if err := tb.sandboxManager().Stop(context.Background(), conv.ContainerName); err != nil {
@@ -262,9 +271,13 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpd
 		}
 	}()
 
-	reply, runErr := tb.Executor.SendPrompt(ctx, conv, prompt, sbx)
+	result, runErr := tb.Executor.SendPrompt(tb.promptRequest(conv, prompt), sbx)
+	reply := result.Reply
 	if reply != "" {
 		reply = cleanTextForTelegram(reply)
+	}
+	if strings.TrimSpace(result.ProviderThreadID) != "" {
+		conv.ProviderThreadID = result.ProviderThreadID
 	}
 
 	if conv.ID != 0 && !conv.Initialized && runErr == nil {
@@ -290,7 +303,7 @@ func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpd
 	return runErr
 }
 
-func (tb *TelegramBot) startConversation(ctx context.Context, chatID int64, threadID int, workspace string, replace bool) (*conversationmodel.ChatSession, error) {
+func (tb *TelegramBot) startConversation(ctx context.Context, chatID int64, threadID int, workspace string, replace bool) (*ChatSession, error) {
 	current, err := tb.Sessions.GetActive(ctx, chatID, threadID)
 	if err != nil {
 		return nil, err
@@ -314,7 +327,20 @@ func (tb *TelegramBot) startConversation(ctx context.Context, chatID int64, thre
 	return conv, nil
 }
 
-func (tb *TelegramBot) newConversationSession(ctx context.Context, chatID int64, threadID int, workspace string) (*conversationmodel.ChatSession, error) {
+func (tb *TelegramBot) ensureSandboxRuntime(ctx context.Context, conv *ChatSession) error {
+	if tb.Config == nil {
+		return fmt.Errorf("missing config")
+	}
+	if _, err := tb.Config.EnsureChatRuntimePaths(conv.ChatID); err != nil {
+		return err
+	}
+	if err := hostbridgetls.EnsureChatClientMaterials(tb.Config.HostbridgeTLSRoot(), tb.Config.ChatThreadTLSDir(conv.ChatID, conv.ThreadID), conv.ContainerName); err != nil {
+		return fmt.Errorf("ensure hostbridge tls client materials: %w", err)
+	}
+	return nil
+}
+
+func (tb *TelegramBot) newConversationSession(ctx context.Context, chatID int64, threadID int, workspace string) (*ChatSession, error) {
 	if tb.Config == nil {
 		return nil, fmt.Errorf("missing config")
 	}
@@ -328,7 +354,7 @@ func (tb *TelegramBot) newConversationSession(ctx context.Context, chatID int64,
 	if err != nil {
 		return nil, err
 	}
-	conv := &conversationmodel.ChatSession{
+	conv := &ChatSession{
 		ChatID:             chatID,
 		ThreadID:           threadID,
 		Active:             true,
@@ -336,11 +362,9 @@ func (tb *TelegramBot) newConversationSession(ctx context.Context, chatID int64,
 		ContainerName:      tb.Config.ChatContainerName(chatID, threadID),
 		WorkspaceHost:      workspaceHostPath,
 		HomeHost:           tb.Config.ChatCodexHomeDirByID(chatID),
+		ThreadRuntimeHost:  tb.Config.ChatThreadsRoot(chatID),
 		ContainerWorkspace: tb.Config.ContainerWorkspacePath(),
 		ContainerHome:      tb.Config.ContainerHomePath(),
-	}
-	if err := tb.Executor.PrepareConversation(ctx, conv); err != nil {
-		return nil, err
 	}
 	if err := tb.sandboxManager().Remove(ctx, conv.ContainerName); err != nil {
 		tb.logf("ignoring stale sandbox cleanup error for %s: %v", conv.ContainerName, err)
@@ -349,11 +373,94 @@ func (tb *TelegramBot) newConversationSession(ctx context.Context, chatID int64,
 	return conv, nil
 }
 
+func (tb *TelegramBot) prepareSandboxRequest(conv *ChatSession) providerengine.PrepareSandboxRequest {
+	allowedCommands := hostbridge.AllowedCommandNames(hostbridge.MergeAllowedCommandSpecs(tb.Config.ChatHostbridgeAllowedCommandSpecs(conv.ChatID)))
+	return providerengine.PrepareSandboxRequest{
+		ProfilePath:         conv.HomeHost,
+		WorkspacePath:       conv.WorkspaceHost,
+		ContainerHome:       conv.ContainerHome,
+		ContainerWorkspace:  conv.ContainerWorkspace,
+		HostOS:              runtime.GOOS,
+		HostbridgeAddr:      tb.Config.ContainerHostbridgeTCPAddr(),
+		AllowedHostCommands: allowedCommands,
+	}
+}
+
+func (tb *TelegramBot) sandboxSpecRequest(conv *ChatSession) providerengine.SandboxSpecRequest {
+	return providerengine.SandboxSpecRequest{
+		SandboxName:        conv.ContainerName,
+		ProfilePath:        conv.HomeHost,
+		WorkspacePath:      conv.WorkspaceHost,
+		ContainerHome:      conv.ContainerHome,
+		ContainerWorkspace: conv.ContainerWorkspace,
+	}
+}
+
+func (tb *TelegramBot) promptRequest(conv *ChatSession, prompt string) providerengine.PromptRequest {
+	return providerengine.PromptRequest{
+		ProviderThreadID:   conv.ProviderThreadID,
+		Prompt:             prompt,
+		ContainerHome:      conv.ContainerHome,
+		ContainerWorkspace: conv.ContainerWorkspace,
+	}
+}
+
+func (tb *TelegramBot) decorateSandboxSpec(conv *ChatSession, spec sandboxengine.Spec) sandboxengine.Spec {
+	spec.SecurityOpts = appendUnique(spec.SecurityOpts, "seccomp=unconfined")
+	spec.Labels = copyStringMap(spec.Labels)
+	spec.Labels["ctgbot.managed"] = "true"
+	spec.Labels["ctgbot.chat_id"] = fmt.Sprintf("%d", conv.ChatID)
+	spec.Labels["ctgbot.thread_id"] = fmt.Sprintf("%d", conv.ThreadID)
+	spec.Env = append(spec.Env,
+		"HOSTBRIDGE_ADDR="+tb.Config.ContainerHostbridgeTCPAddr(),
+		"HOSTBRIDGE_TLS_DIR="+tb.Config.ContainerHostbridgeTLSDir(),
+	)
+	spec.Mounts = append(spec.Mounts, sandboxengine.Mount{
+		Source:   tb.Config.ChatThreadTLSDir(conv.ChatID, conv.ThreadID),
+		Target:   tb.Config.ContainerHostbridgeTLSDir(),
+		ReadOnly: true,
+	})
+	if runtime.GOOS == "linux" {
+		spec.AddHosts = appendUnique(spec.AddHosts, "host.docker.internal:host-gateway")
+	}
+	return spec
+}
+
 func (tb *TelegramBot) sandboxManager() sandboxengine.Manager {
 	if tb.Sandboxes == nil {
 		tb.Sandboxes = &sandboxengine.DockerManager{Logger: tb.Logger}
 	}
 	return tb.Sandboxes
+}
+
+func appendUnique(slice []string, values ...string) []string {
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		found := false
+		for _, existing := range slice {
+			if existing == value {
+				found = true
+				break
+			}
+		}
+		if !found {
+			slice = append(slice, value)
+		}
+	}
+	return slice
+}
+
+func copyStringMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 func (tb *TelegramBot) replyText(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
