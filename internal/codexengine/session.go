@@ -13,7 +13,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
-	"github.com/bartdeboer/ctgbot/internal/providerengine"
+	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -22,7 +22,11 @@ type SessionExecutor struct {
 	Logger *log.Logger
 }
 
-func (e *SessionExecutor) PrepareSandbox(req providerengine.PrepareSandboxRequest) error {
+func (e *SessionExecutor) Name() string {
+	return "codex"
+}
+
+func (e *SessionExecutor) InitSession(ctx context.Context, rt chatbroker.RuntimeContext, sbx sandboxengine.Sandbox) error {
 	if e.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -35,52 +39,51 @@ func (e *SessionExecutor) PrepareSandbox(req providerengine.PrepareSandboxReques
 	if err := (&ImageBuilder{Config: e.Config, Logger: e.Logger}).EnsureImage(context.Background()); err != nil {
 		return err
 	}
-	allowedCommands := strings.Join(req.AllowedHostCommands, ", ")
+	allowedCommands := strings.Join(rt.AllowedHostCommands, ", ")
 	if strings.TrimSpace(allowedCommands) == "" {
 		allowedCommands = "<none>"
 	}
 	bootstrapText, err := bootstrapassets.Text(bootstrapassets.TemplateData{
-		Workspace:      req.ContainerWorkspace,
-		CodexHome:      req.ContainerHome,
+		Workspace:      rt.ContainerWorkspace,
+		CodexHome:      rt.ContainerHome,
 		ContainerOS:    "linux",
-		HostOS:         req.HostOS,
-		HostbridgeAddr: req.HostbridgeAddr,
+		HostOS:         rt.HostOS,
+		HostbridgeAddr: rt.HostbridgeAddr,
 		Binaries:       allowedCommands,
 	})
 	if err != nil {
 		e.logf("render bootstrap template failed: %v", err)
 		bootstrapText = ""
 	}
-	return ensureConversationCodexHome(e.Config, req.ProfilePath, req.ContainerHome, req.ContainerWorkspace, bootstrapText)
+	return ensureConversationCodexHome(e.Config, rt.ProfilePath, rt.ContainerHome, rt.ContainerWorkspace, bootstrapText)
 }
 
-func (e *SessionExecutor) SandboxSpec(req providerengine.SandboxSpecRequest) sandboxengine.Spec {
+func (e *SessionExecutor) SandboxSpec(rt chatbroker.RuntimeContext) sandboxengine.Spec {
 	return sandboxengine.Spec{
-		Name:     req.SandboxName,
-		Hostname: req.SandboxName,
+		Name:     rt.SandboxName,
+		Hostname: rt.SandboxName,
 		Image:    e.Config.DockerImage(),
-		Workdir:  req.ContainerWorkspace,
+		Workdir:  rt.ContainerWorkspace,
 		Env: []string{
-			"HOME=" + req.ContainerHome,
-			"CODEX_HOME=" + req.ContainerHome,
+			"HOME=" + rt.ContainerHome,
+			"CODEX_HOME=" + rt.ContainerHome,
 		},
 		Mounts: []sandboxengine.Mount{
-			{Source: req.WorkspacePath, Target: req.ContainerWorkspace},
-			{Source: req.ProfilePath, Target: req.ContainerHome},
+			{Source: rt.WorkspacePath, Target: rt.ContainerWorkspace},
+			{Source: rt.ProfilePath, Target: rt.ContainerHome},
 		},
 		Cmd: []string{"tail", "-f", "/dev/null"},
 	}
 }
 
-func (e *SessionExecutor) SendPrompt(req providerengine.PromptRequest, sbx sandboxengine.Sandbox) (providerengine.PromptResult, error) {
+func (e *SessionExecutor) HandleTurn(ctx context.Context, rt chatbroker.RuntimeContext, sbx sandboxengine.Sandbox, providerThreadID string, prompt string) (chatbroker.TurnResult, error) {
 	if sbx == nil {
-		return providerengine.PromptResult{}, fmt.Errorf("missing sandbox")
+		return chatbroker.TurnResult{}, fmt.Errorf("missing sandbox")
 	}
-	if strings.TrimSpace(req.Prompt) == "" {
-		return providerengine.PromptResult{}, fmt.Errorf("missing prompt")
+	if strings.TrimSpace(prompt) == "" {
+		return chatbroker.TurnResult{}, fmt.Errorf("missing prompt")
 	}
 
-	ctx := context.Background()
 	timeout := e.Config.SessionTimeout()
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -96,18 +99,18 @@ func (e *SessionExecutor) SendPrompt(req providerengine.PromptRequest, sbx sandb
 		"exec",
 		"--json",
 		"--skip-git-repo-check",
-		"--add-dir", req.ContainerWorkspace,
+		"--add-dir", rt.ContainerWorkspace,
 		"--output-last-message", outputPath,
-		"-C", req.ContainerWorkspace,
+		"-C", rt.ContainerWorkspace,
 	}
 
 	if model := e.Config.CodexModel(); model != "" {
 		args = append(args, "-m", model)
 	}
-	if strings.TrimSpace(req.ProviderThreadID) != "" {
-		args = append(args, "resume", req.ProviderThreadID, req.Prompt)
+	if strings.TrimSpace(providerThreadID) != "" {
+		args = append(args, "resume", providerThreadID, prompt)
 	} else {
-		args = append(args, strings.TrimSpace(req.Prompt))
+		args = append(args, strings.TrimSpace(prompt))
 	}
 
 	var stdoutBuf bytes.Buffer
@@ -117,33 +120,33 @@ func (e *SessionExecutor) SendPrompt(req providerengine.PromptRequest, sbx sandb
 	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 	err := cmd.Run()
 
-	providerThreadID := strings.TrimSpace(req.ProviderThreadID)
-	if providerThreadID == "" {
-		providerThreadID = extractCodexThreadID(stdoutBuf.String())
+	nextProviderThreadID := strings.TrimSpace(providerThreadID)
+	if nextProviderThreadID == "" {
+		nextProviderThreadID = extractCodexThreadID(stdoutBuf.String())
 	}
-	if providerThreadID != "" {
-		e.logf("codex thread started provider_thread_id=%s", providerThreadID)
+	if nextProviderThreadID != "" {
+		e.logf("codex thread started provider_thread_id=%s", nextProviderThreadID)
 	}
 	lastMessage, readErr := runSandboxCommand(ctx, sbx, "cat", outputPath)
 	lastMessage = strings.TrimSpace(lastMessage)
 
 	if err != nil {
 		if readErr == nil && lastMessage != "" {
-			return providerengine.PromptResult{Reply: lastMessage, ProviderThreadID: providerThreadID}, fmt.Errorf("codex exec: %w", err)
+			return chatbroker.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
 		}
 		detail := strings.TrimSpace(stderrBuf.String())
 		if detail == "" {
 			detail = strings.TrimSpace(stdoutBuf.String())
 		}
-		return providerengine.PromptResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
+		return chatbroker.TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
 	}
 	if readErr != nil {
-		return providerengine.PromptResult{}, fmt.Errorf("read last message: %w", readErr)
+		return chatbroker.TurnResult{}, fmt.Errorf("read last message: %w", readErr)
 	}
 	if lastMessage == "" {
-		return providerengine.PromptResult{}, fmt.Errorf("codex returned an empty response")
+		return chatbroker.TurnResult{}, fmt.Errorf("codex returned an empty response")
 	}
-	return providerengine.PromptResult{Reply: lastMessage, ProviderThreadID: providerThreadID}, nil
+	return chatbroker.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, nil
 }
 
 func (e *SessionExecutor) logf(format string, args ...any) {
