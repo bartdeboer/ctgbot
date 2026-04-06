@@ -1,17 +1,17 @@
-package telegramengine
+package chatbroker
 
 import (
 	"context"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 )
 
 func TestDispatcherSerializesSameChat(t *testing.T) {
+	t.Parallel()
+
 	d := NewDispatcher()
-	key := chatmodel.ChatKey{ChatID: 1, ThreadID: 0}
+	key := dispatchKey{ChatID: 1, ThreadID: 0}
 
 	started := make(chan struct{}, 2)
 	releaseFirst := make(chan struct{})
@@ -51,10 +51,12 @@ func TestDispatcherSerializesSameChat(t *testing.T) {
 }
 
 func TestDispatcherAllowsDifferentChats(t *testing.T) {
+	t.Parallel()
+
 	d := NewDispatcher()
 
-	firstKey := chatmodel.ChatKey{ChatID: 1, ThreadID: 0}
-	secondKey := chatmodel.ChatKey{ChatID: 2, ThreadID: 0}
+	firstKey := dispatchKey{ChatID: 1, ThreadID: 0}
+	secondKey := dispatchKey{ChatID: 2, ThreadID: 0}
 
 	firstStarted := make(chan struct{})
 	secondDone := make(chan struct{})

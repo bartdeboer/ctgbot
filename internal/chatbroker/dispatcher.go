@@ -1,15 +1,18 @@
-package telegramengine
+package chatbroker
 
 import (
 	"context"
 	"sync"
-
-	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 )
 
 type Dispatcher struct {
 	mu    sync.Mutex
-	locks map[chatmodel.ChatKey]*chatLock
+	locks map[dispatchKey]*chatLock
+}
+
+type dispatchKey struct {
+	ChatID   int64
+	ThreadID int
 }
 
 type chatLock struct {
@@ -19,11 +22,11 @@ type chatLock struct {
 
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
-		locks: make(map[chatmodel.ChatKey]*chatLock),
+		locks: make(map[dispatchKey]*chatLock),
 	}
 }
 
-func (d *Dispatcher) Run(ctx context.Context, key chatmodel.ChatKey, fn func(context.Context) error) error {
+func (d *Dispatcher) Run(ctx context.Context, key dispatchKey, fn func(context.Context) error) error {
 	lock := d.acquire(key)
 	defer d.release(key, lock)
 
@@ -36,7 +39,7 @@ func (d *Dispatcher) Run(ctx context.Context, key chatmodel.ChatKey, fn func(con
 	return fn(ctx)
 }
 
-func (d *Dispatcher) acquire(key chatmodel.ChatKey) *chatLock {
+func (d *Dispatcher) acquire(key dispatchKey) *chatLock {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -49,7 +52,7 @@ func (d *Dispatcher) acquire(key chatmodel.ChatKey) *chatLock {
 	return lock
 }
 
-func (d *Dispatcher) release(key chatmodel.ChatKey, lock *chatLock) {
+func (d *Dispatcher) release(key dispatchKey, lock *chatLock) {
 	if lock == nil {
 		return
 	}
