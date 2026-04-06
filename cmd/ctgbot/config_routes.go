@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bartdeboer/go-clir"
-	"github.com/bartdeboer/go-clistate"
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/go-clir"
+	"github.com/bartdeboer/go-clistate"
 )
 
 func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *clistate.Store) {
@@ -27,6 +27,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			fs.SetOutput(os.Stdout)
 
 			setTelegramToken := fs.String("set-telegram-token", "", "Persist telegram.token into config")
+			setBuildCompilerPath := fs.String("set-build-compiler-path", "", "Persist build.compiler_path into global config")
 			setDockerImage := fs.String("set-docker-image", "", "Persist docker.image into config")
 			setDockerCLIContainerName := fs.String("set-docker-cli-container-name", "", "Persist docker.cli_container_name into config")
 			setWorkspaceHostPath := fs.String("set-workspace-host-path", "", "Persist docker.workspace_host_path into config")
@@ -53,6 +54,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			}
 
 			if *setTelegramToken == "" &&
+				*setBuildCompilerPath == "" &&
 				*setDockerImage == "" &&
 				*setDockerCLIContainerName == "" &&
 				*setWorkspaceHostPath == "" &&
@@ -76,6 +78,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 
 				fmt.Println("Current config:")
 				fmt.Printf("  project_dir: %q\n", globalStore.GetString("project_dir", ""))
+				fmt.Printf("  build.compiler_path: %q\n", globalStore.GetString("build.compiler_path", ""))
 				fmt.Printf("  telegram.token: %q\n", store.GetString("telegram.token", ""))
 				fmt.Printf("  docker.image: %q\n", cfg.DockerImage())
 				fmt.Printf("  docker.cli_container_name: %q\n", cfg.DockerCLIContainerName())
@@ -124,6 +127,11 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			if *setTelegramToken != "" {
 				if err := store.PersistString("telegram.token", *setTelegramToken); err != nil {
 					return fmt.Errorf("persist telegram.token: %w", err)
+				}
+			}
+			if *setBuildCompilerPath != "" {
+				if err := globalStore.PersistString("build.compiler_path", *setBuildCompilerPath); err != nil {
+					return fmt.Errorf("persist build.compiler_path: %w", err)
 				}
 			}
 			if *setDockerImage != "" {
