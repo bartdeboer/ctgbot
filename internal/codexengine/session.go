@@ -54,7 +54,7 @@ func (e *SessionExecutor) StartConversation(ctx context.Context, chatID int64, t
 	if err := e.prepareConversationState(ctx, conv); err != nil {
 		return nil, err
 	}
-	conv.HomeHost = e.Config.ChatCodexHomeDir(e.Config.ChatFolderName(chatID, threadID))
+	conv.HomeHost = e.Config.ChatCodexHomeDirByID(chatID)
 	if err := e.removeContainer(ctx, conv.ContainerName); err != nil {
 		e.logf("ignoring stale container cleanup error for %s: %v", conv.ContainerName, err)
 	}
@@ -180,7 +180,7 @@ func (e *SessionExecutor) prepareConversationState(ctx context.Context, conv *Ch
 	if err := builder.EnsureImage(ctx); err != nil {
 		return err
 	}
-	folderName, err := e.Config.EnsureChatRuntimePaths(conv.ChatID, conv.ThreadID)
+	_, err := e.Config.EnsureChatRuntimePaths(conv.ChatID)
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func (e *SessionExecutor) prepareConversationState(ctx context.Context, conv *Ch
 		}
 		conv.WorkspaceHost = workspaceHostPath
 	}
-	conv.HomeHost = e.Config.ChatCodexHomeDir(folderName)
+	conv.HomeHost = e.Config.ChatCodexHomeDirByID(conv.ChatID)
 	if strings.TrimSpace(conv.ContainerName) == "" {
 		conv.ContainerName = e.Config.ChatContainerName(conv.ChatID, conv.ThreadID)
 	}
@@ -312,10 +312,10 @@ func (e *SessionExecutor) removeContainer(ctx context.Context, containerName str
 }
 
 func (e *SessionExecutor) chatTLSDir(conv *ChatSession) string {
-	if conv == nil || strings.TrimSpace(conv.HomeHost) == "" {
+	if conv == nil || e.Config == nil || strings.TrimSpace(conv.ContainerName) == "" {
 		return ""
 	}
-	return filepath.Join(filepath.Dir(conv.HomeHost), "tls")
+	return e.Config.ChatThreadTLSDir(conv.ChatID, conv.ThreadID)
 }
 
 func (e *SessionExecutor) renderBootstrapInstructions(chatID int64) string {
