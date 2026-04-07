@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
@@ -36,7 +34,7 @@ type PromptOutcome struct {
 }
 
 type IncomingMessage struct {
-	ProviderType      string
+	ChatProviderType  string
 	ProviderChatID    string
 	ProviderThreadID  string
 	Message           string
@@ -95,7 +93,7 @@ func (b *Broker) AutoMigrate(ctx context.Context) error {
 }
 
 func (b *Broker) GetActiveSession(ctx context.Context, thread *Thread) (*Thread, error) {
-	if b.Sessions == nil || thread == nil {
+	if thread == nil {
 		return nil, nil
 	}
 	if !thread.Active {
@@ -104,17 +102,33 @@ func (b *Broker) GetActiveSession(ctx context.Context, thread *Thread) (*Thread,
 	return thread, nil
 }
 
-func (b *Broker) StartSession(ctx context.Context, chat *Chat, thread *Thread, workspace string, replace bool) (*Thread, error) {
+func (b *Broker) StartSession(ctx context.Context, chatID modeluuid.UUID, thread *Thread, workspace string, replace bool) (*Thread, error) {
 	var out *Thread
-	err := b.dispatcher().Run(ctx, b.dispatchKey(chat, thread), func(runCtx context.Context) error {
+	err := b.dispatcher().Run(ctx, b.dispatchKey(chatID, threadIDOrNil(thread)), func(runCtx context.Context) error {
 		var err error
-		out, err = b.startSession(runCtx, chat, thread, workspace, replace)
+		out, err = b.startSession(runCtx, chatID, thread, workspace, replace)
 		return err
 	})
 	return out, err
 }
 
-func (b *Broker) startSession(ctx context.Context, chat *Chat, thread *Thread, workspace string, replace bool) (*Thread, error) {
+func (b *Broker) startSession(ctx context.Context, chatID modeluuid.UUID, thread *Thread, workspace string, replace bool) (*Thread, error) {
+	if chatID.IsNull() {
+		return nil, fmt.Errorf("missing chat id")
+	}
+	if thread == nil {
+		thread = &Thread{
+			ID:     modeluuid.New(),
+			ChatID: chatID,
+		}
+	}
+	if thread.ChatID.IsNull() {
+		thread.ChatID = chatID
+	}
+	if thread.ChatID != chatID {
+		return nil, fmt.Errorf("thread chat id mismatch")
+	}
+
 	current, err := b.GetActiveSession(ctx, thread)
 	if err != nil {
 		return nil, err
@@ -123,7 +137,7 @@ func (b *Broker) startSession(ctx context.Context, chat *Chat, thread *Thread, w
 		if !replace {
 			return current, nil
 		}
-		_ = b.newSandbox(chat, current).Remove(ctx)
+		_ = b.newSandbox(current).Remove(ctx)
 		if b.Sessions != nil {
 			current.Active = false
 			current.LastError = "replaced by /new"
@@ -131,13 +145,7 @@ func (b *Broker) startSession(ctx context.Context, chat *Chat, thread *Thread, w
 		}
 	}
 
-	if chat == nil {
-		chat = &Chat{ID: modeluuid.New(), ProviderType: "local"}
-	}
-	if thread == nil {
-		thread = &Thread{ID: modeluuid.New(), ChatID: chat.ID}
-	}
-	conv, err := b.prepareThread(ctx, chat, thread, workspace)
+	conv, err := b.prepareThread(ctx, chatID, thread, workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +154,7 @@ func (b *Broker) startSession(ctx context.Context, chat *Chat, thread *Thread, w
 	}
 	if b.Sessions != nil {
 		if err := b.Sessions.SaveThread(ctx, conv); err != nil {
-			_ = b.newSandbox(chat, conv).Remove(context.Background())
+			_ = b.newSandbox(conv).Remove(context.Background())
 			return nil, err
 		}
 	}
@@ -157,7 +165,7 @@ func (b *Broker) StopSession(ctx context.Context, thread *Thread) error {
 	if thread == nil {
 		return nil
 	}
-	return b.dispatcher().Run(ctx, b.dispatchKeyByID(thread.ChatID, thread.ID), func(runCtx context.Context) error {
+	return b.dispatcher().Run(ctx, b.dispatchKey(thread.ChatID, thread.ID), func(runCtx context.Context) error {
 		return b.stopSession(runCtx, thread)
 	})
 }
@@ -166,11 +174,7 @@ func (b *Broker) stopSession(ctx context.Context, conv *Thread) error {
 	if conv == nil {
 		return nil
 	}
-	chat, err := b.chatByID(ctx, conv.ChatID)
-	if err != nil {
-		return err
-	}
-	if err := b.newSandbox(chat, conv).Remove(ctx); err != nil {
+	if err := b.newSandbox(conv).Remove(ctx); err != nil {
 		return err
 	}
 	if b.Sessions == nil {
@@ -181,11 +185,11 @@ func (b *Broker) stopSession(ctx context.Context, conv *Thread) error {
 	return b.Sessions.SaveThread(ctx, conv)
 }
 
-func (b *Broker) PrepareSession(ctx context.Context, chat *Chat, conv *Thread) error {
+func (b *Broker) PrepareSession(ctx context.Context, conv *Thread) error {
 	if conv == nil {
 		return fmt.Errorf("missing thread")
 	}
-	return b.dispatcher().Run(ctx, b.dispatchKey(chat, conv), func(runCtx context.Context) error {
+	return b.dispatcher().Run(ctx, b.dispatchKey(conv.ChatID, conv.ID), func(runCtx context.Context) error {
 		return b.prepareSession(runCtx, conv)
 	})
 }
@@ -196,24 +200,24 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg IncomingMessage)
 		return IncomingResult{}, nil
 	}
 
-	chat, thread, err := b.resolveIncomingThread(ctx, msg, true)
+	chatCfg, thread, err := b.resolveIncomingThread(ctx, msg, true)
 	if err != nil {
 		return IncomingResult{}, err
 	}
-	if err := b.persistIncomingChat(ctx, chat, msg); err != nil {
-		b.logf("persist incoming chat failed provider=%q chat=%q: %v", msg.ProviderType, msg.ProviderChatID, err)
+	if chatCfg == nil {
+		return IncomingResult{}, fmt.Errorf("missing chat mapping")
 	}
-	if !b.chatEnabled(chat) {
-		b.logf("ignoring update from disabled chat provider=%q chat=%q title=%q", msg.ProviderType, msg.ProviderChatID, msg.ChatLabel)
+	if !chatCfg.Enabled {
+		b.logf("ignoring update from disabled chat provider=%q chat=%q title=%q", msg.ChatProviderType, msg.ProviderChatID, chatCfg.ProviderChatTitle)
 		return IncomingResult{}, nil
 	}
 
 	if strings.HasPrefix(text, "/") {
-		args := normalizeIncomingCommand(msg.ProviderType, text)
+		args := normalizeIncomingCommand(msg.ChatProviderType, text)
 		if len(args) == 0 {
 			return IncomingResult{}, nil
 		}
-		reply, err := b.handleCommand(ctx, chat, thread, args[0], args[1:])
+		reply, err := b.handleCommand(ctx, chatCfg.ID, thread, args[0], args[1:])
 		if err != nil {
 			return IncomingResult{
 				Messages: []OutboundMessage{{Text: fmt.Sprintf("command error: %v", err)}},
@@ -227,12 +231,13 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg IncomingMessage)
 		}, nil
 	}
 
-	outcome, err := b.handlePrompt(ctx, chat, thread, text)
+	outcome, err := b.handlePrompt(ctx, chatCfg.ID, thread, text)
 	if err != nil {
 		return IncomingResult{
 			Messages: []OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
 		}, nil
 	}
+
 	var messages []OutboundMessage
 	if outcome.Started && outcome.Thread != nil {
 		messages = append(messages, OutboundMessage{
@@ -249,14 +254,14 @@ func (b *Broker) prepareSession(ctx context.Context, conv *Thread) error {
 	return b.prepareEnvironment(ctx, conv)
 }
 
-func (b *Broker) handleCommand(ctx context.Context, chat *Chat, thread *Thread, name string, args []string) (string, error) {
+func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, thread *Thread, name string, args []string) (string, error) {
 	switch name {
 	case "new":
 		workspace := ""
 		if len(args) > 0 {
 			workspace = args[0]
 		}
-		conv, err := b.StartSession(ctx, chat, thread, workspace, true)
+		conv, err := b.StartSession(ctx, chatID, thread, workspace, true)
 		if err != nil {
 			return "", err
 		}
@@ -298,31 +303,32 @@ func (b *Broker) handleCommand(ctx context.Context, chat *Chat, thread *Thread, 
 	}
 }
 
-func (b *Broker) HandlePrompt(ctx context.Context, chat *Chat, thread *Thread, prompt string) (PromptOutcome, error) {
+func (b *Broker) HandlePrompt(ctx context.Context, chatID modeluuid.UUID, thread *Thread, prompt string) (PromptOutcome, error) {
 	var out PromptOutcome
-	err := b.dispatcher().Run(ctx, b.dispatchKey(chat, thread), func(runCtx context.Context) error {
+	err := b.dispatcher().Run(ctx, b.dispatchKey(chatID, threadIDOrNil(thread)), func(runCtx context.Context) error {
 		var err error
-		out, err = b.handlePrompt(runCtx, chat, thread, prompt)
+		out, err = b.handlePrompt(runCtx, chatID, thread, prompt)
 		return err
 	})
 	return out, err
 }
 
-func (b *Broker) handlePrompt(ctx context.Context, chat *Chat, thread *Thread, prompt string) (PromptOutcome, error) {
+func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread *Thread, prompt string) (PromptOutcome, error) {
 	conv, err := b.GetActiveSession(ctx, thread)
 	if err != nil {
 		return PromptOutcome{}, err
 	}
+
 	started := false
 	if conv == nil {
-		conv, err = b.startSession(ctx, chat, thread, "", false)
+		conv, err = b.startSession(ctx, chatID, thread, "", false)
 		if err != nil {
 			return PromptOutcome{}, err
 		}
 		started = true
 	}
 
-	agent, sbx, err := b.ensurePreparedSession(ctx, chat, conv)
+	agent, sbx, err := b.ensurePreparedSession(ctx, conv)
 	if err != nil {
 		return PromptOutcome{}, err
 	}
@@ -337,13 +343,14 @@ func (b *Broker) handlePrompt(ctx context.Context, chat *Chat, thread *Thread, p
 		conv.AgentThreadID = result.ProviderThreadID
 	}
 	if b.Sessions != nil {
-		lastErr := ""
 		if runErr != nil {
-			lastErr = runErr.Error()
+			conv.LastError = runErr.Error()
+		} else {
+			conv.LastError = ""
 		}
-		conv.LastError = lastErr
 		_ = b.Sessions.SaveThread(ctx, conv)
 	}
+
 	return PromptOutcome{
 		Thread:  conv,
 		Started: started,
@@ -351,15 +358,15 @@ func (b *Broker) handlePrompt(ctx context.Context, chat *Chat, thread *Thread, p
 	}, runErr
 }
 
-func (b *Broker) ensurePreparedSession(ctx context.Context, chat *Chat, conv *Thread) (Agent, *sandboxengine.Sandbox, error) {
+func (b *Broker) ensurePreparedSession(ctx context.Context, conv *Thread) (Agent, *sandboxengine.Sandbox, error) {
 	if err := b.ensureSandboxRuntime(ctx, conv); err != nil {
 		return nil, nil, err
 	}
-	agent, err := b.agent(conv.ProviderType)
+	agent, err := b.agent(conv.AgentProviderType)
 	if err != nil {
 		return nil, nil, err
 	}
-	sbx := b.newSandbox(chat, conv)
+	sbx := b.newSandbox(conv)
 	if !conv.Initialized {
 		if err := agent.SetupEnvironment(ctx, sbx); err != nil {
 			return nil, nil, err
@@ -376,15 +383,11 @@ func (b *Broker) prepareEnvironment(ctx context.Context, conv *Thread) error {
 	if err := b.ensureSandboxRuntime(ctx, conv); err != nil {
 		return err
 	}
-	agent, err := b.agent(conv.ProviderType)
+	agent, err := b.agent(conv.AgentProviderType)
 	if err != nil {
 		return err
 	}
-	chat, err := b.chatByID(ctx, conv.ChatID)
-	if err != nil {
-		return err
-	}
-	sbx := b.newSandbox(chat, conv)
+	sbx := b.newSandbox(conv)
 	if err := agent.SetupEnvironment(ctx, sbx); err != nil {
 		return err
 	}
@@ -395,22 +398,38 @@ func (b *Broker) prepareEnvironment(ctx context.Context, conv *Thread) error {
 	return nil
 }
 
-func (b *Broker) prepareThread(ctx context.Context, chat *Chat, thread *Thread, workspace string) (*Thread, error) {
+func (b *Broker) prepareThread(ctx context.Context, chatID modeluuid.UUID, thread *Thread, workspace string) (*Thread, error) {
 	if b.Config == nil {
 		return nil, fmt.Errorf("missing config")
 	}
+	if chatID.IsNull() {
+		return nil, fmt.Errorf("missing chat id")
+	}
+	if thread == nil {
+		thread = &Thread{
+			ID:     modeluuid.New(),
+			ChatID: chatID,
+		}
+	}
+	if thread.ID.IsNull() {
+		thread.ID = modeluuid.New()
+	}
+	thread.ChatID = chatID
+
 	if err := b.Config.EnsurePaths(); err != nil {
 		return nil, err
 	}
-	if _, err := b.Config.EnsureChatRuntimePaths(thread.ChatID); err != nil {
+	if _, err := b.Config.EnsureChatRuntimePaths(chatID); err != nil {
 		return nil, err
 	}
-	workspaceHostPath, err := b.resolveWorkspaceHostPath(chat, workspace)
+
+	workspaceHostPath, err := b.Config.ResolveChatWorkspaceHostPathByID(chatID, workspace)
 	if err != nil {
 		return nil, err
 	}
+
 	thread.Active = true
-	thread.ProviderType = b.defaultAgentName()
+	thread.AgentProviderType = b.defaultAgentName()
 	thread.ContainerName = b.Config.ChatContainerName(thread.ChatID, thread.ID)
 	thread.WorkspaceHost = workspaceHostPath
 	thread.HomeHost = b.Config.ChatCodexHomeDirByID(thread.ChatID)
@@ -419,7 +438,8 @@ func (b *Broker) prepareThread(ctx context.Context, chat *Chat, thread *Thread, 
 	thread.Initialized = false
 	thread.AgentThreadID = ""
 	thread.LastError = ""
-	if err := b.newSandbox(chat, thread).Remove(ctx); err != nil {
+
+	if err := b.newSandbox(thread).Remove(ctx); err != nil {
 		b.logf("ignoring stale sandbox cleanup error for %s: %v", thread.ContainerName, err)
 	}
 	b.logf("thread prepared name=%s workspace=%s", thread.ContainerName, thread.WorkspaceHost)
@@ -437,20 +457,26 @@ func (b *Broker) ensureSandboxRuntime(ctx context.Context, conv *Thread) error {
 	if _, err := b.Config.EnsureChatRuntimePaths(chatID); err != nil {
 		return err
 	}
-	if err := hostbridgetls.EnsureChatClientMaterials(b.Config.HostbridgeTLSRoot(), b.Config.ChatThreadTLSDir(chatID, threadID), conv.ContainerName); err != nil {
+	if err := hostbridgetls.EnsureChatClientMaterials(
+		b.Config.HostbridgeTLSRoot(),
+		b.Config.ChatThreadTLSDir(chatID, threadID),
+		conv.ContainerName,
+	); err != nil {
 		return fmt.Errorf("ensure hostbridge tls client materials: %w", err)
 	}
 	return nil
 }
 
-func (b *Broker) newSandbox(chat *Chat, conv *Thread) *sandboxengine.Sandbox {
+func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 	sbx := b.sandboxManager().NewSandbox(conv.ContainerName)
+
 	chatID, threadID, _ := b.Config.ParseChatContainerName(conv.ContainerName)
+
 	sbx.WorkspaceDir = conv.WorkspaceHost
 	sbx.ProfileDir = conv.HomeHost
 	sbx.ContainerWorkspace = conv.ContainerWorkspace
 	sbx.ContainerHome = conv.ContainerHome
-	sbx.DeveloperInstructions = b.developerInstructions(chat, conv)
+	sbx.DeveloperInstructions = b.developerInstructions(chatID, conv)
 	sbx.Hostname = conv.ContainerName
 	sbx.Image = b.Config.DockerImage()
 	sbx.Workdir = conv.ContainerWorkspace
@@ -476,19 +502,42 @@ func (b *Broker) newSandbox(chat *Chat, conv *Thread) *sandboxengine.Sandbox {
 	}
 	sbx.SecurityOpts = []string{"seccomp=unconfined"}
 	sbx.Cmd = []string{"tail", "-f", "/dev/null"}
+
 	if runtime.GOOS == "linux" {
 		sbx.AddHosts = []string{"host.docker.internal:host-gateway"}
 	}
 	return sbx
 }
 
-func (b *Broker) developerInstructions(chat *Chat, conv *Thread) string {
-	allowedCommands := append([]string{}, hostbridge.AllowedCommandNames(hostbridge.MergeAllowedCommandSpecs(b.Config.ChatHostbridgeAllowedCommandSpecs(b.providerChatID(chat))))...)
+func (b *Broker) developerInstructions(chatID modeluuid.UUID, conv *Thread) string {
+	allowedCommands := append([]string{}, hostbridge.AllowedCommandNames(
+		hostbridge.MergeAllowedCommandSpecs(b.Config.ChatHostbridgeAllowedCommandSpecsByID(chatID)),
+	)...)
 	sort.Strings(allowedCommands)
+
 	allowedCommandsText := strings.Join(allowedCommands, ", ")
 	if strings.TrimSpace(allowedCommandsText) == "" {
 		allowedCommandsText = "<none>"
 	}
+
+	chatProvider := "Chat"
+	messagePrefix := ""
+	keepRepliesConcise := false
+
+	if chatCfg, err := b.Config.FindChatByID(chatID); err == nil && chatCfg != nil {
+		switch chatCfg.ChatProviderType {
+		case "telegram":
+			chatProvider = "Telegram"
+			messagePrefix = "🤖"
+			keepRepliesConcise = true
+		default:
+			chatProvider = strings.TrimSpace(chatCfg.ChatProviderType)
+			if chatProvider == "" {
+				chatProvider = "Chat"
+			}
+		}
+	}
+
 	text, err := bootstrapassets.Text(bootstrapassets.TemplateData{
 		Workspace:          conv.ContainerWorkspace,
 		CodexHome:          conv.ContainerHome,
@@ -496,9 +545,9 @@ func (b *Broker) developerInstructions(chat *Chat, conv *Thread) string {
 		HostOS:             runtime.GOOS,
 		HostbridgeAddr:     b.Config.ContainerHostbridgeTCPAddr(),
 		Binaries:           allowedCommandsText,
-		ChatProvider:       "Telegram",
-		MessagePrefix:      "🤖",
-		KeepRepliesConcise: true,
+		ChatProvider:       chatProvider,
+		MessagePrefix:      messagePrefix,
+		KeepRepliesConcise: keepRepliesConcise,
 	})
 	if err != nil {
 		b.logf("render bootstrap template failed: %v", err)
@@ -516,23 +565,6 @@ func (b *Broker) agent(name string) (Agent, error) {
 		return nil, fmt.Errorf("unknown agent provider %q", name)
 	}
 	return agent, nil
-}
-
-func (b *Broker) chatByID(ctx context.Context, id modeluuid.UUID) (*Chat, error) {
-	if id.IsNull() {
-		return nil, fmt.Errorf("missing chat id")
-	}
-	if b.Sessions == nil {
-		return &Chat{ID: id}, nil
-	}
-	chat, err := b.Sessions.GetChatByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if chat == nil {
-		return nil, fmt.Errorf("chat not found: %s", id.String())
-	}
-	return chat, nil
 }
 
 func (b *Broker) defaultAgentName() string {
@@ -556,100 +588,63 @@ func (b *Broker) dispatcher() *Dispatcher {
 	return b.Dispatch
 }
 
-func (b *Broker) dispatchKey(chat *Chat, thread *Thread) dispatchKey {
-	if chat == nil {
-		chat = &Chat{}
+func (b *Broker) dispatchKey(chatID modeluuid.UUID, threadID modeluuid.UUID) dispatchKey {
+	return dispatchKey{
+		ChatID:   chatID,
+		ThreadID: threadID,
 	}
-	if thread == nil {
-		thread = &Thread{}
-	}
-	return b.dispatchKeyByID(chat.ID, thread.ID)
 }
 
-func (b *Broker) dispatchKeyByID(chatID modeluuid.UUID, threadID modeluuid.UUID) dispatchKey {
-	return dispatchKey{ChatID: chatID, ThreadID: threadID}
-}
-
-func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage, create bool) (*Chat, *Thread, error) {
+func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage, create bool) (*appconfig.ChatConfigEntry, *Thread, error) {
+	if b.Config == nil {
+		return nil, nil, fmt.Errorf("missing config")
+	}
 	if b.Sessions == nil {
-		return nil, nil, nil
+		return nil, nil, fmt.Errorf("missing session store")
 	}
+
+	providerType := strings.TrimSpace(msg.ChatProviderType)
+	providerChatID := strings.TrimSpace(msg.ProviderChatID)
+	providerThreadID := strings.TrimSpace(msg.ProviderThreadID)
+
+	if providerType == "" {
+		return nil, nil, fmt.Errorf("missing provider type")
+	}
+	if providerChatID == "" {
+		return nil, nil, fmt.Errorf("missing provider chat id")
+	}
+	if providerThreadID == "" {
+		return nil, nil, fmt.Errorf("missing provider thread id")
+	}
+
 	chatLabel := strings.TrimSpace(msg.ChatLabel)
 	if chatLabel == "" {
 		chatLabel = strings.TrimSpace(msg.UserLabel)
 	}
+
 	var (
-		chat   *Chat
-		thread *Thread
-		err    error
+		chatCfg *appconfig.ChatConfigEntry
+		err     error
 	)
 	if create {
-		chat, err = b.Sessions.EnsureChat(ctx, msg.ProviderType, strings.TrimSpace(msg.ProviderChatID), chatLabel)
+		chatCfg, err = b.Config.EnsureProviderChat(providerType, providerChatID, chatLabel)
 	} else {
-		chat, err = b.Sessions.FindChat(ctx, msg.ProviderType, strings.TrimSpace(msg.ProviderChatID))
+		chatCfg, err = b.Config.FindProviderChat(providerType, providerChatID)
 	}
-	if err != nil || chat == nil {
-		return chat, nil, err
+	if err != nil || chatCfg == nil {
+		return chatCfg, nil, err
 	}
+
+	var thread *Thread
 	if create {
-		thread, err = b.Sessions.EnsureThread(ctx, chat.ID, strings.TrimSpace(msg.ProviderThreadID))
+		thread, err = b.Sessions.EnsureThread(ctx, chatCfg.ID, providerThreadID)
 	} else {
-		thread, err = b.Sessions.FindThread(ctx, chat.ID, strings.TrimSpace(msg.ProviderThreadID))
+		thread, err = b.Sessions.FindThread(ctx, chatCfg.ID, providerThreadID)
 	}
 	if err != nil {
 		return nil, nil, err
 	}
-	return chat, thread, nil
-}
-
-func (b *Broker) resolveWorkspaceHostPath(chat *Chat, raw string) (string, error) {
-	candidate := strings.TrimSpace(raw)
-	if candidate == "" {
-		candidate = b.Config.ChatWorkspaceHostPath(b.providerChatID(chat))
-	}
-	if candidate == "" {
-		candidate = b.Config.DefaultWorkspaceHostPath()
-	}
-	if candidate != "" {
-		return b.Config.ResolveWorkspaceHostPath(candidate)
-	}
-	workspace := b.Config.ChatWorkspaceDirByID(chat.ID)
-	if err := os.MkdirAll(workspace, 0o755); err != nil {
-		return "", err
-	}
-	return workspace, nil
-}
-
-func (b *Broker) persistIncomingChat(ctx context.Context, chat *Chat, msg IncomingMessage) error {
-	if b.Config == nil || chat == nil || chat.ProviderType != "telegram" {
-		return nil
-	}
-	label := strings.TrimSpace(msg.ChatLabel)
-	if label == "" {
-		label = strings.TrimSpace(msg.UserLabel)
-	}
-	if label == "" {
-		return nil
-	}
-	return b.Config.PersistChatID(b.providerChatID(chat), label)
-}
-
-func (b *Broker) chatEnabled(chat *Chat) bool {
-	if b.Config == nil || chat == nil || chat.ProviderType != "telegram" {
-		return true
-	}
-	return b.Config.ChatEnabled(b.providerChatID(chat))
-}
-
-func (b *Broker) providerChatID(chat *Chat) int64 {
-	if chat == nil {
-		return 0
-	}
-	providerChatID, err := strconv.ParseInt(strings.TrimSpace(chat.ProviderChatID), 10, 64)
-	if err != nil {
-		return 0
-	}
-	return providerChatID
+	return chatCfg, thread, nil
 }
 
 func normalizeIncomingCommand(providerType string, text string) []string {
@@ -657,6 +652,7 @@ func normalizeIncomingCommand(providerType string, text string) []string {
 	if len(fields) == 0 {
 		return nil
 	}
+
 	fields[0] = strings.TrimPrefix(fields[0], "/")
 	if providerType == "telegram" {
 		if i := strings.Index(fields[0], "@"); i >= 0 {
@@ -664,6 +660,13 @@ func normalizeIncomingCommand(providerType string, text string) []string {
 		}
 	}
 	return fields
+}
+
+func threadIDOrNil(thread *Thread) modeluuid.UUID {
+	if thread == nil {
+		return modeluuid.Nil
+	}
+	return thread.ID
 }
 
 func (b *Broker) logf(format string, args ...any) {

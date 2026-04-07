@@ -41,29 +41,10 @@ func (f *fakeTelegramAPI) SendMessage(ctx context.Context, chatID int64, threadI
 }
 
 type fakeSessionStore struct {
-	chat   *chatbroker.Chat
 	thread *chatbroker.Thread
 }
 
 func (f *fakeSessionStore) AutoMigrate(ctx context.Context) error { return nil }
-
-func (f *fakeSessionStore) FindChat(ctx context.Context, providerType string, providerChatID string) (*chatbroker.Chat, error) {
-	return f.chat, nil
-}
-
-func (f *fakeSessionStore) GetChatByID(ctx context.Context, id modeluuid.UUID) (*chatbroker.Chat, error) {
-	if f.chat != nil && f.chat.ID == id {
-		return f.chat, nil
-	}
-	return nil, nil
-}
-
-func (f *fakeSessionStore) EnsureChat(ctx context.Context, providerType string, providerChatID string, label string) (*chatbroker.Chat, error) {
-	if f.chat == nil {
-		f.chat = &chatbroker.Chat{ID: modeluuid.New(), ProviderType: providerType, ProviderChatID: providerChatID, Label: label, Enabled: true}
-	}
-	return f.chat, nil
-}
 
 func (f *fakeSessionStore) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
 	return f.thread, nil
@@ -155,8 +136,15 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	if agent.sentPrompt != "hello there" {
 		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "hello there")
 	}
-	if sessions.chat == nil || sessions.thread == nil {
-		t.Fatalf("expected chat/thread mapping to be created")
+	if sessions.thread == nil {
+		t.Fatalf("expected thread to be created")
+	}
+	chatCfg, err := cfg.FindProviderChat("telegram", "42")
+	if err != nil {
+		t.Fatalf("find provider chat: %v", err)
+	}
+	if chatCfg == nil {
+		t.Fatalf("expected provider chat mapping to be created")
 	}
 	if !sessions.thread.Active {
 		t.Fatalf("expected thread to be active")
@@ -164,7 +152,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	if !sessions.thread.Initialized {
 		t.Fatalf("expected thread to be initialized")
 	}
-	if sessions.thread.ChatID != sessions.chat.ID {
+	if sessions.thread.ChatID != chatCfg.ID {
 		t.Fatalf("thread does not reference chat")
 	}
 	if !agent.setupCalled {
@@ -174,7 +162,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 		t.Fatalf("expected 2 messages, got %d", len(api.messages))
 	}
 
-	wantStart := "conversation started\ncontainer: " + sessions.thread.ContainerName + "\nworkspace: " + filepath.Join(root, "chats", sessions.chat.ID.String(), "workspace")
+	wantStart := "conversation started\ncontainer: " + sessions.thread.ContainerName + "\nworkspace: " + filepath.Join(root, "chats", chatCfg.ID.String(), "workspace")
 	if api.messages[0].text != wantStart {
 		t.Fatalf("unexpected first message: %q", api.messages[0].text)
 	}

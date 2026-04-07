@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -99,15 +98,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 					if !ok {
 						return hostbridge.DefaultAllowedCommands()
 					}
-					chat, err := sessions.GetChatByID(runCtx, chatID)
-					if err != nil || chat == nil || chat.ProviderType != "telegram" {
-						return hostbridge.DefaultAllowedCommands()
-					}
-					providerChatID, err := strconv.ParseInt(strings.TrimSpace(chat.ProviderChatID), 10, 64)
-					if err != nil {
-						return hostbridge.DefaultAllowedCommands()
-					}
-					return hostbridge.MergeAllowedCommandSpecs(cfg.ChatHostbridgeAllowedCommandSpecs(providerChatID))
+					return hostbridge.MergeAllowedCommandSpecs(cfg.ChatHostbridgeAllowedCommandSpecsByID(chatID))
 				}
 				bridgeErrCh <- hostbridge.ServeListener(runCtx, ln, 30, resolveAllowed, logger)
 			}()

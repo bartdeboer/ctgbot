@@ -75,6 +75,9 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				if err != nil {
 					return err
 				}
+				if err := cfg.EnsurePaths(); err != nil {
+					return err
+				}
 
 				fmt.Println("Current config:")
 				fmt.Printf("  project_dir: %q\n", globalStore.GetString("project_dir", ""))
@@ -97,17 +100,17 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					fmt.Println("    <none yet>")
 				} else {
 					for _, chat := range chats {
-						title := chat.ChatTitle
+						title := chat.ProviderChatTitle
 						if title == "" {
 							title = "<untitled>"
 						}
-						fmt.Printf("    - id=%d scope=%s enabled=%t title=%q\n", chat.ChatID, chat.Scope, chat.Enabled, title)
-						workspacePath := cfg.ChatWorkspaceHostPath(chat.ChatID)
+						fmt.Printf("    - id=%s provider=%s provider_chat_id=%q enabled=%t title=%q\n", chat.ID.String(), chat.ChatProviderType, chat.ProviderChatID, chat.Enabled, title)
+						workspacePath := cfg.ChatWorkspaceHostPathByID(chat.ID)
 						if workspacePath == "" {
 							workspacePath = "<global/default>"
 						}
 						fmt.Printf("      workspace_host_path: %s\n", workspacePath)
-						specs := cfg.ChatHostbridgeAllowedCommandSpecs(chat.ChatID)
+						specs := cfg.ChatHostbridgeAllowedCommandSpecsByID(chat.ID)
 						if len(specs) == 0 {
 							fmt.Println("      hostbridge.allowed_commands: <defaults only>")
 							continue

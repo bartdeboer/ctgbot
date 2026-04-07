@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -24,15 +25,9 @@ func TestSessionStorageEnsuresChatThreadAndPersistsThreadState(t *testing.T) {
 		t.Fatalf("auto migrate: %v", err)
 	}
 
-	chat, err := store.EnsureChat(ctx, "telegram", "-100123", "Test Chat")
-	if err != nil {
-		t.Fatalf("ensure chat: %v", err)
-	}
-	if chat.ID.IsNull() {
-		t.Fatalf("expected chat UUID to be set")
-	}
+	chatID := modeluuid.New()
 
-	thread, err := store.EnsureThread(ctx, chat.ID, "7")
+	thread, err := store.EnsureThread(ctx, chatID, "7")
 	if err != nil {
 		t.Fatalf("ensure thread: %v", err)
 	}
@@ -41,13 +36,13 @@ func TestSessionStorageEnsuresChatThreadAndPersistsThreadState(t *testing.T) {
 	}
 
 	thread.Active = true
-	thread.ProviderType = "codex"
+	thread.AgentProviderType = "codex"
 	thread.ContainerName = "ctgbot-1-7"
 	if err := store.SaveThread(ctx, thread); err != nil {
 		t.Fatalf("save thread: %v", err)
 	}
 
-	got, err := store.FindThread(ctx, chat.ID, "7")
+	got, err := store.FindThread(ctx, chatID, "7")
 	if err != nil {
 		t.Fatalf("find thread: %v", err)
 	}

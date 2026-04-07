@@ -68,6 +68,9 @@ func TestResolveChatWorkspaceHostPathPrefersChatThenGlobalThenDefault(t *testing
 	if err := store.PersistString("docker.workspace_host_path", globalDir); err != nil {
 		t.Fatalf("persist global workspace: %v", err)
 	}
+	if err := cfg.PersistChatID(-123, "Test Chat"); err != nil {
+		t.Fatalf("persist chat mapping: %v", err)
+	}
 
 	got, err := cfg.ResolveChatWorkspaceHostPath(-123, 0, "")
 	if err != nil {
@@ -101,7 +104,7 @@ func TestResolveChatWorkspaceHostPathPrefersChatThenGlobalThenDefault(t *testing
 	}
 }
 
-func TestResolveChatWorkspaceHostPathFallsBackToManagedChatWorkspace(t *testing.T) {
+func TestResolveChatWorkspaceHostPathRequiresKnownChatMapping(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -124,15 +127,8 @@ func TestResolveChatWorkspaceHostPathFallsBackToManagedChatWorkspace(t *testing.
 	}
 
 	got, err := cfg.ResolveChatWorkspaceHostPath(-456, 2, "")
-	if err != nil {
-		t.Fatalf("resolve fallback workspace: %v", err)
-	}
-	want := filepath.Join(root, "chats", "-456", "workspace")
-	if got != want {
-		t.Fatalf("resolve fallback workspace = %q, want %q", got, want)
-	}
-	if info, err := os.Stat(want); err != nil || !info.IsDir() {
-		t.Fatalf("expected fallback workspace directory to exist: %v", err)
+	if err == nil {
+		t.Fatalf("expected unknown chat mapping error, got workspace %q", got)
 	}
 }
 

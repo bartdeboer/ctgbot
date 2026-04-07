@@ -83,7 +83,7 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q text=%q", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), text)
 
 	result, err := tb.Broker.HandleIncomingMessage(ctx, chatbroker.IncomingMessage{
-		ProviderType:      "telegram",
+		ChatProviderType:  "telegram",
 		ProviderChatID:    fmt.Sprintf("%d", u.ChatID),
 		ProviderThreadID:  fmt.Sprintf("%d", u.ThreadID),
 		Message:           text,

@@ -42,7 +42,7 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 
 	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
-		ProviderType:     "telegram",
+		ChatProviderType: "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Message:          "/help@ctgbot",
@@ -60,29 +60,10 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 }
 
 type fakeBrokerSessionStore struct {
-	chat   *Chat
 	thread *Thread
 }
 
 func (f *fakeBrokerSessionStore) AutoMigrate(ctx context.Context) error { return nil }
-
-func (f *fakeBrokerSessionStore) FindChat(ctx context.Context, providerType string, providerChatID string) (*Chat, error) {
-	return f.chat, nil
-}
-
-func (f *fakeBrokerSessionStore) GetChatByID(ctx context.Context, id modeluuid.UUID) (*Chat, error) {
-	if f.chat != nil && f.chat.ID == id {
-		return f.chat, nil
-	}
-	return nil, nil
-}
-
-func (f *fakeBrokerSessionStore) EnsureChat(ctx context.Context, providerType string, providerChatID string, label string) (*Chat, error) {
-	if f.chat == nil {
-		f.chat = &Chat{ID: modeluuid.New(), ProviderType: providerType, ProviderChatID: providerChatID, Label: label, Enabled: true}
-	}
-	return f.chat, nil
-}
 
 func (f *fakeBrokerSessionStore) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
 	return f.thread, nil
