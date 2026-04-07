@@ -2,32 +2,44 @@ package chatbroker
 
 import (
 	"context"
+	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"gorm.io/gorm"
 )
 
-type ChatSession struct {
-	ID uint `gorm:"primaryKey"`
+type Chat struct {
+	ID modeluuid.UUID `gorm:"primaryKey"`
 
-	ChatID   int64 `gorm:"index:idx_chat_session_active"`
-	ThreadID int   `gorm:"index:idx_chat_session_active"`
-	Active   bool  `gorm:"index:idx_chat_session_active"`
+	ProviderType   string `gorm:"uniqueIndex:idx_chat_provider"`
+	ProviderChatID string `gorm:"uniqueIndex:idx_chat_provider"`
+	Label          string
+	Enabled        bool
 
-	ProviderType     string
-	ProviderThreadID string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
 
-	ContainerName string
-	WorkspaceHost string
-	HomeHost      string
+type Thread struct {
+	ID modeluuid.UUID `gorm:"primaryKey"`
 
+	ChatID             modeluuid.UUID `gorm:"uniqueIndex:idx_thread_provider"`
+	ProviderThreadKey  string         `gorm:"uniqueIndex:idx_thread_provider"`
+	ProviderChatID     string
+	Active             bool
+	ProviderType       string
+	AgentThreadID      string
+	ContainerName      string
+	WorkspaceHost      string
+	HomeHost           string
 	ContainerWorkspace string
 	ContainerHome      string
+	Initialized        bool
+	LastError          string
 
-	Initialized bool
-	LastError   string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type SessionStorage struct {
@@ -39,65 +51,106 @@ func NewSessionStorage(db *gorm.DB) *SessionStorage {
 }
 
 func (s *SessionStorage) AutoMigrate(ctx context.Context) error {
-	return s.DB.WithContext(ctx).AutoMigrate(&ChatSession{})
+	return s.DB.WithContext(ctx).AutoMigrate(&Chat{}, &Thread{})
 }
 
-func (s *SessionStorage) GetActive(ctx context.Context, chatID int64, threadID int) (*ChatSession, error) {
-	var sess ChatSession
+func (s *SessionStorage) FindChat(ctx context.Context, providerType string, providerChatID string) (*Chat, error) {
+	var chat Chat
 	err := s.DB.WithContext(ctx).
-		Where("chat_id = ? AND thread_id = ? AND active = ?", chatID, threadID, true).
-		Order("id desc").
-		First(&sess).Error
+		Where("provider_type = ? AND provider_chat_id = ?", strings.TrimSpace(providerType), strings.TrimSpace(providerChatID)).
+		First(&chat).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, err
 	}
-	return &sess, nil
+	return &chat, nil
 }
 
-func (s *SessionStorage) Create(ctx context.Context, sess *ChatSession) error {
-	return s.DB.WithContext(ctx).Create(sess).Error
+func (s *SessionStorage) GetChatByID(ctx context.Context, id modeluuid.UUID) (*Chat, error) {
+	var chat Chat
+	err := s.DB.WithContext(ctx).Where("id = ?", id).First(&chat).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &chat, nil
 }
 
-func (s *SessionStorage) MarkStopped(ctx context.Context, id uint, lastErr string) error {
-	return s.DB.WithContext(ctx).
-		Model(&ChatSession{}).
-		Where("id = ?", id).
-		Updates(map[string]any{
-			"active":     false,
-			"last_error": lastErr,
-		}).Error
+func (s *SessionStorage) EnsureChat(ctx context.Context, providerType string, providerChatID string, label string) (*Chat, error) {
+	chat, err := s.FindChat(ctx, providerType, providerChatID)
+	if err != nil {
+		return nil, err
+	}
+	if chat != nil {
+		label = strings.TrimSpace(label)
+		if label != "" && chat.Label != label {
+			chat.Label = label
+			if err := s.DB.WithContext(ctx).Model(&Chat{}).Where("id = ?", chat.ID).Update("label", chat.Label).Error; err != nil {
+				return nil, err
+			}
+		}
+		return chat, nil
+	}
+	chat = &Chat{
+		ID:             modeluuid.New(),
+		ProviderType:   strings.TrimSpace(providerType),
+		ProviderChatID: strings.TrimSpace(providerChatID),
+		Label:          strings.TrimSpace(label),
+		Enabled:        true,
+	}
+	if err := s.DB.WithContext(ctx).Create(chat).Error; err != nil {
+		return nil, err
+	}
+	return chat, nil
 }
 
-func (s *SessionStorage) MarkInitialized(ctx context.Context, id uint) error {
-	return s.DB.WithContext(ctx).
-		Model(&ChatSession{}).
-		Where("id = ?", id).
-		Update("initialized", true).Error
+func (s *SessionStorage) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*Thread, error) {
+	var thread Thread
+	err := s.DB.WithContext(ctx).
+		Where("chat_id = ? AND provider_thread_key = ?", chatID, strings.TrimSpace(providerThreadKey)).
+		First(&thread).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &thread, nil
 }
 
-func (s *SessionStorage) MarkError(ctx context.Context, id uint, lastErr string) error {
-	return s.DB.WithContext(ctx).
-		Model(&ChatSession{}).
-		Where("id = ?", id).
-		Update("last_error", lastErr).Error
+func (s *SessionStorage) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*Thread, error) {
+	thread, err := s.FindThread(ctx, chatID, providerThreadKey)
+	if err != nil {
+		return nil, err
+	}
+	if thread != nil {
+		return thread, nil
+	}
+	thread = &Thread{
+		ID:                modeluuid.New(),
+		ChatID:            chatID,
+		ProviderThreadKey: strings.TrimSpace(providerThreadKey),
+	}
+	if err := s.DB.WithContext(ctx).Create(thread).Error; err != nil {
+		return nil, err
+	}
+	return thread, nil
 }
 
-func (s *SessionStorage) MarkProviderThreadID(ctx context.Context, id uint, threadID string) error {
-	return s.DB.WithContext(ctx).
-		Model(&ChatSession{}).
-		Where("id = ?", id).
-		Update("provider_thread_id", threadID).Error
+func (s *SessionStorage) SaveThread(ctx context.Context, thread *Thread) error {
+	return s.DB.WithContext(ctx).Save(thread).Error
 }
 
 type SessionStore interface {
 	AutoMigrate(ctx context.Context) error
-	GetActive(ctx context.Context, chatID int64, threadID int) (*ChatSession, error)
-	Create(ctx context.Context, sess *ChatSession) error
-	MarkStopped(ctx context.Context, id uint, lastErr string) error
-	MarkInitialized(ctx context.Context, id uint) error
-	MarkError(ctx context.Context, id uint, lastErr string) error
-	MarkProviderThreadID(ctx context.Context, id uint, threadID string) error
+	FindChat(ctx context.Context, providerType string, providerChatID string) (*Chat, error)
+	GetChatByID(ctx context.Context, id modeluuid.UUID) (*Chat, error)
+	EnsureChat(ctx context.Context, providerType string, providerChatID string, label string) (*Chat, error)
+	FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*Thread, error)
+	EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*Thread, error)
+	SaveThread(ctx context.Context, thread *Thread) error
 }

@@ -8,10 +8,10 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -89,39 +89,39 @@ func (c *Config) ChatFolderName(chatID int64, threadID int) string {
 	return fmt.Sprintf("%d-%d", chatID, threadID)
 }
 
-func (c *Config) ChatRuntimeName(chatID int64) string {
-	return fmt.Sprintf("%d", chatID)
+func (c *Config) ChatRuntimeName(chatID modeluuid.UUID) string {
+	return chatID.String()
 }
 
-func (c *Config) ChatContainerName(chatID int64, threadID int) string {
-	return fmt.Sprintf("%s%d-%d", namePrefix, chatID, threadID)
+func (c *Config) ChatContainerName(chatID modeluuid.UUID, threadID modeluuid.UUID) string {
+	return fmt.Sprintf("%s%s-%s", namePrefix, chatID.String(), threadID.String())
 }
 
-func (c *Config) ParseChatContainerName(name string) (chatID int64, threadID int, ok bool) {
+func (c *Config) ParseChatContainerName(name string) (chatID modeluuid.UUID, threadID modeluuid.UUID, ok bool) {
 	raw := strings.TrimPrefix(strings.TrimSpace(name), namePrefix)
 	if raw == "" || raw == name {
-		return 0, 0, false
+		return modeluuid.Nil, modeluuid.Nil, false
 	}
-	idx := strings.LastIndex(raw, "-")
-	if idx <= 0 || idx == len(raw)-1 {
-		return 0, 0, false
+	parts := strings.SplitN(raw, "-", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return modeluuid.Nil, modeluuid.Nil, false
 	}
-	chatID, err := strconv.ParseInt(raw[:idx], 10, 64)
+	chatID, err := modeluuid.Parse(parts[0])
 	if err != nil {
-		return 0, 0, false
+		return modeluuid.Nil, modeluuid.Nil, false
 	}
-	thread64, err := strconv.ParseInt(raw[idx+1:], 10, 64)
+	threadID, err = modeluuid.Parse(parts[1])
 	if err != nil {
-		return 0, 0, false
+		return modeluuid.Nil, modeluuid.Nil, false
 	}
-	return chatID, int(thread64), true
+	return chatID, threadID, true
 }
 
 func (c *Config) ChatRoot(name string) string {
 	return filepath.Join(c.ChatsRoot(), name)
 }
 
-func (c *Config) ChatRuntimeRoot(chatID int64) string {
+func (c *Config) ChatRuntimeRoot(chatID modeluuid.UUID) string {
 	return c.ChatRoot(c.ChatRuntimeName(chatID))
 }
 
@@ -129,7 +129,7 @@ func (c *Config) ChatCodexHomeDir(name string) string {
 	return filepath.Join(c.ChatRoot(name), ".codex")
 }
 
-func (c *Config) ChatCodexHomeDirByID(chatID int64) string {
+func (c *Config) ChatCodexHomeDirByID(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), ".codex")
 }
 
@@ -137,7 +137,7 @@ func (c *Config) ChatWorkspaceDir(name string) string {
 	return filepath.Join(c.ChatRoot(name), "workspace")
 }
 
-func (c *Config) ChatWorkspaceDirByID(chatID int64) string {
+func (c *Config) ChatWorkspaceDirByID(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), "workspace")
 }
 
@@ -145,7 +145,7 @@ func (c *Config) ChatLogDir(name string) string {
 	return filepath.Join(c.ChatRoot(name), "logs")
 }
 
-func (c *Config) ChatLogDirByID(chatID int64) string {
+func (c *Config) ChatLogDirByID(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), "logs")
 }
 
@@ -153,16 +153,16 @@ func (c *Config) ChatTLSDir(name string) string {
 	return filepath.Join(c.ChatRoot(name), "tls")
 }
 
-func (c *Config) ChatTLSDirByID(chatID int64) string {
+func (c *Config) ChatTLSDirByID(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), "tls")
 }
 
-func (c *Config) ChatThreadsRoot(chatID int64) string {
+func (c *Config) ChatThreadsRoot(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), "threads")
 }
 
-func (c *Config) ChatThreadTLSDir(chatID int64, threadID int) string {
-	return filepath.Join(c.ChatThreadsRoot(chatID), strconv.Itoa(threadID), "tls")
+func (c *Config) ChatThreadTLSDir(chatID modeluuid.UUID, threadID modeluuid.UUID) string {
+	return filepath.Join(c.ChatThreadsRoot(chatID), threadID.String(), "tls")
 }
 
 func (c *Config) HostbridgeTLSRoot() string {
@@ -509,14 +509,14 @@ func (c *Config) ResolveChatWorkspaceHostPath(chatID int64, threadID int, raw st
 	if candidate != "" {
 		return c.ResolveWorkspaceHostPath(candidate)
 	}
-	workspace := c.ChatWorkspaceDirByID(chatID)
+	workspace := filepath.Join(c.ChatsRoot(), fmt.Sprintf("%d", chatID), "workspace")
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		return "", err
 	}
 	return workspace, nil
 }
 
-func (c *Config) EnsureChatRuntimePaths(chatID int64) (string, error) {
+func (c *Config) EnsureChatRuntimePaths(chatID modeluuid.UUID) (string, error) {
 	name := c.ChatRuntimeName(chatID)
 	for _, dir := range []string{
 		c.ChatRuntimeRoot(chatID),

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -157,21 +158,25 @@ func TestEnsureChatRuntimePathsUsesChatScopedLayout(t *testing.T) {
 		t.Fatalf("new config: %v", err)
 	}
 
-	name, err := cfg.EnsureChatRuntimePaths(-789)
+	chatID, err := modeluuid.Parse("00000000100000000000000")
+	if err != nil {
+		t.Fatalf("parse chat uuid: %v", err)
+	}
+	name, err := cfg.EnsureChatRuntimePaths(chatID)
 	if err != nil {
 		t.Fatalf("ensure chat runtime paths: %v", err)
 	}
-	if name != "-789" {
-		t.Fatalf("runtime name = %q, want %q", name, "-789")
+	if name != chatID.String() {
+		t.Fatalf("runtime name = %q, want %q", name, chatID.String())
 	}
 
 	for _, dir := range []string{
-		filepath.Join(root, "chats", "-789"),
-		filepath.Join(root, "chats", "-789", ".codex"),
-		filepath.Join(root, "chats", "-789", "workspace"),
-		filepath.Join(root, "chats", "-789", "logs"),
-		filepath.Join(root, "chats", "-789", "tls"),
-		filepath.Join(root, "chats", "-789", "threads"),
+		filepath.Join(root, "chats", chatID.String()),
+		filepath.Join(root, "chats", chatID.String(), ".codex"),
+		filepath.Join(root, "chats", chatID.String(), "workspace"),
+		filepath.Join(root, "chats", chatID.String(), "logs"),
+		filepath.Join(root, "chats", chatID.String(), "tls"),
+		filepath.Join(root, "chats", chatID.String(), "threads"),
 	} {
 		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 			t.Fatalf("expected runtime dir %q to exist: %v", dir, err)
@@ -201,10 +206,47 @@ func TestChatThreadTLSDirUsesThreadScopedLayout(t *testing.T) {
 		t.Fatalf("new config: %v", err)
 	}
 
-	got := cfg.ChatThreadTLSDir(-100, 6)
-	want := filepath.Join(root, "chats", "-100", "threads", "6", "tls")
+	chatID, err := modeluuid.Parse("00000000200000000000000")
+	if err != nil {
+		t.Fatalf("parse chat uuid: %v", err)
+	}
+	threadID, err := modeluuid.Parse("00000000300000000000000")
+	if err != nil {
+		t.Fatalf("parse thread uuid: %v", err)
+	}
+	got := cfg.ChatThreadTLSDir(chatID, threadID)
+	want := filepath.Join(root, "chats", chatID.String(), "threads", threadID.String(), "tls")
 	if got != want {
 		t.Fatalf("ChatThreadTLSDir() = %q, want %q", got, want)
+	}
+}
+
+func TestChatContainerNameParsesUUIDs(t *testing.T) {
+	root := t.TempDir()
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	chatID, err := modeluuid.Parse("00000000400000000000000")
+	if err != nil {
+		t.Fatalf("parse chat uuid: %v", err)
+	}
+	threadID, err := modeluuid.Parse("00000000500000000000000")
+	if err != nil {
+		t.Fatalf("parse thread uuid: %v", err)
+	}
+
+	name := cfg.ChatContainerName(chatID, threadID)
+	gotChatID, gotThreadID, ok := cfg.ParseChatContainerName(name)
+	if !ok {
+		t.Fatalf("expected container name to parse")
+	}
+	if gotChatID != chatID || gotThreadID != threadID {
+		t.Fatalf("parsed ids = (%q, %q), want (%q, %q)", gotChatID, gotThreadID, chatID, threadID)
 	}
 }
 

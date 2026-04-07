@@ -122,8 +122,8 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 
 func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpdate, prompt string) error {
 	outcome, err := tb.Broker.HandlePrompt(ctx, u.ChatID, u.ThreadID, prompt)
-	if outcome.Started && outcome.Session != nil {
-		msg := fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", outcome.Session.ContainerName, outcome.Session.WorkspaceHost)
+	if outcome.Started && outcome.Thread != nil {
+		msg := fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", outcome.Thread.ContainerName, outcome.Thread.WorkspaceHost)
 		if err := tb.replyText(ctx, u, msg); err != nil {
 			return err
 		}

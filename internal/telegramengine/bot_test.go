@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -40,42 +41,43 @@ func (f *fakeTelegramAPI) SendMessage(ctx context.Context, chatID int64, threadI
 }
 
 type fakeSessionStore struct {
-	active               *chatbroker.ChatSession
-	created              *chatbroker.ChatSession
-	markInitializedID    uint
-	markErrorValue       string
-	markProviderThreadID string
+	chat   *chatbroker.Chat
+	thread *chatbroker.Thread
 }
 
 func (f *fakeSessionStore) AutoMigrate(ctx context.Context) error { return nil }
 
-func (f *fakeSessionStore) GetActive(ctx context.Context, chatID int64, threadID int) (*chatbroker.ChatSession, error) {
-	return f.active, nil
+func (f *fakeSessionStore) FindChat(ctx context.Context, providerType string, providerChatID string) (*chatbroker.Chat, error) {
+	return f.chat, nil
 }
 
-func (f *fakeSessionStore) Create(ctx context.Context, sess *chatbroker.ChatSession) error {
-	sess.ID = 1
-	f.created = sess
-	f.active = sess
-	return nil
+func (f *fakeSessionStore) GetChatByID(ctx context.Context, id modeluuid.UUID) (*chatbroker.Chat, error) {
+	if f.chat != nil && f.chat.ID == id {
+		return f.chat, nil
+	}
+	return nil, nil
 }
 
-func (f *fakeSessionStore) MarkStopped(ctx context.Context, id uint, lastErr string) error {
-	return nil
+func (f *fakeSessionStore) EnsureChat(ctx context.Context, providerType string, providerChatID string, label string) (*chatbroker.Chat, error) {
+	if f.chat == nil {
+		f.chat = &chatbroker.Chat{ID: modeluuid.New(), ProviderType: providerType, ProviderChatID: providerChatID, Label: label, Enabled: true}
+	}
+	return f.chat, nil
 }
 
-func (f *fakeSessionStore) MarkInitialized(ctx context.Context, id uint) error {
-	f.markInitializedID = id
-	return nil
+func (f *fakeSessionStore) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*chatbroker.Thread, error) {
+	return f.thread, nil
 }
 
-func (f *fakeSessionStore) MarkError(ctx context.Context, id uint, lastErr string) error {
-	f.markErrorValue = lastErr
-	return nil
+func (f *fakeSessionStore) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*chatbroker.Thread, error) {
+	if f.thread == nil {
+		f.thread = &chatbroker.Thread{ID: modeluuid.New(), ChatID: chatID, ProviderThreadKey: providerThreadKey}
+	}
+	return f.thread, nil
 }
 
-func (f *fakeSessionStore) MarkProviderThreadID(ctx context.Context, id uint, threadID string) error {
-	f.markProviderThreadID = threadID
+func (f *fakeSessionStore) SaveThread(ctx context.Context, thread *chatbroker.Thread) error {
+	f.thread = thread
 	return nil
 }
 
@@ -100,14 +102,6 @@ type fakeSandboxManager struct{}
 
 func (f fakeSandboxManager) NewSandbox(name string) *sandboxengine.Sandbox {
 	return &sandboxengine.Sandbox{Name: name}
-}
-
-func (f fakeSandboxManager) Stop(ctx context.Context, name string) error {
-	return nil
-}
-
-func (f fakeSandboxManager) Remove(ctx context.Context, name string) error {
-	return nil
 }
 
 func TestHandlePromptAutoStartsConversation(t *testing.T) {
@@ -158,14 +152,17 @@ func TestHandlePromptAutoStartsConversation(t *testing.T) {
 	if agent.sentPrompt != "hello there" {
 		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "hello there")
 	}
-	if sessions.created == nil {
-		t.Fatalf("expected session to be created")
+	if sessions.chat == nil || sessions.thread == nil {
+		t.Fatalf("expected chat/thread mapping to be created")
 	}
-	if sessions.created.ChatID != 42 || sessions.created.ThreadID != 7 {
-		t.Fatalf("auto-started wrong conversation: chat=%d thread=%d", sessions.created.ChatID, sessions.created.ThreadID)
+	if !sessions.thread.Active {
+		t.Fatalf("expected thread to be active")
 	}
-	if !sessions.created.Initialized {
-		t.Fatalf("expected created session to be initialized")
+	if !sessions.thread.Initialized {
+		t.Fatalf("expected thread to be initialized")
+	}
+	if sessions.thread.ChatID != sessions.chat.ID {
+		t.Fatalf("thread does not reference chat")
 	}
 	if !agent.setupCalled {
 		t.Fatalf("expected environment setup to be called")
@@ -174,7 +171,7 @@ func TestHandlePromptAutoStartsConversation(t *testing.T) {
 		t.Fatalf("expected 2 messages, got %d", len(api.messages))
 	}
 
-	wantStart := "conversation started\ncontainer: ctgbot-42-7\nworkspace: " + filepath.Join(root, "chats", "42", "workspace")
+	wantStart := "conversation started\ncontainer: " + sessions.thread.ContainerName + "\nworkspace: " + filepath.Join(root, "chats", sessions.chat.ID.String(), "workspace")
 	if api.messages[0].text != wantStart {
 		t.Fatalf("unexpected first message: %q", api.messages[0].text)
 	}
