@@ -65,13 +65,13 @@ func (f *fakeSessionStore) EnsureChat(ctx context.Context, providerType string, 
 	return f.chat, nil
 }
 
-func (f *fakeSessionStore) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*chatbroker.Thread, error) {
+func (f *fakeSessionStore) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
 	return f.thread, nil
 }
 
-func (f *fakeSessionStore) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*chatbroker.Thread, error) {
+func (f *fakeSessionStore) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
 	if f.thread == nil {
-		f.thread = &chatbroker.Thread{ID: modeluuid.New(), ChatID: chatID, ProviderThreadKey: providerThreadKey}
+		f.thread = &chatbroker.Thread{ID: modeluuid.New(), ChatID: chatID, ProviderThreadID: providerThreadID}
 	}
 	return f.thread, nil
 }
@@ -104,7 +104,7 @@ func (f fakeSandboxManager) NewSandbox(name string) *sandboxengine.Sandbox {
 	return &sandboxengine.Sandbox{Name: name}
 }
 
-func TestHandlePromptAutoStartsConversation(t *testing.T) {
+func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -127,6 +127,9 @@ func TestHandlePromptAutoStartsConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
+	if err := cfg.SetChatEnabled(42, true); err != nil {
+		t.Fatalf("set chat enabled: %v", err)
+	}
 
 	api := &fakeTelegramAPI{}
 	sessions := &fakeSessionStore{}
@@ -145,8 +148,8 @@ func TestHandlePromptAutoStartsConversation(t *testing.T) {
 		MessageID: 99,
 	}
 
-	if err := tb.handlePrompt(context.Background(), u, "hello there"); err != nil {
-		t.Fatalf("handlePrompt returned error: %v", err)
+	if err := tb.handleUpdateSerialized(context.Background(), u, "hello there"); err != nil {
+		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
 	if agent.sentPrompt != "hello there" {

@@ -82,62 +82,24 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 
 	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q text=%q", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), text)
 
-	chatLabel := strings.TrimSpace(u.ChatTitle)
-	if chatLabel == "" {
-		chatLabel = u.UserLabel()
+	result, err := tb.Broker.HandleIncomingMessage(ctx, chatbroker.IncomingMessage{
+		ProviderType:      "telegram",
+		ProviderChatID:    fmt.Sprintf("%d", u.ChatID),
+		ProviderThreadID:  fmt.Sprintf("%d", u.ThreadID),
+		Message:           text,
+		ChatLabel:         strings.TrimSpace(u.ChatTitle),
+		UserLabel:         u.UserLabel(),
+		ProviderMessageID: fmt.Sprintf("%d", u.MessageID),
+	})
+	if err != nil {
+		return err
 	}
-	if err := tb.Config.PersistChatID(u.ChatID, chatLabel); err != nil {
-		tb.logf("persisting chatID failed (chat=%d): %v", u.ChatID, err)
-	}
-	if !tb.Config.ChatEnabled(u.ChatID) {
-		tb.logf("ignoring update from disabled chat=%d title=%q", u.ChatID, chatLabel)
-		return nil
-	}
-
-	if strings.HasPrefix(text, "/") {
-		args := normalizeTelegramCommand(text)
-		if len(args) == 0 {
-			return nil
+	for _, message := range result.Messages {
+		if err := tb.replyText(ctx, u, message.Text); err != nil {
+			return err
 		}
-		reply, err := tb.Broker.HandleCommand(ctx, u.ChatID, u.ThreadID, args[0], args[1:])
-		if err != nil {
-			tb.recordEventError(ctx, err)
-			_ = tb.replyText(ctx, u, fmt.Sprintf("command error: %v", err))
-			return nil
-		}
-		if reply != "" {
-			if err := tb.replyText(ctx, u, reply); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	if err := tb.handlePrompt(ctx, u, text); err != nil {
-		tb.recordEventError(ctx, err)
-		_ = tb.replyText(ctx, u, fmt.Sprintf("conversation error: %v", err))
 	}
 	return nil
-}
-
-func (tb *TelegramBot) handlePrompt(ctx context.Context, u chatmodel.TelegramUpdate, prompt string) error {
-	outcome, err := tb.Broker.HandlePrompt(ctx, u.ChatID, u.ThreadID, prompt)
-	if outcome.Started && outcome.Thread != nil {
-		msg := fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", outcome.Thread.ContainerName, outcome.Thread.WorkspaceHost)
-		if err := tb.replyText(ctx, u, msg); err != nil {
-			return err
-		}
-	}
-	reply := outcome.Reply
-	if reply != "" {
-		reply = cleanTextForTelegram(reply)
-	}
-	if reply != "" {
-		if err := tb.replyText(ctx, u, reply); err != nil {
-			return err
-		}
-	}
-	return err
 }
 
 func (tb *TelegramBot) replyText(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
@@ -159,18 +121,6 @@ func (tb *TelegramBot) logf(format string, args ...any) {
 	if tb.Logger != nil {
 		tb.Logger.Printf(format, args...)
 	}
-}
-
-func normalizeTelegramCommand(text string) []string {
-	fields := strings.Fields(strings.TrimSpace(text))
-	if len(fields) == 0 {
-		return nil
-	}
-	fields[0] = strings.TrimPrefix(fields[0], "/")
-	if i := strings.Index(fields[0], "@"); i >= 0 {
-		fields[0] = fields[0][:i]
-	}
-	return fields
 }
 
 func splitTelegramText(text string, limit int) []string {

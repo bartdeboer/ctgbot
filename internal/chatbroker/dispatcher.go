@@ -3,6 +3,8 @@ package chatbroker
 import (
 	"context"
 	"sync"
+
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
 type Dispatcher struct {
@@ -11,8 +13,8 @@ type Dispatcher struct {
 }
 
 type dispatchKey struct {
-	ChatID   int64
-	ThreadID int
+	ChatID   modeluuid.UUID
+	ThreadID modeluuid.UUID
 }
 
 type chatLock struct {

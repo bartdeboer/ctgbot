@@ -25,8 +25,7 @@ type Thread struct {
 	ID modeluuid.UUID `gorm:"primaryKey"`
 
 	ChatID             modeluuid.UUID `gorm:"uniqueIndex:idx_thread_provider"`
-	ProviderThreadKey  string         `gorm:"uniqueIndex:idx_thread_provider"`
-	ProviderChatID     string
+	ProviderThreadID   string         `gorm:"uniqueIndex:idx_thread_provider"`
 	Active             bool
 	ProviderType       string
 	AgentThreadID      string
@@ -108,10 +107,10 @@ func (s *SessionStorage) EnsureChat(ctx context.Context, providerType string, pr
 	return chat, nil
 }
 
-func (s *SessionStorage) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*Thread, error) {
+func (s *SessionStorage) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
 	var thread Thread
 	err := s.DB.WithContext(ctx).
-		Where("chat_id = ? AND provider_thread_key = ?", chatID, strings.TrimSpace(providerThreadKey)).
+		Where("chat_id = ? AND provider_thread_id = ?", chatID, strings.TrimSpace(providerThreadID)).
 		First(&thread).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -122,8 +121,8 @@ func (s *SessionStorage) FindThread(ctx context.Context, chatID modeluuid.UUID, 
 	return &thread, nil
 }
 
-func (s *SessionStorage) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*Thread, error) {
-	thread, err := s.FindThread(ctx, chatID, providerThreadKey)
+func (s *SessionStorage) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
+	thread, err := s.FindThread(ctx, chatID, providerThreadID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,9 +130,9 @@ func (s *SessionStorage) EnsureThread(ctx context.Context, chatID modeluuid.UUID
 		return thread, nil
 	}
 	thread = &Thread{
-		ID:                modeluuid.New(),
-		ChatID:            chatID,
-		ProviderThreadKey: strings.TrimSpace(providerThreadKey),
+		ID:               modeluuid.New(),
+		ChatID:           chatID,
+		ProviderThreadID: strings.TrimSpace(providerThreadID),
 	}
 	if err := s.DB.WithContext(ctx).Create(thread).Error; err != nil {
 		return nil, err
@@ -150,7 +149,7 @@ type SessionStore interface {
 	FindChat(ctx context.Context, providerType string, providerChatID string) (*Chat, error)
 	GetChatByID(ctx context.Context, id modeluuid.UUID) (*Chat, error)
 	EnsureChat(ctx context.Context, providerType string, providerChatID string, label string) (*Chat, error)
-	FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*Thread, error)
-	EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadKey string) (*Thread, error)
+	FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error)
+	EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error)
 	SaveThread(ctx context.Context, thread *Thread) error
 }

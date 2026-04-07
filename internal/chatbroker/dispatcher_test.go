@@ -5,13 +5,15 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
 func TestDispatcherSerializesSameChat(t *testing.T) {
 	t.Parallel()
 
 	d := NewDispatcher()
-	key := dispatchKey{ChatID: 1, ThreadID: 0}
+	key := dispatchKey{ChatID: modeluuid.New(), ThreadID: modeluuid.New()}
 
 	started := make(chan struct{}, 2)
 	releaseFirst := make(chan struct{})
@@ -55,8 +57,8 @@ func TestDispatcherAllowsDifferentChats(t *testing.T) {
 
 	d := NewDispatcher()
 
-	firstKey := dispatchKey{ChatID: 1, ThreadID: 0}
-	secondKey := dispatchKey{ChatID: 2, ThreadID: 0}
+	firstKey := dispatchKey{ChatID: modeluuid.New(), ThreadID: modeluuid.New()}
+	secondKey := dispatchKey{ChatID: modeluuid.New(), ThreadID: modeluuid.New()}
 
 	firstStarted := make(chan struct{})
 	secondDone := make(chan struct{})
