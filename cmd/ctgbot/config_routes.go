@@ -36,9 +36,9 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			setContainerHostbridgeTCPAddr := fs.String("set-container-hostbridge-tcp-addr", "", "Persist docker.container_hostbridge_tcp_addr into config")
 			var allowChatHostbridgeCommand chatCommandFlag
 			var removeChatHostbridgeCommand chatCommandFlag
-			fs.Var(&setChatWorkspaceHostPath, "set-chat-workspace-host-path", "Persist a chat-local workspace host path in the form <chat-id>:<path>")
-			fs.Var(&allowChatHostbridgeCommand, "allow-chat-hostbridge-command", "Persist a chat-local hostbridge command in the form <chat-id>:<command-or-absolute-path>")
-			fs.Var(&removeChatHostbridgeCommand, "remove-chat-hostbridge-command", "Remove a chat-local hostbridge command by basename in the form <chat-id>:<name>")
+			fs.Var(&setChatWorkspaceHostPath, "set-chat-workspace-host-path", "Persist a Telegram chat-local workspace host path in the form <provider-chat-id>:<path>")
+			fs.Var(&allowChatHostbridgeCommand, "allow-chat-hostbridge-command", "Persist a Telegram chat-local hostbridge command in the form <provider-chat-id>:<command-or-absolute-path>")
+			fs.Var(&removeChatHostbridgeCommand, "remove-chat-hostbridge-command", "Remove a Telegram chat-local hostbridge command by basename in the form <provider-chat-id>:<name>")
 			setCodexModel := fs.String("set-codex-model", "", "Persist codex.model into config")
 			setCodexCLIHomePath := fs.String("set-codex-cli-home-path", "", "Persist codex.cli_home_host_path into config")
 			setCodexSharedHomePath := fs.String("set-codex-shared-home-path", "", "Deprecated alias for --set-codex-cli-home-path")
@@ -46,8 +46,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			setPollTimeoutSec := fs.Int("set-poll-timeout-sec", 0, "Persist telegram.defaults.poll_timeout_sec into config")
 			setFullAuto := fs.Bool("set-codex-full-auto", true, "Persist codex.full_auto into config")
 			writeFullAuto := fs.Bool("write-codex-full-auto", false, "Write the --set-codex-full-auto value into config")
-			enableChatID := fs.Int64("enable-chat-id", 0, "Enable a Telegram chat by id")
-			disableChatID := fs.Int64("disable-chat-id", 0, "Disable a Telegram chat by id")
+			enableChatID := fs.Int64("enable-chat-id", 0, "Enable a Telegram chat by provider chat id")
+			disableChatID := fs.Int64("disable-chat-id", 0, "Disable a Telegram chat by provider chat id")
 
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
@@ -104,7 +104,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 						if title == "" {
 							title = "<untitled>"
 						}
-						fmt.Printf("    - id=%s provider=%s provider_chat_id=%q enabled=%t title=%q\n", chat.ID.String(), chat.ChatProviderType, chat.ProviderChatID, chat.Enabled, title)
+						fmt.Printf("    - internal_chat_id=%s provider=%s provider_chat_id=%q enabled=%t title=%q\n", chat.ID.String(), chat.ProviderType, chat.ProviderChatID, chat.Enabled, title)
 						workspacePath := cfg.ChatWorkspaceHostPathByID(chat.ID)
 						if workspacePath == "" {
 							workspacePath = "<global/default>"
@@ -120,10 +120,11 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					}
 				}
 				fmt.Println("  help:")
-				fmt.Println("    enable a chat with: ctgbot config --enable-chat-id <chat-id>")
-				fmt.Println("    disable a chat with: ctgbot config --disable-chat-id <chat-id>")
-				fmt.Println("    set a chat workspace with: ctgbot config --set-chat-workspace-host-path <chat-id>:<path>")
-				fmt.Println("    allow a chat hostbridge command with: ctgbot config --allow-chat-hostbridge-command <chat-id>:<command-or-absolute-path>")
+				fmt.Println("    compatibility note: mutation flags below still use Telegram provider chat ids, not internal chat UUIDs")
+				fmt.Println("    enable a chat with: ctgbot config --enable-chat-id <provider-chat-id>")
+				fmt.Println("    disable a chat with: ctgbot config --disable-chat-id <provider-chat-id>")
+				fmt.Println("    set a chat workspace with: ctgbot config --set-chat-workspace-host-path <provider-chat-id>:<path>")
+				fmt.Println("    allow a chat hostbridge command with: ctgbot config --allow-chat-hostbridge-command <provider-chat-id>:<command-or-absolute-path>")
 				return nil
 			}
 
@@ -160,7 +161,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				for chatID, specs := range setChatWorkspaceHostPath.values {
 					for _, spec := range specs {
 						if err := cfg.SetChatWorkspaceHostPath(chatID, spec); err != nil {
-							return fmt.Errorf("persist workspace host path for chat %d (%q): %w", chatID, spec, err)
+							return fmt.Errorf("persist workspace host path for telegram chat %d (%q): %w", chatID, spec, err)
 						}
 					}
 				}
@@ -183,14 +184,14 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				for chatID, specs := range allowChatHostbridgeCommand.values {
 					for _, spec := range specs {
 						if err := cfg.SetChatHostbridgeAllowedCommand(chatID, spec); err != nil {
-							return fmt.Errorf("persist hostbridge allowed command for chat %d (%q): %w", chatID, spec, err)
+							return fmt.Errorf("persist hostbridge allowed command for telegram chat %d (%q): %w", chatID, spec, err)
 						}
 					}
 				}
 				for chatID, names := range removeChatHostbridgeCommand.values {
 					for _, name := range names {
 						if err := cfg.RemoveChatHostbridgeAllowedCommand(chatID, name); err != nil {
-							return fmt.Errorf("remove hostbridge allowed command for chat %d (%q): %w", chatID, name, err)
+							return fmt.Errorf("remove hostbridge allowed command for telegram chat %d (%q): %w", chatID, name, err)
 						}
 					}
 				}
@@ -230,7 +231,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					return err
 				}
 				if err := cfg.SetChatEnabled(*enableChatID, true); err != nil {
-					return fmt.Errorf("enable chat %d: %w", *enableChatID, err)
+					return fmt.Errorf("enable telegram chat %d: %w", *enableChatID, err)
 				}
 			}
 			if *disableChatID != 0 {
@@ -239,30 +240,30 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					return err
 				}
 				if err := cfg.SetChatEnabled(*disableChatID, false); err != nil {
-					return fmt.Errorf("disable chat %d: %w", *disableChatID, err)
+					return fmt.Errorf("disable telegram chat %d: %w", *disableChatID, err)
 				}
 			}
 
 			var updates []string
 			if *enableChatID != 0 {
-				updates = append(updates, fmt.Sprintf("enabled chat %d", *enableChatID))
+				updates = append(updates, fmt.Sprintf("enabled telegram chat %d", *enableChatID))
 			}
 			if *disableChatID != 0 {
-				updates = append(updates, fmt.Sprintf("disabled chat %d", *disableChatID))
+				updates = append(updates, fmt.Sprintf("disabled telegram chat %d", *disableChatID))
 			}
 			for chatID, paths := range setChatWorkspaceHostPath.values {
 				for _, path := range paths {
-					updates = append(updates, fmt.Sprintf("set chat %d workspace %s", chatID, path))
+					updates = append(updates, fmt.Sprintf("set telegram chat %d workspace %s", chatID, path))
 				}
 			}
 			for chatID, specs := range allowChatHostbridgeCommand.values {
 				for _, spec := range specs {
-					updates = append(updates, fmt.Sprintf("allowed chat %d hostbridge command %s", chatID, spec))
+					updates = append(updates, fmt.Sprintf("allowed telegram chat %d hostbridge command %s", chatID, spec))
 				}
 			}
 			for chatID, names := range removeChatHostbridgeCommand.values {
 				for _, name := range names {
-					updates = append(updates, fmt.Sprintf("removed chat %d hostbridge command %s", chatID, name))
+					updates = append(updates, fmt.Sprintf("removed telegram chat %d hostbridge command %s", chatID, name))
 				}
 			}
 			if len(updates) == 0 {
@@ -298,12 +299,12 @@ func (f *chatCommandFlag) Set(v string) error {
 	}
 	chatRaw, value, ok := strings.Cut(v, ":")
 	if !ok {
-		return fmt.Errorf("expected <chat-id>:<command-or-absolute-path>")
+		return fmt.Errorf("expected <provider-chat-id>:<command-or-absolute-path>")
 	}
 	chatRaw = strings.TrimSpace(chatRaw)
 	value = strings.TrimSpace(value)
 	if chatRaw == "" || value == "" {
-		return fmt.Errorf("expected <chat-id>:<command-or-absolute-path>")
+		return fmt.Errorf("expected <provider-chat-id>:<command-or-absolute-path>")
 	}
 	chatID, err := strconv.ParseInt(chatRaw, 10, 64)
 	if err != nil {
@@ -336,12 +337,12 @@ func (f *chatValueFlag) Set(v string) error {
 	}
 	chatRaw, value, ok := strings.Cut(v, ":")
 	if !ok {
-		return fmt.Errorf("expected <chat-id>:<path>")
+		return fmt.Errorf("expected <provider-chat-id>:<path>")
 	}
 	chatRaw = strings.TrimSpace(chatRaw)
 	value = strings.TrimSpace(value)
 	if chatRaw == "" || value == "" {
-		return fmt.Errorf("expected <chat-id>:<path>")
+		return fmt.Errorf("expected <provider-chat-id>:<path>")
 	}
 	chatID, err := strconv.ParseInt(chatRaw, 10, 64)
 	if err != nil {

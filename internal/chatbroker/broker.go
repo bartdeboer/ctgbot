@@ -34,7 +34,7 @@ type PromptOutcome struct {
 }
 
 type IncomingMessage struct {
-	ChatProviderType  string
+	ProviderType      string
 	ProviderChatID    string
 	ProviderThreadID  string
 	Message           string
@@ -208,12 +208,12 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg IncomingMessage)
 		return IncomingResult{}, fmt.Errorf("missing chat mapping")
 	}
 	if !chatCfg.Enabled {
-		b.logf("ignoring update from disabled chat provider=%q chat=%q title=%q", msg.ChatProviderType, msg.ProviderChatID, chatCfg.ProviderChatTitle)
+		b.logf("ignoring update from disabled chat provider=%q chat=%q title=%q", msg.ProviderType, msg.ProviderChatID, chatCfg.ProviderChatTitle)
 		return IncomingResult{}, nil
 	}
 
 	if strings.HasPrefix(text, "/") {
-		args := normalizeIncomingCommand(msg.ChatProviderType, text)
+		args := normalizeIncomingCommand(msg.ProviderType, text)
 		if len(args) == 0 {
 			return IncomingResult{}, nil
 		}
@@ -525,13 +525,13 @@ func (b *Broker) developerInstructions(chatID modeluuid.UUID, conv *Thread) stri
 	keepRepliesConcise := false
 
 	if chatCfg, err := b.Config.FindChatByID(chatID); err == nil && chatCfg != nil {
-		switch chatCfg.ChatProviderType {
+		switch chatCfg.ProviderType {
 		case "telegram":
 			chatProvider = "Telegram"
 			messagePrefix = "🤖"
 			keepRepliesConcise = true
 		default:
-			chatProvider = strings.TrimSpace(chatCfg.ChatProviderType)
+			chatProvider = strings.TrimSpace(chatCfg.ProviderType)
 			if chatProvider == "" {
 				chatProvider = "Chat"
 			}
@@ -603,7 +603,7 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage,
 		return nil, nil, fmt.Errorf("missing session store")
 	}
 
-	providerType := strings.TrimSpace(msg.ChatProviderType)
+	providerType := strings.TrimSpace(msg.ProviderType)
 	providerChatID := strings.TrimSpace(msg.ProviderChatID)
 	providerThreadID := strings.TrimSpace(msg.ProviderThreadID)
 

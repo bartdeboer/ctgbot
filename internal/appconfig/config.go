@@ -30,7 +30,7 @@ const (
 
 type ChatConfigEntry struct {
 	ID                modeluuid.UUID
-	ChatProviderType  string
+	ProviderType      string
 	ProviderChatID    string
 	ProviderChatTitle string
 	Enabled           bool
@@ -440,7 +440,7 @@ func (c *Config) findChatByIDNoMigrate(chatID modeluuid.UUID) *ChatConfigEntry {
 	}
 	return &ChatConfigEntry{
 		ID:                chatID,
-		ChatProviderType:  strings.TrimSpace(c.Store.GetString(c.ChatKey(chatID, "chat_provider_type"), c.Store.GetString(c.ChatKey(chatID, "type"), ""))),
+		ProviderType:      strings.TrimSpace(c.Store.GetString(c.ChatKey(chatID, "chat_provider_type"), c.Store.GetString(c.ChatKey(chatID, "type"), ""))),
 		ProviderChatID:    strings.TrimSpace(c.Store.GetString(c.ChatKey(chatID, "provider_chat_id"), "")),
 		ProviderChatTitle: strings.TrimSpace(c.Store.GetString(c.ChatKey(chatID, "provider_chat_title"), "")),
 		Enabled:           c.Store.GetBool(c.ChatKey(chatID, "enabled"), false),
@@ -482,7 +482,7 @@ func (c *Config) findProviderChatNoMigrate(providerType string, providerChatID s
 	}
 
 	for _, chat := range c.knownChatsNoMigrate() {
-		if chat.ChatProviderType == providerType && chat.ProviderChatID == providerChatID {
+		if chat.ProviderType == providerType && chat.ProviderChatID == providerChatID {
 			entry := chat
 			return &entry
 		}
@@ -524,13 +524,13 @@ func (c *Config) EnsureProviderChat(providerType string, providerChatID string, 
 
 	entry := &ChatConfigEntry{
 		ID:                modeluuid.New(),
-		ChatProviderType:  providerType,
+		ProviderType:      providerType,
 		ProviderChatID:    providerChatID,
 		ProviderChatTitle: title,
 		Enabled:           false,
 	}
 
-	if err := c.Store.PersistString(c.ChatKey(entry.ID, "chat_provider_type"), entry.ChatProviderType); err != nil {
+	if err := c.Store.PersistString(c.ChatKey(entry.ID, "chat_provider_type"), entry.ProviderType); err != nil {
 		return nil, err
 	}
 	if err := c.Store.PersistString(c.ChatKey(entry.ID, "provider_chat_id"), entry.ProviderChatID); err != nil {
@@ -542,7 +542,7 @@ func (c *Config) EnsureProviderChat(providerType string, providerChatID string, 
 	if err := c.Store.PersistBool(c.ChatKey(entry.ID, "enabled"), entry.Enabled); err != nil {
 		return nil, err
 	}
-	if err := c.Store.PersistString(c.providerChatMapKey(entry.ChatProviderType, entry.ProviderChatID), entry.ID.String()); err != nil {
+	if err := c.Store.PersistString(c.providerChatMapKey(entry.ProviderType, entry.ProviderChatID), entry.ID.String()); err != nil {
 		return nil, err
 	}
 	return entry, nil
@@ -725,7 +725,7 @@ func (c *Config) knownChatsNoMigrate() []ChatConfigEntry {
 		}
 		out = append(out, ChatConfigEntry{
 			ID:                id,
-			ChatProviderType:  firstNonEmptyString(entryMap["chat_provider_type"], entryMap["type"]),
+			ProviderType:      firstNonEmptyString(entryMap["chat_provider_type"], entryMap["type"]),
 			ProviderChatID:    stringFromAny(entryMap["provider_chat_id"]),
 			ProviderChatTitle: stringFromAny(entryMap["provider_chat_title"]),
 			Enabled:           boolFromAny(entryMap["enabled"]),
@@ -733,8 +733,8 @@ func (c *Config) knownChatsNoMigrate() []ChatConfigEntry {
 	}
 
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].ChatProviderType != out[j].ChatProviderType {
-			return out[i].ChatProviderType < out[j].ChatProviderType
+		if out[i].ProviderType != out[j].ProviderType {
+			return out[i].ProviderType < out[j].ProviderType
 		}
 		if out[i].Enabled != out[j].Enabled {
 			return out[i].Enabled && !out[j].Enabled
@@ -899,12 +899,12 @@ func (c *Config) migrateLegacyChatConfig() error {
 		if existing == nil {
 			entry := &ChatConfigEntry{
 				ID:                modeluuid.New(),
-				ChatProviderType:  "telegram",
+				ProviderType:      "telegram",
 				ProviderChatID:    providerChatID,
 				ProviderChatTitle: legacy.ChatTitle,
 				Enabled:           legacy.Enabled,
 			}
-			if err := c.Store.PersistString(c.ChatKey(entry.ID, "chat_provider_type"), entry.ChatProviderType); err != nil {
+			if err := c.Store.PersistString(c.ChatKey(entry.ID, "chat_provider_type"), entry.ProviderType); err != nil {
 				return err
 			}
 			if err := c.Store.PersistString(c.ChatKey(entry.ID, "provider_chat_id"), entry.ProviderChatID); err != nil {
@@ -916,7 +916,7 @@ func (c *Config) migrateLegacyChatConfig() error {
 			if err := c.Store.PersistBool(c.ChatKey(entry.ID, "enabled"), entry.Enabled); err != nil {
 				return err
 			}
-			if err := c.Store.PersistString(c.providerChatMapKey(entry.ChatProviderType, entry.ProviderChatID), entry.ID.String()); err != nil {
+			if err := c.Store.PersistString(c.providerChatMapKey(entry.ProviderType, entry.ProviderChatID), entry.ID.String()); err != nil {
 				return err
 			}
 			existing = entry

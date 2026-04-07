@@ -42,7 +42,7 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 
 	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
-		ChatProviderType: "telegram",
+		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Message:          "/help@ctgbot",
