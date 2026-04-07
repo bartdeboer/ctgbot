@@ -207,3 +207,152 @@ func TestChatThreadTLSDirUsesThreadScopedLayout(t *testing.T) {
 		t.Fatalf("ChatThreadTLSDir() = %q, want %q", got, want)
 	}
 }
+
+func TestCodexCLIHomeRootDefaultsToLocalWhenNoAuthExists(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	prevHome := os.Getenv("HOME")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatalf("set HOME: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", prevHome)
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	got := cfg.CodexCLIHomeRoot()
+	want := filepath.Join(root, ".ctgbot", ".codex")
+	if got != want {
+		t.Fatalf("CodexCLIHomeRoot() = %q, want %q", got, want)
+	}
+}
+
+func TestCodexCLIHomeRootPrefersExistingAuthSources(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	prevHome := os.Getenv("HOME")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatalf("set HOME: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", prevHome)
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	managedAuth := filepath.Join(home, ".ctgbot", ".codex", "auth.json")
+	if err := os.MkdirAll(filepath.Dir(managedAuth), 0o755); err != nil {
+		t.Fatalf("mkdir managed auth dir: %v", err)
+	}
+	if err := os.WriteFile(managedAuth, []byte("managed"), 0o600); err != nil {
+		t.Fatalf("write managed auth: %v", err)
+	}
+	if got := cfg.CodexCLIHomeRoot(); got != filepath.Join(home, ".ctgbot", ".codex") {
+		t.Fatalf("CodexCLIHomeRoot() with managed auth = %q", got)
+	}
+
+	localAuth := filepath.Join(root, ".ctgbot", ".codex", "auth.json")
+	if err := os.MkdirAll(filepath.Dir(localAuth), 0o755); err != nil {
+		t.Fatalf("mkdir local auth dir: %v", err)
+	}
+	if err := os.WriteFile(localAuth, []byte("local"), 0o600); err != nil {
+		t.Fatalf("write local auth: %v", err)
+	}
+	if got := cfg.CodexCLIHomeRoot(); got != filepath.Join(root, ".ctgbot", ".codex") {
+		t.Fatalf("CodexCLIHomeRoot() with local auth = %q", got)
+	}
+}
+
+func TestEnsureCodexCLIHomeImportsAuthIntoSelectedLocalHome(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	prevHome := os.Getenv("HOME")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatalf("set HOME: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", prevHome)
+		_ = os.Chdir(prevWD)
+	})
+
+	hostAuth := filepath.Join(home, ".codex", "auth.json")
+	if err := os.MkdirAll(filepath.Dir(hostAuth), 0o755); err != nil {
+		t.Fatalf("mkdir host auth dir: %v", err)
+	}
+	if err := os.WriteFile(hostAuth, []byte("host-auth"), 0o600); err != nil {
+		t.Fatalf("write host auth: %v", err)
+	}
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	localSharedHome := filepath.Join(root, ".ctgbot", ".codex")
+	if err := store.PersistString("codex.cli_home_host_path", localSharedHome); err != nil {
+		t.Fatalf("persist codex cli home path: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	if err := cfg.EnsureCodexCLIHome(); err != nil {
+		t.Fatalf("EnsureCodexCLIHome: %v", err)
+	}
+
+	target := filepath.Join(localSharedHome, "auth.json")
+	body, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read copied auth: %v", err)
+	}
+	if string(body) != "host-auth" {
+		t.Fatalf("copied auth = %q, want %q", string(body), "host-auth")
+	}
+}

@@ -8,10 +8,10 @@ import (
 func TestDockerSandboxCommandContextBuildsDockerExec(t *testing.T) {
 	t.Parallel()
 
-	sbx := DockerSandbox{
-		ContainerName: "ctgbot-test",
-		Workdir:       "/workspace",
-		Env:           []string{"HOME=/codex-home", "CODEX_HOME=/codex-home"},
+	sbx := Sandbox{
+		Name:    "ctgbot-test",
+		Workdir: "/workspace",
+		Env:     []string{"HOME=/codex-home", "CODEX_HOME=/codex-home"},
 	}
 	cmd := sbx.CommandContext(context.Background(), "codex", "exec", "hello")
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -82,5 +83,54 @@ func TestExtractCodexThreadIDIgnoresInvalidLines(t *testing.T) {
 
 	if got := extractCodexThreadID(jsonl); got != "abc-123" {
 		t.Fatalf("extractCodexThreadID() = %q, want %q", got, "abc-123")
+	}
+}
+
+func TestSetupEnvironmentWritesManagedFiles(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	sharedAuth := filepath.Join(root, ".ctgbot", ".codex", "auth.json")
+	if err := os.MkdirAll(filepath.Dir(sharedAuth), 0o755); err != nil {
+		t.Fatalf("mkdir shared auth dir: %v", err)
+	}
+	if err := os.WriteFile(sharedAuth, []byte(`{"token":"x"}`), 0o600); err != nil {
+		t.Fatalf("write shared auth: %v", err)
+	}
+
+	exec := &SessionExecutor{Config: cfg}
+	sbx := &sandboxengine.Sandbox{
+		ProfileDir:            filepath.Join(root, "chat", ".codex"),
+		ContainerHome:         "/codex-home",
+		ContainerWorkspace:    "/workspace",
+		DeveloperInstructions: "bootstrap text",
+	}
+
+	if err := exec.SetupEnvironment(t.Context(), sbx); err != nil {
+		t.Fatalf("setup environment: %v", err)
+	}
+
+	for _, name := range []string{"auth.json", "config.toml", "ctgbot-bootstrap.md"} {
+		if _, err := os.Stat(filepath.Join(sbx.ProfileDir, name)); err != nil {
+			t.Fatalf("%s missing: %v", name, err)
+		}
 	}
 }

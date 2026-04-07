@@ -5,23 +5,15 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"sort"
+	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
-
-type RuntimeContext struct {
-	SandboxName         string
-	ProfilePath         string
-	WorkspacePath       string
-	ContainerHome       string
-	ContainerWorkspace  string
-	HostOS              string
-	HostbridgeAddr      string
-	AllowedHostCommands []string
-}
 
 type TurnResult struct {
 	Reply            string
@@ -30,9 +22,8 @@ type TurnResult struct {
 
 type Agent interface {
 	Name() string
-	SandboxSpec(rt RuntimeContext) sandboxengine.Spec
-	InitSession(ctx context.Context, rt RuntimeContext, sbx sandboxengine.Sandbox) error
-	HandleTurn(ctx context.Context, rt RuntimeContext, sbx sandboxengine.Sandbox, providerThreadID string, prompt string) (TurnResult, error)
+	SetupEnvironment(ctx context.Context, sbx *sandboxengine.Sandbox) error
+	HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (TurnResult, error)
 }
 
 type PromptOutcome struct {
@@ -108,7 +99,7 @@ func (b *Broker) startConversationNow(ctx context.Context, chatID int64, threadI
 		if !replace {
 			return current, nil
 		}
-		_ = b.sandboxManager().Remove(ctx, current.ContainerName)
+		_ = b.newSandbox(current).Remove(ctx)
 		if b.Sessions != nil {
 			_ = b.Sessions.MarkStopped(ctx, current.ID, "replaced by /new")
 		}
@@ -118,11 +109,14 @@ func (b *Broker) startConversationNow(ctx context.Context, chatID int64, threadI
 	if err != nil {
 		return nil, err
 	}
+	if err := b.prepareEnvironment(ctx, conv); err != nil {
+		return nil, err
+	}
 	if b.Sessions == nil {
 		return conv, nil
 	}
 	if err := b.Sessions.Create(ctx, conv); err != nil {
-		_ = b.sandboxManager().Remove(ctx, conv.ContainerName)
+		_ = b.newSandbox(conv).Remove(context.Background())
 		return nil, err
 	}
 	return conv, nil
@@ -142,7 +136,7 @@ func (b *Broker) stopConversationNow(ctx context.Context, chatID int64, threadID
 	if conv == nil {
 		return nil
 	}
-	if err := b.sandboxManager().Remove(ctx, conv.ContainerName); err != nil {
+	if err := b.newSandbox(conv).Remove(ctx); err != nil {
 		return err
 	}
 	if b.Sessions == nil {
@@ -153,14 +147,7 @@ func (b *Broker) stopConversationNow(ctx context.Context, chatID int64, threadID
 
 func (b *Broker) PrepareConversation(ctx context.Context, conv *ChatSession) error {
 	return b.dispatcher().Run(ctx, b.dispatchKey(conv.ChatID, conv.ThreadID), func(runCtx context.Context) error {
-		_, _, _, err := b.ensurePreparedConversation(runCtx, conv)
-		if err != nil {
-			return err
-		}
-		if stopErr := b.sandboxManager().Stop(context.Background(), conv.ContainerName); stopErr != nil {
-			return stopErr
-		}
-		return nil
+		return b.prepareEnvironment(runCtx, conv)
 	})
 }
 
@@ -237,23 +224,19 @@ func (b *Broker) handlePromptNow(ctx context.Context, chatID int64, threadID int
 		started = true
 	}
 
-	agent, rt, sbx, err := b.ensurePreparedConversation(ctx, conv)
+	agent, sbx, err := b.ensurePreparedConversation(ctx, conv)
 	if err != nil {
 		return PromptOutcome{}, err
 	}
 	defer func() {
-		if stopErr := b.sandboxManager().Stop(context.Background(), conv.ContainerName); stopErr != nil {
+		if stopErr := sbx.Stop(context.Background()); stopErr != nil {
 			b.logf("stop conversation sandbox %s failed: %v", conv.ContainerName, stopErr)
 		}
 	}()
 
-	result, runErr := agent.HandleTurn(ctx, rt, sbx, conv.ProviderThreadID, prompt)
+	result, runErr := agent.HandleTurn(ctx, sbx, conv.ProviderThreadID, prompt)
 	if result.ProviderThreadID != "" {
 		conv.ProviderThreadID = result.ProviderThreadID
-	}
-	if b.Sessions != nil && conv.ID != 0 && !conv.Initialized && runErr == nil {
-		conv.Initialized = true
-		_ = b.Sessions.MarkInitialized(ctx, conv.ID)
 	}
 	if b.Sessions != nil && conv.ID != 0 {
 		if conv.ProviderThreadID != "" {
@@ -272,27 +255,44 @@ func (b *Broker) handlePromptNow(ctx context.Context, chatID int64, threadID int
 	}, runErr
 }
 
-func (b *Broker) ensurePreparedConversation(ctx context.Context, conv *ChatSession) (Agent, RuntimeContext, sandboxengine.Sandbox, error) {
+func (b *Broker) ensurePreparedConversation(ctx context.Context, conv *ChatSession) (Agent, *sandboxengine.Sandbox, error) {
 	if err := b.ensureSandboxRuntime(ctx, conv); err != nil {
-		return nil, RuntimeContext{}, nil, err
+		return nil, nil, err
 	}
 	agent, err := b.agent(conv.ProviderType)
 	if err != nil {
-		return nil, RuntimeContext{}, nil, err
+		return nil, nil, err
 	}
-	rt := b.runtimeContext(conv)
-	spec := b.decorateSandboxSpec(conv, agent.SandboxSpec(rt))
-	sbx, created, err := b.sandboxManager().Ensure(ctx, spec)
-	if err != nil {
-		return nil, RuntimeContext{}, nil, err
-	}
-	if created {
-		if err := agent.InitSession(ctx, rt, sbx); err != nil {
-			_ = b.sandboxManager().Stop(context.Background(), conv.ContainerName)
-			return nil, RuntimeContext{}, nil, err
+	sbx := b.newSandbox(conv)
+	if !conv.Initialized {
+		if err := agent.SetupEnvironment(ctx, sbx); err != nil {
+			return nil, nil, err
+		}
+		conv.Initialized = true
+		if b.Sessions != nil && conv.ID != 0 {
+			_ = b.Sessions.MarkInitialized(ctx, conv.ID)
 		}
 	}
-	return agent, rt, sbx, nil
+	return agent, sbx, nil
+}
+
+func (b *Broker) prepareEnvironment(ctx context.Context, conv *ChatSession) error {
+	if err := b.ensureSandboxRuntime(ctx, conv); err != nil {
+		return err
+	}
+	agent, err := b.agent(conv.ProviderType)
+	if err != nil {
+		return err
+	}
+	sbx := b.newSandbox(conv)
+	if err := agent.SetupEnvironment(ctx, sbx); err != nil {
+		return err
+	}
+	conv.Initialized = true
+	if b.Sessions != nil && conv.ID != 0 {
+		return b.Sessions.MarkInitialized(ctx, conv.ID)
+	}
+	return nil
 }
 
 func (b *Broker) newConversationSession(ctx context.Context, chatID int64, threadID int, workspace string) (*ChatSession, error) {
@@ -320,7 +320,7 @@ func (b *Broker) newConversationSession(ctx context.Context, chatID int64, threa
 		ContainerWorkspace: b.Config.ContainerWorkspacePath(),
 		ContainerHome:      b.Config.ContainerHomePath(),
 	}
-	if err := b.sandboxManager().Remove(ctx, conv.ContainerName); err != nil {
+	if err := b.newSandbox(conv).Remove(ctx); err != nil {
 		b.logf("ignoring stale sandbox cleanup error for %s: %v", conv.ContainerName, err)
 	}
 	b.logf("conversation session prepared name=%s workspace=%s", conv.ContainerName, conv.WorkspaceHost)
@@ -340,39 +340,67 @@ func (b *Broker) ensureSandboxRuntime(ctx context.Context, conv *ChatSession) er
 	return nil
 }
 
-func (b *Broker) runtimeContext(conv *ChatSession) RuntimeContext {
-	allowedCommands := hostbridge.AllowedCommandNames(hostbridge.MergeAllowedCommandSpecs(b.Config.ChatHostbridgeAllowedCommandSpecs(conv.ChatID)))
-	return RuntimeContext{
-		SandboxName:         conv.ContainerName,
-		ProfilePath:         conv.HomeHost,
-		WorkspacePath:       conv.WorkspaceHost,
-		ContainerHome:       conv.ContainerHome,
-		ContainerWorkspace:  conv.ContainerWorkspace,
-		HostOS:              runtime.GOOS,
-		HostbridgeAddr:      b.Config.ContainerHostbridgeTCPAddr(),
-		AllowedHostCommands: allowedCommands,
+func (b *Broker) newSandbox(conv *ChatSession) *sandboxengine.Sandbox {
+	sbx := b.sandboxManager().NewSandbox(conv.ContainerName)
+	sbx.WorkspaceDir = conv.WorkspaceHost
+	sbx.ProfileDir = conv.HomeHost
+	sbx.ContainerWorkspace = conv.ContainerWorkspace
+	sbx.ContainerHome = conv.ContainerHome
+	sbx.DeveloperInstructions = b.developerInstructions(conv)
+	sbx.Hostname = conv.ContainerName
+	sbx.Image = b.Config.DockerImage()
+	sbx.Workdir = conv.ContainerWorkspace
+	sbx.Labels = map[string]string{
+		"ctgbot.managed":   "true",
+		"ctgbot.chat_id":   fmt.Sprintf("%d", conv.ChatID),
+		"ctgbot.thread_id": fmt.Sprintf("%d", conv.ThreadID),
 	}
+	sbx.Env = []string{
+		"HOME=" + conv.ContainerHome,
+		"CODEX_HOME=" + conv.ContainerHome,
+		"HOSTBRIDGE_ADDR=" + b.Config.ContainerHostbridgeTCPAddr(),
+		"HOSTBRIDGE_TLS_DIR=" + b.Config.ContainerHostbridgeTLSDir(),
+	}
+	sbx.Mounts = []sandboxengine.Mount{
+		{Source: conv.WorkspaceHost, Target: conv.ContainerWorkspace},
+		{Source: conv.HomeHost, Target: conv.ContainerHome},
+		{
+			Source:   b.Config.ChatThreadTLSDir(conv.ChatID, conv.ThreadID),
+			Target:   b.Config.ContainerHostbridgeTLSDir(),
+			ReadOnly: true,
+		},
+	}
+	sbx.SecurityOpts = []string{"seccomp=unconfined"}
+	sbx.Cmd = []string{"tail", "-f", "/dev/null"}
+	if runtime.GOOS == "linux" {
+		sbx.AddHosts = []string{"host.docker.internal:host-gateway"}
+	}
+	return sbx
 }
 
-func (b *Broker) decorateSandboxSpec(conv *ChatSession, spec sandboxengine.Spec) sandboxengine.Spec {
-	spec.SecurityOpts = appendUnique(spec.SecurityOpts, "seccomp=unconfined")
-	spec.Labels = copyStringMap(spec.Labels)
-	spec.Labels["ctgbot.managed"] = "true"
-	spec.Labels["ctgbot.chat_id"] = fmt.Sprintf("%d", conv.ChatID)
-	spec.Labels["ctgbot.thread_id"] = fmt.Sprintf("%d", conv.ThreadID)
-	spec.Env = appendUnique(spec.Env,
-		"HOSTBRIDGE_ADDR="+b.Config.ContainerHostbridgeTCPAddr(),
-		"HOSTBRIDGE_TLS_DIR="+b.Config.ContainerHostbridgeTLSDir(),
-	)
-	spec.Mounts = append(spec.Mounts, sandboxengine.Mount{
-		Source:   b.Config.ChatThreadTLSDir(conv.ChatID, conv.ThreadID),
-		Target:   b.Config.ContainerHostbridgeTLSDir(),
-		ReadOnly: true,
-	})
-	if runtime.GOOS == "linux" {
-		spec.AddHosts = appendUnique(spec.AddHosts, "host.docker.internal:host-gateway")
+func (b *Broker) developerInstructions(conv *ChatSession) string {
+	allowedCommands := append([]string{}, hostbridge.AllowedCommandNames(hostbridge.MergeAllowedCommandSpecs(b.Config.ChatHostbridgeAllowedCommandSpecs(conv.ChatID)))...)
+	sort.Strings(allowedCommands)
+	allowedCommandsText := strings.Join(allowedCommands, ", ")
+	if strings.TrimSpace(allowedCommandsText) == "" {
+		allowedCommandsText = "<none>"
 	}
-	return spec
+	text, err := bootstrapassets.Text(bootstrapassets.TemplateData{
+		Workspace:          conv.ContainerWorkspace,
+		CodexHome:          conv.ContainerHome,
+		ContainerOS:        "linux",
+		HostOS:             runtime.GOOS,
+		HostbridgeAddr:     b.Config.ContainerHostbridgeTCPAddr(),
+		Binaries:           allowedCommandsText,
+		ChatProvider:       "Telegram",
+		MessagePrefix:      "🤖",
+		KeepRepliesConcise: true,
+	})
+	if err != nil {
+		b.logf("render bootstrap template failed: %v", err)
+		return ""
+	}
+	return text
 }
 
 func (b *Broker) agent(name string) (Agent, error) {
@@ -415,34 +443,4 @@ func (b *Broker) logf(format string, args ...any) {
 	if b.Logger != nil {
 		b.Logger.Printf(format, args...)
 	}
-}
-
-func appendUnique(slice []string, values ...string) []string {
-	for _, value := range values {
-		if value == "" {
-			continue
-		}
-		found := false
-		for _, existing := range slice {
-			if existing == value {
-				found = true
-				break
-			}
-		}
-		if !found {
-			slice = append(slice, value)
-		}
-	}
-	return slice
-}
-
-func copyStringMap(in map[string]string) map[string]string {
-	if len(in) == 0 {
-		return map[string]string{}
-	}
-	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
 }

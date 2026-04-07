@@ -399,6 +399,22 @@ func (c *Config) CodexCLIHomeRoot() string {
 			return raw
 		}
 	}
+	for _, root := range c.codexCLIHomeCandidates() {
+		if fileExistsAndNonEmpty(filepath.Join(root, "auth.json")) {
+			return root
+		}
+	}
+	return c.LocalCodexCLIHomeRoot()
+}
+
+func (c *Config) LocalCodexCLIHomeRoot() string {
+	if c == nil {
+		return ""
+	}
+	return filepath.Join(c.Root(), ".codex")
+}
+
+func (c *Config) ManagedHomeCodexCLIHomeRoot() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
@@ -437,10 +453,10 @@ func (c *Config) importAuthIfNeeded() error {
 	if fileExistsAndNonEmpty(target) {
 		return nil
 	}
-	for _, src := range []string{
-		filepath.Join(filepath.Dir(c.CodexCLIHomeRoot()), "codex-shared", "auth.json"),
-		filepath.Join(c.HostCodexRoot(), "auth.json"),
-	} {
+	for _, src := range c.CodexAuthSearchPaths() {
+		if src == target {
+			continue
+		}
 		if !fileExistsAndNonEmpty(src) {
 			continue
 		}
@@ -454,6 +470,32 @@ func (c *Config) importAuthIfNeeded() error {
 
 func (c *Config) CodexCLIHomeAuthPath() string {
 	return filepath.Join(c.CodexCLIHomeRoot(), "auth.json")
+}
+
+func (c *Config) CodexAuthSearchPaths() []string {
+	roots := c.codexCLIHomeCandidates()
+	out := make([]string, 0, len(roots))
+	seen := map[string]struct{}{}
+	for _, root := range roots {
+		if strings.TrimSpace(root) == "" {
+			continue
+		}
+		authPath := filepath.Join(root, "auth.json")
+		if _, ok := seen[authPath]; ok {
+			continue
+		}
+		seen[authPath] = struct{}{}
+		out = append(out, authPath)
+	}
+	return out
+}
+
+func (c *Config) codexCLIHomeCandidates() []string {
+	return []string{
+		c.LocalCodexCLIHomeRoot(),
+		c.ManagedHomeCodexCLIHomeRoot(),
+		c.HostCodexRoot(),
+	}
 }
 
 func (c *Config) ResolveChatWorkspaceHostPath(chatID int64, threadID int, raw string) (string, error) {

@@ -3,7 +3,6 @@ package telegramengine
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -81,38 +80,26 @@ func (f *fakeSessionStore) MarkProviderThreadID(ctx context.Context, id uint, th
 }
 
 type fakeAgent struct {
-	sentPrompt string
+	sentPrompt  string
+	setupCalled bool
 }
 
 func (f *fakeAgent) Name() string { return "codex" }
 
-func (f *fakeAgent) SandboxSpec(rt chatbroker.RuntimeContext) sandboxengine.Spec {
-	return sandboxengine.Spec{Name: rt.SandboxName}
-}
-
-func (f *fakeAgent) InitSession(ctx context.Context, rt chatbroker.RuntimeContext, sbx sandboxengine.Sandbox) error {
+func (f *fakeAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.Sandbox) error {
+	f.setupCalled = true
 	return nil
 }
 
-func (f *fakeAgent) HandleTurn(ctx context.Context, rt chatbroker.RuntimeContext, sbx sandboxengine.Sandbox, providerThreadID string, prompt string) (chatbroker.TurnResult, error) {
+func (f *fakeAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (chatbroker.TurnResult, error) {
 	f.sentPrompt = prompt
 	return chatbroker.TurnResult{Reply: "reply text"}, nil
 }
 
-type fakeSandbox struct{}
-
-func (f fakeSandbox) CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
-	return exec.CommandContext(ctx, name, args...)
-}
-
 type fakeSandboxManager struct{}
 
-func (f fakeSandboxManager) InspectState(ctx context.Context, name string) (sandboxengine.State, error) {
-	return sandboxengine.StateMissing, nil
-}
-
-func (f fakeSandboxManager) Ensure(ctx context.Context, spec sandboxengine.Spec) (sandboxengine.Sandbox, bool, error) {
-	return fakeSandbox{}, true, nil
+func (f fakeSandboxManager) NewSandbox(name string) *sandboxengine.Sandbox {
+	return &sandboxengine.Sandbox{Name: name}
 }
 
 func (f fakeSandboxManager) Stop(ctx context.Context, name string) error {
@@ -177,8 +164,11 @@ func TestHandlePromptAutoStartsConversation(t *testing.T) {
 	if sessions.created.ChatID != 42 || sessions.created.ThreadID != 7 {
 		t.Fatalf("auto-started wrong conversation: chat=%d thread=%d", sessions.created.ChatID, sessions.created.ThreadID)
 	}
-	if sessions.markInitializedID != 1 {
-		t.Fatalf("expected session to be marked initialized, got %d", sessions.markInitializedID)
+	if !sessions.created.Initialized {
+		t.Fatalf("expected created session to be initialized")
+	}
+	if !agent.setupCalled {
+		t.Fatalf("expected environment setup to be called")
 	}
 	if len(api.messages) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(api.messages))

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os/exec"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
@@ -15,71 +14,56 @@ type DockerManager struct {
 	Logger     *log.Logger
 }
 
-type DockerSandbox struct {
-	ContainerName string
-	Workdir       string
-	Env           []string
+func (m *DockerManager) NewSandbox(name string) *Sandbox {
+	return &Sandbox{
+		Name:    strings.TrimSpace(name),
+		runtime: m,
+	}
 }
 
-func (m *DockerManager) InspectState(ctx context.Context, name string) (State, error) {
+func (m *DockerManager) ensure(ctx context.Context, sbx *Sandbox) error {
+	if strings.TrimSpace(sbx.Name) == "" {
+		return fmt.Errorf("missing sandbox name")
+	}
+	state, err := m.inspectState(ctx, sbx.Name)
+	if err != nil {
+		return err
+	}
+	switch state {
+	case StateRunning:
+		return nil
+	case StateCreated, StateExited:
+		return m.containerManager().Start(ctx, sbx.Name)
+	case StateMissing:
+		if err := m.containerManager().Create(ctx, m.toContainerSpec(sbx)); err != nil {
+			return err
+		}
+		return m.containerManager().Start(ctx, sbx.Name)
+	default:
+		return fmt.Errorf("unsupported sandbox state %q for %s", state, sbx.Name)
+	}
+}
+
+func (m *DockerManager) stop(ctx context.Context, sbx *Sandbox) error {
+	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
+		return nil
+	}
+	return m.containerManager().Stop(ctx, sbx.Name)
+}
+
+func (m *DockerManager) remove(ctx context.Context, sbx *Sandbox) error {
+	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
+		return nil
+	}
+	return m.containerManager().Remove(ctx, sbx.Name)
+}
+
+func (m *DockerManager) inspectState(ctx context.Context, name string) (State, error) {
 	state, err := m.containerManager().InspectState(ctx, name)
 	if err != nil {
 		return StateMissing, err
 	}
 	return State(state), nil
-}
-
-func (m *DockerManager) Ensure(ctx context.Context, spec Spec) (Sandbox, bool, error) {
-	if strings.TrimSpace(spec.Name) == "" {
-		return nil, false, fmt.Errorf("missing sandbox name")
-	}
-	state, err := m.InspectState(ctx, spec.Name)
-	if err != nil {
-		return nil, false, err
-	}
-	switch state {
-	case StateRunning:
-		return DockerSandbox{ContainerName: spec.Name, Workdir: spec.Workdir, Env: append([]string{}, spec.Env...)}, false, nil
-	case StateCreated, StateExited:
-		if err := m.containerManager().Start(ctx, spec.Name); err != nil {
-			return nil, false, err
-		}
-		return DockerSandbox{ContainerName: spec.Name, Workdir: spec.Workdir, Env: append([]string{}, spec.Env...)}, false, nil
-	case StateMissing:
-		if err := m.containerManager().Create(ctx, m.toContainerSpec(spec)); err != nil {
-			return nil, false, err
-		}
-		if err := m.containerManager().Start(ctx, spec.Name); err != nil {
-			return nil, false, err
-		}
-		return DockerSandbox{ContainerName: spec.Name, Workdir: spec.Workdir, Env: append([]string{}, spec.Env...)}, true, nil
-	default:
-		return nil, false, fmt.Errorf("unsupported sandbox state %q for %s", state, spec.Name)
-	}
-}
-
-func (m *DockerManager) Stop(ctx context.Context, name string) error {
-	return m.containerManager().Stop(ctx, name)
-}
-
-func (m *DockerManager) Remove(ctx context.Context, name string) error {
-	return m.containerManager().Remove(ctx, name)
-}
-
-func (s DockerSandbox) CommandContext(ctx context.Context, name string, commandArgs ...string) *exec.Cmd {
-	args := []string{"exec"}
-	for _, env := range s.Env {
-		if strings.TrimSpace(env) == "" {
-			continue
-		}
-		args = append(args, "-e", env)
-	}
-	if workdir := strings.TrimSpace(s.Workdir); workdir != "" {
-		args = append(args, "-w", workdir)
-	}
-	args = append(args, s.ContainerName, name)
-	args = append(args, commandArgs...)
-	return exec.CommandContext(ctx, "docker", args...)
 }
 
 func (m *DockerManager) containerManager() *containerengine.Manager {
@@ -89,9 +73,9 @@ func (m *DockerManager) containerManager() *containerengine.Manager {
 	return m.Containers
 }
 
-func (m *DockerManager) toContainerSpec(spec Spec) containerengine.ContainerSpec {
-	mounts := make([]containerengine.Mount, 0, len(spec.Mounts))
-	for _, mount := range spec.Mounts {
+func (m *DockerManager) toContainerSpec(sbx *Sandbox) containerengine.ContainerSpec {
+	mounts := make([]containerengine.Mount, 0, len(sbx.Mounts))
+	for _, mount := range sbx.Mounts {
 		mounts = append(mounts, containerengine.Mount{
 			Source:   mount.Source,
 			Target:   mount.Target,
@@ -99,15 +83,15 @@ func (m *DockerManager) toContainerSpec(spec Spec) containerengine.ContainerSpec
 		})
 	}
 	return containerengine.ContainerSpec{
-		Name:         spec.Name,
-		Hostname:     spec.Hostname,
-		Image:        spec.Image,
-		Workdir:      spec.Workdir,
-		Labels:       spec.Labels,
-		Env:          spec.Env,
+		Name:         sbx.Name,
+		Hostname:     sbx.Hostname,
+		Image:        sbx.Image,
+		Workdir:      sbx.Workdir,
+		Labels:       sbx.Labels,
+		Env:          sbx.Env,
 		Mounts:       mounts,
-		SecurityOpts: spec.SecurityOpts,
-		AddHosts:     spec.AddHosts,
-		Cmd:          spec.Cmd,
+		SecurityOpts: sbx.SecurityOpts,
+		AddHosts:     sbx.AddHosts,
+		Cmd:          sbx.Cmd,
 	}
 }
