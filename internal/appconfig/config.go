@@ -165,10 +165,6 @@ func (c *Config) ChatThreadsRoot(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), "threads")
 }
 
-func (c *Config) ChatThreadTLSDir(chatID modeluuid.UUID, threadID modeluuid.UUID) string {
-	return filepath.Join(c.ChatThreadsRoot(chatID), threadID.String(), "tls")
-}
-
 func (c *Config) HostbridgeTLSRoot() string {
 	return filepath.Join(c.Root(), "tls")
 }

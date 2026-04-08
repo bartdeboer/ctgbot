@@ -180,7 +180,7 @@ func TestEnsureChatRuntimePathsUsesChatScopedLayout(t *testing.T) {
 	}
 }
 
-func TestChatThreadTLSDirUsesThreadScopedLayout(t *testing.T) {
+func TestChatTLSDirUsesChatScopedLayout(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -206,14 +206,10 @@ func TestChatThreadTLSDirUsesThreadScopedLayout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse chat uuid: %v", err)
 	}
-	threadID, err := modeluuid.Parse("00000000300000000000000")
-	if err != nil {
-		t.Fatalf("parse thread uuid: %v", err)
-	}
-	got := cfg.ChatThreadTLSDir(chatID, threadID)
-	want := filepath.Join(root, "chats", chatID.String(), "threads", threadID.String(), "tls")
+	got := cfg.ChatTLSDirByID(chatID)
+	want := filepath.Join(root, "chats", chatID.String(), "tls")
 	if got != want {
-		t.Fatalf("ChatThreadTLSDir() = %q, want %q", got, want)
+		t.Fatalf("ChatTLSDirByID() = %q, want %q", got, want)
 	}
 }
 

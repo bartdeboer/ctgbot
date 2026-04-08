@@ -450,7 +450,7 @@ func (b *Broker) ensureSandboxRuntime(ctx context.Context, conv *Thread) error {
 	if b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
-	chatID, threadID, ok := b.Config.ParseChatContainerName(conv.ContainerName)
+	chatID, _, ok := b.Config.ParseChatContainerName(conv.ContainerName)
 	if !ok {
 		return fmt.Errorf("parse container name: %s", conv.ContainerName)
 	}
@@ -459,8 +459,8 @@ func (b *Broker) ensureSandboxRuntime(ctx context.Context, conv *Thread) error {
 	}
 	if err := hostbridgetls.EnsureChatClientMaterials(
 		b.Config.HostbridgeTLSRoot(),
-		b.Config.ChatThreadTLSDir(chatID, threadID),
-		conv.ContainerName,
+		b.Config.ChatTLSDirByID(chatID),
+		fmt.Sprintf("ctgbot-chat-%s", chatID.String()),
 	); err != nil {
 		return fmt.Errorf("ensure hostbridge tls client materials: %w", err)
 	}
@@ -495,7 +495,7 @@ func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 		{Source: conv.WorkspaceHost, Target: conv.ContainerWorkspace},
 		{Source: conv.HomeHost, Target: conv.ContainerHome},
 		{
-			Source:   b.Config.ChatThreadTLSDir(chatID, threadID),
+			Source:   b.Config.ChatTLSDirByID(chatID),
 			Target:   b.Config.ContainerHostbridgeTLSDir(),
 			ReadOnly: true,
 		},
