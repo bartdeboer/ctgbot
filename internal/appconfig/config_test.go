@@ -284,6 +284,88 @@ func TestCodexCLIHomeRootDefaultsToLocalWhenNoAuthExists(t *testing.T) {
 	}
 }
 
+func TestEnsureProviderChatPersistsExactUUIDChatKey(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	entry, err := cfg.EnsureProviderChat("telegram", "-1003803364247", "Codex #2")
+	if err != nil {
+		t.Fatalf("EnsureProviderChat: %v", err)
+	}
+
+	chats, ok := store.Get("chats", nil).(map[string]any)
+	if !ok {
+		t.Fatalf("expected chats map")
+	}
+	if _, ok := chats[entry.ID.String()]; !ok {
+		t.Fatalf("expected exact UUID chat key %q in chats map", entry.ID.String())
+	}
+}
+
+func TestFindProviderChatScansChatsWithoutReverseIndex(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	chatID := modeluuid.New()
+	if err := store.PersistStruct("chats", map[string]any{
+		chatID.String(): map[string]any{
+			"chat_provider_type":  "telegram",
+			"provider_chat_id":    "-1003803364247",
+			"provider_chat_title": "Codex #2",
+			"enabled":             true,
+		},
+	}); err != nil {
+		t.Fatalf("persist chats map: %v", err)
+	}
+
+	entry, err := cfg.FindProviderChat("telegram", "-1003803364247")
+	if err != nil {
+		t.Fatalf("FindProviderChat: %v", err)
+	}
+	if entry == nil {
+		t.Fatalf("expected migrated provider chat entry")
+	}
+	if entry.ID != chatID {
+		t.Fatalf("resolved chat id = %q, want %q", entry.ID, chatID)
+	}
+}
+
 func TestCodexCLIHomeRootPrefersExistingAuthSources(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")

@@ -76,9 +76,6 @@ func (c *Config) EnsurePaths() error {
 	if err := c.migrateLegacyLocalLayout(); err != nil {
 		return err
 	}
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -425,9 +422,6 @@ func (c *Config) EnsureChatRuntimePaths(chatID modeluuid.UUID) (string, error) {
 }
 
 func (c *Config) FindChatByID(chatID modeluuid.UUID) (*ChatConfigEntry, error) {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return nil, err
-	}
 	return c.findChatByIDNoMigrate(chatID), nil
 }
 
@@ -460,9 +454,6 @@ func (c *Config) hasChatConfigByID(chatID modeluuid.UUID) bool {
 }
 
 func (c *Config) FindProviderChat(providerType string, providerChatID string) (*ChatConfigEntry, error) {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return nil, err
-	}
 	return c.findProviderChatNoMigrate(providerType, providerChatID), nil
 }
 
@@ -471,14 +462,6 @@ func (c *Config) findProviderChatNoMigrate(providerType string, providerChatID s
 	providerChatID = strings.TrimSpace(providerChatID)
 	if c == nil || c.Store == nil || providerType == "" || providerChatID == "" {
 		return nil
-	}
-
-	if rawID := strings.TrimSpace(c.Store.GetString(c.providerChatMapKey(providerType, providerChatID), "")); rawID != "" {
-		if id, err := modeluuid.Parse(rawID); err == nil {
-			if entry := c.findChatByIDNoMigrate(id); entry != nil {
-				return entry
-			}
-		}
 	}
 
 	for _, chat := range c.knownChatsNoMigrate() {
@@ -491,9 +474,6 @@ func (c *Config) findProviderChatNoMigrate(providerType string, providerChatID s
 }
 
 func (c *Config) EnsureProviderChat(providerType string, providerChatID string, title string) (*ChatConfigEntry, error) {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return nil, err
-	}
 	if c == nil || c.Store == nil {
 		return nil, fmt.Errorf("config store not available")
 	}
@@ -542,16 +522,10 @@ func (c *Config) EnsureProviderChat(providerType string, providerChatID string, 
 	if err := c.Store.PersistBool(c.ChatKey(entry.ID, "enabled"), entry.Enabled); err != nil {
 		return nil, err
 	}
-	if err := c.Store.PersistString(c.providerChatMapKey(entry.ProviderType, entry.ProviderChatID), entry.ID.String()); err != nil {
-		return nil, err
-	}
 	return entry, nil
 }
 
 func (c *Config) SetChatEnabledByID(chatID modeluuid.UUID, enabled bool) error {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return err
-	}
 	if c == nil || c.Store == nil {
 		return fmt.Errorf("config store not available")
 	}
@@ -562,9 +536,6 @@ func (c *Config) SetChatEnabledByID(chatID modeluuid.UUID, enabled bool) error {
 }
 
 func (c *Config) ChatEnabledByID(chatID modeluuid.UUID) bool {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return false
-	}
 	if c == nil || c.Store == nil || chatID.IsNull() {
 		return false
 	}
@@ -572,9 +543,6 @@ func (c *Config) ChatEnabledByID(chatID modeluuid.UUID) bool {
 }
 
 func (c *Config) ChatWorkspaceHostPathByID(chatID modeluuid.UUID) string {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return ""
-	}
 	if c == nil || c.Store == nil || chatID.IsNull() {
 		return ""
 	}
@@ -582,9 +550,6 @@ func (c *Config) ChatWorkspaceHostPathByID(chatID modeluuid.UUID) string {
 }
 
 func (c *Config) SetChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string) error {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return err
-	}
 	if c == nil || c.Store == nil {
 		return fmt.Errorf("config store not available")
 	}
@@ -599,9 +564,6 @@ func (c *Config) SetChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string)
 }
 
 func (c *Config) ChatHostbridgeAllowedCommandSpecsByID(chatID modeluuid.UUID) []string {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return nil
-	}
 	if c == nil || c.Store == nil || chatID.IsNull() {
 		return nil
 	}
@@ -621,9 +583,6 @@ func (c *Config) ChatHostbridgeAllowedCommandSpecsByID(chatID modeluuid.UUID) []
 }
 
 func (c *Config) SetChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, spec string) error {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return err
-	}
 	if c == nil || c.Store == nil {
 		return fmt.Errorf("config store not available")
 	}
@@ -647,9 +606,6 @@ func (c *Config) SetChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, spec
 }
 
 func (c *Config) RemoveChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, name string) error {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return err
-	}
 	if c == nil || c.Store == nil {
 		return fmt.Errorf("config store not available")
 	}
@@ -676,9 +632,6 @@ func (c *Config) RemoveChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, n
 }
 
 func (c *Config) ResolveChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string) (string, error) {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return "", err
-	}
 	candidate := strings.TrimSpace(raw)
 	if candidate == "" {
 		candidate = c.ChatWorkspaceHostPathByID(chatID)
@@ -697,9 +650,6 @@ func (c *Config) ResolveChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw str
 }
 
 func (c *Config) KnownChats() []ChatConfigEntry {
-	if err := c.migrateLegacyChatConfig(); err != nil {
-		return nil
-	}
 	return c.knownChatsNoMigrate()
 }
 
@@ -751,7 +701,7 @@ func (c *Config) knownChatsNoMigrate() []ChatConfigEntry {
 }
 
 func (c *Config) ChatKey(chatID modeluuid.UUID, key string) string {
-	base := fmt.Sprintf("chats.%s", chatID.String())
+	base := fmt.Sprintf(`chats["%s"]`, chatID.String())
 	if strings.TrimSpace(key) == "" {
 		return base
 	}
@@ -883,121 +833,6 @@ func (c *Config) migrateLegacyLocalLayout() error {
 	return nil
 }
 
-func (c *Config) migrateLegacyChatConfig() error {
-	if c == nil || c.Store == nil {
-		return nil
-	}
-	rootAny := c.Store.Get("telegram.chats", nil)
-	root, ok := rootAny.(map[string]any)
-	if !ok {
-		return nil
-	}
-
-	for _, legacy := range legacyChatEntries(root) {
-		providerChatID := strconv.FormatInt(legacy.ChatID, 10)
-		existing := c.findProviderChatNoMigrate("telegram", providerChatID)
-		if existing == nil {
-			entry := &ChatConfigEntry{
-				ID:                modeluuid.New(),
-				ProviderType:      "telegram",
-				ProviderChatID:    providerChatID,
-				ProviderChatTitle: legacy.ChatTitle,
-				Enabled:           legacy.Enabled,
-			}
-			if err := c.Store.PersistString(c.ChatKey(entry.ID, "chat_provider_type"), entry.ProviderType); err != nil {
-				return err
-			}
-			if err := c.Store.PersistString(c.ChatKey(entry.ID, "provider_chat_id"), entry.ProviderChatID); err != nil {
-				return err
-			}
-			if err := c.Store.PersistString(c.ChatKey(entry.ID, "provider_chat_title"), entry.ProviderChatTitle); err != nil {
-				return err
-			}
-			if err := c.Store.PersistBool(c.ChatKey(entry.ID, "enabled"), entry.Enabled); err != nil {
-				return err
-			}
-			if err := c.Store.PersistString(c.providerChatMapKey(entry.ProviderType, entry.ProviderChatID), entry.ID.String()); err != nil {
-				return err
-			}
-			existing = entry
-		}
-
-		if raw := strings.TrimSpace(c.Store.GetString(c.legacyChatKey(legacy.ChatID, "workspace_host_path"), "")); raw != "" {
-			if c.Store.Get(c.ChatKey(existing.ID, "workspace_host_path"), nil) == nil {
-				if err := c.Store.PersistString(c.ChatKey(existing.ID, "workspace_host_path"), absOrEmpty(raw)); err != nil {
-					return err
-				}
-			}
-		}
-		var commands []string
-		if c.Store.GetStruct(c.legacyChatKey(legacy.ChatID, "hostbridge.allowed_commands"), &commands) && len(commands) > 0 {
-			if c.Store.Get(c.ChatKey(existing.ID, "hostbridge.allowed_commands"), nil) == nil {
-				if err := c.Store.PersistStruct(c.ChatKey(existing.ID, "hostbridge.allowed_commands"), commands); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func legacyChatEntries(root map[string]any) []struct {
-	ChatID    int64
-	ChatTitle string
-	Enabled   bool
-} {
-	var out []struct {
-		ChatID    int64
-		ChatTitle string
-		Enabled   bool
-	}
-	appendScope := func(scope string, scopeMap map[string]any) {
-		for _, raw := range scopeMap {
-			entryMap, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			chatID := int64FromAny(entryMap["chat_id"])
-			if chatID == 0 && scope == "groups" {
-				chatID = -int64FromAny(entryMap["id"])
-			}
-			if chatID == 0 {
-				continue
-			}
-			out = append(out, struct {
-				ChatID    int64
-				ChatTitle string
-				Enabled   bool
-			}{
-				ChatID:    chatID,
-				ChatTitle: stringFromAny(entryMap["chat_title"]),
-				Enabled:   boolFromAny(entryMap["enabled"]),
-			})
-		}
-	}
-	if users, ok := root["users"].(map[string]any); ok {
-		appendScope("users", users)
-	}
-	if groups, ok := root["groups"].(map[string]any); ok {
-		appendScope("groups", groups)
-	}
-	return out
-}
-
-func (c *Config) legacyChatKey(chatID int64, key string) string {
-	scope := "users"
-	id := chatID
-	if chatID < 0 {
-		scope = "groups"
-		id = -chatID
-	}
-	return fmt.Sprintf("telegram.chats.%s.%d.%s", scope, id, key)
-}
-
-func (c *Config) providerChatMapKey(providerType string, providerChatID string) string {
-	return fmt.Sprintf("provider_chats.%x.%x", strings.TrimSpace(providerType), strings.TrimSpace(providerChatID))
-}
-
 func (c *Config) ResolveWorkspaceHostPath(raw string) (string, error) {
 	candidate := strings.TrimSpace(raw)
 	if candidate == "" {
@@ -1108,19 +943,4 @@ func firstNonEmptyString(values ...any) string {
 func boolFromAny(v any) bool {
 	b, _ := v.(bool)
 	return b
-}
-
-func int64FromAny(v any) int64 {
-	switch t := v.(type) {
-	case int:
-		return int64(t)
-	case int64:
-		return t
-	case float64:
-		return int64(t)
-	case float32:
-		return int64(t)
-	default:
-		return 0
-	}
 }
