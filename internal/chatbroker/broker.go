@@ -512,6 +512,21 @@ func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 		"HOSTBRIDGE_ADDR=" + b.Config.ContainerHostbridgeTCPAddr(),
 		"HOSTBRIDGE_TLS_DIR=" + b.Config.ContainerHostbridgeTLSDir(),
 	}
+	if b.Config != nil {
+		identity := b.Config.HostGitIdentity(context.Background())
+		if identity.Name != "" {
+			sbx.Env = append(sbx.Env,
+				"GIT_AUTHOR_NAME="+identity.Name,
+				"GIT_COMMITTER_NAME="+identity.Name,
+			)
+		}
+		if identity.Email != "" {
+			sbx.Env = append(sbx.Env,
+				"GIT_AUTHOR_EMAIL="+identity.Email,
+				"GIT_COMMITTER_EMAIL="+identity.Email,
+			)
+		}
+	}
 	sbx.Mounts = []sandboxengine.Mount{
 		{Source: conv.WorkspaceHost, Target: conv.ContainerWorkspace},
 		{Source: conv.HomeHost, Target: conv.ContainerHome},

@@ -1,6 +1,7 @@
 package appconfig
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -34,6 +35,11 @@ type ChatConfigEntry struct {
 	ProviderChatID    string
 	ProviderChatTitle string
 	Enabled           bool
+}
+
+type GitIdentity struct {
+	Name  string
+	Email string
 }
 
 func NewConfig(root string, store *clistate.Store) (*Config, error) {
@@ -215,6 +221,13 @@ func (c *Config) ProjectDir() string {
 		return ""
 	}
 	return strings.TrimSpace(c.Store.GetProjectDir())
+}
+
+func (c *Config) HostGitIdentity(ctx context.Context) GitIdentity {
+	return GitIdentity{
+		Name:  strings.TrimSpace(readGitConfig(ctx, "user.name")),
+		Email: strings.TrimSpace(readGitConfig(ctx, "user.email")),
+	}
 }
 
 func (c *Config) DefaultWorkspaceHostPath() string {
@@ -920,6 +933,22 @@ func absOrEmpty(v string) string {
 		return v
 	}
 	return abs
+}
+
+func readGitConfig(ctx context.Context, key string) string {
+	if strings.TrimSpace(key) == "" {
+		return ""
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	cmd := exec.CommandContext(ctx, "git", "config", "--global", key)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
 }
 
 func stringFromAny(v any) string {
