@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -112,12 +114,18 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			select {
 			case err := <-bridgeErrCh:
 				stop()
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
 				if err != nil {
 					return fmt.Errorf("hostbridge runtime: %w", err)
 				}
 				return nil
 			case err := <-botErrCh:
 				stop()
+				if errors.Is(err, context.Canceled) {
+					return nil
+				}
 				return err
 			}
 		})
