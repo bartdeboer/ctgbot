@@ -13,7 +13,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	outPath := filepath.Join(root, "internal", "containerassets", "src.tar.gz")
+	outPath := filepath.Join(root, "internal", "containerassets", "assets", "src.tar.gz")
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
+		panic(err)
+	}
 	out, err := os.Create(outPath)
 	if err != nil {
 		panic(err)

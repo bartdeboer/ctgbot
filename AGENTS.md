@@ -20,7 +20,7 @@ The project has three major responsibilities:
 - `internal/telegramengine`: Telegram API integration, bot routing, and Telegram event logging
 - `internal/codexengine`: Codex runtime, Docker session execution, image builder, and Codex chat-session state
 - `internal/hostbridge`: shared hostbridge protocol and controller runtime
-- `internal/containerassets`: embeds `src.tar.gz` for Docker image builds
+- `internal/containerassets`: embeds an optional `assets/src.tar.gz` for Docker image builds
 - `docker/Dockerfile`: source Dockerfile for the embedded image build context
 
 ## Main Commands
@@ -125,7 +125,7 @@ This was needed to get Codex file writes working in the Dockerized Telegram setu
 - Put Telegram transport logic in `internal/telegramengine`.
 - Put Docker/Codex/runtime logic in `internal/codexengine`.
 - Keep config/state access in `internal/appconfig` and shared types in `internal/chatmodel`.
-- Prefer updating the embedded build-context source files and then regenerating `internal/containerassets/src.tar.gz`.
+- Prefer updating the embedded build-context source files and then regenerating `internal/containerassets/assets/src.tar.gz`.
 - Do not commit runtime chat data from `chats/` or local control data from `./.ctgbot/`.
 
 ## Good First Checks

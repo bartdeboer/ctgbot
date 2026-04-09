@@ -1,0 +1,1 @@
+This directory intentionally stays in git so go:embed always matches.
