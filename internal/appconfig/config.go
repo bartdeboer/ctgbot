@@ -26,8 +26,9 @@ type Config struct {
 const CodexLoginCallbackPort = 1455
 
 const (
-	stateDirName = ".ctgbot"
-	namePrefix   = "ctgbot-"
+	stateDirName         = ".ctgbot"
+	namePrefix           = "ctgbot-"
+	chatClientNamePrefix = "ctgbot-chat-"
 )
 
 type ChatConfigEntry struct {
@@ -106,6 +107,13 @@ func (c *Config) ChatContainerName(chatID modeluuid.UUID, threadID modeluuid.UUI
 	return fmt.Sprintf("%s%s-%s", namePrefix, chatID.String(), threadID.String())
 }
 
+func (c *Config) ChatClientIdentity(chatID modeluuid.UUID) string {
+	if chatID.IsNull() {
+		return ""
+	}
+	return chatClientNamePrefix + chatID.String()
+}
+
 func (c *Config) ParseChatContainerName(name string) (chatID modeluuid.UUID, threadID modeluuid.UUID, ok bool) {
 	raw := strings.TrimPrefix(strings.TrimSpace(name), namePrefix)
 	if raw == "" || raw == name {
@@ -126,6 +134,18 @@ func (c *Config) ParseChatContainerName(name string) (chatID modeluuid.UUID, thr
 		return modeluuid.Nil, modeluuid.Nil, false
 	}
 	return chatID, threadID, true
+}
+
+func (c *Config) ParseChatClientIdentity(name string) (chatID modeluuid.UUID, ok bool) {
+	raw := strings.TrimPrefix(strings.TrimSpace(name), chatClientNamePrefix)
+	if raw == "" || raw == name {
+		return modeluuid.Nil, false
+	}
+	chatID, err := modeluuid.Parse(raw)
+	if err != nil {
+		return modeluuid.Nil, false
+	}
+	return chatID, true
 }
 
 func (c *Config) ChatRoot(name string) string {

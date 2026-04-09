@@ -214,6 +214,45 @@ func TestChatTLSDirUsesChatScopedLayout(t *testing.T) {
 	}
 }
 
+func TestChatClientIdentityRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	chatID, err := modeluuid.Parse("00000000200000000000000")
+	if err != nil {
+		t.Fatalf("parse chat uuid: %v", err)
+	}
+	name := cfg.ChatClientIdentity(chatID)
+	if name != "ctgbot-chat-"+chatID.String() {
+		t.Fatalf("ChatClientIdentity() = %q", name)
+	}
+	gotChatID, ok := cfg.ParseChatClientIdentity(name)
+	if !ok {
+		t.Fatalf("expected parse success")
+	}
+	if gotChatID != chatID {
+		t.Fatalf("ParseChatClientIdentity() = %q, want %q", gotChatID.String(), chatID.String())
+	}
+}
+
 func TestChatProcessToolsEnabledRoundTrip(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()

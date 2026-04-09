@@ -523,7 +523,7 @@ func (b *Broker) ensureSandboxRuntime(ctx context.Context, conv *Thread) error {
 	if err := hostbridgetls.EnsureChatClientMaterials(
 		b.Config.HostbridgeTLSRoot(),
 		b.Config.ChatTLSDirByID(chatID),
-		fmt.Sprintf("ctgbot-chat-%s", chatID.String()),
+		b.Config.ChatClientIdentity(chatID),
 	); err != nil {
 		return fmt.Errorf("ensure hostbridge tls client materials: %w", err)
 	}
