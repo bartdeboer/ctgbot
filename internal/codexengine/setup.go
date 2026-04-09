@@ -62,9 +62,9 @@ web_search = false
 [sandbox_workspace_write]
 exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
-writable_roots = [%q]
+writable_roots = [%q, %q, %q]
 network_access = true
-`, path.Join(containerHome, "ctgbot-bootstrap.md"), containerWorkspace)) + "\n"
+`, path.Join(containerHome, "ctgbot-bootstrap.md"), containerWorkspace, containerHome, "/tmp")) + "\n"
 	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
 		return err
 	}

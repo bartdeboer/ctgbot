@@ -488,6 +488,10 @@ func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 	sbx.Env = []string{
 		"HOME=" + conv.ContainerHome,
 		"CODEX_HOME=" + conv.ContainerHome,
+		"GOCACHE=/tmp/go-build-cache",
+		"GOMODCACHE=/tmp/go-mod-cache",
+		"GOPATH=/tmp/go",
+		"XDG_CACHE_HOME=/tmp/.cache",
 		"HOSTBRIDGE_ADDR=" + b.Config.ContainerHostbridgeTCPAddr(),
 		"HOSTBRIDGE_TLS_DIR=" + b.Config.ContainerHostbridgeTLSDir(),
 	}

@@ -54,6 +54,9 @@ func TestEnsureConversationCodexHomeWritesPosixModelInstructionsPath(t *testing.
 	if strings.Contains(text, `\codex-home\ctgbot-bootstrap.md`) {
 		t.Fatalf("config.toml still contains a windows-style model_instructions_file:\n%s", text)
 	}
+	if !strings.Contains(text, `writable_roots = ["/workspace", "/codex-home", "/tmp"]`) {
+		t.Fatalf("config.toml does not contain expanded writable roots:\n%s", text)
+	}
 }
 
 func TestExtractCodexThreadID(t *testing.T) {
@@ -132,5 +135,14 @@ func TestSetupEnvironmentWritesManagedFiles(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(sbx.ProfileDir, name)); err != nil {
 			t.Fatalf("%s missing: %v", name, err)
 		}
+	}
+
+	body, err := os.ReadFile(filepath.Join(sbx.ProfileDir, "config.toml"))
+	if err != nil {
+		t.Fatalf("read config.toml: %v", err)
+	}
+	text := string(body)
+	if !strings.Contains(text, `writable_roots = ["/workspace", "/codex-home", "/tmp"]`) {
+		t.Fatalf("config.toml does not contain expanded writable roots:\n%s", text)
 	}
 }
