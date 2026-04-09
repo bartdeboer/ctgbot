@@ -51,7 +51,7 @@ type IncomingResult struct {
 	Messages []OutboundMessage
 }
 
-const helpText = "Commands:\n/new [absolute-host-path]\n/status\n/stop\n/upgrade\n/quit\n/help\n\nAny non-command message is sent to the active Codex conversation."
+const helpText = "Commands:\n/new [absolute-host-path]\n/refresh\n/status\n/stop\n/upgrade\n/quit\n/help\n\nAny non-command message is sent to the active Codex conversation."
 
 type Broker struct {
 	Config         *appconfig.Config
@@ -171,6 +171,15 @@ func (b *Broker) StopSession(ctx context.Context, thread *Thread) error {
 	})
 }
 
+func (b *Broker) RefreshSession(ctx context.Context, thread *Thread) error {
+	if thread == nil {
+		return nil
+	}
+	return b.dispatcher().Run(ctx, b.dispatchKey(thread.ChatID, thread.ID), func(runCtx context.Context) error {
+		return b.refreshSession(runCtx, thread)
+	})
+}
+
 func (b *Broker) stopSession(ctx context.Context, conv *Thread) error {
 	if conv == nil {
 		return nil
@@ -184,6 +193,25 @@ func (b *Broker) stopSession(ctx context.Context, conv *Thread) error {
 	conv.Active = false
 	conv.LastError = "stopped by /stop"
 	return b.Sessions.SaveThread(ctx, conv)
+}
+
+func (b *Broker) refreshSession(ctx context.Context, conv *Thread) error {
+	if conv == nil {
+		return nil
+	}
+	if err := b.newSandbox(conv).Remove(ctx); err != nil {
+		return err
+	}
+	conv.Initialized = false
+	conv.LastError = ""
+	if err := b.prepareEnvironment(ctx, conv); err != nil {
+		if b.Sessions != nil {
+			conv.LastError = err.Error()
+			_ = b.Sessions.SaveThread(ctx, conv)
+		}
+		return err
+	}
+	return nil
 }
 
 func (b *Broker) PrepareSession(ctx context.Context, conv *Thread) error {
@@ -267,6 +295,18 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 			return "", err
 		}
 		return fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName, conv.WorkspaceHost), nil
+	case "refresh":
+		conv, err := b.GetActiveSession(ctx, thread)
+		if err != nil {
+			return "", err
+		}
+		if conv == nil {
+			return "no active conversation", nil
+		}
+		if err := b.RefreshSession(ctx, conv); err != nil {
+			return "", err
+		}
+		return "conversation runtime refreshed", nil
 	case "stop":
 		conv, err := b.GetActiveSession(ctx, thread)
 		if err != nil {
