@@ -553,7 +553,7 @@ func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 
 func (b *Broker) developerInstructions(chatID modeluuid.UUID, conv *Thread) string {
 	allowedCommands := append([]string{}, hostbridge.AllowedCommandNames(
-		hostbridge.MergeAllowedCommandSpecs(b.Config.ChatHostbridgeAllowedCommandSpecsByID(chatID)),
+		hostbridge.MergeNamedAllowedCommands(b.Config.ChatHostbridgeAllowedCommandsByID(chatID)),
 	)...)
 	sort.Strings(allowedCommands)
 

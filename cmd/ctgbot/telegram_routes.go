@@ -101,7 +101,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 					if !ok {
 						return hostbridge.DefaultAllowedCommands()
 					}
-					return hostbridge.MergeAllowedCommandSpecs(cfg.ChatHostbridgeAllowedCommandSpecsByID(chatID))
+					return hostbridge.MergeNamedAllowedCommands(cfg.ChatHostbridgeAllowedCommandsByID(chatID))
 				}
 				bridgeErrCh <- hostbridge.ServeListener(runCtx, ln, 30, resolveAllowed, logger)
 			}()

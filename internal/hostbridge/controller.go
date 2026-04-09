@@ -21,7 +21,11 @@ import (
 )
 
 type AllowedCommand struct {
-	Path string
+	Name           string
+	Args           []string
+	Dir            string
+	Env            map[string]string
+	AllowExtraArgs bool
 }
 
 type securityTaggedListener struct {
@@ -161,17 +165,15 @@ func handleConn(conn net.Conn, resolve AllowedCommandResolver, defaultTimeoutSec
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	execPath := spec.Path
-	execArgs := req.Args
-	if req.Command == "dir" && runtime.GOOS == "windows" {
-		execArgs = append([]string{"/c", "dir"}, req.Args...)
+	plan, err := buildExecutionPlan(req, spec)
+	if err != nil {
+		_ = send.Encode(Frame{Kind: StreamError, Message: err.Error()})
+		return
 	}
 
-	cmd := exec.CommandContext(ctx, execPath, execArgs...)
-	if strings.TrimSpace(req.Cwd) != "" {
-		cmd.Dir = req.Cwd
-	}
-	cmd.Env = sanitizedEnv(req.Env)
+	cmd := exec.CommandContext(ctx, plan.Name, plan.Args...)
+	cmd.Dir = plan.Dir
+	cmd.Env = plan.Env
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -194,7 +196,7 @@ func handleConn(conn net.Conn, resolve AllowedCommandResolver, defaultTimeoutSec
 		return
 	}
 
-	logger.Printf("hostbridge command=%s args=%q cwd=%q security=%s client=%q", req.Command, req.Args, req.Cwd, connectionSecurityMode(conn), clientIdentity)
+	logger.Printf("hostbridge command=%s args=%q dir=%q security=%s client=%q", req.Command, plan.Args, plan.Dir, connectionSecurityMode(conn), clientIdentity)
 
 	go func() {
 		defer stdin.Close()
@@ -247,12 +249,43 @@ func streamReader(enc *safeEncoder, r io.Reader, kind StreamKind, done chan<- st
 	}
 }
 
+type executionPlan struct {
+	Name string
+	Args []string
+	Dir  string
+	Env  []string
+}
+
+func buildExecutionPlan(req Request, spec AllowedCommand) (executionPlan, error) {
+	spec, ok := normalizeAllowedCommand(spec)
+	if !ok {
+		return executionPlan{}, fmt.Errorf("allowed command %q has empty executable name", req.Command)
+	}
+
+	args := append([]string{}, spec.Args...)
+	if len(req.Args) > 0 {
+		if !spec.AllowExtraArgs {
+			return executionPlan{}, fmt.Errorf("command does not allow extra args: %s", req.Command)
+		}
+		args = append(args, req.Args...)
+	}
+
+	return executionPlan{
+		Name: spec.Name,
+		Args: args,
+		Dir:  spec.Dir,
+		Env:  sanitizedEnv(spec.Env),
+	}, nil
+}
+
 func DefaultAllowedCommands() map[string]AllowedCommand {
 	allowed := map[string]AllowedCommand{}
 
 	if runtime.GOOS == "windows" {
 		allowed["dir"] = AllowedCommand{
-			Path: `C:\Windows\System32\cmd.exe`,
+			Name:           `C:\Windows\System32\cmd.exe`,
+			Args:           []string{"/c", "dir"},
+			AllowExtraArgs: true,
 		}
 		return allowed
 	}
@@ -267,7 +300,7 @@ func DefaultAllowedCommands() map[string]AllowedCommand {
 		{name: "uname", path: "/usr/bin/uname"},
 	} {
 		if _, err := os.Stat(pair.path); err == nil {
-			allowed[pair.name] = AllowedCommand{Path: pair.path}
+			allowed[pair.name] = AllowedCommand{Name: pair.path, AllowExtraArgs: true}
 		}
 	}
 
@@ -275,28 +308,39 @@ func DefaultAllowedCommands() map[string]AllowedCommand {
 }
 
 func sanitizedEnv(extra map[string]string) []string {
-	base := []string{
-		"PATH=/usr/bin:/bin:/usr/sbin:/sbin",
-		"LANG=C",
-	}
+	base := append([]string{}, os.Environ()...)
 	for k, v := range extra {
 		if strings.TrimSpace(k) == "" || strings.ContainsRune(k, '=') {
 			continue
 		}
-		base = append(base, k+"="+v)
+		base = upsertEnv(base, k, v)
 	}
 	return base
 }
 
 func MergeAllowedCommands(extra map[string]string) map[string]AllowedCommand {
 	allowed := DefaultAllowedCommands()
-	for name, path := range extra {
+	for name, executable := range extra {
 		name = strings.TrimSpace(name)
-		path = strings.TrimSpace(path)
-		if name == "" || path == "" {
+		executable = strings.TrimSpace(executable)
+		if name == "" || executable == "" {
 			continue
 		}
-		allowed[name] = AllowedCommand{Path: path}
+		allowed[name] = AllowedCommand{Name: executable}
+	}
+	return allowed
+}
+
+func MergeNamedAllowedCommands(extra map[string]AllowedCommand) map[string]AllowedCommand {
+	allowed := DefaultAllowedCommands()
+	for name, spec := range extra {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if normalized, ok := normalizeAllowedCommand(spec); ok {
+			allowed[name] = normalized
+		}
 	}
 	return allowed
 }
@@ -321,9 +365,60 @@ func AllowedCommandsFromSpecs(specs []string) map[string]AllowedCommand {
 		if name == "" || name == "." || name == string(filepath.Separator) {
 			continue
 		}
-		allowed[name] = AllowedCommand{Path: spec}
+		allowed[name] = AllowedCommand{Name: spec}
 	}
 	return allowed
+}
+
+func normalizeAllowedCommand(spec AllowedCommand) (AllowedCommand, bool) {
+	spec.Name = strings.TrimSpace(spec.Name)
+	spec.Dir = strings.TrimSpace(spec.Dir)
+	spec.Args = cleanCommandArgs(spec.Args)
+	spec.Env = cleanCommandEnv(spec.Env)
+	if spec.Name == "" {
+		return AllowedCommand{}, false
+	}
+	return spec, true
+}
+
+func cleanCommandArgs(args []string) []string {
+	if len(args) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		out = append(out, arg)
+	}
+	return out
+}
+
+func cleanCommandEnv(env map[string]string) map[string]string {
+	if len(env) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(env))
+	for key, value := range env {
+		key = strings.TrimSpace(key)
+		if key == "" || strings.ContainsRune(key, '=') {
+			continue
+		}
+		out[key] = value
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func upsertEnv(env []string, key string, value string) []string {
+	prefix := key + "="
+	for i, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			env[i] = prefix + value
+			return env
+		}
+	}
+	return append(env, prefix+value)
 }
 
 func AllowedCommandNames(allowed map[string]AllowedCommand) []string {

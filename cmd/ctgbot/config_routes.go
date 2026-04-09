@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -34,11 +37,17 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			var setChatWorkspaceHostPath chatValueFlag
 			setHostbridgeTCPListenAddr := fs.String("set-hostbridge-tcp-listen-addr", "", "Persist hostbridge.tcp_listen_addr into config")
 			setContainerHostbridgeTCPAddr := fs.String("set-container-hostbridge-tcp-addr", "", "Persist docker.container_hostbridge_tcp_addr into config")
-			var allowChatHostbridgeCommand chatCommandFlag
-			var removeChatHostbridgeCommand chatCommandFlag
+			var allowChatHostbridgeCommand chatAllowedCommandFlag
+			var setChatHostbridgeCommandDir chatAliasValueFlag
+			var setChatHostbridgeCommandArgs chatAliasArgsFlag
+			var setChatHostbridgeCommandAllowExtraArgs chatAliasBoolFlag
+			var removeChatHostbridgeCommand chatAliasNameFlag
 			fs.Var(&setChatWorkspaceHostPath, "set-chat-workspace-host-path", "Persist a Telegram chat-local workspace host path in the form <provider-chat-id>:<path>")
-			fs.Var(&allowChatHostbridgeCommand, "allow-chat-hostbridge-command", "Persist a Telegram chat-local hostbridge command in the form <provider-chat-id>:<command-or-absolute-path>")
-			fs.Var(&removeChatHostbridgeCommand, "remove-chat-hostbridge-command", "Remove a Telegram chat-local hostbridge command by basename in the form <provider-chat-id>:<name>")
+			fs.Var(&allowChatHostbridgeCommand, "allow-chat-hostbridge-command", "Persist a Telegram chat-local hostbridge command in the form <provider-chat-id>:<alias>=<command> (or legacy <provider-chat-id>:<command>)")
+			fs.Var(&setChatHostbridgeCommandDir, "set-chat-hostbridge-command-dir", "Persist a Telegram chat-local hostbridge command dir in the form <provider-chat-id>:<alias>=<dir>")
+			fs.Var(&setChatHostbridgeCommandArgs, "set-chat-hostbridge-command-args", "Persist a Telegram chat-local hostbridge command args in the form <provider-chat-id>:<alias>=arg1,arg2")
+			fs.Var(&setChatHostbridgeCommandAllowExtraArgs, "set-chat-hostbridge-command-allow-extra-args", "Persist whether a Telegram chat-local hostbridge command allows extra args in the form <provider-chat-id>:<alias>=true")
+			fs.Var(&removeChatHostbridgeCommand, "remove-chat-hostbridge-command", "Remove a Telegram chat-local hostbridge command in the form <provider-chat-id>:<alias>")
 			setCodexModel := fs.String("set-codex-model", "", "Persist codex.model into config")
 			setCodexCLIHomePath := fs.String("set-codex-cli-home-path", "", "Persist codex.cli_home_host_path into config")
 			setCodexSharedHomePath := fs.String("set-codex-shared-home-path", "", "Deprecated alias for --set-codex-cli-home-path")
@@ -64,6 +73,9 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				*setHostbridgeTCPListenAddr == "" &&
 				*setContainerHostbridgeTCPAddr == "" &&
 				len(allowChatHostbridgeCommand.values) == 0 &&
+				len(setChatHostbridgeCommandDir.values) == 0 &&
+				len(setChatHostbridgeCommandArgs.values) == 0 &&
+				len(setChatHostbridgeCommandAllowExtraArgs.values) == 0 &&
 				len(removeChatHostbridgeCommand.values) == 0 &&
 				*setCodexModel == "" &&
 				*setCodexCLIHomePath == "" &&
@@ -114,13 +126,17 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 							workspacePath = "<global/default>"
 						}
 						fmt.Printf("      workspace_host_path: %s\n", workspacePath)
-						specs := cfg.ChatHostbridgeAllowedCommandSpecsByID(chat.ID)
-						if len(specs) == 0 {
+						commands := cfg.ChatHostbridgeAllowedCommandsByID(chat.ID)
+						if len(commands) == 0 {
 							fmt.Println("      hostbridge.allowed_commands: <defaults only>")
 							continue
 						}
-						names := hostbridge.AllowedCommandNames(hostbridge.AllowedCommandsFromSpecs(specs))
-						fmt.Printf("      hostbridge.allowed_commands: names=%v specs=%v\n", names, specs)
+						names := hostbridge.AllowedCommandNames(commands)
+						fmt.Printf("      hostbridge.allowed_commands: names=%v\n", names)
+						for _, name := range names {
+							spec := commands[name]
+							fmt.Printf("        %s => name=%q args=%v dir=%q allow_extra_args=%t\n", name, spec.Name, spec.Args, spec.Dir, spec.AllowExtraArgs)
+						}
 					}
 				}
 				fmt.Println("  help:")
@@ -130,7 +146,9 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				fmt.Println("    enable chat process tools with: ctgbot config --enable-chat-process-tools <provider-chat-id>")
 				fmt.Println("    disable chat process tools with: ctgbot config --disable-chat-process-tools <provider-chat-id>")
 				fmt.Println("    set a chat workspace with: ctgbot config --set-chat-workspace-host-path <provider-chat-id>:<path>")
-				fmt.Println("    allow a chat hostbridge command with: ctgbot config --allow-chat-hostbridge-command <provider-chat-id>:<command-or-absolute-path>")
+				fmt.Println("    allow a chat hostbridge command with: ctgbot config --allow-chat-hostbridge-command <provider-chat-id>:<alias>=<command>")
+				fmt.Println("    set a chat hostbridge command dir with: ctgbot config --set-chat-hostbridge-command-dir <provider-chat-id>:<alias>=<dir>")
+				fmt.Println("    set a chat hostbridge command args with: ctgbot config --set-chat-hostbridge-command-args <provider-chat-id>:<alias>=arg1,arg2")
 				return nil
 			}
 
@@ -182,16 +200,25 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					return fmt.Errorf("persist docker.container_hostbridge_tcp_addr: %w", err)
 				}
 			}
-			if len(allowChatHostbridgeCommand.values) > 0 || len(removeChatHostbridgeCommand.values) > 0 {
+			if len(allowChatHostbridgeCommand.values) > 0 ||
+				len(setChatHostbridgeCommandDir.values) > 0 ||
+				len(setChatHostbridgeCommandArgs.values) > 0 ||
+				len(setChatHostbridgeCommandAllowExtraArgs.values) > 0 ||
+				len(removeChatHostbridgeCommand.values) > 0 {
 				cfg, err := appconfig.NewConfig("", store)
 				if err != nil {
 					return err
 				}
-				for chatID, specs := range allowChatHostbridgeCommand.values {
-					for _, spec := range specs {
-						if err := cfg.SetChatHostbridgeAllowedCommand(chatID, spec); err != nil {
-							return fmt.Errorf("persist hostbridge allowed command for telegram chat %d (%q): %w", chatID, spec, err)
-						}
+				updates := collectChatHostbridgeCommandUpdates(
+					cfg,
+					allowChatHostbridgeCommand.values,
+					setChatHostbridgeCommandDir.values,
+					setChatHostbridgeCommandArgs.values,
+					setChatHostbridgeCommandAllowExtraArgs.values,
+				)
+				for _, update := range updates {
+					if err := cfg.SetChatHostbridgeAllowedCommand(update.chatID, update.alias, update.command); err != nil {
+						return fmt.Errorf("persist hostbridge allowed command for telegram chat %d alias %q: %w", update.chatID, update.alias, err)
 					}
 				}
 				for chatID, names := range removeChatHostbridgeCommand.values {
@@ -286,10 +313,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					updates = append(updates, fmt.Sprintf("set telegram chat %d workspace %s", chatID, path))
 				}
 			}
-			for chatID, specs := range allowChatHostbridgeCommand.values {
-				for _, spec := range specs {
-					updates = append(updates, fmt.Sprintf("allowed telegram chat %d hostbridge command %s", chatID, spec))
-				}
+			for _, update := range collectChatHostbridgeCommandUpdates(nil, allowChatHostbridgeCommand.values, setChatHostbridgeCommandDir.values, setChatHostbridgeCommandArgs.values, setChatHostbridgeCommandAllowExtraArgs.values) {
+				updates = append(updates, fmt.Sprintf("set telegram chat %d hostbridge command %s => name=%s args=%v dir=%s allow_extra_args=%t", update.chatID, update.alias, update.command.Name, update.command.Args, update.command.Dir, update.command.AllowExtraArgs))
 			}
 			for chatID, names := range removeChatHostbridgeCommand.values {
 				for _, name := range names {
@@ -306,11 +331,167 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 	})
 }
 
-type chatCommandFlag struct {
+type chatAllowedCommandFlag struct {
+	values map[int64]map[string]hostbridge.AllowedCommand
+}
+
+func (f *chatAllowedCommandFlag) String() string {
+	if len(f.values) == 0 {
+		return ""
+	}
+	var parts []string
+	for chatID, aliases := range f.values {
+		for alias, command := range aliases {
+			parts = append(parts, fmt.Sprintf("%d:%s=%s", chatID, alias, command.Name))
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func (f *chatAllowedCommandFlag) Set(v string) error {
+	chatID, raw, err := parseChatValue(v, "<provider-chat-id>:<alias>=<command>")
+	if err != nil {
+		return err
+	}
+
+	alias := ""
+	commandName := ""
+	if key, value, ok := strings.Cut(raw, "="); ok {
+		alias = strings.TrimSpace(key)
+		commandName = strings.TrimSpace(value)
+	} else {
+		commandName = strings.TrimSpace(raw)
+		alias = strings.TrimSpace(filepath.Base(commandName))
+	}
+	if alias == "" || commandName == "" {
+		return fmt.Errorf("expected <provider-chat-id>:<alias>=<command>")
+	}
+
+	if f.values == nil {
+		f.values = map[int64]map[string]hostbridge.AllowedCommand{}
+	}
+	if f.values[chatID] == nil {
+		f.values[chatID] = map[string]hostbridge.AllowedCommand{}
+	}
+	current := f.values[chatID][alias]
+	current.Name = commandName
+	f.values[chatID][alias] = current
+	return nil
+}
+
+type chatAliasValueFlag struct {
+	values map[int64]map[string]string
+}
+
+func (f *chatAliasValueFlag) String() string {
+	if len(f.values) == 0 {
+		return ""
+	}
+	var parts []string
+	for chatID, aliases := range f.values {
+		for alias, value := range aliases {
+			parts = append(parts, fmt.Sprintf("%d:%s=%s", chatID, alias, value))
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func (f *chatAliasValueFlag) Set(v string) error {
+	chatID, alias, value, err := parseChatAliasAssignment(v)
+	if err != nil {
+		return err
+	}
+	if f.values == nil {
+		f.values = map[int64]map[string]string{}
+	}
+	if f.values[chatID] == nil {
+		f.values[chatID] = map[string]string{}
+	}
+	f.values[chatID][alias] = value
+	return nil
+}
+
+type chatAliasBoolFlag struct {
+	values map[int64]map[string]bool
+}
+
+func (f *chatAliasBoolFlag) String() string {
+	if len(f.values) == 0 {
+		return ""
+	}
+	var parts []string
+	for chatID, aliases := range f.values {
+		for alias, value := range aliases {
+			parts = append(parts, fmt.Sprintf("%d:%s=%t", chatID, alias, value))
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func (f *chatAliasBoolFlag) Set(v string) error {
+	chatID, alias, raw, err := parseChatAliasAssignment(v)
+	if err != nil {
+		return err
+	}
+	parsed, err := strconv.ParseBool(raw)
+	if err != nil {
+		return fmt.Errorf("invalid bool %q", raw)
+	}
+	if f.values == nil {
+		f.values = map[int64]map[string]bool{}
+	}
+	if f.values[chatID] == nil {
+		f.values[chatID] = map[string]bool{}
+	}
+	f.values[chatID][alias] = parsed
+	return nil
+}
+
+type chatAliasArgsFlag struct {
+	values map[int64]map[string][]string
+}
+
+func (f *chatAliasArgsFlag) String() string {
+	if len(f.values) == 0 {
+		return ""
+	}
+	var parts []string
+	for chatID, aliases := range f.values {
+		for alias, value := range aliases {
+			parts = append(parts, fmt.Sprintf("%d:%s=%s", chatID, alias, strings.Join(value, ",")))
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func (f *chatAliasArgsFlag) Set(v string) error {
+	chatID, alias, raw, err := parseChatAliasAssignment(v)
+	if err != nil {
+		return err
+	}
+	args, err := parseArgsCSV(raw)
+	if err != nil {
+		return err
+	}
+	if f.values == nil {
+		f.values = map[int64]map[string][]string{}
+	}
+	if f.values[chatID] == nil {
+		f.values[chatID] = map[string][]string{}
+	}
+	f.values[chatID][alias] = args
+	return nil
+}
+
+type chatAliasNameFlag struct {
 	values map[int64][]string
 }
 
-func (f *chatCommandFlag) String() string {
+func (f *chatAliasNameFlag) String() string {
 	if len(f.values) == 0 {
 		return ""
 	}
@@ -320,27 +501,19 @@ func (f *chatCommandFlag) String() string {
 			parts = append(parts, fmt.Sprintf("%d:%s", chatID, value))
 		}
 	}
+	sort.Strings(parts)
 	return strings.Join(parts, ",")
 }
 
-func (f *chatCommandFlag) Set(v string) error {
+func (f *chatAliasNameFlag) Set(v string) error {
+	chatID, value, err := parseChatValue(v, "<provider-chat-id>:<alias>")
+	if err != nil {
+		return err
+	}
 	if f.values == nil {
 		f.values = map[int64][]string{}
 	}
-	chatRaw, value, ok := strings.Cut(v, ":")
-	if !ok {
-		return fmt.Errorf("expected <provider-chat-id>:<command-or-absolute-path>")
-	}
-	chatRaw = strings.TrimSpace(chatRaw)
-	value = strings.TrimSpace(value)
-	if chatRaw == "" || value == "" {
-		return fmt.Errorf("expected <provider-chat-id>:<command-or-absolute-path>")
-	}
-	chatID, err := strconv.ParseInt(chatRaw, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid chat id %q", chatRaw)
-	}
-	f.values[chatID] = append(f.values[chatID], value)
+	f.values[chatID] = append(f.values[chatID], strings.TrimSpace(value))
 	return nil
 }
 
@@ -365,19 +538,144 @@ func (f *chatValueFlag) Set(v string) error {
 	if f.values == nil {
 		f.values = map[int64][]string{}
 	}
+	chatID, value, err := parseChatValue(v, "<provider-chat-id>:<path>")
+	if err != nil {
+		return err
+	}
+	f.values[chatID] = append(f.values[chatID], value)
+	return nil
+}
+
+type chatHostbridgeCommandUpdate struct {
+	chatID  int64
+	alias   string
+	command hostbridge.AllowedCommand
+}
+
+func collectChatHostbridgeCommandUpdates(cfg *appconfig.Config, allowed map[int64]map[string]hostbridge.AllowedCommand, dirs map[int64]map[string]string, args map[int64]map[string][]string, allowExtra map[int64]map[string]bool) []chatHostbridgeCommandUpdate {
+	keys := map[[2]string]struct{}{}
+	addKeys := func(chatID int64, aliases map[string]struct{}) {
+		for alias := range aliases {
+			keys[[2]string{strconv.FormatInt(chatID, 10), alias}] = struct{}{}
+		}
+	}
+	for chatID, aliases := range allowed {
+		seen := map[string]struct{}{}
+		for alias := range aliases {
+			seen[alias] = struct{}{}
+		}
+		addKeys(chatID, seen)
+	}
+	for chatID, aliases := range dirs {
+		seen := map[string]struct{}{}
+		for alias := range aliases {
+			seen[alias] = struct{}{}
+		}
+		addKeys(chatID, seen)
+	}
+	for chatID, aliases := range args {
+		seen := map[string]struct{}{}
+		for alias := range aliases {
+			seen[alias] = struct{}{}
+		}
+		addKeys(chatID, seen)
+	}
+	for chatID, aliases := range allowExtra {
+		seen := map[string]struct{}{}
+		for alias := range aliases {
+			seen[alias] = struct{}{}
+		}
+		addKeys(chatID, seen)
+	}
+
+	pairs := make([][2]string, 0, len(keys))
+	for pair := range keys {
+		pairs = append(pairs, pair)
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		if pairs[i][0] != pairs[j][0] {
+			return pairs[i][0] < pairs[j][0]
+		}
+		return pairs[i][1] < pairs[j][1]
+	})
+
+	updates := make([]chatHostbridgeCommandUpdate, 0, len(pairs))
+	for _, pair := range pairs {
+		chatID, _ := strconv.ParseInt(pair[0], 10, 64)
+		alias := pair[1]
+		command := hostbridge.AllowedCommand{}
+		if cfg != nil {
+			if existing := cfg.ChatHostbridgeAllowedCommands(chatID); len(existing) > 0 {
+				command = existing[alias]
+			}
+		}
+		if spec, ok := allowed[chatID][alias]; ok {
+			command.Name = spec.Name
+		}
+		if value, ok := dirs[chatID][alias]; ok {
+			command.Dir = value
+		}
+		if value, ok := args[chatID][alias]; ok {
+			command.Args = append([]string{}, value...)
+		}
+		if value, ok := allowExtra[chatID][alias]; ok {
+			command.AllowExtraArgs = value
+		}
+		updates = append(updates, chatHostbridgeCommandUpdate{
+			chatID:  chatID,
+			alias:   alias,
+			command: command,
+		})
+	}
+	return updates
+}
+
+func parseChatValue(v string, expected string) (int64, string, error) {
 	chatRaw, value, ok := strings.Cut(v, ":")
 	if !ok {
-		return fmt.Errorf("expected <provider-chat-id>:<path>")
+		return 0, "", fmt.Errorf("expected %s", expected)
 	}
 	chatRaw = strings.TrimSpace(chatRaw)
 	value = strings.TrimSpace(value)
 	if chatRaw == "" || value == "" {
-		return fmt.Errorf("expected <provider-chat-id>:<path>")
+		return 0, "", fmt.Errorf("expected %s", expected)
 	}
 	chatID, err := strconv.ParseInt(chatRaw, 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid chat id %q", chatRaw)
+		return 0, "", fmt.Errorf("invalid chat id %q", chatRaw)
 	}
-	f.values[chatID] = append(f.values[chatID], value)
-	return nil
+	return chatID, value, nil
+}
+
+func parseChatAliasAssignment(v string) (int64, string, string, error) {
+	chatID, raw, err := parseChatValue(v, "<provider-chat-id>:<alias>=<value>")
+	if err != nil {
+		return 0, "", "", err
+	}
+	alias, value, ok := strings.Cut(raw, "=")
+	if !ok {
+		return 0, "", "", fmt.Errorf("expected <provider-chat-id>:<alias>=<value>")
+	}
+	alias = strings.TrimSpace(alias)
+	value = strings.TrimSpace(value)
+	if alias == "" || value == "" {
+		return 0, "", "", fmt.Errorf("expected <provider-chat-id>:<alias>=<value>")
+	}
+	return chatID, alias, value, nil
+}
+
+func parseArgsCSV(raw string) ([]string, error) {
+	reader := csv.NewReader(strings.NewReader(raw))
+	values, err := reader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("parse args csv: %w", err)
+	}
+	args := make([]string, 0, len(values))
+	for _, value := range values {
+		args = append(args, strings.TrimSpace(value))
+	}
+	if len(args) == 1 && args[0] == "" {
+		return nil, nil
+	}
+	return args, nil
 }

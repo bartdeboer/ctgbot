@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -589,45 +590,57 @@ func (c *Config) SetChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string)
 	return c.Store.PersistString(c.ChatKey(chatID, "workspace_host_path"), resolved)
 }
 
-func (c *Config) ChatHostbridgeAllowedCommandSpecsByID(chatID modeluuid.UUID) []string {
+func (c *Config) ChatHostbridgeAllowedCommandsByID(chatID modeluuid.UUID) map[string]hostbridge.AllowedCommand {
 	if c == nil || c.Store == nil || chatID.IsNull() {
 		return nil
 	}
-	var out []string
-	if !c.Store.GetStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), &out) {
+	var out map[string]hostbridge.AllowedCommand
+	if c.Store.GetStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), &out) {
+		return normalizeAllowedCommands(out)
+	}
+
+	var legacy []string
+	if !c.Store.GetStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), &legacy) {
 		return nil
 	}
-	cleaned := make([]string, 0, len(out))
-	for _, spec := range out {
-		spec = strings.TrimSpace(spec)
-		if spec == "" {
-			continue
-		}
-		cleaned = append(cleaned, spec)
-	}
-	return cleaned
+	return hostbridge.AllowedCommandsFromSpecs(legacy)
 }
 
-func (c *Config) SetChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, spec string) error {
+func (c *Config) ChatHostbridgeAllowedCommandSpecsByID(chatID modeluuid.UUID) []string {
+	allowed := c.ChatHostbridgeAllowedCommandsByID(chatID)
+	if len(allowed) == 0 {
+		return nil
+	}
+	names := hostbridge.AllowedCommandNames(allowed)
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		spec := allowed[name]
+		out = append(out, spec.Name)
+	}
+	return out
+}
+
+func (c *Config) SetChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, name string, command hostbridge.AllowedCommand) error {
 	if c == nil || c.Store == nil {
 		return fmt.Errorf("config store not available")
 	}
 	if chatID.IsNull() {
 		return fmt.Errorf("chat id is null")
 	}
-	spec = strings.TrimSpace(spec)
-	if spec == "" {
-		return fmt.Errorf("hostbridge allowed command spec is empty")
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("hostbridge allowed command name is empty")
+	}
+	normalized, ok := hostbridgeNormalizeAllowedCommand(command)
+	if !ok {
+		return fmt.Errorf("hostbridge allowed command executable is empty")
 	}
 
-	commands := c.ChatHostbridgeAllowedCommandSpecsByID(chatID)
-	for _, existing := range commands {
-		if existing == spec {
-			return nil
-		}
+	commands := c.ChatHostbridgeAllowedCommandsByID(chatID)
+	if commands == nil {
+		commands = map[string]hostbridge.AllowedCommand{}
 	}
-	commands = append(commands, spec)
-	sort.Strings(commands)
+	commands[name] = normalized
 	return c.Store.PersistStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), commands)
 }
 
@@ -643,18 +656,16 @@ func (c *Config) RemoveChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, n
 		return fmt.Errorf("hostbridge allowed command name is empty")
 	}
 
-	commands := c.ChatHostbridgeAllowedCommandSpecsByID(chatID)
+	commands := c.ChatHostbridgeAllowedCommandsByID(chatID)
 	if len(commands) == 0 {
 		return nil
 	}
-	filtered := make([]string, 0, len(commands))
-	for _, spec := range commands {
-		if strings.EqualFold(filepath.Base(spec), name) {
-			continue
+	for alias := range commands {
+		if strings.EqualFold(alias, name) {
+			delete(commands, alias)
 		}
-		filtered = append(filtered, spec)
 	}
-	return c.Store.PersistStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), filtered)
+	return c.Store.PersistStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), commands)
 }
 
 func (c *Config) ResolveChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string) (string, error) {
@@ -795,12 +806,20 @@ func (c *Config) ChatHostbridgeAllowedCommandSpecs(chatID int64) []string {
 	return c.ChatHostbridgeAllowedCommandSpecsByID(entry.ID)
 }
 
-func (c *Config) SetChatHostbridgeAllowedCommand(chatID int64, spec string) error {
+func (c *Config) ChatHostbridgeAllowedCommands(chatID int64) map[string]hostbridge.AllowedCommand {
+	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
+	if err != nil || entry == nil {
+		return nil
+	}
+	return c.ChatHostbridgeAllowedCommandsByID(entry.ID)
+}
+
+func (c *Config) SetChatHostbridgeAllowedCommand(chatID int64, name string, command hostbridge.AllowedCommand) error {
 	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
 	if err != nil {
 		return err
 	}
-	return c.SetChatHostbridgeAllowedCommandByID(entry.ID, spec)
+	return c.SetChatHostbridgeAllowedCommandByID(entry.ID, name, command)
 }
 
 func (c *Config) RemoveChatHostbridgeAllowedCommand(chatID int64, name string) error {
@@ -982,6 +1001,41 @@ func readGitConfig(ctx context.Context, key string) string {
 		return ""
 	}
 	return string(out)
+}
+
+func normalizeAllowedCommands(raw map[string]hostbridge.AllowedCommand) map[string]hostbridge.AllowedCommand {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string]hostbridge.AllowedCommand, len(raw))
+	for name, spec := range raw {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if normalized, ok := hostbridgeNormalizeAllowedCommand(spec); ok {
+			out[name] = normalized
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func hostbridgeNormalizeAllowedCommand(spec hostbridge.AllowedCommand) (hostbridge.AllowedCommand, bool) {
+	spec.Name = strings.TrimSpace(spec.Name)
+	spec.Dir = strings.TrimSpace(spec.Dir)
+	if spec.Name == "" {
+		return hostbridge.AllowedCommand{}, false
+	}
+	if len(spec.Args) == 0 {
+		spec.Args = nil
+	}
+	if len(spec.Env) == 0 {
+		spec.Env = nil
+	}
+	return spec, true
 }
 
 func stringFromAny(v any) string {

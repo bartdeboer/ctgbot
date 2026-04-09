@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -255,6 +256,95 @@ func TestChatProcessToolsEnabledRoundTrip(t *testing.T) {
 	}
 	if cfg.ChatProcessToolsEnabled(-123) {
 		t.Fatalf("expected process tools disabled")
+	}
+}
+
+func TestChatHostbridgeAllowedCommandsRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	if err := cfg.PersistChatID(-123, "Test Chat"); err != nil {
+		t.Fatalf("persist chat mapping: %v", err)
+	}
+
+	err = cfg.SetChatHostbridgeAllowedCommand(-123, "git-push-ctgbot", hostbridge.AllowedCommand{
+		Name: "git",
+		Args: []string{"push"},
+		Dir:  filepath.Join(root, "ctgbot"),
+	})
+	if err != nil {
+		t.Fatalf("set hostbridge allowed command: %v", err)
+	}
+
+	commands := cfg.ChatHostbridgeAllowedCommands(-123)
+	spec, ok := commands["git-push-ctgbot"]
+	if !ok {
+		t.Fatalf("expected git-push-ctgbot alias")
+	}
+	if spec.Name != "git" {
+		t.Fatalf("spec.Name = %q, want git", spec.Name)
+	}
+	if len(spec.Args) != 1 || spec.Args[0] != "push" {
+		t.Fatalf("spec.Args = %#v, want [push]", spec.Args)
+	}
+	if spec.Dir != filepath.Join(root, "ctgbot") {
+		t.Fatalf("spec.Dir = %q", spec.Dir)
+	}
+}
+
+func TestChatHostbridgeAllowedCommandsFallsBackToLegacySpecs(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	chatID := modeluuid.New()
+	if err := store.PersistStruct(cfg.ChatKey(chatID, "hostbridge.allowed_commands"), []string{"/usr/bin/git"}); err != nil {
+		t.Fatalf("persist legacy specs: %v", err)
+	}
+
+	commands := cfg.ChatHostbridgeAllowedCommandsByID(chatID)
+	spec, ok := commands["git"]
+	if !ok {
+		t.Fatalf("expected legacy git alias")
+	}
+	if spec.Name != "/usr/bin/git" {
+		t.Fatalf("spec.Name = %q, want /usr/bin/git", spec.Name)
 	}
 }
 
