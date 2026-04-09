@@ -13,8 +13,6 @@ import (
 )
 
 func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
-	t.Parallel()
-
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -33,6 +31,9 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
 	}
 	if err := cfg.SetChatEnabled(42, true); err != nil {
 		t.Fatalf("set chat enabled: %v", err)
@@ -56,6 +57,112 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	}
 	if result.Messages[0].Text != helpText {
 		t.Fatalf("message text = %q, want %q", result.Messages[0].Text, helpText)
+	}
+}
+
+func TestHandleIncomingMessageRunsUpgradeCommand(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	if err := cfg.SetChatEnabled(42, true); err != nil {
+		t.Fatalf("set chat enabled: %v", err)
+	}
+
+	process := &fakeProcessActions{}
+	sessions := &fakeBrokerSessionStore{}
+	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker.ProcessActions = process
+
+	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Message:          "/upgrade",
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if !process.upgradeCalled {
+		t.Fatalf("expected upgrade to be called")
+	}
+	if len(result.Messages) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(result.Messages))
+	}
+	if result.Messages[0].Text != "upgrade completed\ntype /quit to restart" {
+		t.Fatalf("message text = %q", result.Messages[0].Text)
+	}
+}
+
+func TestHandleIncomingMessageRunsQuitCommand(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	if err := cfg.SetChatEnabled(42, true); err != nil {
+		t.Fatalf("set chat enabled: %v", err)
+	}
+
+	process := &fakeProcessActions{}
+	sessions := &fakeBrokerSessionStore{}
+	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker.ProcessActions = process
+
+	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Message:          "/quit",
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if !process.quitCalled {
+		t.Fatalf("expected quit to be called")
+	}
+	if len(result.Messages) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(result.Messages))
+	}
+	if result.Messages[0].Text != "shutting down ctgbot" {
+		t.Fatalf("message text = %q", result.Messages[0].Text)
 	}
 }
 
@@ -85,4 +192,19 @@ type fakeBrokerSandboxManager struct{}
 
 func (f fakeBrokerSandboxManager) NewSandbox(name string) *sandboxengine.Sandbox {
 	return &sandboxengine.Sandbox{Name: name}
+}
+
+type fakeProcessActions struct {
+	upgradeCalled bool
+	quitCalled    bool
+}
+
+func (f *fakeProcessActions) Upgrade(ctx context.Context) error {
+	f.upgradeCalled = true
+	return nil
+}
+
+func (f *fakeProcessActions) Quit(ctx context.Context) error {
+	f.quitCalled = true
+	return nil
 }

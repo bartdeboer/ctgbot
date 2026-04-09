@@ -51,16 +51,17 @@ type IncomingResult struct {
 	Messages []OutboundMessage
 }
 
-const helpText = "Commands:\n/new [absolute-host-path]\n/status\n/stop\n/help\n\nAny non-command message is sent to the active Codex conversation."
+const helpText = "Commands:\n/new [absolute-host-path]\n/status\n/stop\n/upgrade\n/quit\n/help\n\nAny non-command message is sent to the active Codex conversation."
 
 type Broker struct {
-	Config       *appconfig.Config
-	Sessions     SessionStore
-	Sandboxes    sandboxengine.Manager
-	Dispatch     *Dispatcher
-	Agents       map[string]Agent
-	DefaultAgent string
-	Logger       *log.Logger
+	Config         *appconfig.Config
+	Sessions       SessionStore
+	Sandboxes      sandboxengine.Manager
+	Dispatch       *Dispatcher
+	ProcessActions ProcessActions
+	Agents         map[string]Agent
+	DefaultAgent   string
+	Logger         *log.Logger
 }
 
 func New(cfg *appconfig.Config, sessions SessionStore, sandboxes sandboxengine.Manager, logger *log.Logger) *Broker {
@@ -296,6 +297,22 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 			msg += "\nlast_error: " + conv.LastError
 		}
 		return msg, nil
+	case "upgrade":
+		if b.ProcessActions == nil {
+			return "upgrade is not available in this runtime", nil
+		}
+		if err := b.ProcessActions.Upgrade(ctx); err != nil {
+			return "", err
+		}
+		return "upgrade completed\ntype /quit to restart", nil
+	case "quit":
+		if b.ProcessActions == nil {
+			return "quit is not available in this runtime", nil
+		}
+		if err := b.ProcessActions.Quit(ctx); err != nil {
+			return "", err
+		}
+		return "shutting down ctgbot", nil
 	case "help":
 		return helpText, nil
 	default:

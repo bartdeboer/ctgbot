@@ -77,6 +77,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+			broker.ProcessActions = &processActions{stop: stop, logger: logger}
 
 			if err := hostbridgetls.EnsureServerMaterials(cfg.HostbridgeTLSRoot()); err != nil {
 				return fmt.Errorf("ensure hostbridge tls server materials: %w", err)
