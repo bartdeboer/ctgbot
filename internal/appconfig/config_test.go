@@ -213,6 +213,51 @@ func TestChatTLSDirUsesChatScopedLayout(t *testing.T) {
 	}
 }
 
+func TestChatProcessToolsEnabledRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	if err := cfg.PersistChatID(-123, "Test Chat"); err != nil {
+		t.Fatalf("persist chat mapping: %v", err)
+	}
+
+	if cfg.ChatProcessToolsEnabled(-123) {
+		t.Fatalf("expected process tools disabled by default")
+	}
+	if err := cfg.SetChatProcessToolsEnabled(-123, true); err != nil {
+		t.Fatalf("set process tools enabled: %v", err)
+	}
+	if !cfg.ChatProcessToolsEnabled(-123) {
+		t.Fatalf("expected process tools enabled")
+	}
+	if err := cfg.SetChatProcessToolsEnabled(-123, false); err != nil {
+		t.Fatalf("set process tools disabled: %v", err)
+	}
+	if cfg.ChatProcessToolsEnabled(-123) {
+		t.Fatalf("expected process tools disabled")
+	}
+}
+
 func TestChatContainerNameParsesUUIDs(t *testing.T) {
 	root := t.TempDir()
 	store, err := clistate.NewCwd("ctgbot", "config")

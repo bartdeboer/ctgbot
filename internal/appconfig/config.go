@@ -551,6 +551,23 @@ func (c *Config) ChatEnabledByID(chatID modeluuid.UUID) bool {
 	return c.Store.GetBool(c.ChatKey(chatID, "enabled"), false)
 }
 
+func (c *Config) SetChatProcessToolsEnabledByID(chatID modeluuid.UUID, enabled bool) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	if chatID.IsNull() {
+		return fmt.Errorf("chat id is null")
+	}
+	return c.Store.PersistBool(c.ChatKey(chatID, "process_tools"), enabled)
+}
+
+func (c *Config) ChatProcessToolsEnabledByID(chatID modeluuid.UUID) bool {
+	if c == nil || c.Store == nil || chatID.IsNull() {
+		return false
+	}
+	return c.Store.GetBool(c.ChatKey(chatID, "process_tools"), false)
+}
+
 func (c *Config) ChatWorkspaceHostPathByID(chatID modeluuid.UUID) string {
 	if c == nil || c.Store == nil || chatID.IsNull() {
 		return ""
@@ -736,6 +753,22 @@ func (c *Config) SetChatEnabled(chatID int64, enabled bool) error {
 		return err
 	}
 	return c.SetChatEnabledByID(entry.ID, enabled)
+}
+
+func (c *Config) ChatProcessToolsEnabled(chatID int64) bool {
+	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
+	if err != nil || entry == nil {
+		return false
+	}
+	return c.ChatProcessToolsEnabledByID(entry.ID)
+}
+
+func (c *Config) SetChatProcessToolsEnabled(chatID int64, enabled bool) error {
+	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
+	if err != nil {
+		return err
+	}
+	return c.SetChatProcessToolsEnabledByID(entry.ID, enabled)
 }
 
 func (c *Config) ChatWorkspaceHostPath(chatID int64) string {

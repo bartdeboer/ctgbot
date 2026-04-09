@@ -298,6 +298,9 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 		}
 		return msg, nil
 	case "upgrade":
+		if b.Config == nil || !b.Config.ChatProcessToolsEnabledByID(chatID) {
+			return "upgrade is not enabled for this chat", nil
+		}
 		if b.ProcessActions == nil {
 			return "upgrade is not available in this runtime", nil
 		}
@@ -306,6 +309,9 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 		}
 		return "upgrade completed\ntype /quit to restart", nil
 	case "quit":
+		if b.Config == nil || !b.Config.ChatProcessToolsEnabledByID(chatID) {
+			return "quit is not enabled for this chat", nil
+		}
 		if b.ProcessActions == nil {
 			return "quit is not available in this runtime", nil
 		}

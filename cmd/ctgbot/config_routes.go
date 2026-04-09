@@ -48,6 +48,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			writeFullAuto := fs.Bool("write-codex-full-auto", false, "Write the --set-codex-full-auto value into config")
 			enableChatID := fs.Int64("enable-chat-id", 0, "Enable a Telegram chat by provider chat id")
 			disableChatID := fs.Int64("disable-chat-id", 0, "Disable a Telegram chat by provider chat id")
+			enableChatProcessToolsID := fs.Int64("enable-chat-process-tools", 0, "Enable Telegram chat process tools by provider chat id")
+			disableChatProcessToolsID := fs.Int64("disable-chat-process-tools", 0, "Disable Telegram chat process tools by provider chat id")
 
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
@@ -70,6 +72,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				*setPollTimeoutSec == 0 &&
 				*enableChatID == 0 &&
 				*disableChatID == 0 &&
+				*enableChatProcessToolsID == 0 &&
+				*disableChatProcessToolsID == 0 &&
 				!*writeFullAuto {
 				cfg, err := appconfig.NewConfig("", store)
 				if err != nil {
@@ -104,7 +108,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 						if title == "" {
 							title = "<untitled>"
 						}
-						fmt.Printf("    - internal_chat_id=%s provider=%s provider_chat_id=%q enabled=%t title=%q\n", chat.ID.String(), chat.ProviderType, chat.ProviderChatID, chat.Enabled, title)
+						fmt.Printf("    - internal_chat_id=%s provider=%s provider_chat_id=%q enabled=%t process_tools=%t title=%q\n", chat.ID.String(), chat.ProviderType, chat.ProviderChatID, chat.Enabled, cfg.ChatProcessToolsEnabledByID(chat.ID), title)
 						workspacePath := cfg.ChatWorkspaceHostPathByID(chat.ID)
 						if workspacePath == "" {
 							workspacePath = "<global/default>"
@@ -123,6 +127,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				fmt.Println("    compatibility note: mutation flags below still use Telegram provider chat ids, not internal chat UUIDs")
 				fmt.Println("    enable a chat with: ctgbot config --enable-chat-id <provider-chat-id>")
 				fmt.Println("    disable a chat with: ctgbot config --disable-chat-id <provider-chat-id>")
+				fmt.Println("    enable chat process tools with: ctgbot config --enable-chat-process-tools <provider-chat-id>")
+				fmt.Println("    disable chat process tools with: ctgbot config --disable-chat-process-tools <provider-chat-id>")
 				fmt.Println("    set a chat workspace with: ctgbot config --set-chat-workspace-host-path <provider-chat-id>:<path>")
 				fmt.Println("    allow a chat hostbridge command with: ctgbot config --allow-chat-hostbridge-command <provider-chat-id>:<command-or-absolute-path>")
 				return nil
@@ -243,6 +249,24 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					return fmt.Errorf("disable telegram chat %d: %w", *disableChatID, err)
 				}
 			}
+			if *enableChatProcessToolsID != 0 {
+				cfg, err := appconfig.NewConfig("", store)
+				if err != nil {
+					return err
+				}
+				if err := cfg.SetChatProcessToolsEnabled(*enableChatProcessToolsID, true); err != nil {
+					return fmt.Errorf("enable telegram chat %d process tools: %w", *enableChatProcessToolsID, err)
+				}
+			}
+			if *disableChatProcessToolsID != 0 {
+				cfg, err := appconfig.NewConfig("", store)
+				if err != nil {
+					return err
+				}
+				if err := cfg.SetChatProcessToolsEnabled(*disableChatProcessToolsID, false); err != nil {
+					return fmt.Errorf("disable telegram chat %d process tools: %w", *disableChatProcessToolsID, err)
+				}
+			}
 
 			var updates []string
 			if *enableChatID != 0 {
@@ -250,6 +274,12 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			}
 			if *disableChatID != 0 {
 				updates = append(updates, fmt.Sprintf("disabled telegram chat %d", *disableChatID))
+			}
+			if *enableChatProcessToolsID != 0 {
+				updates = append(updates, fmt.Sprintf("enabled telegram chat %d process tools", *enableChatProcessToolsID))
+			}
+			if *disableChatProcessToolsID != 0 {
+				updates = append(updates, fmt.Sprintf("disabled telegram chat %d process tools", *disableChatProcessToolsID))
 			}
 			for chatID, paths := range setChatWorkspaceHostPath.values {
 				for _, path := range paths {
