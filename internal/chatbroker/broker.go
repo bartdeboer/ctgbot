@@ -27,6 +27,10 @@ type Agent interface {
 	HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (TurnResult, error)
 }
 
+type PurgingAgent interface {
+	Purge(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string) error
+}
+
 type PromptOutcome struct {
 	Thread  *Thread
 	Started bool
@@ -51,7 +55,7 @@ type IncomingResult struct {
 	Messages []OutboundMessage
 }
 
-const helpText = "Commands:\n/new [absolute-host-path]\n/refresh\n/status\n/stop\n/upgrade\n/quit\n/help\n\nAny non-command message is sent to the active Codex conversation."
+const helpText = "Commands:\n/new [absolute-host-path]\n/refresh\n/purge\n/status\n/stop\n/upgrade\n/quit\n/help\n\nAny non-command message is sent to the active Codex conversation."
 
 type Broker struct {
 	Config         *appconfig.Config
@@ -180,6 +184,15 @@ func (b *Broker) RefreshSession(ctx context.Context, thread *Thread) error {
 	})
 }
 
+func (b *Broker) PurgeSession(ctx context.Context, thread *Thread) error {
+	if thread == nil {
+		return nil
+	}
+	return b.dispatcher().Run(ctx, b.dispatchKey(thread.ChatID, thread.ID), func(runCtx context.Context) error {
+		return b.purgeSession(runCtx, thread)
+	})
+}
+
 func (b *Broker) stopSession(ctx context.Context, conv *Thread) error {
 	if conv == nil {
 		return nil
@@ -210,6 +223,36 @@ func (b *Broker) refreshSession(ctx context.Context, conv *Thread) error {
 			_ = b.Sessions.SaveThread(ctx, conv)
 		}
 		return err
+	}
+	return nil
+}
+
+func (b *Broker) purgeSession(ctx context.Context, conv *Thread) error {
+	if conv == nil {
+		return nil
+	}
+	if err := b.newSandbox(conv).Remove(ctx); err != nil {
+		return err
+	}
+	agent, err := b.agent(conv.AgentProviderType)
+	if err != nil {
+		return err
+	}
+	if purgingAgent, ok := agent.(PurgingAgent); ok && strings.TrimSpace(conv.AgentThreadID) != "" {
+		if err := purgingAgent.Purge(ctx, b.newSandbox(conv), conv.AgentThreadID); err != nil {
+			if b.Sessions != nil {
+				conv.LastError = err.Error()
+				_ = b.Sessions.SaveThread(ctx, conv)
+			}
+			return err
+		}
+	}
+	conv.Active = false
+	conv.Initialized = false
+	conv.AgentThreadID = ""
+	conv.LastError = ""
+	if b.Sessions != nil {
+		return b.Sessions.SaveThread(ctx, conv)
 	}
 	return nil
 }
@@ -307,6 +350,18 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 			return "", err
 		}
 		return "conversation runtime refreshed", nil
+	case "purge":
+		conv, err := b.GetActiveSession(ctx, thread)
+		if err != nil {
+			return "", err
+		}
+		if conv == nil {
+			return "no active conversation", nil
+		}
+		if err := b.PurgeSession(ctx, conv); err != nil {
+			return "", err
+		}
+		return "conversation purged", nil
 	case "stop":
 		conv, err := b.GetActiveSession(ctx, thread)
 		if err != nil {

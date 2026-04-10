@@ -23,6 +23,16 @@ func (e *SessionExecutor) Name() string {
 	return "codex"
 }
 
+func (e *SessionExecutor) Purge(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string) error {
+	_ = ctx
+	_ = sbx
+	_ = providerThreadID
+
+	// TODO: delete the Codex conversation when Codex exposes supported session
+	// deletion through the runtime or CLI.
+	return nil
+}
+
 func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (chatbroker.TurnResult, error) {
 	if e.Config == nil {
 		return chatbroker.TurnResult{}, fmt.Errorf("missing config")
