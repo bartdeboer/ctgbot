@@ -65,7 +65,7 @@ func (b *Broker) startSession(ctx context.Context, chatID modeluuid.UUID, thread
 	if err != nil {
 		return nil, err
 	}
-	if err := b.prepareEnvironment(ctx, conv); err != nil {
+	if _, _, err := b.prepareRuntime(ctx, conv, true); err != nil {
 		return nil, err
 	}
 	if b.Sessions != nil {
@@ -128,7 +128,7 @@ func (b *Broker) refreshSession(ctx context.Context, conv *Thread) error {
 	}
 	conv.Initialized = false
 	conv.LastError = ""
-	if err := b.prepareEnvironment(ctx, conv); err != nil {
+	if _, _, err := b.prepareRuntime(ctx, conv, true); err != nil {
 		if b.Sessions != nil {
 			conv.LastError = err.Error()
 			_ = b.Sessions.SaveThread(ctx, conv)
@@ -173,12 +173,9 @@ func (b *Broker) PrepareSession(ctx context.Context, conv *Thread) error {
 		return fmt.Errorf("missing thread")
 	}
 	return b.dispatcher().Run(ctx, b.dispatchKey(conv.ChatID, conv.ID), func(runCtx context.Context) error {
-		return b.prepareSession(runCtx, conv)
+		_, _, err := b.prepareRuntime(runCtx, conv, true)
+		return err
 	})
-}
-
-func (b *Broker) prepareSession(ctx context.Context, conv *Thread) error {
-	return b.prepareEnvironment(ctx, conv)
 }
 
 func (b *Broker) HandlePrompt(ctx context.Context, chatID modeluuid.UUID, thread *Thread, prompt string) (PromptOutcome, error) {
@@ -206,7 +203,7 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 		started = true
 	}
 
-	agent, sbx, err := b.ensurePreparedSession(ctx, conv)
+	agent, sbx, err := b.prepareRuntime(ctx, conv, false)
 	if err != nil {
 		return PromptOutcome{}, err
 	}

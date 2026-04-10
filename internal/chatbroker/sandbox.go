@@ -8,24 +8,38 @@ import (
 )
 
 func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
-	sbx := b.sandboxManager().NewSandbox(conv.ContainerName)
+	return sandboxengine.NewBuilder(b.sandboxManager(), conv.ContainerName).
+		WorkspaceDir(conv.WorkspaceHost).
+		ProfileDir(conv.HomeHost).
+		ContainerWorkspace(conv.ContainerWorkspace).
+		ContainerHome(conv.ContainerHome).
+		DeveloperInstructions(b.developerInstructions(conv.ChatID, conv)).
+		Hostname(conv.ContainerName).
+		Image(b.Config.DockerImage()).
+		Workdir(conv.ContainerWorkspace).
+		Labels(map[string]string{
+			"ctgbot.managed":   "true",
+			"ctgbot.chat_id":   conv.ChatID.String(),
+			"ctgbot.thread_id": conv.ID.String(),
+		}).
+		Env(b.sandboxEnv(conv)).
+		Mounts([]sandboxengine.Mount{
+			{Source: conv.WorkspaceHost, Target: conv.ContainerWorkspace},
+			{Source: conv.HomeHost, Target: conv.ContainerHome},
+			{
+				Source:   b.Config.ChatTLSDirByID(conv.ChatID),
+				Target:   b.Config.ContainerHostbridgeTLSDir(),
+				ReadOnly: true,
+			},
+		}).
+		SecurityOpts([]string{"seccomp=unconfined"}).
+		Cmd([]string{"tail", "-f", "/dev/null"}).
+		AddHosts(b.sandboxAddHosts()).
+		Build()
+}
 
-	chatID, threadID, _ := b.Config.ParseChatContainerName(conv.ContainerName)
-
-	sbx.WorkspaceDir = conv.WorkspaceHost
-	sbx.ProfileDir = conv.HomeHost
-	sbx.ContainerWorkspace = conv.ContainerWorkspace
-	sbx.ContainerHome = conv.ContainerHome
-	sbx.DeveloperInstructions = b.developerInstructions(chatID, conv)
-	sbx.Hostname = conv.ContainerName
-	sbx.Image = b.Config.DockerImage()
-	sbx.Workdir = conv.ContainerWorkspace
-	sbx.Labels = map[string]string{
-		"ctgbot.managed":   "true",
-		"ctgbot.chat_id":   chatID.String(),
-		"ctgbot.thread_id": threadID.String(),
-	}
-	sbx.Env = []string{
+func (b *Broker) sandboxEnv(conv *Thread) []string {
+	env := []string{
 		"HOME=" + conv.ContainerHome,
 		"CODEX_HOME=" + conv.ContainerHome,
 		"GOCACHE=/tmp/go-build-cache",
@@ -35,35 +49,29 @@ func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 		"HOSTBRIDGE_ADDR=" + b.Config.ContainerHostbridgeTCPAddr(),
 		"HOSTBRIDGE_TLS_DIR=" + b.Config.ContainerHostbridgeTLSDir(),
 	}
-	if b.Config != nil {
-		identity := b.Config.HostGitIdentity(context.Background())
-		if identity.Name != "" {
-			sbx.Env = append(sbx.Env,
-				"GIT_AUTHOR_NAME="+identity.Name,
-				"GIT_COMMITTER_NAME="+identity.Name,
-			)
-		}
-		if identity.Email != "" {
-			sbx.Env = append(sbx.Env,
-				"GIT_AUTHOR_EMAIL="+identity.Email,
-				"GIT_COMMITTER_EMAIL="+identity.Email,
-			)
-		}
+	if b.Config == nil {
+		return env
 	}
-	sbx.Mounts = []sandboxengine.Mount{
-		{Source: conv.WorkspaceHost, Target: conv.ContainerWorkspace},
-		{Source: conv.HomeHost, Target: conv.ContainerHome},
-		{
-			Source:   b.Config.ChatTLSDirByID(chatID),
-			Target:   b.Config.ContainerHostbridgeTLSDir(),
-			ReadOnly: true,
-		},
-	}
-	sbx.SecurityOpts = []string{"seccomp=unconfined"}
-	sbx.Cmd = []string{"tail", "-f", "/dev/null"}
 
-	if runtime.GOOS == "linux" {
-		sbx.AddHosts = []string{"host.docker.internal:host-gateway"}
+	identity := b.Config.HostGitIdentity(context.Background())
+	if identity.Name != "" {
+		env = append(env,
+			"GIT_AUTHOR_NAME="+identity.Name,
+			"GIT_COMMITTER_NAME="+identity.Name,
+		)
 	}
-	return sbx
+	if identity.Email != "" {
+		env = append(env,
+			"GIT_AUTHOR_EMAIL="+identity.Email,
+			"GIT_COMMITTER_EMAIL="+identity.Email,
+		)
+	}
+	return env
+}
+
+func (b *Broker) sandboxAddHosts() []string {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	return []string{"host.docker.internal:host-gateway"}
 }

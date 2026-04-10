@@ -14,7 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
-func (b *Broker) ensurePreparedSession(ctx context.Context, conv *Thread) (Agent, *sandboxengine.Sandbox, error) {
+func (b *Broker) prepareRuntime(ctx context.Context, conv *Thread, forceSetup bool) (Agent, *sandboxengine.Sandbox, error) {
 	if err := b.ensureSandboxRuntime(ctx, conv); err != nil {
 		return nil, nil, err
 	}
@@ -23,7 +23,7 @@ func (b *Broker) ensurePreparedSession(ctx context.Context, conv *Thread) (Agent
 		return nil, nil, err
 	}
 	sbx := b.newSandbox(conv)
-	if !conv.Initialized {
+	if forceSetup || !conv.Initialized {
 		if err := agent.SetupEnvironment(ctx, sbx); err != nil {
 			return nil, nil, err
 		}
@@ -36,28 +36,6 @@ func (b *Broker) ensurePreparedSession(ctx context.Context, conv *Thread) (Agent
 		}
 	}
 	return agent, sbx, nil
-}
-
-func (b *Broker) prepareEnvironment(ctx context.Context, conv *Thread) error {
-	if err := b.ensureSandboxRuntime(ctx, conv); err != nil {
-		return err
-	}
-	agent, err := b.agent(conv.AgentProviderType)
-	if err != nil {
-		return err
-	}
-	sbx := b.newSandbox(conv)
-	if err := agent.SetupEnvironment(ctx, sbx); err != nil {
-		return err
-	}
-	if err := b.installConfiguredSkills(ctx, conv.ChatID, agent, sbx); err != nil {
-		return err
-	}
-	conv.Initialized = true
-	if b.Sessions != nil {
-		return b.Sessions.SaveThread(ctx, conv)
-	}
-	return nil
 }
 
 func (b *Broker) installConfiguredSkills(ctx context.Context, chatID modeluuid.UUID, agent Agent, sbx *sandboxengine.Sandbox) error {
