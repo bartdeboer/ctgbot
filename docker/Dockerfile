@@ -12,8 +12,9 @@ FROM node:22-alpine
 
 ARG CODEX_VERSION=latest
 
-RUN apk add --no-cache ca-certificates git ripgrep curl libc6-compat bubblewrap \
+RUN apk add --no-cache ca-certificates git curl libc6-compat \
         bash make tar zip unzip jq go \
+    && apk add --no-cache --no-scripts bubblewrap \
     && curl -fsSL https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
     && chmod +x /tmp/install-codex.sh \
     && CODEX_INSTALL_DIR=/usr/local/bin /tmp/install-codex.sh "${CODEX_VERSION}" \
