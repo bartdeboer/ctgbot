@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
@@ -30,6 +31,32 @@ func (e *SessionExecutor) Purge(ctx context.Context, sbx *sandboxengine.Sandbox,
 
 	// TODO: delete the Codex conversation when Codex exposes supported session
 	// deletion through the runtime or CLI.
+	return nil
+}
+
+func (e *SessionExecutor) InstallSkill(ctx context.Context, sbx *sandboxengine.Sandbox, skillDir string) error {
+	_ = ctx
+	if sbx == nil {
+		return fmt.Errorf("missing sandbox")
+	}
+	if strings.TrimSpace(sbx.ProfileDir) == "" {
+		return fmt.Errorf("missing sandbox profile dir")
+	}
+	skillDir = strings.TrimSpace(skillDir)
+	if skillDir == "" {
+		return fmt.Errorf("skill dir is empty")
+	}
+	if !filepath.IsAbs(skillDir) {
+		return fmt.Errorf("skill dir must be absolute: %s", skillDir)
+	}
+	name := strings.TrimSpace(filepath.Base(skillDir))
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return fmt.Errorf("invalid skill dir: %s", skillDir)
+	}
+	targetDir := filepath.Join(sbx.ProfileDir, "skills", name)
+	if err := copyDirReplace(skillDir, targetDir); err != nil {
+		return fmt.Errorf("install skill %s: %w", skillDir, err)
+	}
 	return nil
 }
 

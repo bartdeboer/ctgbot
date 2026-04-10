@@ -113,3 +113,55 @@ func copyFile(src, dst string) error {
 	}
 	return os.Chmod(dst, info.Mode().Perm())
 }
+
+func copyDirReplace(src string, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("expected directory, got file: %s", src)
+	}
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
+	return copyDir(src, dst)
+}
+
+func copyDir(src string, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("expected directory, got file: %s", src)
+	}
+	if err := os.MkdirAll(dst, info.Mode().Perm()); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case info.Mode().IsRegular():
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		case info.IsDir():
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported skill entry: %s", srcPath)
+		}
+	}
+	return nil
+}

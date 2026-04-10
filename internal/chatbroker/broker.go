@@ -31,6 +31,10 @@ type PurgingAgent interface {
 	Purge(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string) error
 }
 
+type SkillInstallingAgent interface {
+	InstallSkill(ctx context.Context, sbx *sandboxengine.Sandbox, skillDir string) error
+}
+
 type PromptOutcome struct {
 	Thread  *Thread
 	Started bool
@@ -489,6 +493,9 @@ func (b *Broker) ensurePreparedSession(ctx context.Context, conv *Thread) (Agent
 		if err := agent.SetupEnvironment(ctx, sbx); err != nil {
 			return nil, nil, err
 		}
+		if err := b.installConfiguredSkills(ctx, conv.ChatID, agent, sbx); err != nil {
+			return nil, nil, err
+		}
 		conv.Initialized = true
 		if b.Sessions != nil {
 			_ = b.Sessions.SaveThread(ctx, conv)
@@ -509,9 +516,28 @@ func (b *Broker) prepareEnvironment(ctx context.Context, conv *Thread) error {
 	if err := agent.SetupEnvironment(ctx, sbx); err != nil {
 		return err
 	}
+	if err := b.installConfiguredSkills(ctx, conv.ChatID, agent, sbx); err != nil {
+		return err
+	}
 	conv.Initialized = true
 	if b.Sessions != nil {
 		return b.Sessions.SaveThread(ctx, conv)
+	}
+	return nil
+}
+
+func (b *Broker) installConfiguredSkills(ctx context.Context, chatID modeluuid.UUID, agent Agent, sbx *sandboxengine.Sandbox) error {
+	if b.Config == nil || agent == nil || sbx == nil {
+		return nil
+	}
+	installer, ok := agent.(SkillInstallingAgent)
+	if !ok {
+		return nil
+	}
+	for _, skillDir := range b.Config.ChatSkillsByID(chatID) {
+		if err := installer.InstallSkill(ctx, sbx, skillDir); err != nil {
+			return err
+		}
 	}
 	return nil
 }

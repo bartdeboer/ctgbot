@@ -146,3 +146,55 @@ func TestSetupEnvironmentWritesManagedFiles(t *testing.T) {
 		t.Fatalf("config.toml does not contain expanded writable roots:\n%s", text)
 	}
 }
+
+func TestInstallSkillCopiesSkillDirectoryIntoChatHome(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	skillDir := filepath.Join(root, "source-skills", "human-first-coding")
+	if err := os.MkdirAll(filepath.Join(skillDir, "docs"), 0o755); err != nil {
+		t.Fatalf("mkdir skill dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write SKILL.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "docs", "notes.txt"), []byte("notes"), 0o644); err != nil {
+		t.Fatalf("write notes.txt: %v", err)
+	}
+
+	exec := &SessionExecutor{Config: cfg}
+	sbx := &sandboxengine.Sandbox{
+		ProfileDir: filepath.Join(root, "chat", ".codex"),
+	}
+
+	if err := exec.InstallSkill(t.Context(), sbx, skillDir); err != nil {
+		t.Fatalf("install skill: %v", err)
+	}
+
+	for _, path := range []string{
+		filepath.Join(sbx.ProfileDir, "skills", "human-first-coding", "SKILL.md"),
+		filepath.Join(sbx.ProfileDir, "skills", "human-first-coding", "docs", "notes.txt"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected copied skill entry %q: %v", path, err)
+		}
+	}
+}

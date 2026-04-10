@@ -387,6 +387,55 @@ func TestChatHostbridgeAllowedCommandsFallsBackToLegacySpecs(t *testing.T) {
 	}
 }
 
+func TestChatSkillsByIDRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	chatID := modeluuid.New()
+	skillA := filepath.Join(root, "skills", "human-first-coding")
+	skillB := filepath.Join(root, "skills", "checks")
+	if err := cfg.SetChatSkillsByID(chatID, []string{skillB, skillA, skillA}); err != nil {
+		t.Fatalf("set chat skills: %v", err)
+	}
+
+	got := cfg.ChatSkillsByID(chatID)
+	want := []string{skillB, skillA}
+	if len(got) != len(want) {
+		t.Fatalf("skills len = %d, want %d (%v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("skills[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+
+	if err := cfg.RemoveChatSkillByID(chatID, skillA); err != nil {
+		t.Fatalf("remove chat skill: %v", err)
+	}
+	got = cfg.ChatSkillsByID(chatID)
+	if len(got) != 1 || got[0] != skillB {
+		t.Fatalf("skills after remove = %v, want [%q]", got, skillB)
+	}
+}
+
 func TestChatContainerNameParsesUUIDs(t *testing.T) {
 	root := t.TempDir()
 	store, err := clistate.NewCwd("ctgbot", "config")

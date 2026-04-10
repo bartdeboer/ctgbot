@@ -12,6 +12,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -42,12 +43,16 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			var setChatHostbridgeCommandArgs chatAliasArgsFlag
 			var setChatHostbridgeCommandAllowExtraArgs chatAliasBoolFlag
 			var removeChatHostbridgeCommand chatAliasNameFlag
+			var addChatSkill uuidValueFlag
+			var removeChatSkill uuidValueFlag
 			fs.Var(&setChatWorkspaceHostPath, "set-chat-workspace-host-path", "Persist a Telegram chat-local workspace host path in the form <provider-chat-id>:<path>")
 			fs.Var(&allowChatHostbridgeCommand, "allow-chat-hostbridge-command", "Persist a Telegram chat-local hostbridge command in the form <provider-chat-id>:<alias>=<command> (or legacy <provider-chat-id>:<command>)")
 			fs.Var(&setChatHostbridgeCommandDir, "set-chat-hostbridge-command-dir", "Persist a Telegram chat-local hostbridge command dir in the form <provider-chat-id>:<alias>=<dir>")
 			fs.Var(&setChatHostbridgeCommandArgs, "set-chat-hostbridge-command-args", "Persist a Telegram chat-local hostbridge command args in the form <provider-chat-id>:<alias>=arg1,arg2")
 			fs.Var(&setChatHostbridgeCommandAllowExtraArgs, "set-chat-hostbridge-command-allow-extra-args", "Persist whether a Telegram chat-local hostbridge command allows extra args in the form <provider-chat-id>:<alias>=true")
 			fs.Var(&removeChatHostbridgeCommand, "remove-chat-hostbridge-command", "Remove a Telegram chat-local hostbridge command in the form <provider-chat-id>:<alias>")
+			fs.Var(&addChatSkill, "add-chat-skill", "Persist a chat-local skill in the form <internal-chat-id>:<absolute-skill-dir>")
+			fs.Var(&removeChatSkill, "remove-chat-skill", "Remove a chat-local skill in the form <internal-chat-id>:<absolute-skill-dir>")
 			setCodexModel := fs.String("set-codex-model", "", "Persist codex.model into config")
 			setCodexCLIHomePath := fs.String("set-codex-cli-home-path", "", "Persist codex.cli_home_host_path into config")
 			setCodexSharedHomePath := fs.String("set-codex-shared-home-path", "", "Deprecated alias for --set-codex-cli-home-path")
@@ -77,6 +82,8 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				len(setChatHostbridgeCommandArgs.values) == 0 &&
 				len(setChatHostbridgeCommandAllowExtraArgs.values) == 0 &&
 				len(removeChatHostbridgeCommand.values) == 0 &&
+				len(addChatSkill.values) == 0 &&
+				len(removeChatSkill.values) == 0 &&
 				*setCodexModel == "" &&
 				*setCodexCLIHomePath == "" &&
 				*setCodexSharedHomePath == "" &&
@@ -126,6 +133,12 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 							workspacePath = "<global/default>"
 						}
 						fmt.Printf("      workspace_host_path: %s\n", workspacePath)
+						skills := cfg.ChatSkillsByID(chat.ID)
+						if len(skills) == 0 {
+							fmt.Println("      skills: <none>")
+						} else {
+							fmt.Printf("      skills: %v\n", skills)
+						}
 						commands := cfg.ChatHostbridgeAllowedCommandsByID(chat.ID)
 						if len(commands) == 0 {
 							fmt.Println("      hostbridge.allowed_commands: <defaults only>")
@@ -149,6 +162,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 				fmt.Println("    allow a chat hostbridge command with: ctgbot config --allow-chat-hostbridge-command <provider-chat-id>:<alias>=<command>")
 				fmt.Println("    set a chat hostbridge command dir with: ctgbot config --set-chat-hostbridge-command-dir <provider-chat-id>:<alias>=<dir>")
 				fmt.Println("    set a chat hostbridge command args with: ctgbot config --set-chat-hostbridge-command-args <provider-chat-id>:<alias>=arg1,arg2")
+				fmt.Println("    add a chat skill with: ctgbot config --add-chat-skill <internal-chat-id>:<absolute-skill-dir>")
 				return nil
 			}
 
@@ -225,6 +239,26 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					for _, name := range names {
 						if err := cfg.RemoveChatHostbridgeAllowedCommand(chatID, name); err != nil {
 							return fmt.Errorf("remove hostbridge allowed command for telegram chat %d (%q): %w", chatID, name, err)
+						}
+					}
+				}
+			}
+			if len(addChatSkill.values) > 0 || len(removeChatSkill.values) > 0 {
+				cfg, err := appconfig.NewConfig("", store)
+				if err != nil {
+					return err
+				}
+				for chatID, skills := range addChatSkill.values {
+					for _, skill := range skills {
+						if err := cfg.AddChatSkillByID(chatID, skill); err != nil {
+							return fmt.Errorf("add skill for chat %s (%q): %w", chatID.String(), skill, err)
+						}
+					}
+				}
+				for chatID, skills := range removeChatSkill.values {
+					for _, skill := range skills {
+						if err := cfg.RemoveChatSkillByID(chatID, skill); err != nil {
+							return fmt.Errorf("remove skill for chat %s (%q): %w", chatID.String(), skill, err)
 						}
 					}
 				}
@@ -319,6 +353,16 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			for chatID, names := range removeChatHostbridgeCommand.values {
 				for _, name := range names {
 					updates = append(updates, fmt.Sprintf("removed telegram chat %d hostbridge command %s", chatID, name))
+				}
+			}
+			for chatID, skills := range addChatSkill.values {
+				for _, skill := range skills {
+					updates = append(updates, fmt.Sprintf("added chat %s skill %s", chatID.String(), skill))
+				}
+			}
+			for chatID, skills := range removeChatSkill.values {
+				for _, skill := range skills {
+					updates = append(updates, fmt.Sprintf("removed chat %s skill %s", chatID.String(), skill))
 				}
 			}
 			if len(updates) == 0 {
@@ -541,6 +585,45 @@ func (f *chatValueFlag) Set(v string) error {
 	chatID, value, err := parseChatValue(v, "<provider-chat-id>:<path>")
 	if err != nil {
 		return err
+	}
+	f.values[chatID] = append(f.values[chatID], value)
+	return nil
+}
+
+type uuidValueFlag struct {
+	values map[modeluuid.UUID][]string
+}
+
+func (f *uuidValueFlag) String() string {
+	if len(f.values) == 0 {
+		return ""
+	}
+	var parts []string
+	for chatID, values := range f.values {
+		for _, value := range values {
+			parts = append(parts, fmt.Sprintf("%s:%s", chatID.String(), value))
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func (f *uuidValueFlag) Set(v string) error {
+	if f.values == nil {
+		f.values = map[modeluuid.UUID][]string{}
+	}
+	chatRaw, value, ok := strings.Cut(v, ":")
+	if !ok {
+		return fmt.Errorf("expected <internal-chat-id>:<value>")
+	}
+	chatRaw = strings.TrimSpace(chatRaw)
+	value = strings.TrimSpace(value)
+	if chatRaw == "" || value == "" {
+		return fmt.Errorf("expected <internal-chat-id>:<value>")
+	}
+	chatID, err := modeluuid.Parse(chatRaw)
+	if err != nil {
+		return fmt.Errorf("invalid internal chat id %q", chatRaw)
 	}
 	f.values[chatID] = append(f.values[chatID], value)
 	return nil

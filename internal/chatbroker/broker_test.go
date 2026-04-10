@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/appconfig"
@@ -366,6 +367,88 @@ func TestHandleIncomingMessageRefreshesActiveConversation(t *testing.T) {
 	}
 }
 
+func TestHandleIncomingMessageRefreshInstallsConfiguredSkills(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	if err := cfg.SetChatEnabled(42, true); err != nil {
+		t.Fatalf("set chat enabled: %v", err)
+	}
+
+	chatEntry, err := cfg.EnsureProviderChat("telegram", "42", "Test Chat")
+	if err != nil {
+		t.Fatalf("ensure provider chat: %v", err)
+	}
+	skillOne := filepath.Join(root, "skills", "one")
+	skillTwo := filepath.Join(root, "skills", "two")
+	if err := cfg.SetChatSkillsByID(chatEntry.ID, []string{skillTwo, skillOne}); err != nil {
+		t.Fatalf("set chat skills: %v", err)
+	}
+
+	threadID := modeluuid.New()
+	thread := &Thread{
+		ID:                 threadID,
+		ChatID:             chatEntry.ID,
+		ProviderThreadID:   "7",
+		AgentProviderType:  "codex",
+		ContainerName:      cfg.ChatContainerName(chatEntry.ID, threadID),
+		WorkspaceHost:      filepath.Join(root, "workspace"),
+		HomeHost:           cfg.ChatCodexHomeDirByID(chatEntry.ID),
+		ContainerWorkspace: cfg.ContainerWorkspacePath(),
+		ContainerHome:      cfg.ContainerHomePath(),
+		AgentThreadID:      "agent-thread-123",
+		Initialized:        true,
+		Active:             true,
+	}
+	if err := os.MkdirAll(thread.WorkspaceHost, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	if err := os.MkdirAll(thread.HomeHost, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+
+	sessions := &fakeBrokerSessionStore{thread: thread}
+	agent := &fakeSkillInstallingBrokerAgent{}
+	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker.RegisterAgent("codex", agent)
+
+	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Message:          "/refresh",
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if len(result.Messages) != 1 || result.Messages[0].Text != "conversation runtime refreshed" {
+		t.Fatalf("unexpected refresh response: %#v", result.Messages)
+	}
+	if !reflect.DeepEqual(agent.installedSkills, []string{skillOne, skillTwo}) {
+		t.Fatalf("installedSkills = %#v, want %#v", agent.installedSkills, []string{skillOne, skillTwo})
+	}
+}
+
 func TestHandleIncomingMessageRefreshWithoutActiveConversation(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
@@ -638,5 +721,15 @@ type fakePurgingBrokerAgent struct {
 func (f *fakePurgingBrokerAgent) Purge(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string) error {
 	f.purgeCalled = true
 	f.providerThreadID = providerThreadID
+	return nil
+}
+
+type fakeSkillInstallingBrokerAgent struct {
+	fakeBrokerAgent
+	installedSkills []string
+}
+
+func (f *fakeSkillInstallingBrokerAgent) InstallSkill(ctx context.Context, sbx *sandboxengine.Sandbox, skillDir string) error {
+	f.installedSkills = append(f.installedSkills, skillDir)
 	return nil
 }

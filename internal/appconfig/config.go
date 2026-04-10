@@ -596,6 +596,60 @@ func (c *Config) ChatWorkspaceHostPathByID(chatID modeluuid.UUID) string {
 	return absOrEmpty(c.Store.GetString(c.ChatKey(chatID, "workspace_host_path"), ""))
 }
 
+func (c *Config) ChatSkillsByID(chatID modeluuid.UUID) []string {
+	if c == nil || c.Store == nil || chatID.IsNull() {
+		return nil
+	}
+	var out []string
+	if !c.Store.GetStruct(c.ChatKey(chatID, "skills"), &out) {
+		return nil
+	}
+	return normalizeSkillPaths(out)
+}
+
+func (c *Config) SetChatSkillsByID(chatID modeluuid.UUID, skills []string) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	if chatID.IsNull() {
+		return fmt.Errorf("chat id is null")
+	}
+	normalized, err := validateAndNormalizeSkillPaths(skills)
+	if err != nil {
+		return err
+	}
+	return c.Store.PersistStruct(c.ChatKey(chatID, "skills"), normalized)
+}
+
+func (c *Config) AddChatSkillByID(chatID modeluuid.UUID, skillDir string) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	if chatID.IsNull() {
+		return fmt.Errorf("chat id is null")
+	}
+	skills := append(c.ChatSkillsByID(chatID), skillDir)
+	return c.SetChatSkillsByID(chatID, skills)
+}
+
+func (c *Config) RemoveChatSkillByID(chatID modeluuid.UUID, skillDir string) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	if chatID.IsNull() {
+		return fmt.Errorf("chat id is null")
+	}
+	target := absOrEmpty(skillDir)
+	filtered := make([]string, 0, len(c.ChatSkillsByID(chatID)))
+	for _, existing := range c.ChatSkillsByID(chatID) {
+		if existing == target {
+			continue
+		}
+		filtered = append(filtered, existing)
+	}
+	return c.Store.PersistStruct(c.ChatKey(chatID, "skills"), filtered)
+}
+
 func (c *Config) SetChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string) error {
 	if c == nil || c.Store == nil {
 		return fmt.Errorf("config store not available")
@@ -765,11 +819,13 @@ func (c *Config) ChatKey(chatID modeluuid.UUID, key string) string {
 	return base + "." + key
 }
 
+// Deprecated: use UUID-native chat methods after resolving provider chat IDs at ingress.
 func (c *Config) PersistChatID(chatID int64, chatTitle string) error {
 	_, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), chatTitle)
 	return err
 }
 
+// Deprecated: use ChatEnabledByID after resolving provider chat IDs at ingress.
 func (c *Config) ChatEnabled(chatID int64) bool {
 	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
 	if err != nil || entry == nil {
@@ -778,6 +834,7 @@ func (c *Config) ChatEnabled(chatID int64) bool {
 	return entry.Enabled
 }
 
+// Deprecated: use SetChatEnabledByID after resolving provider chat IDs at ingress.
 func (c *Config) SetChatEnabled(chatID int64, enabled bool) error {
 	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
 	if err != nil {
@@ -786,6 +843,7 @@ func (c *Config) SetChatEnabled(chatID int64, enabled bool) error {
 	return c.SetChatEnabledByID(entry.ID, enabled)
 }
 
+// Deprecated: use ChatProcessToolsEnabledByID after resolving provider chat IDs at ingress.
 func (c *Config) ChatProcessToolsEnabled(chatID int64) bool {
 	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
 	if err != nil || entry == nil {
@@ -794,6 +852,7 @@ func (c *Config) ChatProcessToolsEnabled(chatID int64) bool {
 	return c.ChatProcessToolsEnabledByID(entry.ID)
 }
 
+// Deprecated: use SetChatProcessToolsEnabledByID after resolving provider chat IDs at ingress.
 func (c *Config) SetChatProcessToolsEnabled(chatID int64, enabled bool) error {
 	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
 	if err != nil {
@@ -802,6 +861,7 @@ func (c *Config) SetChatProcessToolsEnabled(chatID int64, enabled bool) error {
 	return c.SetChatProcessToolsEnabledByID(entry.ID, enabled)
 }
 
+// Deprecated: use ChatWorkspaceHostPathByID after resolving provider chat IDs at ingress.
 func (c *Config) ChatWorkspaceHostPath(chatID int64) string {
 	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
 	if err != nil || entry == nil {
@@ -810,6 +870,7 @@ func (c *Config) ChatWorkspaceHostPath(chatID int64) string {
 	return c.ChatWorkspaceHostPathByID(entry.ID)
 }
 
+// Deprecated: use SetChatWorkspaceHostPathByID after resolving provider chat IDs at ingress.
 func (c *Config) SetChatWorkspaceHostPath(chatID int64, raw string) error {
 	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
 	if err != nil {
@@ -818,6 +879,7 @@ func (c *Config) SetChatWorkspaceHostPath(chatID int64, raw string) error {
 	return c.SetChatWorkspaceHostPathByID(entry.ID, raw)
 }
 
+// Deprecated: use ChatHostbridgeAllowedCommandsByID after resolving provider chat IDs at ingress.
 func (c *Config) ChatHostbridgeAllowedCommandSpecs(chatID int64) []string {
 	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
 	if err != nil || entry == nil {
@@ -826,6 +888,7 @@ func (c *Config) ChatHostbridgeAllowedCommandSpecs(chatID int64) []string {
 	return c.ChatHostbridgeAllowedCommandSpecsByID(entry.ID)
 }
 
+// Deprecated: use ChatHostbridgeAllowedCommandsByID after resolving provider chat IDs at ingress.
 func (c *Config) ChatHostbridgeAllowedCommands(chatID int64) map[string]hostbridge.AllowedCommand {
 	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
 	if err != nil || entry == nil {
@@ -834,6 +897,7 @@ func (c *Config) ChatHostbridgeAllowedCommands(chatID int64) map[string]hostbrid
 	return c.ChatHostbridgeAllowedCommandsByID(entry.ID)
 }
 
+// Deprecated: use SetChatHostbridgeAllowedCommandByID after resolving provider chat IDs at ingress.
 func (c *Config) SetChatHostbridgeAllowedCommand(chatID int64, name string, command hostbridge.AllowedCommand) error {
 	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
 	if err != nil {
@@ -842,6 +906,7 @@ func (c *Config) SetChatHostbridgeAllowedCommand(chatID int64, name string, comm
 	return c.SetChatHostbridgeAllowedCommandByID(entry.ID, name, command)
 }
 
+// Deprecated: use RemoveChatHostbridgeAllowedCommandByID after resolving provider chat IDs at ingress.
 func (c *Config) RemoveChatHostbridgeAllowedCommand(chatID int64, name string) error {
 	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
 	if err != nil || entry == nil {
@@ -850,6 +915,7 @@ func (c *Config) RemoveChatHostbridgeAllowedCommand(chatID int64, name string) e
 	return c.RemoveChatHostbridgeAllowedCommandByID(entry.ID, name)
 }
 
+// Deprecated: use ResolveChatWorkspaceHostPathByID after resolving provider chat IDs at ingress.
 func (c *Config) ResolveChatWorkspaceHostPath(chatID int64, threadID int, raw string) (string, error) {
 	_ = threadID
 	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
@@ -1061,6 +1127,37 @@ func hostbridgeNormalizeAllowedCommand(spec hostbridge.AllowedCommand) (hostbrid
 func stringFromAny(v any) string {
 	s, _ := v.(string)
 	return strings.TrimSpace(s)
+}
+
+func validateAndNormalizeSkillPaths(skills []string) ([]string, error) {
+	normalized := normalizeSkillPaths(skills)
+	for _, skill := range normalized {
+		if !filepath.IsAbs(skill) {
+			return nil, fmt.Errorf("skill path must be absolute: %s", skill)
+		}
+	}
+	return normalized, nil
+}
+
+func normalizeSkillPaths(skills []string) []string {
+	if len(skills) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		skill = absOrEmpty(skill)
+		if skill == "" {
+			continue
+		}
+		if _, ok := seen[skill]; ok {
+			continue
+		}
+		seen[skill] = struct{}{}
+		out = append(out, skill)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func firstNonEmptyString(values ...any) string {
