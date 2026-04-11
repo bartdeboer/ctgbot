@@ -5,16 +5,16 @@ import (
 	"log"
 	"os"
 
+	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/codexengine"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
-	"github.com/bartdeboer/ctgbot/internal/codexengine"
 )
 
 func registerCodexRoutes(r *clir.Router, store *clistate.Store) {
 	r.Routes(func(b *clir.Builder) {
 		b.Handle("codex", "Run the normal Codex CLI inside the ctgbot Docker image", func(req *clir.Request) error {
-			cfg, err := appconfig.NewConfig("", store)
+			cfg, err := appstate.NewConfig("", store)
 			if err != nil {
 				return err
 			}
@@ -32,7 +32,7 @@ func registerCodexRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			cfg, err := appconfig.NewConfig("", store)
+			cfg, err := appstate.NewConfig("", store)
 			if err != nil {
 				return err
 			}
@@ -42,7 +42,7 @@ func registerCodexRoutes(r *clir.Router, store *clistate.Store) {
 		})
 
 		b.Handle("codex status", "Show Codex login status using the bot's shared Codex home", func(req *clir.Request) error {
-			cfg, err := appconfig.NewConfig("", store)
+			cfg, err := appstate.NewConfig("", store)
 			if err != nil {
 				return err
 			}

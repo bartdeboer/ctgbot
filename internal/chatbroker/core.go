@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
@@ -56,7 +56,7 @@ type IncomingResult struct {
 const helpText = "Commands:\n/new [absolute-host-path]\n/refresh\n/purge\n/status\n/stop\n/upgrade\n/quit\n/help\n\nAny non-command message is sent to the active Codex conversation."
 
 type Broker struct {
-	Config         *appconfig.Config
+	Config         *appstate.Config
 	Sessions       SessionStore
 	Sandboxes      sandboxengine.Manager
 	Dispatch       *Dispatcher
@@ -66,7 +66,7 @@ type Broker struct {
 	Logger         *log.Logger
 }
 
-func New(cfg *appconfig.Config, sessions SessionStore, sandboxes sandboxengine.Manager, logger *log.Logger) *Broker {
+func New(cfg *appstate.Config, sessions SessionStore, sandboxes sandboxengine.Manager, logger *log.Logger) *Broker {
 	if sandboxes == nil {
 		sandboxes = &sandboxengine.DockerManager{Logger: logger}
 	}

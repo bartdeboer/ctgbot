@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
 type SessionExecutor struct {
-	Config *appconfig.Config
+	Config *appstate.Config
 	Logger *log.Logger
 }
 

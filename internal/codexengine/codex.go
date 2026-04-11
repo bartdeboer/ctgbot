@@ -8,11 +8,11 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 )
 
 type CodexManager struct {
-	Config *appconfig.Config
+	Config *appstate.Config
 	Logger *log.Logger
 }
 
@@ -29,7 +29,7 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 		return err
 	}
 
-	relay, err := startSigninRelay(m.Config.DockerCLIContainerName(), appconfig.CodexLoginCallbackPort, m.Logger)
+	relay, err := startSigninRelay(m.Config.DockerCLIContainerName(), appstate.CodexLoginCallbackPort, m.Logger)
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	m.logf("starting containerized codex signin codex_home=%s callback_port=%d", m.Config.CodexCLIHomeRoot(), appconfig.CodexLoginCallbackPort)
+	m.logf("starting containerized codex signin codex_home=%s callback_port=%d", m.Config.CodexCLIHomeRoot(), appstate.CodexLoginCallbackPort)
 	return cmd.Run()
 }
 

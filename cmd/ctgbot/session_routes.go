@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -26,7 +26,7 @@ func registerSessionRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			cfg, err := appconfig.NewConfig("", store)
+			cfg, err := appstate.NewConfig("", store)
 			if err != nil {
 				return err
 			}

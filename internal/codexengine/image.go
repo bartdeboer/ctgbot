@@ -8,12 +8,12 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/containerassets"
 )
 
 type ImageBuilder struct {
-	Config *appconfig.Config
+	Config *appstate.Config
 	Logger *log.Logger
 }
 

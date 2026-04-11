@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
@@ -43,7 +43,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			logger := log.New(os.Stdout, "", log.LstdFlags)
 
-			cfg, err := appconfig.NewConfig(*stateRoot, store)
+			cfg, err := appstate.NewConfig(*stateRoot, store)
 			if err != nil {
 				return err
 			}

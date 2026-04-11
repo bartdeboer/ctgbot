@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -32,7 +32,7 @@ func TestEnsureConversationCodexHomeWritesPosixModelInstructionsPath(t *testing.
 		t.Fatalf("persist container home path: %v", err)
 	}
 
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestSetupEnvironmentWritesManagedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestInstallSkillCopiesSkillDirectoryIntoChatHome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}

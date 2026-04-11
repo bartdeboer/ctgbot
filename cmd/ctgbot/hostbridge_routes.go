@@ -10,11 +10,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bartdeboer/go-clir"
-	"github.com/bartdeboer/go-clistate"
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/go-clir"
+	"github.com/bartdeboer/go-clistate"
 )
 
 func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
@@ -39,7 +39,7 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 
 			resolvedTLSDir := strings.TrimSpace(*tlsDir)
 			if resolvedTLSDir == "" {
-				cfg, err := appconfig.NewConfig("", store)
+				cfg, err := appstate.NewConfig("", store)
 				if err != nil {
 					return err
 				}

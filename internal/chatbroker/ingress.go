@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 )
 
 func (b *Broker) HandleIncomingMessage(ctx context.Context, msg IncomingMessage) (IncomingResult, error) {
@@ -64,7 +64,7 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg IncomingMessage)
 	return IncomingResult{Messages: messages}, nil
 }
 
-func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage, create bool) (*appconfig.ChatConfigEntry, *Thread, error) {
+func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
 	if b.Config == nil {
 		return nil, nil, fmt.Errorf("missing config")
 	}
@@ -92,7 +92,7 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage,
 	}
 
 	var (
-		chatCfg *appconfig.ChatConfigEntry
+		chatCfg *appstate.ChatConfigEntry
 		err     error
 	)
 	if create {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -104,7 +104,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}

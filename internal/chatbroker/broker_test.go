@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
@@ -29,7 +29,7 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestHandleIncomingMessageRunsUpgradeCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestHandleIncomingMessageRunsQuitCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestHandleIncomingMessageBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestHandleIncomingMessageBlocksQuitWithoutProcessTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestHandleIncomingMessageRefreshesActiveConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -383,7 +383,7 @@ func TestHandleIncomingMessageRefreshInstallsConfiguredSkills(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -465,7 +465,7 @@ func TestHandleIncomingMessageRefreshWithoutActiveConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -520,7 +520,7 @@ func TestHandleIncomingMessagePurgesActiveConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
@@ -618,7 +618,7 @@ func TestHandleIncomingMessagePurgeWithoutActiveConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	cfg, err := appconfig.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}

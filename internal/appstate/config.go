@@ -1,4 +1,4 @@
-package appconfig
+package appstate
 
 import (
 	"context"
@@ -318,13 +318,6 @@ func (c *Config) CodexModel() string {
 		return ""
 	}
 	return strings.TrimSpace(c.Store.GetString("codex.model", ""))
-}
-
-func (c *Config) CodexFullAuto() bool {
-	if c == nil || c.Store == nil {
-		return true
-	}
-	return c.Store.GetBool("codex.full_auto", true)
 }
 
 func (c *Config) CodexCLIHomeRoot() string {

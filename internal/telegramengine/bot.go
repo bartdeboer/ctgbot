@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/appconfig"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 )
@@ -17,11 +17,11 @@ type TelegramBot struct {
 	API     TelegramAPI
 	Updates *UpdateStorage
 	Broker  *chatbroker.Broker
-	Config  *appconfig.Config
+	Config  *appstate.Config
 	Logger  *log.Logger
 }
 
-func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, broker *chatbroker.Broker, cfg *appconfig.Config, logger *log.Logger) *TelegramBot {
+func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, broker *chatbroker.Broker, cfg *appstate.Config, logger *log.Logger) *TelegramBot {
 	return &TelegramBot{
 		API:     api,
 		Updates: updates,

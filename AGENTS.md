@@ -15,7 +15,7 @@ The project has three major responsibilities:
 - `cmd/ctgbot`: main CLI entrypoint
 - `cmd/hostbridge`: container-side hostbridge client
 - `cmd/pack`: generates the embedded Docker build context tarball
-- `internal/appconfig`: typed config access and local/global state helpers
+- `internal/appstate`: typed config access and local/global state helpers
 - `internal/chatmodel`: shared conversation and Telegram update types
 - `internal/telegramengine`: Telegram API integration, bot routing, and Telegram event logging
 - `internal/codexengine`: Codex runtime, Docker session execution, image builder, and Codex chat-session state
@@ -124,7 +124,7 @@ This was needed to get Codex file writes working in the Dockerized Telegram setu
 - Keep `cmd/` files focused on `clir` routing.
 - Put Telegram transport logic in `internal/telegramengine`.
 - Put Docker/Codex/runtime logic in `internal/codexengine`.
-- Keep config/state access in `internal/appconfig` and shared types in `internal/chatmodel`.
+- Keep config/state access in `internal/appstate` and shared types in `internal/chatmodel`.
 - Prefer updating the embedded build-context source files and then regenerating `internal/containerassets/assets/src.tar.gz`.
 - Do not commit runtime chat data from `chats/` or local control data from `./.ctgbot/`.
 
