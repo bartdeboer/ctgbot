@@ -310,6 +310,51 @@ func TestChatProcessToolsEnabledRoundTrip(t *testing.T) {
 	}
 }
 
+func TestChatGPUsRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	entry, err := cfg.EnsureProviderChat("telegram", "42", "Test Chat")
+	if err != nil {
+		t.Fatalf("ensure provider chat: %v", err)
+	}
+
+	if got := cfg.ChatGPUsByID(entry.ID); got != "" {
+		t.Fatalf("expected gpus disabled by default, got %q", got)
+	}
+	if err := cfg.SetChatGPUsByID(entry.ID, " all "); err != nil {
+		t.Fatalf("set chat gpus: %v", err)
+	}
+	if got := cfg.ChatGPUsByID(entry.ID); got != "all" {
+		t.Fatalf("expected trimmed gpus value, got %q", got)
+	}
+	if err := cfg.SetChatGPUsByID(entry.ID, ""); err != nil {
+		t.Fatalf("clear chat gpus: %v", err)
+	}
+	if got := cfg.ChatGPUsByID(entry.ID); got != "" {
+		t.Fatalf("expected gpus cleared, got %q", got)
+	}
+}
+
 func TestChatHostbridgeAllowedCommandsRoundTrip(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()

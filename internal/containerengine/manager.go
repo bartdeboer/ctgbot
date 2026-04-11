@@ -26,6 +26,19 @@ func (m *Manager) InspectState(ctx context.Context, containerName string) (State
 }
 
 func (m *Manager) Create(ctx context.Context, spec ContainerSpec) error {
+	args := buildCreateArgs(spec)
+	if len(args) == 0 {
+		return fmt.Errorf("missing container image")
+	}
+	out, err := runCommand(ctx, "docker", args...)
+	if err != nil {
+		return fmt.Errorf("docker create: %w: %s", err, strings.TrimSpace(out))
+	}
+	m.logf("conversation container created name=%s docker=%s", spec.Name, strings.TrimSpace(out))
+	return nil
+}
+
+func buildCreateArgs(spec ContainerSpec) []string {
 	args := []string{"create"}
 	for _, opt := range spec.SecurityOpts {
 		if strings.TrimSpace(opt) == "" {
@@ -54,6 +67,9 @@ func (m *Manager) Create(ctx context.Context, spec ContainerSpec) error {
 		}
 		args = append(args, "--env", env)
 	}
+	if gpus := strings.TrimSpace(spec.GPUs); gpus != "" {
+		args = append(args, "--gpus", gpus)
+	}
 	if workdir := strings.TrimSpace(spec.Workdir); workdir != "" {
 		args = append(args, "--workdir", workdir)
 	}
@@ -74,16 +90,11 @@ func (m *Manager) Create(ctx context.Context, spec ContainerSpec) error {
 		args = append(args, "--add-host", entry)
 	}
 	if strings.TrimSpace(spec.Image) == "" {
-		return fmt.Errorf("missing container image")
+		return nil
 	}
 	args = append(args, spec.Image)
 	args = append(args, spec.Cmd...)
-	out, err := runCommand(ctx, "docker", args...)
-	if err != nil {
-		return fmt.Errorf("docker create: %w: %s", err, strings.TrimSpace(out))
-	}
-	m.logf("conversation container created name=%s docker=%s", spec.Name, strings.TrimSpace(out))
-	return nil
+	return args
 }
 
 func (m *Manager) Start(ctx context.Context, containerName string) error {

@@ -84,6 +84,24 @@ func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
 	if !containsString(sbx.Env, "CTGBOT_THREAD_ID="+threadID.String()) {
 		t.Fatalf("expected CTGBOT_THREAD_ID in sandbox env: %#v", sbx.Env)
 	}
+	if sbx.GPUs != "" {
+		t.Fatalf("expected GPUs disabled by default, got %q", sbx.GPUs)
+	}
+	if err := cfg.SetChatGPUsByID(chatID, "all"); err != nil {
+		t.Fatalf("set chat gpus: %v", err)
+	}
+	sbx = broker.newSandbox(&Thread{
+		ID:                 threadID,
+		ChatID:             chatID,
+		ContainerName:      "ctgbot-test",
+		WorkspaceHost:      filepath.Join(root, "workspace"),
+		HomeHost:           filepath.Join(root, "home"),
+		ContainerWorkspace: "/workspace",
+		ContainerHome:      "/home/codex",
+	})
+	if sbx.GPUs != "all" {
+		t.Fatalf("expected GPUs=all, got %q", sbx.GPUs)
+	}
 }
 
 func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {

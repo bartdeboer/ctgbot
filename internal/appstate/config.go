@@ -581,6 +581,23 @@ func (c *Config) ChatProcessToolsEnabledByID(chatID modeluuid.UUID) bool {
 	return c.Store.GetBool(c.ChatKey(chatID, "process_tools"), false)
 }
 
+func (c *Config) SetChatGPUsByID(chatID modeluuid.UUID, raw string) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	if chatID.IsNull() {
+		return fmt.Errorf("chat id is null")
+	}
+	return c.Store.PersistString(c.ChatKey(chatID, "gpus"), strings.TrimSpace(raw))
+}
+
+func (c *Config) ChatGPUsByID(chatID modeluuid.UUID) string {
+	if c == nil || c.Store == nil || chatID.IsNull() {
+		return ""
+	}
+	return strings.TrimSpace(c.Store.GetString(c.ChatKey(chatID, "gpus"), ""))
+}
+
 func (c *Config) ChatWorkspaceHostPathByID(chatID modeluuid.UUID) string {
 	if c == nil || c.Store == nil || chatID.IsNull() {
 		return ""

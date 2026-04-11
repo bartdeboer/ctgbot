@@ -87,6 +87,7 @@ func (m *DockerManager) toContainerSpec(sbx *Sandbox) containerengine.ContainerS
 		Hostname:     sbx.Hostname,
 		Image:        sbx.Image,
 		Workdir:      sbx.Workdir,
+		GPUs:         sbx.GPUs,
 		Labels:       sbx.Labels,
 		Env:          sbx.Env,
 		Mounts:       mounts,

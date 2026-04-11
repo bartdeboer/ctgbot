@@ -63,6 +63,12 @@ func TestRegisterConfigRoutes_ShowAndMutate(t *testing.T) {
 	if !state.ChatEnabledByID(entry.ID) {
 		t.Fatalf("expected chat 123 to be enabled")
 	}
+	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "--set-gpus", "all"}); err != nil {
+		t.Fatalf("Run chat gpu setter: %v", err)
+	}
+	if got := state.ChatGPUsByID(entry.ID); got != "all" {
+		t.Fatalf("chat gpus = %q, want %q", got, "all")
+	}
 
 	output := captureStdout(t, func() {
 		if err := router.Run(context.Background(), []string{"config"}); err != nil {
@@ -74,6 +80,9 @@ func TestRegisterConfigRoutes_ShowAndMutate(t *testing.T) {
 	}
 	if strings.Contains(output, "codex.full_auto") {
 		t.Fatalf("did not expect dead codex.full_auto config in output: %q", output)
+	}
+	if !strings.Contains(output, `gpus="all"`) {
+		t.Fatalf("expected chat gpu config in output, got %q", output)
 	}
 }
 

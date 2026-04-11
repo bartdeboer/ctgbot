@@ -48,6 +48,11 @@ func (b Builder) Workdir(v string) Builder {
 	return b
 }
 
+func (b Builder) GPUs(v string) Builder {
+	b.sbx.GPUs = v
+	return b
+}
+
 func (b Builder) Labels(v map[string]string) Builder {
 	b.sbx.Labels = v
 	return b

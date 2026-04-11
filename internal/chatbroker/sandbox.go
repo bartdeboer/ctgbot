@@ -8,7 +8,7 @@ import (
 )
 
 func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
-	return sandboxengine.NewBuilder(b.sandboxManager(), conv.ContainerName).
+	builder := sandboxengine.NewBuilder(b.sandboxManager(), conv.ContainerName).
 		WorkspaceDir(conv.WorkspaceHost).
 		ProfileDir(conv.HomeHost).
 		ContainerWorkspace(conv.ContainerWorkspace).
@@ -34,8 +34,13 @@ func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 		}).
 		SecurityOpts([]string{"seccomp=unconfined"}).
 		Cmd([]string{"tail", "-f", "/dev/null"}).
-		AddHosts(b.sandboxAddHosts()).
-		Build()
+		AddHosts(b.sandboxAddHosts())
+
+	if gpus := b.Config.ChatGPUsByID(conv.ChatID); gpus != "" {
+		builder = builder.GPUs(gpus)
+	}
+
+	return builder.Build()
 }
 
 func (b *Broker) sandboxEnv(conv *Thread) []string {

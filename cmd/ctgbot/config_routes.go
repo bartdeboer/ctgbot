@@ -74,7 +74,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					if title == "" {
 						title = "<untitled>"
 					}
-					fmt.Printf("    - internal_chat_id=%s provider=%s provider_chat_id=%q enabled=%t process_tools=%t title=%q\n", chat.ID.String(), chat.ProviderType, chat.ProviderChatID, chat.Enabled, cfg.ChatProcessToolsEnabledByID(chat.ID), title)
+					fmt.Printf("    - internal_chat_id=%s provider=%s provider_chat_id=%q enabled=%t process_tools=%t gpus=%q title=%q\n", chat.ID.String(), chat.ProviderType, chat.ProviderChatID, chat.Enabled, cfg.ChatProcessToolsEnabledByID(chat.ID), cfg.ChatGPUsByID(chat.ID), title)
 					workspacePath := cfg.ChatWorkspaceHostPathByID(chat.ID)
 					if workspacePath == "" {
 						workspacePath = "<global/default>"
@@ -103,6 +103,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			fmt.Println("    set a root value with: ctgbot config --set-docker-image <image>")
 			fmt.Println("    enable a chat with: ctgbot config chat <chat-id> --set-enabled true")
 			fmt.Println("    set chat process tools with: ctgbot config chat <chat-id> --set-process-tools-enabled true")
+			fmt.Println("    set chat GPUs with: ctgbot config chat <chat-id> --set-gpus all")
 			fmt.Println("    set a chat workspace with: ctgbot config chat <chat-id> --set-workspace-host-path <path>")
 			fmt.Println("    set a chat hostbridge command with: ctgbot config chat <chat-id> hostbridge <alias> --set-command <command>")
 			fmt.Println("    set a chat hostbridge dir with: ctgbot config chat <chat-id> hostbridge <alias> --set-dir <dir>")

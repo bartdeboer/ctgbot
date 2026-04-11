@@ -69,6 +69,13 @@ func TestConfigSettersRegisterRoutes(t *testing.T) {
 		t.Fatalf("expected chat 123 to be enabled")
 	}
 
+	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "--set-gpus", "all"}); err != nil {
+		t.Fatalf("Run chat gpu setter: %v", err)
+	}
+	if got := state.ChatGPUsByID(entry.ID); got != "all" {
+		t.Fatalf("chat gpus = %q, want %q", got, "all")
+	}
+
 	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "hostbridge", "origin", "--set-command", "git"}); err != nil {
 		t.Fatalf("Run hostbridge alias command setter: %v", err)
 	}

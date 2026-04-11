@@ -21,3 +21,29 @@ func TestIsMissingContainerOutputIsCaseInsensitive(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildCreateArgsIncludesGPUs(t *testing.T) {
+	t.Parallel()
+
+	args := buildCreateArgs(ContainerSpec{
+		Name:  "ctgbot-test",
+		Image: "ctgbot:latest",
+		GPUs:  "all",
+		Cmd:   []string{"tail", "-f", "/dev/null"},
+	})
+
+	if len(args) == 0 {
+		t.Fatalf("expected docker create args")
+	}
+
+	found := false
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--gpus" && args[i+1] == "all" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected --gpus all in args: %#v", args)
+	}
+}

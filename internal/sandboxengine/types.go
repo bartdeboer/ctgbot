@@ -33,6 +33,7 @@ type Sandbox struct {
 	Hostname     string
 	Image        string
 	Workdir      string
+	GPUs         string
 	Labels       map[string]string
 	Env          []string
 	Mounts       []Mount
