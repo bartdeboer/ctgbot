@@ -106,6 +106,7 @@ func (b *Broker) developerInstructions(chatID modeluuid.UUID, conv *Thread) stri
 
 	text, err := bootstrapassets.Text(bootstrapassets.TemplateData{
 		Workspace:          conv.ContainerWorkspace,
+		WorkspaceInbox:     conv.ContainerWorkspace + "/inbox",
 		CodexHome:          conv.ContainerHome,
 		ContainerOS:        "linux",
 		HostOS:             runtime.GOOS,
