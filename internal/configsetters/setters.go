@@ -356,11 +356,11 @@ func (c *ConfigSetters) chatHostbridgeAliasCommand(chatID modeluuid.UUID, alias 
 func parseChatID(raw string) (modeluuid.UUID, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return modeluuid.Nil, fmt.Errorf("missing internal chat id")
+		return modeluuid.Nil, fmt.Errorf("missing chat id")
 	}
 	chatID, err := modeluuid.Parse(raw)
 	if err != nil {
-		return modeluuid.Nil, fmt.Errorf("invalid internal chat id %q", raw)
+		return modeluuid.Nil, fmt.Errorf("invalid chat id %q", raw)
 	}
 	return chatID, nil
 }
