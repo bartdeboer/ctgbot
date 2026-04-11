@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
@@ -59,7 +61,7 @@ func (tb *TelegramBot) Run(ctx context.Context) error {
 
 func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpdate) {
 	text := strings.TrimSpace(u.Text)
-	if text == "" {
+	if text == "" && len(u.Attachments) == 0 {
 		return
 	}
 
@@ -79,10 +81,7 @@ func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpd
 }
 
 func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
-
-	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q text=%q", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), text)
-
-	result, err := tb.Broker.HandleIncomingMessage(ctx, chatbroker.IncomingMessage{
+	msg := chatbroker.IncomingMessage{
 		ProviderType:      "telegram",
 		ProviderChatID:    fmt.Sprintf("%d", u.ChatID),
 		ProviderThreadID:  fmt.Sprintf("%d", u.ThreadID),
@@ -90,7 +89,30 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 		ChatLabel:         strings.TrimSpace(u.ChatTitle),
 		UserLabel:         u.UserLabel(),
 		ProviderMessageID: fmt.Sprintf("%d", u.MessageID),
-	})
+	}
+
+	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q text=%q attachments=%d", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), text, len(u.Attachments))
+
+	if len(u.Attachments) > 0 {
+		uploadReplies, err := tb.handleAttachmentUploads(ctx, u, msg)
+		if err != nil {
+			return fmt.Errorf("handle attachment uploads: %w", err)
+		}
+		for _, reply := range uploadReplies {
+			if strings.TrimSpace(reply) == "" {
+				continue
+			}
+			if err := tb.replyText(ctx, u, reply); err != nil {
+				return err
+			}
+		}
+	}
+
+	if text == "" {
+		return nil
+	}
+
+	result, err := tb.Broker.HandleIncomingMessage(ctx, msg)
 	if err != nil {
 		return err
 	}
@@ -100,6 +122,51 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 		}
 	}
 	return nil
+}
+
+func (tb *TelegramBot) handleAttachmentUploads(ctx context.Context, u chatmodel.TelegramUpdate, msg chatbroker.IncomingMessage) ([]string, error) {
+	if tb.Broker == nil {
+		return nil, fmt.Errorf("missing broker")
+	}
+	if tb.Config == nil {
+		return nil, fmt.Errorf("missing config")
+	}
+
+	chatCfg, _, err := tb.Broker.ResolveIncomingThread(ctx, msg, true)
+	if err != nil {
+		return nil, err
+	}
+	if chatCfg == nil {
+		return nil, fmt.Errorf("missing chat mapping")
+	}
+	if !chatCfg.Enabled {
+		tb.logf("ignoring document upload from disabled chat provider=%q chat=%q title=%q", msg.ProviderType, msg.ProviderChatID, chatCfg.ProviderChatID)
+		return nil, nil
+	}
+
+	workspaceHost, err := tb.Config.ResolveChatWorkspaceHostPathByID(chatCfg.ID, "")
+	if err != nil {
+		return nil, err
+	}
+	inboxHost := filepath.Join(workspaceHost, "inbox")
+	if err := os.MkdirAll(inboxHost, 0o755); err != nil {
+		return nil, err
+	}
+
+	replies := make([]string, 0, len(u.Attachments))
+	for _, attachment := range u.Attachments {
+		content, err := tb.API.DownloadFile(ctx, attachment.FileID)
+		if err != nil {
+			return nil, err
+		}
+		filename := safeIncomingFilename(attachment.Filename)
+		targetHost := filepath.Join(inboxHost, filename)
+		if err := os.WriteFile(targetHost, content, 0o644); err != nil {
+			return nil, err
+		}
+		replies = append(replies, fmt.Sprintf("upload saved: /workspace/inbox/%s", filename))
+	}
+	return replies, nil
 }
 
 func (tb *TelegramBot) replyText(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
@@ -146,6 +213,14 @@ func splitTelegramText(text string, limit int) []string {
 func cleanTextForTelegram(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	return strings.TrimSpace(text)
+}
+
+func safeIncomingFilename(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "upload.bin"
+	}
+	return name
 }
 
 func (tb *TelegramBot) appendEventResponse(ctx context.Context, text string) {

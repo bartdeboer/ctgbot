@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -45,7 +48,8 @@ func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUp
 				ChatTitle: msg.Chat.Title,
 				ThreadID:  msg.MessageThreadID,
 				MessageID: msg.ID,
-				Text:      msg.Text,
+				Text:      telegramMessageText(msg),
+				Attachments: telegramMessageAttachments(msg),
 			}
 			if msg.From != nil {
 				tupd.FirstName = msg.From.FirstName
@@ -114,8 +118,143 @@ func (a *TelegramAPIV2) SendDocument(ctx context.Context, chatID int64, threadID
 	return err
 }
 
+func (a *TelegramAPIV2) DownloadFile(ctx context.Context, fileID string) ([]byte, error) {
+	b := a.getBot()
+	if b == nil {
+		return nil, fmt.Errorf("telegram bot not initialized")
+	}
+	fileID = strings.TrimSpace(fileID)
+	if fileID == "" {
+		return nil, fmt.Errorf("missing file id")
+	}
+	f, err := b.GetFile(ctx, &bot.GetFileParams{FileID: fileID})
+	if err != nil {
+		return nil, err
+	}
+	if f == nil || strings.TrimSpace(f.FilePath) == "" {
+		return nil, fmt.Errorf("telegram file path missing")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.FileDownloadLink(f), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("download telegram file: %s", resp.Status)
+	}
+	return io.ReadAll(resp.Body)
+}
+
 func (a *TelegramAPIV2) getBot() *bot.Bot {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.b
+}
+
+func telegramMessageText(msg *models.Message) string {
+	if msg == nil {
+		return ""
+	}
+	if strings.TrimSpace(msg.Text) != "" {
+		return msg.Text
+	}
+	return strings.TrimSpace(msg.Caption)
+}
+
+func telegramMessageAttachments(msg *models.Message) []chatmodel.TelegramAttachment {
+	if msg == nil {
+		return nil
+	}
+	var out []chatmodel.TelegramAttachment
+
+	if doc := msg.Document; doc != nil {
+		out = append(out, chatmodel.TelegramAttachment{
+			Kind:     "document",
+			FileID:   doc.FileID,
+			Filename: attachmentFilename("document", msg.ID, doc.FileName, doc.MimeType, ".bin"),
+		})
+	}
+	if len(msg.Photo) > 0 {
+		photo := msg.Photo[len(msg.Photo)-1]
+		out = append(out, chatmodel.TelegramAttachment{
+			Kind:     "photo",
+			FileID:   photo.FileID,
+			Filename: attachmentFilename("photo", msg.ID, "", "image/jpeg", ".jpg"),
+		})
+	}
+	if video := msg.Video; video != nil {
+		out = append(out, chatmodel.TelegramAttachment{
+			Kind:     "video",
+			FileID:   video.FileID,
+			Filename: attachmentFilename("video", msg.ID, video.FileName, video.MimeType, ".mp4"),
+		})
+	}
+	if audio := msg.Audio; audio != nil {
+		out = append(out, chatmodel.TelegramAttachment{
+			Kind:     "audio",
+			FileID:   audio.FileID,
+			Filename: attachmentFilename("audio", msg.ID, audio.FileName, audio.MimeType, ".bin"),
+		})
+	}
+	if voice := msg.Voice; voice != nil {
+		out = append(out, chatmodel.TelegramAttachment{
+			Kind:     "voice",
+			FileID:   voice.FileID,
+			Filename: attachmentFilename("voice", msg.ID, "", voice.MimeType, ".ogg"),
+		})
+	}
+	if animation := msg.Animation; animation != nil {
+		out = append(out, chatmodel.TelegramAttachment{
+			Kind:     "animation",
+			FileID:   animation.FileID,
+			Filename: attachmentFilename("animation", msg.ID, animation.FileName, animation.MimeType, ".bin"),
+		})
+	}
+
+	return out
+}
+
+func attachmentFilename(kind string, messageID int, existing string, mimeType string, fallbackExt string) string {
+	name := filepath.Base(strings.TrimSpace(existing))
+	if name != "" && name != "." && name != string(filepath.Separator) {
+		return name
+	}
+	ext := attachmentExtension(strings.TrimSpace(mimeType), fallbackExt)
+	if ext == "" {
+		ext = fallbackExt
+	}
+	return fmt.Sprintf("%s-%d%s", kind, messageID, ext)
+}
+
+func attachmentExtension(mimeType string, fallback string) string {
+	if mimeType == "" {
+		return fallback
+	}
+	switch mimeType {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	case "video/mp4":
+		return ".mp4"
+	case "audio/mpeg":
+		return ".mp3"
+	case "audio/ogg", "audio/opus":
+		return ".ogg"
+	case "audio/mp4":
+		return ".m4a"
+	case "image/gif":
+		return ".gif"
+	}
+	if exts, err := mime.ExtensionsByType(mimeType); err == nil && len(exts) > 0 {
+		return exts[0]
+	}
+	return fallback
 }

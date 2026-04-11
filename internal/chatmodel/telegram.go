@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+type TelegramAttachment struct {
+	Kind     string
+	FileID   string
+	Filename string
+}
+
 type TelegramUpdate struct {
 	ID uint `gorm:"primaryKey"`
 
@@ -13,6 +19,7 @@ type TelegramUpdate struct {
 	MessageID int
 	ThreadID  int
 	Text      string
+	Attachments []TelegramAttachment `gorm:"-"`
 	FirstName string
 	LastName  string
 	Username  string

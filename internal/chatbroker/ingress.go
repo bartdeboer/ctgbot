@@ -64,6 +64,10 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg IncomingMessage)
 	return IncomingResult{Messages: messages}, nil
 }
 
+func (b *Broker) ResolveIncomingThread(ctx context.Context, msg IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
+	return b.resolveIncomingThread(ctx, msg, create)
+}
+
 func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
 	if b.Config == nil {
 		return nil, nil, fmt.Errorf("missing config")
