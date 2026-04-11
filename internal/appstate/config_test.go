@@ -3,12 +3,23 @@ package appstate
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clistate"
 )
+
+func ensureTelegramChat(t *testing.T, cfg *Config, providerChatID int64, title string) ChatConfigEntry {
+	t.Helper()
+
+	entry, err := cfg.EnsureProviderChat("telegram", strconv.FormatInt(providerChatID, 10), title)
+	if err != nil {
+		t.Fatalf("ensure provider chat: %v", err)
+	}
+	return *entry
+}
 
 func TestNormalizeContainerPath(t *testing.T) {
 	t.Parallel()
@@ -69,11 +80,9 @@ func TestResolveChatWorkspaceHostPathPrefersChatThenGlobalThenDefault(t *testing
 	if err := store.PersistString("docker.workspace_host_path", globalDir); err != nil {
 		t.Fatalf("persist global workspace: %v", err)
 	}
-	if err := cfg.PersistChatID(-123, "Test Chat"); err != nil {
-		t.Fatalf("persist chat mapping: %v", err)
-	}
+	entry := ensureTelegramChat(t, cfg, -123, "Test Chat")
 
-	got, err := cfg.ResolveChatWorkspaceHostPath(-123, 0, "")
+	got, err := cfg.ResolveChatWorkspaceHostPathByID(entry.ID, "")
 	if err != nil {
 		t.Fatalf("resolve with global fallback: %v", err)
 	}
@@ -81,10 +90,10 @@ func TestResolveChatWorkspaceHostPathPrefersChatThenGlobalThenDefault(t *testing
 		t.Fatalf("resolve with global fallback = %q, want %q", got, globalDir)
 	}
 
-	if err := cfg.SetChatWorkspaceHostPath(-123, chatDir); err != nil {
+	if err := cfg.SetChatWorkspaceHostPathByID(entry.ID, chatDir); err != nil {
 		t.Fatalf("set chat workspace: %v", err)
 	}
-	got, err = cfg.ResolveChatWorkspaceHostPath(-123, 0, "")
+	got, err = cfg.ResolveChatWorkspaceHostPathByID(entry.ID, "")
 	if err != nil {
 		t.Fatalf("resolve with chat-local workspace: %v", err)
 	}
@@ -96,7 +105,7 @@ func TestResolveChatWorkspaceHostPathPrefersChatThenGlobalThenDefault(t *testing
 	if err := os.MkdirAll(explicitDir, 0o755); err != nil {
 		t.Fatalf("mkdir explicit workspace: %v", err)
 	}
-	got, err = cfg.ResolveChatWorkspaceHostPath(-123, 0, explicitDir)
+	got, err = cfg.ResolveChatWorkspaceHostPathByID(entry.ID, explicitDir)
 	if err != nil {
 		t.Fatalf("resolve with explicit workspace: %v", err)
 	}
@@ -105,7 +114,7 @@ func TestResolveChatWorkspaceHostPathPrefersChatThenGlobalThenDefault(t *testing
 	}
 }
 
-func TestResolveChatWorkspaceHostPathRequiresKnownChatMapping(t *testing.T) {
+func TestResolveChatWorkspaceHostPathByIDFallsBackToChatWorkspace(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -127,9 +136,14 @@ func TestResolveChatWorkspaceHostPathRequiresKnownChatMapping(t *testing.T) {
 		t.Fatalf("new config: %v", err)
 	}
 
-	got, err := cfg.ResolveChatWorkspaceHostPath(-456, 2, "")
-	if err == nil {
-		t.Fatalf("expected unknown chat mapping error, got workspace %q", got)
+	chatID := modeluuid.New()
+	got, err := cfg.ResolveChatWorkspaceHostPathByID(chatID, "")
+	if err != nil {
+		t.Fatalf("resolve chat workspace by id: %v", err)
+	}
+	want := cfg.ChatWorkspaceDirByID(chatID)
+	if got != want {
+		t.Fatalf("ResolveChatWorkspaceHostPathByID() = %q, want %q", got, want)
 	}
 }
 
@@ -277,23 +291,21 @@ func TestChatProcessToolsEnabledRoundTrip(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.PersistChatID(-123, "Test Chat"); err != nil {
-		t.Fatalf("persist chat mapping: %v", err)
-	}
+	entry := ensureTelegramChat(t, cfg, -123, "Test Chat")
 
-	if cfg.ChatProcessToolsEnabled(-123) {
+	if cfg.ChatProcessToolsEnabledByID(entry.ID) {
 		t.Fatalf("expected process tools disabled by default")
 	}
-	if err := cfg.SetChatProcessToolsEnabled(-123, true); err != nil {
+	if err := cfg.SetChatProcessToolsEnabledByID(entry.ID, true); err != nil {
 		t.Fatalf("set process tools enabled: %v", err)
 	}
-	if !cfg.ChatProcessToolsEnabled(-123) {
+	if !cfg.ChatProcessToolsEnabledByID(entry.ID) {
 		t.Fatalf("expected process tools enabled")
 	}
-	if err := cfg.SetChatProcessToolsEnabled(-123, false); err != nil {
+	if err := cfg.SetChatProcessToolsEnabledByID(entry.ID, false); err != nil {
 		t.Fatalf("set process tools disabled: %v", err)
 	}
-	if cfg.ChatProcessToolsEnabled(-123) {
+	if cfg.ChatProcessToolsEnabledByID(entry.ID) {
 		t.Fatalf("expected process tools disabled")
 	}
 }
@@ -322,11 +334,9 @@ func TestChatHostbridgeAllowedCommandsRoundTrip(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.PersistChatID(-123, "Test Chat"); err != nil {
-		t.Fatalf("persist chat mapping: %v", err)
-	}
+	entry := ensureTelegramChat(t, cfg, -123, "Test Chat")
 
-	err = cfg.SetChatHostbridgeAllowedCommand(-123, "git-push-ctgbot", hostbridge.AllowedCommand{
+	err = cfg.SetChatHostbridgeAllowedCommandByID(entry.ID, "git-push-ctgbot", hostbridge.AllowedCommand{
 		Name: "git",
 		Args: []string{"push"},
 		Dir:  filepath.Join(root, "ctgbot"),
@@ -335,7 +345,7 @@ func TestChatHostbridgeAllowedCommandsRoundTrip(t *testing.T) {
 		t.Fatalf("set hostbridge allowed command: %v", err)
 	}
 
-	commands := cfg.ChatHostbridgeAllowedCommands(-123)
+	commands := cfg.ChatHostbridgeAllowedCommandsByID(entry.ID)
 	spec, ok := commands["git-push-ctgbot"]
 	if !ok {
 		t.Fatalf("expected git-push-ctgbot alias")

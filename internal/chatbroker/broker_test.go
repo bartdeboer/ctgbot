@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
@@ -12,6 +13,26 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
 )
+
+func ensureTelegramChat(t *testing.T, cfg *appstate.Config, providerChatID int64, title string, enabled bool, processTools bool) *appstate.ChatConfigEntry {
+	t.Helper()
+
+	entry, err := cfg.EnsureProviderChat("telegram", strconv.FormatInt(providerChatID, 10), title)
+	if err != nil {
+		t.Fatalf("ensure provider chat: %v", err)
+	}
+	if enabled {
+		if err := cfg.SetChatEnabledByID(entry.ID, true); err != nil {
+			t.Fatalf("set chat enabled: %v", err)
+		}
+	}
+	if processTools {
+		if err := cfg.SetChatProcessToolsEnabledByID(entry.ID, true); err != nil {
+			t.Fatalf("set chat process tools enabled: %v", err)
+		}
+	}
+	return entry
+}
 
 func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	root := t.TempDir()
@@ -36,9 +57,7 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	sessions := &fakeBrokerSessionStore{}
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
@@ -84,12 +103,7 @@ func TestHandleIncomingMessageRunsUpgradeCommand(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
-	if err := cfg.SetChatProcessToolsEnabled(42, true); err != nil {
-		t.Fatalf("set chat process tools enabled: %v", err)
-	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, true)
 
 	process := &fakeProcessActions{}
 	sessions := &fakeBrokerSessionStore{}
@@ -140,12 +154,7 @@ func TestHandleIncomingMessageRunsQuitCommand(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
-	if err := cfg.SetChatProcessToolsEnabled(42, true); err != nil {
-		t.Fatalf("set chat process tools enabled: %v", err)
-	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, true)
 
 	process := &fakeProcessActions{}
 	sessions := &fakeBrokerSessionStore{}
@@ -196,9 +205,7 @@ func TestHandleIncomingMessageBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	process := &fakeProcessActions{}
 	sessions := &fakeBrokerSessionStore{}
@@ -249,9 +256,7 @@ func TestHandleIncomingMessageBlocksQuitWithoutProcessTools(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	process := &fakeProcessActions{}
 	sessions := &fakeBrokerSessionStore{}
@@ -302,14 +307,7 @@ func TestHandleIncomingMessageRefreshesActiveConversation(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
-
-	chatEntry, err := cfg.EnsureProviderChat("telegram", "42", "Test Chat")
-	if err != nil {
-		t.Fatalf("ensure provider chat: %v", err)
-	}
+	chatEntry := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 	threadID := modeluuid.New()
 	thread := &Thread{
 		ID:                 threadID,
@@ -390,14 +388,7 @@ func TestHandleIncomingMessageRefreshInstallsConfiguredSkills(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
-
-	chatEntry, err := cfg.EnsureProviderChat("telegram", "42", "Test Chat")
-	if err != nil {
-		t.Fatalf("ensure provider chat: %v", err)
-	}
+	chatEntry := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 	skillOne := filepath.Join(root, "skills", "one")
 	skillTwo := filepath.Join(root, "skills", "two")
 	if err := cfg.SetChatSkillsByID(chatEntry.ID, []string{skillTwo, skillOne}); err != nil {
@@ -472,9 +463,7 @@ func TestHandleIncomingMessageRefreshWithoutActiveConversation(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	sessions := &fakeBrokerSessionStore{
 		thread: &Thread{
@@ -527,14 +516,7 @@ func TestHandleIncomingMessagePurgesActiveConversation(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
-
-	chatEntry, err := cfg.EnsureProviderChat("telegram", "42", "Test Chat")
-	if err != nil {
-		t.Fatalf("ensure provider chat: %v", err)
-	}
+	chatEntry := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 	threadID := modeluuid.New()
 	thread := &Thread{
 		ID:                 threadID,
@@ -625,9 +607,7 @@ func TestHandleIncomingMessagePurgeWithoutActiveConversation(t *testing.T) {
 	if err := cfg.EnsurePaths(); err != nil {
 		t.Fatalf("ensure paths: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	sessions := &fakeBrokerSessionStore{
 		thread: &Thread{

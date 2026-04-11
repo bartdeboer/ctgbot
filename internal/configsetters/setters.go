@@ -18,16 +18,12 @@ type ConfigSetters struct {
 }
 
 type ChatRoute struct {
-	ChatID int64 `arg:"chatID" segment:"chat"`
+	ChatID string `arg:"chatID" segment:"chat"`
 }
 
 type ChatHostbridgeAliasRoute struct {
-	ChatID int64  `arg:"chatID" segment:"chat"`
+	ChatID string `arg:"chatID" segment:"chat"`
 	Alias  string `arg:"alias" segment:"hostbridge"`
-}
-
-type InternalChatRoute struct {
-	ChatID string `arg:"chatID" segment:"chat-id"`
 }
 
 type SetTelegramTokenInput struct {
@@ -119,12 +115,12 @@ type SetChatHostbridgeAliasRemovedInput struct {
 }
 
 type SetChatSkillAddedInput struct {
-	InternalChatRoute
+	ChatRoute
 	AddSkill string `flag:"add-skill"`
 }
 
 type SetChatSkillRemovedInput struct {
-	InternalChatRoute
+	ChatRoute
 	RemoveSkill string `flag:"remove-skill"`
 }
 
@@ -221,46 +217,70 @@ func (c *ConfigSetters) SetPollTimeoutSec(in SetPollTimeoutSecInput) error {
 }
 
 func (c *ConfigSetters) SetChatEnabled(in SetChatEnabledInput) error {
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
 	if c == nil || c.State == nil {
 		return fmt.Errorf("missing app state")
 	}
-	return c.State.SetChatEnabled(in.ChatID, in.SetEnabled)
+	return c.State.SetChatEnabledByID(chatID, in.SetEnabled)
 }
 
 func (c *ConfigSetters) SetChatProcessToolsEnabled(in SetChatProcessToolsEnabledInput) error {
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
 	if c == nil || c.State == nil {
 		return fmt.Errorf("missing app state")
 	}
-	return c.State.SetChatProcessToolsEnabled(in.ChatID, in.SetProcessToolsEnabled)
+	return c.State.SetChatProcessToolsEnabledByID(chatID, in.SetProcessToolsEnabled)
 }
 
 func (c *ConfigSetters) SetChatWorkspaceHostPath(in SetChatWorkspaceHostPathInput) error {
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
 	if c == nil || c.State == nil {
 		return fmt.Errorf("missing app state")
 	}
-	return c.State.SetChatWorkspaceHostPath(in.ChatID, in.SetWorkspaceHostPath)
+	return c.State.SetChatWorkspaceHostPathByID(chatID, in.SetWorkspaceHostPath)
 }
 
 func (c *ConfigSetters) SetChatHostbridgeAliasCommand(in SetChatHostbridgeAliasCommandInput) error {
-	command, err := c.chatHostbridgeAliasCommand(in.ChatID, in.Alias)
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
+	command, err := c.chatHostbridgeAliasCommand(chatID, in.Alias)
 	if err != nil {
 		return err
 	}
 	command.Name = strings.TrimSpace(in.SetCommand)
-	return c.State.SetChatHostbridgeAllowedCommand(in.ChatID, in.Alias, command)
+	return c.State.SetChatHostbridgeAllowedCommandByID(chatID, in.Alias, command)
 }
 
 func (c *ConfigSetters) SetChatHostbridgeAliasDir(in SetChatHostbridgeAliasDirInput) error {
-	command, err := c.chatHostbridgeAliasCommand(in.ChatID, in.Alias)
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
+	command, err := c.chatHostbridgeAliasCommand(chatID, in.Alias)
 	if err != nil {
 		return err
 	}
 	command.Dir = strings.TrimSpace(in.SetDir)
-	return c.State.SetChatHostbridgeAllowedCommand(in.ChatID, in.Alias, command)
+	return c.State.SetChatHostbridgeAllowedCommandByID(chatID, in.Alias, command)
 }
 
 func (c *ConfigSetters) SetChatHostbridgeAliasArgs(in SetChatHostbridgeAliasArgsInput) error {
-	command, err := c.chatHostbridgeAliasCommand(in.ChatID, in.Alias)
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
+	command, err := c.chatHostbridgeAliasCommand(chatID, in.Alias)
 	if err != nil {
 		return err
 	}
@@ -269,30 +289,38 @@ func (c *ConfigSetters) SetChatHostbridgeAliasArgs(in SetChatHostbridgeAliasArgs
 		return err
 	}
 	command.Args = args
-	return c.State.SetChatHostbridgeAllowedCommand(in.ChatID, in.Alias, command)
+	return c.State.SetChatHostbridgeAllowedCommandByID(chatID, in.Alias, command)
 }
 
 func (c *ConfigSetters) SetChatHostbridgeAliasAllowExtraArgs(in SetChatHostbridgeAliasAllowExtraArgsInput) error {
-	command, err := c.chatHostbridgeAliasCommand(in.ChatID, in.Alias)
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
+	command, err := c.chatHostbridgeAliasCommand(chatID, in.Alias)
 	if err != nil {
 		return err
 	}
 	command.AllowExtraArgs = in.SetAllowExtraArgs
-	return c.State.SetChatHostbridgeAllowedCommand(in.ChatID, in.Alias, command)
+	return c.State.SetChatHostbridgeAllowedCommandByID(chatID, in.Alias, command)
 }
 
 func (c *ConfigSetters) SetChatHostbridgeAliasRemoved(in SetChatHostbridgeAliasRemovedInput) error {
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
 	if c == nil || c.State == nil {
 		return fmt.Errorf("missing app state")
 	}
 	if !in.Remove {
 		return nil
 	}
-	return c.State.RemoveChatHostbridgeAllowedCommand(in.ChatID, in.Alias)
+	return c.State.RemoveChatHostbridgeAllowedCommandByID(chatID, in.Alias)
 }
 
 func (c *ConfigSetters) SetChatSkillAdded(in SetChatSkillAddedInput) error {
-	chatID, err := parseInternalChatID(in.ChatID)
+	chatID, err := parseChatID(in.ChatID)
 	if err != nil {
 		return err
 	}
@@ -303,7 +331,7 @@ func (c *ConfigSetters) SetChatSkillAdded(in SetChatSkillAddedInput) error {
 }
 
 func (c *ConfigSetters) SetChatSkillRemoved(in SetChatSkillRemovedInput) error {
-	chatID, err := parseInternalChatID(in.ChatID)
+	chatID, err := parseChatID(in.ChatID)
 	if err != nil {
 		return err
 	}
@@ -313,7 +341,7 @@ func (c *ConfigSetters) SetChatSkillRemoved(in SetChatSkillRemovedInput) error {
 	return c.State.RemoveChatSkillByID(chatID, strings.TrimSpace(in.RemoveSkill))
 }
 
-func (c *ConfigSetters) chatHostbridgeAliasCommand(chatID int64, alias string) (hostbridge.AllowedCommand, error) {
+func (c *ConfigSetters) chatHostbridgeAliasCommand(chatID modeluuid.UUID, alias string) (hostbridge.AllowedCommand, error) {
 	if c == nil || c.State == nil {
 		return hostbridge.AllowedCommand{}, fmt.Errorf("missing app state")
 	}
@@ -321,11 +349,11 @@ func (c *ConfigSetters) chatHostbridgeAliasCommand(chatID int64, alias string) (
 	if alias == "" {
 		return hostbridge.AllowedCommand{}, fmt.Errorf("alias is empty")
 	}
-	command := c.State.ChatHostbridgeAllowedCommands(chatID)[alias]
+	command := c.State.ChatHostbridgeAllowedCommandsByID(chatID)[alias]
 	return command, nil
 }
 
-func parseInternalChatID(raw string) (modeluuid.UUID, error) {
+func parseChatID(raw string) (modeluuid.UUID, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return modeluuid.Nil, fmt.Errorf("missing internal chat id")

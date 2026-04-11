@@ -57,20 +57,25 @@ func TestConfigSettersRegisterRoutes(t *testing.T) {
 		t.Fatalf("docker.image = %q, want %q", got, "ctgbot:test")
 	}
 
-	if err := router.Run(context.Background(), []string{"config", "chat", "123", "--set-enabled", "true"}); err != nil {
+	entry, err := state.EnsureProviderChat("telegram", "123", "Test Chat")
+	if err != nil {
+		t.Fatalf("EnsureProviderChat: %v", err)
+	}
+
+	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "--set-enabled", "true"}); err != nil {
 		t.Fatalf("Run chat setter: %v", err)
 	}
-	if !state.ChatEnabled(123) {
+	if !state.ChatEnabledByID(entry.ID) {
 		t.Fatalf("expected chat 123 to be enabled")
 	}
 
-	if err := router.Run(context.Background(), []string{"config", "chat", "123", "hostbridge", "origin", "--set-command", "git"}); err != nil {
+	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "hostbridge", "origin", "--set-command", "git"}); err != nil {
 		t.Fatalf("Run hostbridge alias command setter: %v", err)
 	}
-	if err := router.Run(context.Background(), []string{"config", "chat", "123", "hostbridge", "origin", "--set-dir", "/repo"}); err != nil {
+	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "hostbridge", "origin", "--set-dir", "/repo"}); err != nil {
 		t.Fatalf("Run hostbridge alias setter: %v", err)
 	}
-	command := state.ChatHostbridgeAllowedCommands(123)["origin"]
+	command := state.ChatHostbridgeAllowedCommandsByID(entry.ID)["origin"]
 	if command.Dir != "/repo" {
 		t.Fatalf("command.Dir = %q, want %q", command.Dir, "/repo")
 	}

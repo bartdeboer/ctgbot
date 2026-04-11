@@ -37,6 +37,10 @@ func TestRegisterConfigRoutes_ShowAndMutate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewGlobal: %v", err)
 	}
+	state, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), local)
+	if err != nil {
+		t.Fatalf("NewConfig: %v", err)
+	}
 
 	router := clir.New()
 	registerConfigRoutes(router, local, global)
@@ -48,15 +52,15 @@ func TestRegisterConfigRoutes_ShowAndMutate(t *testing.T) {
 		t.Fatalf("docker.image = %q, want %q", got, "ctgbot:test")
 	}
 
-	if err := router.Run(context.Background(), []string{"config", "chat", "123", "--set-enabled", "true"}); err != nil {
-		t.Fatalf("Run chat setter: %v", err)
+	entry, err := state.EnsureProviderChat("telegram", "123", "Test Chat")
+	if err != nil {
+		t.Fatalf("EnsureProviderChat: %v", err)
 	}
 
-	state, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), local)
-	if err != nil {
-		t.Fatalf("NewConfig: %v", err)
+	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "--set-enabled", "true"}); err != nil {
+		t.Fatalf("Run chat setter: %v", err)
 	}
-	if !state.ChatEnabled(123) {
+	if !state.ChatEnabledByID(entry.ID) {
 		t.Fatalf("expected chat 123 to be enabled")
 	}
 

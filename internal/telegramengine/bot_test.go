@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -14,6 +15,21 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
 )
+
+func ensureTelegramChat(t *testing.T, cfg *appstate.Config, providerChatID int64, title string, enabled bool) *appstate.ChatConfigEntry {
+	t.Helper()
+
+	entry, err := cfg.EnsureProviderChat("telegram", strconv.FormatInt(providerChatID, 10), title)
+	if err != nil {
+		t.Fatalf("ensure provider chat: %v", err)
+	}
+	if enabled {
+		if err := cfg.SetChatEnabledByID(entry.ID, true); err != nil {
+			t.Fatalf("set chat enabled: %v", err)
+		}
+	}
+	return entry
+}
 
 type fakeTelegramAPI struct {
 	messages []sentMessage
@@ -108,9 +124,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
-	if err := cfg.SetChatEnabled(42, true); err != nil {
-		t.Fatalf("set chat enabled: %v", err)
-	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true)
 
 	api := &fakeTelegramAPI{}
 	sessions := &fakeSessionStore{}

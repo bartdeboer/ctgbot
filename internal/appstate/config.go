@@ -9,7 +9,6 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -810,115 +809,6 @@ func (c *Config) ChatKey(chatID modeluuid.UUID, key string) string {
 		return base
 	}
 	return base + "." + key
-}
-
-// Deprecated: use UUID-native chat methods after resolving provider chat IDs at ingress.
-func (c *Config) PersistChatID(chatID int64, chatTitle string) error {
-	_, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), chatTitle)
-	return err
-}
-
-// Deprecated: use ChatEnabledByID after resolving provider chat IDs at ingress.
-func (c *Config) ChatEnabled(chatID int64) bool {
-	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
-	if err != nil || entry == nil {
-		return false
-	}
-	return entry.Enabled
-}
-
-// Deprecated: use SetChatEnabledByID after resolving provider chat IDs at ingress.
-func (c *Config) SetChatEnabled(chatID int64, enabled bool) error {
-	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
-	if err != nil {
-		return err
-	}
-	return c.SetChatEnabledByID(entry.ID, enabled)
-}
-
-// Deprecated: use ChatProcessToolsEnabledByID after resolving provider chat IDs at ingress.
-func (c *Config) ChatProcessToolsEnabled(chatID int64) bool {
-	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
-	if err != nil || entry == nil {
-		return false
-	}
-	return c.ChatProcessToolsEnabledByID(entry.ID)
-}
-
-// Deprecated: use SetChatProcessToolsEnabledByID after resolving provider chat IDs at ingress.
-func (c *Config) SetChatProcessToolsEnabled(chatID int64, enabled bool) error {
-	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
-	if err != nil {
-		return err
-	}
-	return c.SetChatProcessToolsEnabledByID(entry.ID, enabled)
-}
-
-// Deprecated: use ChatWorkspaceHostPathByID after resolving provider chat IDs at ingress.
-func (c *Config) ChatWorkspaceHostPath(chatID int64) string {
-	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
-	if err != nil || entry == nil {
-		return ""
-	}
-	return c.ChatWorkspaceHostPathByID(entry.ID)
-}
-
-// Deprecated: use SetChatWorkspaceHostPathByID after resolving provider chat IDs at ingress.
-func (c *Config) SetChatWorkspaceHostPath(chatID int64, raw string) error {
-	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
-	if err != nil {
-		return err
-	}
-	return c.SetChatWorkspaceHostPathByID(entry.ID, raw)
-}
-
-// Deprecated: use ChatHostbridgeAllowedCommandsByID after resolving provider chat IDs at ingress.
-func (c *Config) ChatHostbridgeAllowedCommandSpecs(chatID int64) []string {
-	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
-	if err != nil || entry == nil {
-		return nil
-	}
-	return c.ChatHostbridgeAllowedCommandSpecsByID(entry.ID)
-}
-
-// Deprecated: use ChatHostbridgeAllowedCommandsByID after resolving provider chat IDs at ingress.
-func (c *Config) ChatHostbridgeAllowedCommands(chatID int64) map[string]hostbridge.AllowedCommand {
-	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
-	if err != nil || entry == nil {
-		return nil
-	}
-	return c.ChatHostbridgeAllowedCommandsByID(entry.ID)
-}
-
-// Deprecated: use SetChatHostbridgeAllowedCommandByID after resolving provider chat IDs at ingress.
-func (c *Config) SetChatHostbridgeAllowedCommand(chatID int64, name string, command hostbridge.AllowedCommand) error {
-	entry, err := c.EnsureProviderChat("telegram", strconv.FormatInt(chatID, 10), "")
-	if err != nil {
-		return err
-	}
-	return c.SetChatHostbridgeAllowedCommandByID(entry.ID, name, command)
-}
-
-// Deprecated: use RemoveChatHostbridgeAllowedCommandByID after resolving provider chat IDs at ingress.
-func (c *Config) RemoveChatHostbridgeAllowedCommand(chatID int64, name string) error {
-	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
-	if err != nil || entry == nil {
-		return nil
-	}
-	return c.RemoveChatHostbridgeAllowedCommandByID(entry.ID, name)
-}
-
-// Deprecated: use ResolveChatWorkspaceHostPathByID after resolving provider chat IDs at ingress.
-func (c *Config) ResolveChatWorkspaceHostPath(chatID int64, threadID int, raw string) (string, error) {
-	_ = threadID
-	entry, err := c.FindProviderChat("telegram", strconv.FormatInt(chatID, 10))
-	if err != nil {
-		return "", err
-	}
-	if entry == nil {
-		return "", fmt.Errorf("unknown telegram chat id %d", chatID)
-	}
-	return c.ResolveChatWorkspaceHostPathByID(entry.ID, raw)
 }
 
 func (c *Config) migrateLegacyLocalLayout() error {
