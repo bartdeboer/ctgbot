@@ -124,6 +124,16 @@ func TestHandleConnDispatchesSendFileRequests(t *testing.T) {
 	if err := dec.Decode(&frame); err != nil {
 		t.Fatalf("decode frame: %v", err)
 	}
+	if frame.Kind != StreamStdout {
+		t.Fatalf("frame.Kind = %d, want stdout", frame.Kind)
+	}
+	if string(frame.Data) != "sent file: report.pdf\n" {
+		t.Fatalf("frame.Data = %q", string(frame.Data))
+	}
+
+	if err := dec.Decode(&frame); err != nil {
+		t.Fatalf("decode exit frame: %v", err)
+	}
 	if frame.Kind != StreamExit {
 		t.Fatalf("frame.Kind = %d, want exit", frame.Kind)
 	}

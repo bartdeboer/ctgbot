@@ -293,6 +293,10 @@ func handleSendFile(conn net.Conn, send *safeEncoder, req Request, sendFile Send
 		_ = send.Encode(Frame{Kind: StreamError, Message: err.Error()})
 		return
 	}
+	_ = send.Encode(Frame{
+		Kind: StreamStdout,
+		Data: []byte(fmt.Sprintf("sent file: %s\n", req.Filename)),
+	})
 	_ = send.Encode(Frame{Kind: StreamExit, ExitCode: 0})
 }
 
