@@ -55,6 +55,20 @@ func (s *SessionStorage) FindThread(ctx context.Context, chatID modeluuid.UUID, 
 	return &thread, nil
 }
 
+func (s *SessionStorage) FindThreadByID(ctx context.Context, threadID modeluuid.UUID) (*Thread, error) {
+	var thread Thread
+	err := s.DB.WithContext(ctx).
+		Where("id = ?", threadID).
+		First(&thread).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &thread, nil
+}
+
 func (s *SessionStorage) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
 	thread, err := s.FindThread(ctx, chatID, providerThreadID)
 	if err != nil {

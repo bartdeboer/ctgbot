@@ -35,7 +35,17 @@ type securityTaggedListener struct {
 
 type AllowedCommandResolver func(clientIdentity string) map[string]AllowedCommand
 
-func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, logger *log.Logger) error {
+type SendFileRequest struct {
+	ChatID   string
+	ThreadID string
+	Filename string
+	Caption  string
+	Content  []byte
+}
+
+type SendFileHandler func(ctx context.Context, req SendFileRequest) error
+
+func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, sendFile SendFileHandler, logger *log.Logger) error {
 	if strings.TrimSpace(address) == "" {
 		return fmt.Errorf("missing address")
 	}
@@ -55,10 +65,10 @@ func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed m
 	}
 	defer ln.Close()
 
-	return ServeListener(ctx, ln, defaultTimeoutSec, StaticAllowedCommandResolver(allowed), logger)
+	return ServeListener(ctx, ln, defaultTimeoutSec, StaticAllowedCommandResolver(allowed), sendFile, logger)
 }
 
-func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, resolve AllowedCommandResolver, logger *log.Logger) error {
+func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, resolve AllowedCommandResolver, sendFile SendFileHandler, logger *log.Logger) error {
 	if ln == nil {
 		return fmt.Errorf("missing listener")
 	}
@@ -88,7 +98,7 @@ func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, 
 			logger.Printf("accept error: %v", err)
 			continue
 		}
-		go handleConn(conn, resolve, defaultTimeoutSec, logger)
+		go handleConn(conn, resolve, sendFile, defaultTimeoutSec, logger)
 	}
 }
 
@@ -132,7 +142,7 @@ func validateLoopbackListenAddress(address string) error {
 	return nil
 }
 
-func handleConn(conn net.Conn, resolve AllowedCommandResolver, defaultTimeoutSec int, logger *log.Logger) {
+func handleConn(conn net.Conn, resolve AllowedCommandResolver, sendFile SendFileHandler, defaultTimeoutSec int, logger *log.Logger) {
 	defer conn.Close()
 
 	dec := gob.NewDecoder(conn)
@@ -145,6 +155,17 @@ func handleConn(conn net.Conn, resolve AllowedCommandResolver, defaultTimeoutSec
 		return
 	}
 
+	switch req.Op {
+	case "", OpRunCommand:
+		handleRunCommand(conn, send, req, resolve, defaultTimeoutSec, logger)
+	case OpSendFile:
+		handleSendFile(conn, send, req, sendFile, defaultTimeoutSec, logger)
+	default:
+		_ = send.Encode(Frame{Kind: StreamError, Message: "unsupported operation: " + string(req.Op)})
+	}
+}
+
+func handleRunCommand(conn net.Conn, send *safeEncoder, req Request, resolve AllowedCommandResolver, defaultTimeoutSec int, logger *log.Logger) {
 	clientIdentity := connectionClientIdentity(conn)
 	allowed := resolve(clientIdentity)
 	if allowed == nil {
@@ -228,6 +249,51 @@ func handleConn(conn net.Conn, resolve AllowedCommandResolver, defaultTimeoutSec
 	}
 
 	_ = send.Encode(Frame{Kind: StreamExit, ExitCode: exitCode})
+}
+
+func handleSendFile(conn net.Conn, send *safeEncoder, req Request, sendFile SendFileHandler, defaultTimeoutSec int, logger *log.Logger) {
+	if sendFile == nil {
+		_ = send.Encode(Frame{Kind: StreamError, Message: "sendfile not configured"})
+		return
+	}
+	if strings.TrimSpace(req.ChatID) == "" {
+		_ = send.Encode(Frame{Kind: StreamError, Message: "missing chat id"})
+		return
+	}
+	if strings.TrimSpace(req.ThreadID) == "" {
+		_ = send.Encode(Frame{Kind: StreamError, Message: "missing thread id"})
+		return
+	}
+	if strings.TrimSpace(req.Filename) == "" {
+		_ = send.Encode(Frame{Kind: StreamError, Message: "missing filename"})
+		return
+	}
+	if len(req.Content) > MaxSendFileBytes {
+		_ = send.Encode(Frame{Kind: StreamError, Message: fmt.Sprintf("file exceeds %d byte limit", MaxSendFileBytes)})
+		return
+	}
+
+	timeout := time.Duration(defaultTimeoutSec) * time.Second
+	if req.Timeout > 0 && req.Timeout <= 600 {
+		timeout = time.Duration(req.Timeout) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	logger.Printf("hostbridge sendfile filename=%q bytes=%d security=%s client=%q chat=%q thread=%q", req.Filename, len(req.Content), connectionSecurityMode(conn), connectionClientIdentity(conn), req.ChatID, req.ThreadID)
+
+	err := sendFile(ctx, SendFileRequest{
+		ChatID:   req.ChatID,
+		ThreadID: req.ThreadID,
+		Filename: req.Filename,
+		Caption:  req.Caption,
+		Content:  req.Content,
+	})
+	if err != nil {
+		_ = send.Encode(Frame{Kind: StreamError, Message: err.Error()})
+		return
+	}
+	_ = send.Encode(Frame{Kind: StreamExit, ExitCode: 0})
 }
 
 func streamReader(enc *safeEncoder, r io.Reader, kind StreamKind, done chan<- struct{}) {

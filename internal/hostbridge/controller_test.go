@@ -1,6 +1,11 @@
 package hostbridge
 
 import (
+	"context"
+	"encoding/gob"
+	"io"
+	"log"
+	"net"
 	"reflect"
 	"testing"
 )
@@ -83,5 +88,57 @@ func TestMergeNamedAllowedCommandsNormalizesEntries(t *testing.T) {
 	}
 	if spec.Dir != "/workspace/src/ctgbot" {
 		t.Fatalf("spec.Dir = %q, want /workspace/src/ctgbot", spec.Dir)
+	}
+}
+
+func TestHandleConnDispatchesSendFileRequests(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	defer client.Close()
+
+	var got SendFileRequest
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handleConn(server, StaticAllowedCommandResolver(nil), func(ctx context.Context, req SendFileRequest) error {
+			got = req
+			return nil
+		}, 30, log.New(io.Discard, "", 0))
+	}()
+
+	enc := gob.NewEncoder(client)
+	dec := gob.NewDecoder(client)
+	if err := enc.Encode(Request{
+		Op:       OpSendFile,
+		ChatID:   "chat-1",
+		ThreadID: "thread-2",
+		Filename: "report.pdf",
+		Caption:  "Weekly report",
+		Content:  []byte("hello"),
+	}); err != nil {
+		t.Fatalf("encode request: %v", err)
+	}
+
+	var frame Frame
+	if err := dec.Decode(&frame); err != nil {
+		t.Fatalf("decode frame: %v", err)
+	}
+	if frame.Kind != StreamExit {
+		t.Fatalf("frame.Kind = %d, want exit", frame.Kind)
+	}
+	if frame.ExitCode != 0 {
+		t.Fatalf("frame.ExitCode = %d, want 0", frame.ExitCode)
+	}
+	<-done
+
+	if got.ChatID != "chat-1" || got.ThreadID != "thread-2" {
+		t.Fatalf("unexpected routing ids: %+v", got)
+	}
+	if got.Filename != "report.pdf" || got.Caption != "Weekly report" {
+		t.Fatalf("unexpected file metadata: %+v", got)
+	}
+	if string(got.Content) != "hello" {
+		t.Fatalf("unexpected content: %q", string(got.Content))
 	}
 }

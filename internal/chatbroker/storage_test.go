@@ -55,4 +55,15 @@ func TestSessionStorageEnsuresChatThreadAndPersistsThreadState(t *testing.T) {
 	if got.ContainerName != "ctgbot-1-7" {
 		t.Fatalf("got container name %q", got.ContainerName)
 	}
+
+	byID, err := store.FindThreadByID(ctx, thread.ID)
+	if err != nil {
+		t.Fatalf("find thread by id: %v", err)
+	}
+	if byID == nil {
+		t.Fatalf("expected thread by id")
+	}
+	if byID.ProviderThreadID != "7" {
+		t.Fatalf("byID.ProviderThreadID = %q", byID.ProviderThreadID)
+	}
 }

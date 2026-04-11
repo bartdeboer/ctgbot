@@ -1,6 +1,7 @@
 package telegramengine
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -87,6 +88,29 @@ func (a *TelegramAPIV2) SendMessage(ctx context.Context, chatID int64, threadID 
 	}
 
 	_, err := b.SendMessage(ctx, p)
+	return err
+}
+
+func (a *TelegramAPIV2) SendDocument(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+	b := a.getBot()
+	if b == nil {
+		return fmt.Errorf("telegram bot not initialized")
+	}
+	filename = strings.TrimSpace(filename)
+	if filename == "" {
+		return fmt.Errorf("missing filename")
+	}
+
+	p := &bot.SendDocumentParams{
+		ChatID:          chatID,
+		MessageThreadID: threadID,
+		Document: &models.InputFileUpload{
+			Filename: filename,
+			Data:     bytes.NewReader(content),
+		},
+		Caption: strings.TrimSpace(caption),
+	}
+	_, err := b.SendDocument(ctx, p)
 	return err
 }
 

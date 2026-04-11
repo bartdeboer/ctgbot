@@ -34,6 +34,58 @@ func ensureTelegramChat(t *testing.T, cfg *appstate.Config, providerChatID int64
 	return entry
 }
 
+func containsString(values []string, want string) bool {
+	for _, v := range values {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
+	sbx := broker.newSandbox(&Thread{
+		ID:                 threadID,
+		ChatID:             chatID,
+		ContainerName:      "ctgbot-test",
+		WorkspaceHost:      filepath.Join(root, "workspace"),
+		HomeHost:           filepath.Join(root, "home"),
+		ContainerWorkspace: "/workspace",
+		ContainerHome:      "/home/codex",
+	})
+
+	if !containsString(sbx.Env, "CTGBOT_CHAT_ID="+chatID.String()) {
+		t.Fatalf("expected CTGBOT_CHAT_ID in sandbox env: %#v", sbx.Env)
+	}
+	if !containsString(sbx.Env, "CTGBOT_THREAD_ID="+threadID.String()) {
+		t.Fatalf("expected CTGBOT_THREAD_ID in sandbox env: %#v", sbx.Env)
+	}
+}
+
 func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()

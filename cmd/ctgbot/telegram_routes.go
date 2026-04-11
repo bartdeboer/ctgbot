@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/telegramengine"
 	"github.com/bartdeboer/go-clir"
@@ -103,7 +105,53 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 					}
 					return hostbridge.MergeNamedAllowedCommands(cfg.ChatHostbridgeAllowedCommandsByID(chatID))
 				}
-				bridgeErrCh <- hostbridge.ServeListener(runCtx, ln, 30, resolveAllowed, logger)
+				sendFile := func(ctx context.Context, req hostbridge.SendFileRequest) error {
+					chatID, err := modeluuid.Parse(strings.TrimSpace(req.ChatID))
+					if err != nil {
+						return fmt.Errorf("parse chat id: %w", err)
+					}
+					threadID, err := modeluuid.Parse(strings.TrimSpace(req.ThreadID))
+					if err != nil {
+						return fmt.Errorf("parse thread id: %w", err)
+					}
+
+					thread, err := sessions.FindThreadByID(ctx, threadID)
+					if err != nil {
+						return fmt.Errorf("find thread: %w", err)
+					}
+					if thread == nil {
+						return fmt.Errorf("thread not found: %s", threadID)
+					}
+					if thread.ChatID != chatID {
+						return fmt.Errorf("thread %s does not belong to chat %s", threadID, chatID)
+					}
+
+					chatCfg, err := cfg.FindChatByID(chatID)
+					if err != nil {
+						return fmt.Errorf("find chat: %w", err)
+					}
+					if chatCfg == nil {
+						return fmt.Errorf("chat not found: %s", chatID)
+					}
+					if chatCfg.ProviderType != "telegram" {
+						return fmt.Errorf("file upload only supported for telegram chats")
+					}
+
+					providerChatID, err := strconv.ParseInt(strings.TrimSpace(chatCfg.ProviderChatID), 10, 64)
+					if err != nil {
+						return fmt.Errorf("parse telegram chat id: %w", err)
+					}
+					providerThreadID := 0
+					if raw := strings.TrimSpace(thread.ProviderThreadID); raw != "" {
+						providerThreadID, err = strconv.Atoi(raw)
+						if err != nil {
+							return fmt.Errorf("parse telegram thread id: %w", err)
+						}
+					}
+
+					return api.SendDocument(ctx, providerChatID, providerThreadID, req.Filename, req.Caption, req.Content)
+				}
+				bridgeErrCh <- hostbridge.ServeListener(runCtx, ln, 30, resolveAllowed, sendFile, logger)
 			}()
 
 			botErrCh := make(chan error, 1)

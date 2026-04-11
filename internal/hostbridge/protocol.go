@@ -1,12 +1,28 @@
 package hostbridge
 
+type Operation string
+
+const (
+	OpRunCommand Operation = "run-command"
+	OpSendFile   Operation = "send-file"
+)
+
+const MaxSendFileBytes = 50 * 1024 * 1024
+
 type Request struct {
+	Op      Operation
 	Command string
 	Args    []string
 	Stdin   []byte
 	Cwd     string
 	Env     map[string]string
 	Timeout int
+
+	ChatID   string
+	ThreadID string
+	Filename string
+	Caption  string
+	Content  []byte
 }
 
 type StreamKind uint8

@@ -31,15 +31,24 @@ func ensureTelegramChat(t *testing.T, cfg *appstate.Config, providerChatID int64
 	return entry
 }
 
-type fakeTelegramAPI struct {
-	messages []sentMessage
-}
-
 type sentMessage struct {
 	chatID   int64
 	threadID int
 	replyTo  int
 	text     string
+}
+
+type sentDocument struct {
+	chatID   int64
+	threadID int
+	filename string
+	caption  string
+	content  []byte
+}
+
+type fakeTelegramAPI struct {
+	messages  []sentMessage
+	documents []sentDocument
 }
 
 func (f *fakeTelegramAPI) Run(ctx context.Context, _ time.Duration, _ func(context.Context, chatmodel.TelegramUpdate)) error {
@@ -52,6 +61,17 @@ func (f *fakeTelegramAPI) SendMessage(ctx context.Context, chatID int64, threadI
 		threadID: threadID,
 		replyTo:  replyTo,
 		text:     text,
+	})
+	return nil
+}
+
+func (f *fakeTelegramAPI) SendDocument(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+	f.documents = append(f.documents, sentDocument{
+		chatID:   chatID,
+		threadID: threadID,
+		filename: filename,
+		caption:  caption,
+		content:  append([]byte(nil), content...),
 	})
 	return nil
 }

@@ -48,6 +48,8 @@ func (b *Broker) sandboxEnv(conv *Thread) []string {
 		"XDG_CACHE_HOME=/tmp/.cache",
 		"HOSTBRIDGE_ADDR=" + b.Config.ContainerHostbridgeTCPAddr(),
 		"HOSTBRIDGE_TLS_DIR=" + b.Config.ContainerHostbridgeTLSDir(),
+		"CTGBOT_CHAT_ID=" + conv.ChatID.String(),
+		"CTGBOT_THREAD_ID=" + conv.ID.String(),
 	}
 	if b.Config == nil {
 		return env
