@@ -4,8 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
@@ -18,19 +17,45 @@ type tgEventKey struct{}
 type TelegramBot struct {
 	API     TelegramAPI
 	Updates *UpdateStorage
-	Broker  *chatbroker.Broker
 	Config  *appstate.Config
 	Logger  *log.Logger
 }
 
-func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, broker *chatbroker.Broker, cfg *appstate.Config, logger *log.Logger) *TelegramBot {
+func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, cfg *appstate.Config, logger *log.Logger) *TelegramBot {
 	return &TelegramBot{
 		API:     api,
 		Updates: updates,
-		Broker:  broker,
 		Config:  cfg,
 		Logger:  logger,
 	}
+}
+
+func (tb *TelegramBot) ProviderType() string {
+	return "telegram"
+}
+
+func (tb *TelegramBot) SendText(ctx context.Context, msg chatbroker.ResolvedOutgoingMessage) error {
+	chatID, err := strconv.ParseInt(strings.TrimSpace(msg.ProviderChatID), 10, 64)
+	if err != nil {
+		return fmt.Errorf("parse telegram chat id: %w", err)
+	}
+	threadID, err := parseTelegramProviderThreadID(msg.ProviderThreadID)
+	if err != nil {
+		return err
+	}
+	return tb.API.SendMessage(ctx, chatID, threadID, 0, msg.Text)
+}
+
+func (tb *TelegramBot) SendFile(ctx context.Context, file chatbroker.ResolvedOutgoingFile) error {
+	chatID, err := strconv.ParseInt(strings.TrimSpace(file.ProviderChatID), 10, 64)
+	if err != nil {
+		return fmt.Errorf("parse telegram chat id: %w", err)
+	}
+	threadID, err := parseTelegramProviderThreadID(file.ProviderThreadID)
+	if err != nil {
+		return err
+	}
+	return tb.API.SendDocument(ctx, chatID, threadID, file.Filename, file.Caption, file.Content)
 }
 
 func (tb *TelegramBot) AutoMigrate(ctx context.Context) error {
@@ -39,15 +64,10 @@ func (tb *TelegramBot) AutoMigrate(ctx context.Context) error {
 			return err
 		}
 	}
-	if tb.Broker != nil {
-		if err := tb.Broker.AutoMigrate(ctx); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-func (tb *TelegramBot) Run(ctx context.Context) error {
+func (tb *TelegramBot) Run(ctx context.Context, onUpdate func(context.Context, chatbroker.IncomingUpdate) (chatbroker.IncomingResult, error)) error {
 	if tb.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -55,11 +75,11 @@ func (tb *TelegramBot) Run(ctx context.Context) error {
 		return err
 	}
 	return tb.API.Run(ctx, tb.Config.PollTimeout(), func(cbCtx context.Context, u chatmodel.TelegramUpdate) {
-		tb.handleUpdate(cbCtx, u)
+		tb.handleUpdate(cbCtx, u, onUpdate)
 	})
 }
 
-func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpdate) {
+func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpdate, onUpdate func(context.Context, chatbroker.IncomingUpdate) (chatbroker.IncomingResult, error)) {
 	text := strings.TrimSpace(u.Text)
 	if text == "" && len(u.Attachments) == 0 {
 		return
@@ -74,18 +94,21 @@ func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpd
 	ctx = context.WithValue(ctx, tgEventKey{}, &event)
 	defer tb.persistEvent(ctx)
 
-	if err := tb.handleUpdateSerialized(ctx, u, text); err != nil {
+	if err := tb.handleUpdateSerialized(ctx, u, text, onUpdate); err != nil {
 		tb.recordEventError(ctx, err)
 		tb.logf("telegram update handling failed chat=%d thread=%d msg=%d err=%v", u.ChatID, u.ThreadID, u.MessageID, err)
 	}
 }
 
-func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
-	msg := chatbroker.IncomingMessage{
+func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.TelegramUpdate, text string, onUpdate func(context.Context, chatbroker.IncomingUpdate) (chatbroker.IncomingResult, error)) error {
+	if onUpdate == nil {
+		return fmt.Errorf("missing update callback")
+	}
+	update := chatbroker.IncomingUpdate{
 		ProviderType:      "telegram",
 		ProviderChatID:    fmt.Sprintf("%d", u.ChatID),
 		ProviderThreadID:  fmt.Sprintf("%d", u.ThreadID),
-		Message:           text,
+		Text:              text,
 		ChatLabel:         strings.TrimSpace(u.ChatTitle),
 		UserLabel:         u.UserLabel(),
 		ProviderMessageID: fmt.Sprintf("%d", u.MessageID),
@@ -94,25 +117,14 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q text=%q attachments=%d", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), text, len(u.Attachments))
 
 	if len(u.Attachments) > 0 {
-		uploadReplies, err := tb.handleAttachmentUploads(ctx, u, msg)
+		attachments, err := tb.loadIncomingAttachments(ctx, u.Attachments)
 		if err != nil {
-			return fmt.Errorf("handle attachment uploads: %w", err)
+			return fmt.Errorf("load incoming attachments: %w", err)
 		}
-		for _, reply := range uploadReplies {
-			if strings.TrimSpace(reply) == "" {
-				continue
-			}
-			if err := tb.replyText(ctx, u, reply); err != nil {
-				return err
-			}
-		}
+		update.Attachments = attachments
 	}
 
-	if text == "" {
-		return nil
-	}
-
-	result, err := tb.Broker.HandleIncomingMessage(ctx, msg)
+	result, err := onUpdate(ctx, update)
 	if err != nil {
 		return err
 	}
@@ -124,49 +136,20 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 	return nil
 }
 
-func (tb *TelegramBot) handleAttachmentUploads(ctx context.Context, u chatmodel.TelegramUpdate, msg chatbroker.IncomingMessage) ([]string, error) {
-	if tb.Broker == nil {
-		return nil, fmt.Errorf("missing broker")
-	}
-	if tb.Config == nil {
-		return nil, fmt.Errorf("missing config")
-	}
-
-	chatCfg, _, err := tb.Broker.ResolveIncomingThread(ctx, msg, true)
-	if err != nil {
-		return nil, err
-	}
-	if chatCfg == nil {
-		return nil, fmt.Errorf("missing chat mapping")
-	}
-	if !chatCfg.Enabled {
-		tb.logf("ignoring document upload from disabled chat provider=%q chat=%q title=%q", msg.ProviderType, msg.ProviderChatID, chatCfg.ProviderChatID)
-		return nil, nil
-	}
-
-	workspaceHost, err := tb.Config.ResolveChatWorkspaceHostPathByID(chatCfg.ID, "")
-	if err != nil {
-		return nil, err
-	}
-	inboxHost := filepath.Join(workspaceHost, "inbox")
-	if err := os.MkdirAll(inboxHost, 0o755); err != nil {
-		return nil, err
-	}
-
-	replies := make([]string, 0, len(u.Attachments))
-	for _, attachment := range u.Attachments {
+func (tb *TelegramBot) loadIncomingAttachments(ctx context.Context, attachments []chatmodel.TelegramAttachment) ([]chatbroker.IncomingAttachment, error) {
+	out := make([]chatbroker.IncomingAttachment, 0, len(attachments))
+	for _, attachment := range attachments {
 		content, err := tb.API.DownloadFile(ctx, attachment.FileID)
 		if err != nil {
 			return nil, err
 		}
-		filename := safeIncomingFilename(attachment.Filename)
-		targetHost := filepath.Join(inboxHost, filename)
-		if err := os.WriteFile(targetHost, content, 0o644); err != nil {
-			return nil, err
-		}
-		replies = append(replies, fmt.Sprintf("upload saved: /workspace/inbox/%s", filename))
+		out = append(out, chatbroker.IncomingAttachment{
+			Kind:     strings.TrimSpace(attachment.Kind),
+			Filename: strings.TrimSpace(attachment.Filename),
+			Content:  content,
+		})
 	}
-	return replies, nil
+	return out, nil
 }
 
 func (tb *TelegramBot) replyText(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
@@ -215,12 +198,16 @@ func cleanTextForTelegram(text string) string {
 	return strings.TrimSpace(text)
 }
 
-func safeIncomingFilename(name string) string {
-	name = filepath.Base(strings.TrimSpace(name))
-	if name == "" || name == "." || name == string(filepath.Separator) {
-		return "upload.bin"
+func parseTelegramProviderThreadID(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
 	}
-	return name
+	threadID, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("parse telegram thread id: %w", err)
+	}
+	return threadID, nil
 }
 
 func (tb *TelegramBot) appendEventResponse(ctx context.Context, text string) {

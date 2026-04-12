@@ -17,7 +17,7 @@ type Thread struct {
 	Active             bool
 	AgentProviderType  string
 	AgentThreadID      string
-	ContainerName      string
+	RuntimeName        string `gorm:"column:container_name"`
 	WorkspaceHost      string
 	HomeHost           string
 	ContainerWorkspace string
@@ -27,6 +27,20 @@ type Thread struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+func (t *Thread) ContainerName(cfg interface {
+	ThreadContainerName(threadID modeluuid.UUID) string
+}) string {
+	if t == nil {
+		return ""
+	}
+	if cfg != nil && !t.ID.IsNull() {
+		if name := strings.TrimSpace(cfg.ThreadContainerName(t.ID)); name != "" {
+			return name
+		}
+	}
+	return strings.TrimSpace(t.RuntimeName)
 }
 
 type SessionStorage struct {
@@ -95,6 +109,7 @@ func (s *SessionStorage) SaveThread(ctx context.Context, thread *Thread) error {
 type SessionStore interface {
 	AutoMigrate(ctx context.Context) error
 	FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error)
+	FindThreadByID(ctx context.Context, threadID modeluuid.UUID) (*Thread, error)
 	EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error)
 	SaveThread(ctx context.Context, thread *Thread) error
 }

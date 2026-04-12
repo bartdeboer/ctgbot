@@ -47,7 +47,7 @@ func registerSessionRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			fmt.Printf("conversation prepared: %s\n", conv.ContainerName)
+			fmt.Printf("conversation prepared: %s\n", conv.ContainerName(cfg))
 			fmt.Printf("workspace: %s\n", conv.WorkspaceHost)
 			return nil
 		})

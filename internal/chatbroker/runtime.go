@@ -58,17 +58,13 @@ func (b *Broker) ensureSandboxRuntime(ctx context.Context, conv *Thread) error {
 	if b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
-	chatID, _, ok := b.Config.ParseChatContainerName(conv.ContainerName)
-	if !ok {
-		return fmt.Errorf("parse container name: %s", conv.ContainerName)
-	}
-	if _, err := b.Config.EnsureChatRuntimePaths(chatID); err != nil {
+	if _, err := b.Config.EnsureChatRuntimePaths(conv.ChatID); err != nil {
 		return err
 	}
 	if err := hostbridgetls.EnsureChatClientMaterials(
 		b.Config.HostbridgeTLSRoot(),
-		b.Config.ChatTLSDirByID(chatID),
-		b.Config.ChatClientIdentity(chatID),
+		b.Config.ChatTLSDirByID(conv.ChatID),
+		b.Config.ChatClientIdentity(conv.ChatID),
 	); err != nil {
 		return fmt.Errorf("ensure hostbridge tls client materials: %w", err)
 	}

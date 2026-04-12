@@ -110,12 +110,11 @@ func TestHandleConnDispatchesSendFileRequests(t *testing.T) {
 	enc := gob.NewEncoder(client)
 	dec := gob.NewDecoder(client)
 	if err := enc.Encode(Request{
-		Op:       OpSendFile,
-		ChatID:   "chat-1",
-		ThreadID: "thread-2",
-		Filename: "report.pdf",
-		Caption:  "Weekly report",
-		Content:  []byte("hello"),
+		Op:        OpSendFile,
+		SandboxID: "thread-2",
+		Filename:  "report.pdf",
+		Caption:   "Weekly report",
+		Content:   []byte("hello"),
 	}); err != nil {
 		t.Fatalf("encode request: %v", err)
 	}
@@ -142,8 +141,8 @@ func TestHandleConnDispatchesSendFileRequests(t *testing.T) {
 	}
 	<-done
 
-	if got.ChatID != "chat-1" || got.ThreadID != "thread-2" {
-		t.Fatalf("unexpected routing ids: %+v", got)
+	if got.SandboxID != "thread-2" {
+		t.Fatalf("unexpected sandbox id: %+v", got)
 	}
 	if got.Filename != "report.pdf" || got.Caption != "Weekly report" {
 		t.Fatalf("unexpected file metadata: %+v", got)

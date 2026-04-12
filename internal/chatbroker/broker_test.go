@@ -71,18 +71,15 @@ func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
 	sbx := broker.newSandbox(&Thread{
 		ID:                 threadID,
 		ChatID:             chatID,
-		ContainerName:      "ctgbot-test",
+		RuntimeName:        "ctgbot-test",
 		WorkspaceHost:      filepath.Join(root, "workspace"),
 		HomeHost:           filepath.Join(root, "home"),
 		ContainerWorkspace: "/workspace",
 		ContainerHome:      "/home/codex",
 	})
 
-	if !containsString(sbx.Env, "CTGBOT_CHAT_ID="+chatID.String()) {
-		t.Fatalf("expected CTGBOT_CHAT_ID in sandbox env: %#v", sbx.Env)
-	}
-	if !containsString(sbx.Env, "CTGBOT_THREAD_ID="+threadID.String()) {
-		t.Fatalf("expected CTGBOT_THREAD_ID in sandbox env: %#v", sbx.Env)
+	if !containsString(sbx.Env, "CTGBOT_SANDBOX_ID="+threadID.String()) {
+		t.Fatalf("expected CTGBOT_SANDBOX_ID in sandbox env: %#v", sbx.Env)
 	}
 	if sbx.GPUs != "" {
 		t.Fatalf("expected GPUs disabled by default, got %q", sbx.GPUs)
@@ -93,7 +90,7 @@ func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
 	sbx = broker.newSandbox(&Thread{
 		ID:                 threadID,
 		ChatID:             chatID,
-		ContainerName:      "ctgbot-test",
+		RuntimeName:        "ctgbot-test",
 		WorkspaceHost:      filepath.Join(root, "workspace"),
 		HomeHost:           filepath.Join(root, "home"),
 		ContainerWorkspace: "/workspace",
@@ -384,7 +381,7 @@ func TestHandleIncomingMessageRefreshesActiveConversation(t *testing.T) {
 		ChatID:             chatEntry.ID,
 		ProviderThreadID:   "7",
 		AgentProviderType:  "codex",
-		ContainerName:      cfg.ChatContainerName(chatEntry.ID, threadID),
+		RuntimeName:        cfg.ThreadContainerName(threadID),
 		WorkspaceHost:      filepath.Join(root, "workspace"),
 		HomeHost:           cfg.ChatCodexHomeDirByID(chatEntry.ID),
 		ContainerWorkspace: cfg.ContainerWorkspacePath(),
@@ -471,7 +468,7 @@ func TestHandleIncomingMessageRefreshInstallsConfiguredSkills(t *testing.T) {
 		ChatID:             chatEntry.ID,
 		ProviderThreadID:   "7",
 		AgentProviderType:  "codex",
-		ContainerName:      cfg.ChatContainerName(chatEntry.ID, threadID),
+		RuntimeName:        cfg.ThreadContainerName(threadID),
 		WorkspaceHost:      filepath.Join(root, "workspace"),
 		HomeHost:           cfg.ChatCodexHomeDirByID(chatEntry.ID),
 		ContainerWorkspace: cfg.ContainerWorkspacePath(),
@@ -593,7 +590,7 @@ func TestHandleIncomingMessagePurgesActiveConversation(t *testing.T) {
 		ChatID:             chatEntry.ID,
 		ProviderThreadID:   "7",
 		AgentProviderType:  "codex",
-		ContainerName:      cfg.ChatContainerName(chatEntry.ID, threadID),
+		RuntimeName:        cfg.ThreadContainerName(threadID),
 		WorkspaceHost:      filepath.Join(root, "workspace"),
 		HomeHost:           cfg.ChatCodexHomeDirByID(chatEntry.ID),
 		ContainerWorkspace: cfg.ContainerWorkspacePath(),
@@ -707,6 +704,62 @@ func TestHandleIncomingMessagePurgeWithoutActiveConversation(t *testing.T) {
 	}
 }
 
+func TestBrokerSendFileRoutesToOutboundProvider(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	chat := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+
+	thread := &Thread{ID: modeluuid.New(), ChatID: chat.ID, ProviderThreadID: "7"}
+	sessions := &fakeBrokerSessionStore{thread: thread}
+	provider := &fakeOutboundBrokerProvider{}
+
+	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker.RegisterOutboundChatProvider("telegram", provider)
+
+	err = broker.SendFile(context.Background(), OutgoingFile{
+		SandboxID: thread.ID,
+		Filename:  "report.pdf",
+		Caption:   "Weekly report",
+		Content:   []byte("hello"),
+	})
+	if err != nil {
+		t.Fatalf("SendFile: %v", err)
+	}
+	if provider.file == nil {
+		t.Fatalf("expected outbound provider to receive file")
+	}
+	if provider.file.ProviderChatID != "42" || provider.file.ProviderThreadID != "7" {
+		t.Fatalf("unexpected provider target: %+v", *provider.file)
+	}
+	if provider.file.Filename != "report.pdf" || provider.file.Caption != "Weekly report" {
+		t.Fatalf("unexpected outbound metadata: %+v", *provider.file)
+	}
+	if string(provider.file.Content) != "hello" {
+		t.Fatalf("unexpected outbound content: %q", string(provider.file.Content))
+	}
+}
+
 type fakeBrokerSessionStore struct {
 	thread *Thread
 }
@@ -715,6 +768,13 @@ func (f *fakeBrokerSessionStore) AutoMigrate(ctx context.Context) error { return
 
 func (f *fakeBrokerSessionStore) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
 	return f.thread, nil
+}
+
+func (f *fakeBrokerSessionStore) FindThreadByID(ctx context.Context, threadID modeluuid.UUID) (*Thread, error) {
+	if f.thread != nil && f.thread.ID == threadID {
+		return f.thread, nil
+	}
+	return nil, nil
 }
 
 func (f *fakeBrokerSessionStore) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
@@ -781,5 +841,22 @@ type fakeSkillInstallingBrokerAgent struct {
 
 func (f *fakeSkillInstallingBrokerAgent) InstallSkill(ctx context.Context, sbx *sandboxengine.Sandbox, skillDir string) error {
 	f.installedSkills = append(f.installedSkills, skillDir)
+	return nil
+}
+
+type fakeOutboundBrokerProvider struct {
+	file *ResolvedOutgoingFile
+}
+
+func (f *fakeOutboundBrokerProvider) ProviderType() string { return "telegram" }
+
+func (f *fakeOutboundBrokerProvider) SendText(ctx context.Context, msg ResolvedOutgoingMessage) error {
+	return nil
+}
+
+func (f *fakeOutboundBrokerProvider) SendFile(ctx context.Context, file ResolvedOutgoingFile) error {
+	copyFile := file
+	copyFile.Content = append([]byte(nil), file.Content...)
+	f.file = &copyFile
 	return nil
 }

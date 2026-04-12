@@ -18,7 +18,7 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName, conv.WorkspaceHost), nil
+		return fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName(b.Config), conv.WorkspaceHost), nil
 	case "refresh":
 		conv, err := b.GetActiveSession(ctx, thread)
 		if err != nil {
@@ -65,7 +65,7 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 		}
 		msg := fmt.Sprintf(
 			"active conversation\ncontainer: %s\nworkspace: %s\ninitialized: %t",
-			conv.ContainerName,
+			conv.ContainerName(b.Config),
 			conv.WorkspaceHost,
 			conv.Initialized,
 		)

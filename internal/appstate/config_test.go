@@ -491,7 +491,7 @@ func TestChatSkillsByIDRoundTrip(t *testing.T) {
 	}
 }
 
-func TestChatContainerNameParsesUUIDs(t *testing.T) {
+func TestThreadContainerNameParsesUUID(t *testing.T) {
 	root := t.TempDir()
 	store, err := clistate.NewCwd("ctgbot", "config")
 	if err != nil {
@@ -501,22 +501,18 @@ func TestChatContainerNameParsesUUIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
-	chatID, err := modeluuid.Parse("00000000400000000000000")
-	if err != nil {
-		t.Fatalf("parse chat uuid: %v", err)
-	}
 	threadID, err := modeluuid.Parse("00000000500000000000000")
 	if err != nil {
 		t.Fatalf("parse thread uuid: %v", err)
 	}
 
-	name := cfg.ChatContainerName(chatID, threadID)
-	gotChatID, gotThreadID, ok := cfg.ParseChatContainerName(name)
+	name := cfg.ThreadContainerName(threadID)
+	gotThreadID, ok := cfg.ParseThreadContainerName(name)
 	if !ok {
 		t.Fatalf("expected container name to parse")
 	}
-	if gotChatID != chatID || gotThreadID != threadID {
-		t.Fatalf("parsed ids = (%q, %q), want (%q, %q)", gotChatID, gotThreadID, chatID, threadID)
+	if gotThreadID != threadID {
+		t.Fatalf("parsed thread id = %q, want %q", gotThreadID, threadID)
 	}
 }
 

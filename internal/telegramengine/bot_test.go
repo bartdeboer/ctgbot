@@ -98,6 +98,13 @@ func (f *fakeSessionStore) FindThread(ctx context.Context, chatID modeluuid.UUID
 	return f.thread, nil
 }
 
+func (f *fakeSessionStore) FindThreadByID(ctx context.Context, threadID modeluuid.UUID) (*chatbroker.Thread, error) {
+	if f.thread != nil && f.thread.ID == threadID {
+		return f.thread, nil
+	}
+	return nil, nil
+}
+
 func (f *fakeSessionStore) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
 	if f.thread == nil {
 		f.thread = &chatbroker.Thread{ID: modeluuid.New(), ChatID: chatID, ProviderThreadID: providerThreadID}
@@ -163,7 +170,6 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{
 		API:    api,
-		Broker: broker,
 		Config: cfg,
 	}
 
@@ -173,7 +179,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 		MessageID: 99,
 	}
 
-	if err := tb.handleUpdateSerialized(context.Background(), u, "hello there"); err != nil {
+	if err := tb.handleUpdateSerialized(context.Background(), u, "hello there", broker.HandleIncomingUpdate); err != nil {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
@@ -206,7 +212,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 		t.Fatalf("expected 2 messages, got %d", len(api.messages))
 	}
 
-	wantStart := "conversation started\ncontainer: " + sessions.thread.ContainerName + "\nworkspace: " + filepath.Join(root, "chats", chatCfg.ID.String(), "workspace")
+	wantStart := "conversation started\ncontainer: " + sessions.thread.ContainerName(cfg) + "\nworkspace: " + filepath.Join(root, "chats", chatCfg.ID.String(), "workspace")
 	if api.messages[0].text != wantStart {
 		t.Fatalf("unexpected first message: %q", api.messages[0].text)
 	}
@@ -243,14 +249,13 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
 	tb := &TelegramBot{
 		API:    api,
-		Broker: broker,
 		Config: cfg,
 	}
 
 	u := chatmodel.TelegramUpdate{
-		ChatID:       42,
-		ThreadID:     7,
-		MessageID:    99,
+		ChatID:    42,
+		ThreadID:  7,
+		MessageID: 99,
 		Attachments: []chatmodel.TelegramAttachment{{
 			Kind:     "document",
 			FileID:   "doc-1",
@@ -258,7 +263,7 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 		}},
 	}
 
-	if err := tb.handleUpdateSerialized(context.Background(), u, ""); err != nil {
+	if err := tb.handleUpdateSerialized(context.Background(), u, "", broker.HandleIncomingUpdate); err != nil {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
@@ -308,14 +313,13 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{
 		API:    api,
-		Broker: broker,
 		Config: cfg,
 	}
 
 	u := chatmodel.TelegramUpdate{
-		ChatID:       42,
-		ThreadID:     7,
-		MessageID:    99,
+		ChatID:    42,
+		ThreadID:  7,
+		MessageID: 99,
 		Attachments: []chatmodel.TelegramAttachment{{
 			Kind:     "document",
 			FileID:   "doc-2",
@@ -323,7 +327,7 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 		}},
 	}
 
-	if err := tb.handleUpdateSerialized(context.Background(), u, "please review it"); err != nil {
+	if err := tb.handleUpdateSerialized(context.Background(), u, "please review it", broker.HandleIncomingUpdate); err != nil {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
@@ -372,7 +376,6 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{
 		API:    api,
-		Broker: broker,
 		Config: cfg,
 	}
 
@@ -387,7 +390,7 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 		}},
 	}
 
-	if err := tb.handleUpdateSerialized(context.Background(), u, "please inspect"); err != nil {
+	if err := tb.handleUpdateSerialized(context.Background(), u, "please inspect", broker.HandleIncomingUpdate); err != nil {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 

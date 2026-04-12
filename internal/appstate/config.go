@@ -102,8 +102,11 @@ func (c *Config) ChatRuntimeName(chatID modeluuid.UUID) string {
 	return chatID.String()
 }
 
-func (c *Config) ChatContainerName(chatID modeluuid.UUID, threadID modeluuid.UUID) string {
-	return fmt.Sprintf("%s%s-%s", namePrefix, chatID.String(), threadID.String())
+func (c *Config) ThreadContainerName(threadID modeluuid.UUID) string {
+	if threadID.IsNull() {
+		return ""
+	}
+	return fmt.Sprintf("%s%s", namePrefix, threadID.String())
 }
 
 func (c *Config) ChatClientIdentity(chatID modeluuid.UUID) string {
@@ -113,26 +116,16 @@ func (c *Config) ChatClientIdentity(chatID modeluuid.UUID) string {
 	return chatClientNamePrefix + chatID.String()
 }
 
-func (c *Config) ParseChatContainerName(name string) (chatID modeluuid.UUID, threadID modeluuid.UUID, ok bool) {
+func (c *Config) ParseThreadContainerName(name string) (threadID modeluuid.UUID, ok bool) {
 	raw := strings.TrimPrefix(strings.TrimSpace(name), namePrefix)
 	if raw == "" || raw == name {
-		return modeluuid.Nil, modeluuid.Nil, false
+		return modeluuid.Nil, false
 	}
-
-	parts := strings.SplitN(raw, "-", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return modeluuid.Nil, modeluuid.Nil, false
-	}
-
-	chatID, err := modeluuid.Parse(parts[0])
+	threadID, err := modeluuid.Parse(raw)
 	if err != nil {
-		return modeluuid.Nil, modeluuid.Nil, false
+		return modeluuid.Nil, false
 	}
-	threadID, err = modeluuid.Parse(parts[1])
-	if err != nil {
-		return modeluuid.Nil, modeluuid.Nil, false
-	}
-	return chatID, threadID, true
+	return threadID, true
 }
 
 func (c *Config) ParseChatClientIdentity(name string) (chatID modeluuid.UUID, ok bool) {

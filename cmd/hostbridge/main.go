@@ -175,22 +175,17 @@ func buildSendFileRequest(path string, caption string) (hostbridge.Request, erro
 		return hostbridge.Request{}, fmt.Errorf("read file %s: %w", path, err)
 	}
 
-	chatID := getenv("CTGBOT_CHAT_ID", "")
-	if strings.TrimSpace(chatID) == "" {
-		return hostbridge.Request{}, fmt.Errorf("missing CTGBOT_CHAT_ID")
-	}
-	threadID := getenv("CTGBOT_THREAD_ID", "")
-	if strings.TrimSpace(threadID) == "" {
-		return hostbridge.Request{}, fmt.Errorf("missing CTGBOT_THREAD_ID")
+	sandboxID := getenv("CTGBOT_SANDBOX_ID", "")
+	if strings.TrimSpace(sandboxID) == "" {
+		return hostbridge.Request{}, fmt.Errorf("missing CTGBOT_SANDBOX_ID")
 	}
 
 	return hostbridge.Request{
-		Op:       hostbridge.OpSendFile,
-		Timeout:  30,
-		ChatID:   chatID,
-		ThreadID: threadID,
-		Filename: filepath.Base(path),
-		Caption:  strings.TrimSpace(caption),
-		Content:  content,
+		Op:        hostbridge.OpSendFile,
+		Timeout:   30,
+		SandboxID: sandboxID,
+		Filename:  filepath.Base(path),
+		Caption:   strings.TrimSpace(caption),
+		Content:   content,
 	}, nil
 }

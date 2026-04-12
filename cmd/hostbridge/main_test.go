@@ -9,8 +9,7 @@ import (
 )
 
 func TestBuildSendFileRequest(t *testing.T) {
-	t.Setenv("CTGBOT_CHAT_ID", "chat-123")
-	t.Setenv("CTGBOT_THREAD_ID", "thread-456")
+	t.Setenv("CTGBOT_SANDBOX_ID", "thread-456")
 
 	path := filepath.Join(t.TempDir(), "report.pdf")
 	if err := os.WriteFile(path, []byte("hello"), 0644); err != nil {
@@ -24,11 +23,8 @@ func TestBuildSendFileRequest(t *testing.T) {
 	if req.Op != hostbridge.OpSendFile {
 		t.Fatalf("req.Op = %q, want %q", req.Op, hostbridge.OpSendFile)
 	}
-	if req.ChatID != "chat-123" {
-		t.Fatalf("req.ChatID = %q", req.ChatID)
-	}
-	if req.ThreadID != "thread-456" {
-		t.Fatalf("req.ThreadID = %q", req.ThreadID)
+	if req.SandboxID != "thread-456" {
+		t.Fatalf("req.SandboxID = %q", req.SandboxID)
 	}
 	if req.Filename != "report.pdf" {
 		t.Fatalf("req.Filename = %q", req.Filename)

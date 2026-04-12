@@ -3,10 +3,49 @@ package chatbroker
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 )
+
+func (b *Broker) HandleIncomingUpdate(ctx context.Context, u IncomingUpdate) (IncomingResult, error) {
+	text := strings.TrimSpace(u.Text)
+	if text == "" && len(u.Attachments) == 0 {
+		return IncomingResult{}, nil
+	}
+
+	msg := IncomingMessage{
+		ProviderType:      strings.TrimSpace(u.ProviderType),
+		ProviderChatID:    strings.TrimSpace(u.ProviderChatID),
+		ProviderThreadID:  strings.TrimSpace(u.ProviderThreadID),
+		Message:           text,
+		ChatLabel:         strings.TrimSpace(u.ChatLabel),
+		UserLabel:         strings.TrimSpace(u.UserLabel),
+		ProviderMessageID: strings.TrimSpace(u.ProviderMessageID),
+	}
+
+	var messages []OutboundMessage
+	if len(u.Attachments) > 0 {
+		attachmentMessages, err := b.handleIncomingAttachments(ctx, msg, u.Attachments)
+		if err != nil {
+			return IncomingResult{}, err
+		}
+		messages = append(messages, attachmentMessages...)
+	}
+
+	if text == "" {
+		return IncomingResult{Messages: messages}, nil
+	}
+
+	result, err := b.HandleIncomingMessage(ctx, msg)
+	if err != nil {
+		return IncomingResult{}, err
+	}
+	messages = append(messages, result.Messages...)
+	return IncomingResult{Messages: messages}, nil
+}
 
 func (b *Broker) HandleIncomingMessage(ctx context.Context, msg IncomingMessage) (IncomingResult, error) {
 	text := strings.TrimSpace(msg.Message)
@@ -55,7 +94,7 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg IncomingMessage)
 	var messages []OutboundMessage
 	if outcome.Started && outcome.Thread != nil {
 		messages = append(messages, OutboundMessage{
-			Text: fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", outcome.Thread.ContainerName, outcome.Thread.WorkspaceHost),
+			Text: fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", outcome.Thread.ContainerName(b.Config), outcome.Thread.WorkspaceHost),
 		})
 	}
 	if strings.TrimSpace(outcome.Reply) != "" {
@@ -120,6 +159,44 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage,
 	return chatCfg, thread, nil
 }
 
+func (b *Broker) handleIncomingAttachments(ctx context.Context, msg IncomingMessage, attachments []IncomingAttachment) ([]OutboundMessage, error) {
+	if len(attachments) == 0 {
+		return nil, nil
+	}
+
+	chatCfg, _, err := b.resolveIncomingThread(ctx, msg, true)
+	if err != nil {
+		return nil, err
+	}
+	if chatCfg == nil {
+		return nil, fmt.Errorf("missing chat mapping")
+	}
+	if !chatCfg.Enabled {
+		b.logf("ignoring attachment upload from disabled chat provider=%q chat=%q title=%q", msg.ProviderType, msg.ProviderChatID, chatCfg.ProviderChatTitle)
+		return nil, nil
+	}
+
+	workspaceHost, err := b.Config.ResolveChatWorkspaceHostPathByID(chatCfg.ID, "")
+	if err != nil {
+		return nil, err
+	}
+	inboxHost := filepath.Join(workspaceHost, "inbox")
+	if err := os.MkdirAll(inboxHost, 0o755); err != nil {
+		return nil, err
+	}
+
+	replies := make([]OutboundMessage, 0, len(attachments))
+	for _, attachment := range attachments {
+		filename := safeIncomingFilename(attachment.Filename)
+		targetHost := filepath.Join(inboxHost, filename)
+		if err := os.WriteFile(targetHost, attachment.Content, 0o644); err != nil {
+			return nil, err
+		}
+		replies = append(replies, OutboundMessage{Text: fmt.Sprintf("upload saved: /workspace/inbox/%s", filename)})
+	}
+	return replies, nil
+}
+
 func normalizeIncomingCommand(providerType string, text string) []string {
 	fields := strings.Fields(strings.TrimSpace(text))
 	if len(fields) == 0 {
@@ -133,4 +210,12 @@ func normalizeIncomingCommand(providerType string, text string) []string {
 		}
 	}
 	return fields
+}
+
+func safeIncomingFilename(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "upload.bin"
+	}
+	return name
 }

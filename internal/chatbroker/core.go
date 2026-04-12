@@ -45,25 +45,76 @@ type IncomingMessage struct {
 	ProviderMessageID string
 }
 
+type IncomingAttachment struct {
+	Kind     string
+	Filename string
+	Content  []byte
+}
+
+type IncomingUpdate struct {
+	ProviderType      string
+	ProviderChatID    string
+	ProviderThreadID  string
+	ProviderMessageID string
+	ChatLabel         string
+	UserLabel         string
+	Text              string
+	Attachments       []IncomingAttachment
+}
+
 type OutboundMessage struct {
 	Text string
+}
+
+type OutgoingFile struct {
+	SandboxID modeluuid.UUID
+	Filename  string
+	Caption   string
+	Content   []byte
+}
+
+type ResolvedOutgoingMessage struct {
+	ProviderChatID   string
+	ProviderThreadID string
+	Text             string
+}
+
+type ResolvedOutgoingFile struct {
+	ProviderChatID   string
+	ProviderThreadID string
+	Filename         string
+	Caption          string
+	Content          []byte
 }
 
 type IncomingResult struct {
 	Messages []OutboundMessage
 }
 
+type InboundChatProvider interface {
+	ProviderType() string
+	Run(ctx context.Context, onUpdate func(context.Context, IncomingUpdate) (IncomingResult, error)) error
+}
+
+type OutboundChatProvider interface {
+	ProviderType() string
+	SendText(ctx context.Context, msg ResolvedOutgoingMessage) error
+	SendFile(ctx context.Context, file ResolvedOutgoingFile) error
+}
+
 const helpText = "Commands:\n/new [absolute-host-path]\n/refresh\n/purge\n/status\n/stop\n/upgrade\n/quit\n/help\n\nAny non-command message is sent to the active Codex conversation."
 
 type Broker struct {
-	Config         *appstate.Config
-	Sessions       SessionStore
-	Sandboxes      sandboxengine.Manager
-	Dispatch       *Dispatcher
-	ProcessActions ProcessActions
-	Agents         map[string]Agent
-	DefaultAgent   string
-	Logger         *log.Logger
+	Config            *appstate.Config
+	Sessions          SessionStore
+	Sandboxes         sandboxengine.Manager
+	Dispatch          *Dispatcher
+	ProcessActions    ProcessActions
+	Agents            map[string]Agent
+	InboundProviders  map[string]InboundChatProvider
+	OutboundProviders map[string]OutboundChatProvider
+	DefaultAgent      string
+	Logger            *log.Logger
 }
 
 func New(cfg *appstate.Config, sessions SessionStore, sandboxes sandboxengine.Manager, logger *log.Logger) *Broker {
@@ -71,13 +122,15 @@ func New(cfg *appstate.Config, sessions SessionStore, sandboxes sandboxengine.Ma
 		sandboxes = sandboxengine.NewSandboxManager(logger)
 	}
 	return &Broker{
-		Config:       cfg,
-		Sessions:     sessions,
-		Sandboxes:    sandboxes,
-		Dispatch:     NewDispatcher(),
-		Agents:       map[string]Agent{},
-		DefaultAgent: "codex",
-		Logger:       logger,
+		Config:            cfg,
+		Sessions:          sessions,
+		Sandboxes:         sandboxes,
+		Dispatch:          NewDispatcher(),
+		Agents:            map[string]Agent{},
+		InboundProviders:  map[string]InboundChatProvider{},
+		OutboundProviders: map[string]OutboundChatProvider{},
+		DefaultAgent:      "codex",
+		Logger:            logger,
 	}
 }
 
@@ -86,6 +139,20 @@ func (b *Broker) RegisterAgent(name string, agent Agent) {
 		b.Agents = map[string]Agent{}
 	}
 	b.Agents[name] = agent
+}
+
+func (b *Broker) RegisterInboundChatProvider(name string, provider InboundChatProvider) {
+	if b.InboundProviders == nil {
+		b.InboundProviders = map[string]InboundChatProvider{}
+	}
+	b.InboundProviders[name] = provider
+}
+
+func (b *Broker) RegisterOutboundChatProvider(name string, provider OutboundChatProvider) {
+	if b.OutboundProviders == nil {
+		b.OutboundProviders = map[string]OutboundChatProvider{}
+	}
+	b.OutboundProviders[name] = provider
 }
 
 func (b *Broker) AutoMigrate(ctx context.Context) error {

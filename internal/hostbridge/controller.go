@@ -36,11 +36,10 @@ type securityTaggedListener struct {
 type AllowedCommandResolver func(clientIdentity string) map[string]AllowedCommand
 
 type SendFileRequest struct {
-	ChatID   string
-	ThreadID string
-	Filename string
-	Caption  string
-	Content  []byte
+	SandboxID string
+	Filename  string
+	Caption   string
+	Content   []byte
 }
 
 type SendFileHandler func(ctx context.Context, req SendFileRequest) error
@@ -267,12 +266,8 @@ func handleSendFile(conn net.Conn, send *safeEncoder, req Request, sendFile Send
 		_ = send.Encode(Frame{Kind: StreamError, Message: "sendfile not configured"})
 		return
 	}
-	if strings.TrimSpace(req.ChatID) == "" {
-		_ = send.Encode(Frame{Kind: StreamError, Message: "missing chat id"})
-		return
-	}
-	if strings.TrimSpace(req.ThreadID) == "" {
-		_ = send.Encode(Frame{Kind: StreamError, Message: "missing thread id"})
+	if strings.TrimSpace(req.SandboxID) == "" {
+		_ = send.Encode(Frame{Kind: StreamError, Message: "missing sandbox id"})
 		return
 	}
 	if strings.TrimSpace(req.Filename) == "" {
@@ -291,14 +286,13 @@ func handleSendFile(conn net.Conn, send *safeEncoder, req Request, sendFile Send
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	logger.Printf("hostbridge sendfile filename=%q bytes=%d security=%s client=%q chat=%q thread=%q", req.Filename, len(req.Content), connectionSecurityMode(conn), connectionClientIdentity(conn), req.ChatID, req.ThreadID)
+	logger.Printf("hostbridge sendfile filename=%q bytes=%d security=%s client=%q sandbox=%q", req.Filename, len(req.Content), connectionSecurityMode(conn), connectionClientIdentity(conn), req.SandboxID)
 
 	err := sendFile(ctx, SendFileRequest{
-		ChatID:   req.ChatID,
-		ThreadID: req.ThreadID,
-		Filename: req.Filename,
-		Caption:  req.Caption,
-		Content:  req.Content,
+		SandboxID: req.SandboxID,
+		Filename:  req.Filename,
+		Caption:   req.Caption,
+		Content:   req.Content,
 	})
 	if err != nil {
 		_ = send.Encode(Frame{Kind: StreamError, Message: err.Error()})

@@ -8,13 +8,14 @@ import (
 )
 
 func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
-	builder := sandboxengine.NewBuilder(b.sandboxManager(), conv.ContainerName).
+	containerName := conv.ContainerName(b.Config)
+	builder := sandboxengine.NewBuilder(b.sandboxManager(), containerName).
 		WorkspaceDir(conv.WorkspaceHost).
 		ProfileDir(conv.HomeHost).
 		ContainerWorkspace(conv.ContainerWorkspace).
 		ContainerHome(conv.ContainerHome).
 		DeveloperInstructions(b.developerInstructions(conv.ChatID, conv)).
-		Hostname(conv.ContainerName).
+		Hostname(containerName).
 		Image(b.Config.DockerImage()).
 		Workdir(conv.ContainerWorkspace).
 		Labels(map[string]string{
@@ -53,8 +54,7 @@ func (b *Broker) sandboxEnv(conv *Thread) []string {
 		"XDG_CACHE_HOME=/tmp/.cache",
 		"HOSTBRIDGE_ADDR=" + b.Config.ContainerHostbridgeTCPAddr(),
 		"HOSTBRIDGE_TLS_DIR=" + b.Config.ContainerHostbridgeTLSDir(),
-		"CTGBOT_CHAT_ID=" + conv.ChatID.String(),
-		"CTGBOT_THREAD_ID=" + conv.ID.String(),
+		"CTGBOT_SANDBOX_ID=" + conv.ID.String(),
 	}
 	if b.Config == nil {
 		return env

@@ -209,7 +209,7 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 	}
 	defer func() {
 		if stopErr := sbx.Stop(context.Background()); stopErr != nil {
-			b.logf("stop conversation sandbox %s failed: %v", conv.ContainerName, stopErr)
+			b.logf("stop conversation sandbox %s failed: %v", conv.ContainerName(b.Config), stopErr)
 		}
 	}()
 
@@ -265,7 +265,7 @@ func (b *Broker) prepareThread(ctx context.Context, chatID modeluuid.UUID, threa
 
 	thread.Active = true
 	thread.AgentProviderType = b.defaultAgentName()
-	thread.ContainerName = b.Config.ChatContainerName(thread.ChatID, thread.ID)
+	thread.RuntimeName = b.Config.ThreadContainerName(thread.ID)
 	thread.WorkspaceHost = workspaceHostPath
 	thread.HomeHost = b.Config.ChatCodexHomeDirByID(thread.ChatID)
 	thread.ContainerWorkspace = b.Config.ContainerWorkspacePath()
@@ -275,8 +275,8 @@ func (b *Broker) prepareThread(ctx context.Context, chatID modeluuid.UUID, threa
 	thread.LastError = ""
 
 	if err := b.newSandbox(thread).Remove(ctx); err != nil {
-		b.logf("ignoring stale sandbox cleanup error for %s: %v", thread.ContainerName, err)
+		b.logf("ignoring stale sandbox cleanup error for %s: %v", thread.ContainerName(b.Config), err)
 	}
-	b.logf("thread prepared name=%s workspace=%s", thread.ContainerName, thread.WorkspaceHost)
+	b.logf("thread prepared name=%s workspace=%s", thread.ContainerName(b.Config), thread.WorkspaceHost)
 	return thread, nil
 }

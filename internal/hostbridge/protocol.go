@@ -18,11 +18,10 @@ type Request struct {
 	Env     map[string]string
 	Timeout int
 
-	ChatID   string
-	ThreadID string
-	Filename string
-	Caption  string
-	Content  []byte
+	SandboxID string
+	Filename  string
+	Caption   string
+	Content   []byte
 }
 
 type StreamKind uint8

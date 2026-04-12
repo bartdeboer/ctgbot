@@ -37,7 +37,7 @@ func TestSessionStorageEnsuresChatThreadAndPersistsThreadState(t *testing.T) {
 
 	thread.Active = true
 	thread.AgentProviderType = "codex"
-	thread.ContainerName = "ctgbot-1-7"
+	thread.RuntimeName = "ctgbot-1-7"
 	if err := store.SaveThread(ctx, thread); err != nil {
 		t.Fatalf("save thread: %v", err)
 	}
@@ -52,8 +52,8 @@ func TestSessionStorageEnsuresChatThreadAndPersistsThreadState(t *testing.T) {
 	if !got.Active {
 		t.Fatalf("expected thread to be active")
 	}
-	if got.ContainerName != "ctgbot-1-7" {
-		t.Fatalf("got container name %q", got.ContainerName)
+	if got.RuntimeName != "ctgbot-1-7" {
+		t.Fatalf("got container name %q", got.RuntimeName)
 	}
 
 	byID, err := store.FindThreadByID(ctx, thread.ID)

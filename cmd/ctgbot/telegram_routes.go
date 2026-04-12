@@ -15,7 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
-	filedelivery "github.com/bartdeboer/ctgbot/internal/monitor"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/telegramengine"
 	"github.com/bartdeboer/go-clir"
@@ -59,10 +59,22 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			sandboxes := sandboxengine.NewSandboxManager(logger)
 			broker := chatbroker.New(cfg, sessions, sandboxes, logger)
 			broker.RegisterAgent("codex", codexengine.NewSessionExecutor(cfg, logger))
-			bot := telegramengine.NewTelegramBot(api, updates, broker, cfg, logger)
+			bot := telegramengine.NewTelegramBot(api, updates, cfg, logger)
+			broker.RegisterInboundChatProvider("telegram", bot)
+			broker.RegisterOutboundChatProvider("telegram", bot)
 
-			files := filedelivery.NewFileDeliveryService(cfg, sessions, api)
-			hostbridgeRuntime := hostbridge.NewRuntime(cfg, logger, cfg.ResolveHostbridgeAllowedCommands, files.SendFile)
+			hostbridgeRuntime := hostbridge.NewRuntime(cfg, logger, cfg.ResolveHostbridgeAllowedCommands, func(ctx context.Context, req hostbridge.SendFileRequest) error {
+				sandboxID, err := modeluuid.Parse(strings.TrimSpace(req.SandboxID))
+				if err != nil {
+					return fmt.Errorf("parse sandbox id: %w", err)
+				}
+				return broker.SendFile(ctx, chatbroker.OutgoingFile{
+					SandboxID: sandboxID,
+					Filename:  req.Filename,
+					Caption:   req.Caption,
+					Content:   req.Content,
+				})
+			})
 
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -75,6 +87,9 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 				logger: logger,
 			}
 
+			if err := broker.AutoMigrate(runCtx); err != nil {
+				return err
+			}
 			if err := bot.AutoMigrate(runCtx); err != nil {
 				return err
 			}
@@ -86,7 +101,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			botErrCh := make(chan error, 1)
 			go func() {
-				botErrCh <- bot.Run(runCtx)
+				botErrCh <- bot.Run(runCtx, broker.HandleIncomingUpdate)
 			}()
 
 			select {
