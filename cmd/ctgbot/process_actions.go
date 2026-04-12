@@ -6,27 +6,32 @@ import (
 	"time"
 )
 
-type processActions struct {
-	stop   context.CancelFunc
-	logger *log.Logger
+type runtimeProcessActions struct {
+	stop    context.CancelFunc
+	upgrade func(context.Context) error
+	logger  *log.Logger
 }
 
-func (p *processActions) Upgrade(ctx context.Context) error {
+func (p *runtimeProcessActions) Upgrade(ctx context.Context) error {
 	p.logf("running ctgbot upgrade from telegram")
-	return runInstalledCtgbotCommand(ctx, "upgrade")
+	if p == nil || p.upgrade == nil {
+		return nil
+	}
+	return p.upgrade(ctx)
 }
 
-func (p *processActions) Quit(ctx context.Context) error {
+func (p *runtimeProcessActions) Quit(ctx context.Context) error {
+	_ = ctx
 	p.logf("shutting down ctgbot from telegram")
-	if p.stop == nil {
+	if p == nil || p.stop == nil {
 		return nil
 	}
 	time.AfterFunc(250*time.Millisecond, p.stop)
 	return nil
 }
 
-func (p *processActions) logf(format string, args ...any) {
-	if p.logger != nil {
+func (p *runtimeProcessActions) logf(format string, args ...any) {
+	if p != nil && p.logger != nil {
 		p.logger.Printf(format, args...)
 	}
 }

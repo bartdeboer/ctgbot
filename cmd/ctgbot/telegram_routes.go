@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -16,8 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
-	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
-	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	filedelivery "github.com/bartdeboer/ctgbot/internal/monitor"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/telegramengine"
 	"github.com/bartdeboer/go-clir"
@@ -27,25 +25,13 @@ import (
 func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 	r.Routes(func(b *clir.Builder) {
 		b.Handle("telegram monitor", "Run the Telegram Codex bot", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("telegram monitor", flag.ContinueOnError)
-			fs.SetOutput(os.Stdout)
-
-			tokenFlag := fs.String("token", "", "Telegram bot token")
-			stateRoot := fs.String("state-root", "", "State root (default: <cwd>/.ctgbot)")
-			dbPath := fs.String("db-path", "", "SQLite DB path (default: <state-root>/ctgbot.db)")
-
-			if err := fs.Parse(req.Extra); err != nil {
+			token, stateRoot, dbPath, err := parseTelegramMonitorOptions(req.Extra, store)
+			if err != nil {
 				return err
 			}
 
-			token := resolveTelegramToken(*tokenFlag, store)
-			if token == "" {
-				return fmt.Errorf("missing telegram token (use --token, TELEGRAM_BOT_TOKEN, or ctgbot config --set-telegram-token)")
-			}
-
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-
-			cfg, err := appstate.NewConfig(*stateRoot, store)
+			cfg, err := appstate.NewConfig(stateRoot, store)
 			if err != nil {
 				return err
 			}
@@ -53,7 +39,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			resolvedDBPath := strings.TrimSpace(*dbPath)
+			resolvedDBPath := strings.TrimSpace(dbPath)
 			if resolvedDBPath == "" {
 				resolvedDBPath = cfg.DBPath()
 			}
@@ -70,93 +56,37 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			updates := telegramengine.NewUpdateStorage(db)
 			sessions := chatbroker.NewSessionStorage(db)
-			sandboxes := &sandboxengine.DockerManager{Logger: logger}
+			sandboxes := sandboxengine.NewSandboxManager(logger)
 			broker := chatbroker.New(cfg, sessions, sandboxes, logger)
-			broker.RegisterAgent("codex", &codexengine.SessionExecutor{Config: cfg, Logger: logger})
-			tb := telegramengine.NewTelegramBot(api, updates, broker, cfg, logger)
+			broker.RegisterAgent("codex", codexengine.NewSessionExecutor(cfg, logger))
+			bot := telegramengine.NewTelegramBot(api, updates, broker, cfg, logger)
 
-			if err := tb.AutoMigrate(req.Context()); err != nil {
-				return err
-			}
+			files := filedelivery.NewFileDeliveryService(cfg, sessions, api)
+			hostbridgeRuntime := hostbridge.NewRuntime(cfg, logger, cfg.ResolveHostbridgeAllowedCommands, files.SendFile)
 
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			broker.ProcessActions = &processActions{stop: stop, logger: logger}
 
-			if err := hostbridgetls.EnsureServerMaterials(cfg.HostbridgeTLSRoot()); err != nil {
-				return fmt.Errorf("ensure hostbridge tls server materials: %w", err)
-			}
-			tlsConfig, err := hostbridgetls.LoadServerTLSConfig(cfg.HostbridgeTLSRoot())
-			if err != nil {
-				return fmt.Errorf("load hostbridge tls server config: %w", err)
+			broker.ProcessActions = &runtimeProcessActions{
+				stop: stop,
+				upgrade: func(ctx context.Context) error {
+					return runInstalledCtgbotCommand(ctx, "upgrade")
+				},
+				logger: logger,
 			}
 
-			ln, err := hostbridge.ListenTLS(cfg.HostbridgeTCPListenAddr(), tlsConfig)
-			if err != nil {
-				return fmt.Errorf("start hostbridge listener: %w", err)
+			if err := bot.AutoMigrate(runCtx); err != nil {
+				return err
 			}
 
 			bridgeErrCh := make(chan error, 1)
 			go func() {
-				resolveAllowed := func(clientIdentity string) map[string]hostbridge.AllowedCommand {
-					chatID, ok := cfg.ParseChatClientIdentity(clientIdentity)
-					if !ok {
-						return hostbridge.DefaultAllowedCommands()
-					}
-					return hostbridge.MergeNamedAllowedCommands(cfg.ChatHostbridgeAllowedCommandsByID(chatID))
-				}
-				sendFile := func(ctx context.Context, req hostbridge.SendFileRequest) error {
-					chatID, err := modeluuid.Parse(strings.TrimSpace(req.ChatID))
-					if err != nil {
-						return fmt.Errorf("parse chat id: %w", err)
-					}
-					threadID, err := modeluuid.Parse(strings.TrimSpace(req.ThreadID))
-					if err != nil {
-						return fmt.Errorf("parse thread id: %w", err)
-					}
-
-					thread, err := sessions.FindThreadByID(ctx, threadID)
-					if err != nil {
-						return fmt.Errorf("find thread: %w", err)
-					}
-					if thread == nil {
-						return fmt.Errorf("thread not found: %s", threadID)
-					}
-					if thread.ChatID != chatID {
-						return fmt.Errorf("thread %s does not belong to chat %s", threadID, chatID)
-					}
-
-					chatCfg, err := cfg.FindChatByID(chatID)
-					if err != nil {
-						return fmt.Errorf("find chat: %w", err)
-					}
-					if chatCfg == nil {
-						return fmt.Errorf("chat not found: %s", chatID)
-					}
-					if chatCfg.ProviderType != "telegram" {
-						return fmt.Errorf("file upload only supported for telegram chats")
-					}
-
-					providerChatID, err := strconv.ParseInt(strings.TrimSpace(chatCfg.ProviderChatID), 10, 64)
-					if err != nil {
-						return fmt.Errorf("parse telegram chat id: %w", err)
-					}
-					providerThreadID := 0
-					if raw := strings.TrimSpace(thread.ProviderThreadID); raw != "" {
-						providerThreadID, err = strconv.Atoi(raw)
-						if err != nil {
-							return fmt.Errorf("parse telegram thread id: %w", err)
-						}
-					}
-
-					return api.SendDocument(ctx, providerChatID, providerThreadID, req.Filename, req.Caption, req.Content)
-				}
-				bridgeErrCh <- hostbridge.ServeListener(runCtx, ln, 30, resolveAllowed, sendFile, logger)
+				bridgeErrCh <- hostbridgeRuntime.Run(runCtx)
 			}()
 
 			botErrCh := make(chan error, 1)
 			go func() {
-				botErrCh <- tb.Run(runCtx)
+				botErrCh <- bot.Run(runCtx)
 			}()
 
 			select {
@@ -178,6 +108,26 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			}
 		})
 	})
+}
+
+func parseTelegramMonitorOptions(args []string, store *clistate.Store) (token string, stateRoot string, dbPath string, err error) {
+	fs := flag.NewFlagSet("telegram monitor", flag.ContinueOnError)
+	fs.SetOutput(os.Stdout)
+
+	tokenFlag := fs.String("token", "", "Telegram bot token")
+	stateRootFlag := fs.String("state-root", "", "State root (default: <cwd>/.ctgbot)")
+	dbPathFlag := fs.String("db-path", "", "SQLite DB path (default: <state-root>/ctgbot.db)")
+
+	if err := fs.Parse(args); err != nil {
+		return "", "", "", err
+	}
+
+	resolvedToken := resolveTelegramToken(*tokenFlag, store)
+	if resolvedToken == "" {
+		return "", "", "", fmt.Errorf("missing telegram token (use --token, TELEGRAM_BOT_TOKEN, or ctgbot config --set-telegram-token)")
+	}
+
+	return resolvedToken, strings.TrimSpace(*stateRootFlag), strings.TrimSpace(*dbPathFlag), nil
 }
 
 func resolveTelegramToken(flagVal string, store *clistate.Store) string {

@@ -68,7 +68,7 @@ type Broker struct {
 
 func New(cfg *appstate.Config, sessions SessionStore, sandboxes sandboxengine.Manager, logger *log.Logger) *Broker {
 	if sandboxes == nil {
-		sandboxes = &sandboxengine.DockerManager{Logger: logger}
+		sandboxes = sandboxengine.NewSandboxManager(logger)
 	}
 	return &Broker{
 		Config:       cfg,
@@ -115,7 +115,7 @@ func (b *Broker) defaultAgentName() string {
 
 func (b *Broker) sandboxManager() sandboxengine.Manager {
 	if b.Sandboxes == nil {
-		b.Sandboxes = &sandboxengine.DockerManager{Logger: b.Logger}
+		b.Sandboxes = sandboxengine.NewSandboxManager(b.Logger)
 	}
 	return b.Sandboxes
 }

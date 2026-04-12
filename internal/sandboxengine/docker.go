@@ -14,6 +14,10 @@ type DockerManager struct {
 	Logger     *log.Logger
 }
 
+func NewSandboxManager(logger *log.Logger) *DockerManager {
+	return &DockerManager{Logger: logger}
+}
+
 func (m *DockerManager) NewSandbox(name string) *Sandbox {
 	return &Sandbox{
 		Name:    strings.TrimSpace(name),

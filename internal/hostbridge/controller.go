@@ -45,6 +45,10 @@ type SendFileRequest struct {
 
 type SendFileHandler func(ctx context.Context, req SendFileRequest) error
 
+type tlsListenerConfig interface {
+	HostbridgeTCPListenAddr() string
+}
+
 func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, sendFile SendFileHandler, logger *log.Logger) error {
 	if strings.TrimSpace(address) == "" {
 		return fmt.Errorf("missing address")
@@ -129,6 +133,13 @@ func ListenTLS(address string, tlsConfig *tls.Config) (net.Listener, error) {
 		return nil, fmt.Errorf("listen tls on %s: %w", address, err)
 	}
 	return &securityTaggedListener{Listener: ln, securityMode: "tls-mtls"}, nil
+}
+
+func NewTLSListener(cfg tlsListenerConfig, tlsConfig *tls.Config) (net.Listener, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("missing config")
+	}
+	return ListenTLS(cfg.HostbridgeTCPListenAddr(), tlsConfig)
 }
 
 func validateLoopbackListenAddress(address string) error {

@@ -147,6 +147,17 @@ func (c *Config) ParseChatClientIdentity(name string) (chatID modeluuid.UUID, ok
 	return chatID, true
 }
 
+func (c *Config) ResolveHostbridgeAllowedCommands(clientIdentity string) map[string]hostbridge.AllowedCommand {
+	if c == nil {
+		return hostbridge.DefaultAllowedCommands()
+	}
+	chatID, ok := c.ParseChatClientIdentity(clientIdentity)
+	if !ok {
+		return hostbridge.DefaultAllowedCommands()
+	}
+	return hostbridge.MergeNamedAllowedCommands(c.ChatHostbridgeAllowedCommandsByID(chatID))
+}
+
 func (c *Config) ChatRoot(name string) string {
 	return filepath.Join(c.ChatsRoot(), name)
 }

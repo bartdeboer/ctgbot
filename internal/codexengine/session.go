@@ -20,6 +20,10 @@ type SessionExecutor struct {
 	Logger *log.Logger
 }
 
+func NewSessionExecutor(cfg *appstate.Config, logger *log.Logger) *SessionExecutor {
+	return &SessionExecutor{Config: cfg, Logger: logger}
+}
+
 func (e *SessionExecutor) Name() string {
 	return "codex"
 }

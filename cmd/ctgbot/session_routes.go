@@ -35,8 +35,8 @@ func registerSessionRoutes(r *clir.Router, store *clistate.Store) {
 			}
 
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			broker := chatbroker.New(cfg, nil, &sandboxengine.DockerManager{Logger: logger}, logger)
-			broker.RegisterAgent("codex", &codexengine.SessionExecutor{Config: cfg, Logger: logger})
+			broker := chatbroker.New(cfg, nil, sandboxengine.NewSandboxManager(logger), logger)
+			broker.RegisterAgent("codex", codexengine.NewSessionExecutor(cfg, logger))
 			chatID := modeluuid.New()
 			thread := &chatbroker.Thread{ID: modeluuid.New(), ChatID: chatID, ProviderThreadID: "session-new"}
 			conv, err := broker.StartSession(req.Context(), chatID, thread, *workspace, true)
