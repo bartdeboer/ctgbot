@@ -17,8 +17,10 @@ The project has three major responsibilities:
 - `cmd/pack`: generates the embedded Docker build context tarball
 - `internal/appstate`: typed config access and local/global state helpers
 - `internal/chatmodel`: shared conversation and Telegram update types
-- `internal/telegramengine`: Telegram API integration, bot routing, and Telegram event logging
-- `internal/codexengine`: Codex runtime, Docker session execution, image builder, and Codex chat-session state
+- `internal/messenger`: messenger plugin contracts and shared transport types
+- `internal/messenger/telegramengine`: Telegram messenger implementation, API integration, and event logging
+- `internal/agent`: agent plugin contracts
+- `internal/agent/codexengine`: Codex runtime, Docker session execution, image builder, and Codex chat-session state
 - `internal/hostbridge`: shared hostbridge protocol and controller runtime
 - `internal/containerassets`: embeds an optional `assets/src.tar.gz` for Docker image builds
 - `docker/Dockerfile`: source Dockerfile for the embedded image build context
@@ -116,14 +118,14 @@ This was needed to get Codex file writes working in the Dockerized Telegram setu
   1. `go run ./cmd/ctgbot go-generate`
   2. `go run ./cmd/ctgbot image build --no-cache`
 
-- `codex signin` depends on the host-side callback relay implemented in `internal/codexengine/signin_relay.go`.
+- `codex signin` depends on the host-side callback relay implemented in `internal/agent/codexengine/signin_relay.go`.
   The callback port is fixed at `127.0.0.1:1455`.
 
 ## Editing Guidance
 
 - Keep `cmd/` files focused on `clir` routing.
-- Put Telegram transport logic in `internal/telegramengine`.
-- Put Docker/Codex/runtime logic in `internal/codexengine`.
+- Put messenger transport logic in `internal/messenger`.
+- Put agent runtime logic in `internal/agent`.
 - Keep config/state access in `internal/appstate` and shared types in `internal/chatmodel`.
 - Prefer updating the embedded build-context source files and then regenerating `internal/containerassets/assets/src.tar.gz`.
 - Do not commit runtime chat data from `chats/` or local control data from `./.ctgbot/`.

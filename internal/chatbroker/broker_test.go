@@ -8,7 +8,9 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
@@ -129,7 +131,7 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	sessions := &fakeBrokerSessionStore{}
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -177,7 +179,7 @@ func TestHandleIncomingMessageRunsUpgradeCommand(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -228,7 +230,7 @@ func TestHandleIncomingMessageRunsQuitCommand(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -279,7 +281,7 @@ func TestHandleIncomingMessageBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -330,7 +332,7 @@ func TestHandleIncomingMessageBlocksQuitWithoutProcessTools(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -402,7 +404,7 @@ func TestHandleIncomingMessageRefreshesActiveConversation(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", fakeBrokerAgent{})
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -489,7 +491,7 @@ func TestHandleIncomingMessageRefreshInstallsConfiguredSkills(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -542,7 +544,7 @@ func TestHandleIncomingMessageRefreshWithoutActiveConversation(t *testing.T) {
 	}
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -612,7 +614,7 @@ func TestHandleIncomingMessagePurgesActiveConversation(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -686,7 +688,7 @@ func TestHandleIncomingMessagePurgeWithoutActiveConversation(t *testing.T) {
 	}
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), IncomingMessage{
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
@@ -737,7 +739,7 @@ func TestBrokerSendFileRoutesToOutboundProvider(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterOutboundChatProvider("telegram", provider)
 
-	err = broker.SendFile(context.Background(), OutgoingFile{
+	err = broker.SendFile(context.Background(), messenger.OutgoingFile{
 		SandboxID: thread.ID,
 		Filename:  "report.pdf",
 		Caption:   "Weekly report",
@@ -818,8 +820,8 @@ func (fakeBrokerAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.
 	return nil
 }
 
-func (fakeBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (TurnResult, error) {
-	return TurnResult{}, nil
+func (fakeBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (agent.TurnResult, error) {
+	return agent.TurnResult{}, nil
 }
 
 type fakePurgingBrokerAgent struct {
@@ -845,16 +847,16 @@ func (f *fakeSkillInstallingBrokerAgent) InstallSkill(ctx context.Context, sbx *
 }
 
 type fakeOutboundBrokerProvider struct {
-	file *ResolvedOutgoingFile
+	file *messenger.ResolvedOutgoingFile
 }
 
 func (f *fakeOutboundBrokerProvider) ProviderType() string { return "telegram" }
 
-func (f *fakeOutboundBrokerProvider) SendText(ctx context.Context, msg ResolvedOutgoingMessage) error {
+func (f *fakeOutboundBrokerProvider) SendText(ctx context.Context, msg messenger.ResolvedOutgoingMessage) error {
 	return nil
 }
 
-func (f *fakeOutboundBrokerProvider) SendFile(ctx context.Context, file ResolvedOutgoingFile) error {
+func (f *fakeOutboundBrokerProvider) SendFile(ctx context.Context, file messenger.ResolvedOutgoingFile) error {
 	copyFile := file
 	copyFile.Content = append([]byte(nil), file.Content...)
 	f.file = &copyFile

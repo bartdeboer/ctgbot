@@ -8,15 +8,16 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 
-func (b *Broker) HandleIncomingUpdate(ctx context.Context, u IncomingUpdate) (IncomingResult, error) {
+func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.IncomingUpdate) (messenger.IncomingResult, error) {
 	text := strings.TrimSpace(u.Text)
 	if text == "" && len(u.Attachments) == 0 {
-		return IncomingResult{}, nil
+		return messenger.IncomingResult{}, nil
 	}
 
-	msg := IncomingMessage{
+	msg := messenger.IncomingMessage{
 		ProviderType:      strings.TrimSpace(u.ProviderType),
 		ProviderChatID:    strings.TrimSpace(u.ProviderChatID),
 		ProviderThreadID:  strings.TrimSpace(u.ProviderThreadID),
@@ -26,88 +27,88 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u IncomingUpdate) (In
 		ProviderMessageID: strings.TrimSpace(u.ProviderMessageID),
 	}
 
-	var messages []OutboundMessage
+	var messages []messenger.OutboundMessage
 	if len(u.Attachments) > 0 {
 		attachmentMessages, err := b.handleIncomingAttachments(ctx, msg, u.Attachments)
 		if err != nil {
-			return IncomingResult{}, err
+			return messenger.IncomingResult{}, err
 		}
 		messages = append(messages, attachmentMessages...)
 	}
 
 	if text == "" {
-		return IncomingResult{Messages: messages}, nil
+		return messenger.IncomingResult{Messages: messages}, nil
 	}
 
 	result, err := b.HandleIncomingMessage(ctx, msg)
 	if err != nil {
-		return IncomingResult{}, err
+		return messenger.IncomingResult{}, err
 	}
 	messages = append(messages, result.Messages...)
-	return IncomingResult{Messages: messages}, nil
+	return messenger.IncomingResult{Messages: messages}, nil
 }
 
-func (b *Broker) HandleIncomingMessage(ctx context.Context, msg IncomingMessage) (IncomingResult, error) {
+func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.IncomingMessage) (messenger.IncomingResult, error) {
 	text := strings.TrimSpace(msg.Message)
 	if text == "" {
-		return IncomingResult{}, nil
+		return messenger.IncomingResult{}, nil
 	}
 
 	chatCfg, thread, err := b.resolveIncomingThread(ctx, msg, true)
 	if err != nil {
-		return IncomingResult{}, err
+		return messenger.IncomingResult{}, err
 	}
 	if chatCfg == nil {
-		return IncomingResult{}, fmt.Errorf("missing chat mapping")
+		return messenger.IncomingResult{}, fmt.Errorf("missing chat mapping")
 	}
 	if !chatCfg.Enabled {
 		b.logf("ignoring update from disabled chat provider=%q chat=%q title=%q", msg.ProviderType, msg.ProviderChatID, chatCfg.ProviderChatTitle)
-		return IncomingResult{}, nil
+		return messenger.IncomingResult{}, nil
 	}
 
 	if strings.HasPrefix(text, "/") {
 		args := normalizeIncomingCommand(msg.ProviderType, text)
 		if len(args) == 0 {
-			return IncomingResult{}, nil
+			return messenger.IncomingResult{}, nil
 		}
 		reply, err := b.handleCommand(ctx, chatCfg.ID, thread, args[0], args[1:])
 		if err != nil {
-			return IncomingResult{
-				Messages: []OutboundMessage{{Text: fmt.Sprintf("command error: %v", err)}},
+			return messenger.IncomingResult{
+				Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("command error: %v", err)}},
 			}, nil
 		}
 		if strings.TrimSpace(reply) == "" {
-			return IncomingResult{}, nil
+			return messenger.IncomingResult{}, nil
 		}
-		return IncomingResult{
-			Messages: []OutboundMessage{{Text: reply}},
+		return messenger.IncomingResult{
+			Messages: []messenger.OutboundMessage{{Text: reply}},
 		}, nil
 	}
 
 	outcome, err := b.handlePrompt(ctx, chatCfg.ID, thread, text)
 	if err != nil {
-		return IncomingResult{
-			Messages: []OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
+		return messenger.IncomingResult{
+			Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
 		}, nil
 	}
 
-	var messages []OutboundMessage
+	var messages []messenger.OutboundMessage
 	if outcome.Started && outcome.Thread != nil {
-		messages = append(messages, OutboundMessage{
+		messages = append(messages, messenger.OutboundMessage{
 			Text: fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", outcome.Thread.ContainerName(b.Config), outcome.Thread.WorkspaceHost),
 		})
 	}
 	if strings.TrimSpace(outcome.Reply) != "" {
-		messages = append(messages, OutboundMessage{Text: outcome.Reply})
+		messages = append(messages, messenger.OutboundMessage{Text: outcome.Reply})
 	}
-	return IncomingResult{Messages: messages}, nil
+	return messenger.IncomingResult{Messages: messages}, nil
 }
 
-func (b *Broker) ResolveIncomingThread(ctx context.Context, msg IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
+func (b *Broker) ResolveIncomingThread(ctx context.Context, msg messenger.IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
 	return b.resolveIncomingThread(ctx, msg, create)
 }
 
-func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
+func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
 	if b.Config == nil {
 		return nil, nil, fmt.Errorf("missing config")
 	}
@@ -159,7 +160,7 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg IncomingMessage,
 	return chatCfg, thread, nil
 }
 
-func (b *Broker) handleIncomingAttachments(ctx context.Context, msg IncomingMessage, attachments []IncomingAttachment) ([]OutboundMessage, error) {
+func (b *Broker) handleIncomingAttachments(ctx context.Context, msg messenger.IncomingMessage, attachments []messenger.IncomingAttachment) ([]messenger.OutboundMessage, error) {
 	if len(attachments) == 0 {
 		return nil, nil
 	}
@@ -185,14 +186,14 @@ func (b *Broker) handleIncomingAttachments(ctx context.Context, msg IncomingMess
 		return nil, err
 	}
 
-	replies := make([]OutboundMessage, 0, len(attachments))
+	replies := make([]messenger.OutboundMessage, 0, len(attachments))
 	for _, attachment := range attachments {
 		filename := safeIncomingFilename(attachment.Filename)
 		targetHost := filepath.Join(inboxHost, filename)
 		if err := os.WriteFile(targetHost, attachment.Content, 0o644); err != nil {
 			return nil, err
 		}
-		replies = append(replies, OutboundMessage{Text: fmt.Sprintf("upload saved: /workspace/inbox/%s", filename)})
+		replies = append(replies, messenger.OutboundMessage{Text: fmt.Sprintf("upload saved: /workspace/inbox/%s", filename)})
 	}
 	return replies, nil
 }

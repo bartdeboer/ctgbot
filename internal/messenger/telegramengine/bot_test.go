@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
@@ -129,9 +130,9 @@ func (f *fakeAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.San
 	return nil
 }
 
-func (f *fakeAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (chatbroker.TurnResult, error) {
+func (f *fakeAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (agent.TurnResult, error) {
 	f.sentPrompt = prompt
-	return chatbroker.TurnResult{Reply: "reply text"}, nil
+	return agent.TurnResult{Reply: "reply text"}, nil
 }
 
 type fakeSandboxManager struct{}

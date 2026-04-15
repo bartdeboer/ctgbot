@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 
-func (b *Broker) SendFile(ctx context.Context, file OutgoingFile) error {
+func (b *Broker) SendFile(ctx context.Context, file messenger.OutgoingFile) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -41,7 +43,7 @@ func (b *Broker) SendFile(ctx context.Context, file OutgoingFile) error {
 		return fmt.Errorf("outbound provider not registered: %s", chatCfg.ProviderType)
 	}
 
-	return provider.SendFile(ctx, ResolvedOutgoingFile{
+	return provider.SendFile(ctx, messenger.ResolvedOutgoingFile{
 		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
 		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
 		Filename:         strings.TrimSpace(file.Filename),

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
@@ -145,11 +146,11 @@ func (b *Broker) purgeSession(ctx context.Context, conv *Thread) error {
 	if err := b.newSandbox(conv).Remove(ctx); err != nil {
 		return err
 	}
-	agent, err := b.agent(conv.AgentProviderType)
+	agentImpl, err := b.agent(conv.AgentProviderType)
 	if err != nil {
 		return err
 	}
-	if purgingAgent, ok := agent.(PurgingAgent); ok && strings.TrimSpace(conv.AgentThreadID) != "" {
+	if purgingAgent, ok := agentImpl.(agent.PurgingAgent); ok && strings.TrimSpace(conv.AgentThreadID) != "" {
 		if err := purgingAgent.Purge(ctx, b.newSandbox(conv), conv.AgentThreadID); err != nil {
 			if b.Sessions != nil {
 				conv.LastError = err.Error()

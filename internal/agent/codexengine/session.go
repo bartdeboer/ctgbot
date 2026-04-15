@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -64,15 +64,15 @@ func (e *SessionExecutor) InstallSkill(ctx context.Context, sbx *sandboxengine.S
 	return nil
 }
 
-func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (chatbroker.TurnResult, error) {
+func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (agent.TurnResult, error) {
 	if e.Config == nil {
-		return chatbroker.TurnResult{}, fmt.Errorf("missing config")
+		return agent.TurnResult{}, fmt.Errorf("missing config")
 	}
 	if sbx == nil {
-		return chatbroker.TurnResult{}, fmt.Errorf("missing sandbox")
+		return agent.TurnResult{}, fmt.Errorf("missing sandbox")
 	}
 	if strings.TrimSpace(prompt) == "" {
-		return chatbroker.TurnResult{}, fmt.Errorf("missing prompt")
+		return agent.TurnResult{}, fmt.Errorf("missing prompt")
 	}
 
 	timeout := e.Config.SessionTimeout()
@@ -83,10 +83,10 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 	}
 
 	if err := (&ImageBuilder{Config: e.Config, Logger: e.Logger}).EnsureImage(ctx); err != nil {
-		return chatbroker.TurnResult{}, err
+		return agent.TurnResult{}, err
 	}
 	if err := sbx.Ensure(ctx); err != nil {
-		return chatbroker.TurnResult{}, err
+		return agent.TurnResult{}, err
 	}
 
 	outputPath := "/tmp/ctgbot-last-message.txt"
@@ -130,21 +130,21 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 
 	if err != nil {
 		if readErr == nil && lastMessage != "" {
-			return chatbroker.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
+			return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
 		}
 		detail := strings.TrimSpace(stderrBuf.String())
 		if detail == "" {
 			detail = strings.TrimSpace(stdoutBuf.String())
 		}
-		return chatbroker.TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
+		return agent.TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
 	}
 	if readErr != nil {
-		return chatbroker.TurnResult{}, fmt.Errorf("read last message: %w", readErr)
+		return agent.TurnResult{}, fmt.Errorf("read last message: %w", readErr)
 	}
 	if lastMessage == "" {
-		return chatbroker.TurnResult{}, fmt.Errorf("codex returned an empty response")
+		return agent.TurnResult{}, fmt.Errorf("codex returned an empty response")
 	}
-	return chatbroker.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, nil
+	return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, nil
 }
 
 func (e *SessionExecutor) logf(format string, args ...any) {

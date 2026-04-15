@@ -44,11 +44,11 @@ func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUp
 			}
 			msg := upd.Message
 			tupd := chatmodel.TelegramUpdate{
-				ChatID:    msg.Chat.ID,
-				ChatTitle: msg.Chat.Title,
-				ThreadID:  msg.MessageThreadID,
-				MessageID: msg.ID,
-				Text:      telegramMessageText(msg),
+				ChatID:      msg.Chat.ID,
+				ChatTitle:   msg.Chat.Title,
+				ThreadID:    msg.MessageThreadID,
+				MessageID:   msg.ID,
+				Text:        telegramMessageText(msg),
 				Attachments: telegramMessageAttachments(msg),
 			}
 			if msg.From != nil {

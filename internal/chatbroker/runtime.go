@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
@@ -14,7 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
-func (b *Broker) prepareRuntime(ctx context.Context, conv *Thread, forceSetup bool) (Agent, *sandboxengine.Sandbox, error) {
+func (b *Broker) prepareRuntime(ctx context.Context, conv *Thread, forceSetup bool) (agent.Agent, *sandboxengine.Sandbox, error) {
 	if err := b.ensureSandboxRuntime(ctx, conv); err != nil {
 		return nil, nil, err
 	}
@@ -38,11 +39,11 @@ func (b *Broker) prepareRuntime(ctx context.Context, conv *Thread, forceSetup bo
 	return agent, sbx, nil
 }
 
-func (b *Broker) installConfiguredSkills(ctx context.Context, chatID modeluuid.UUID, agent Agent, sbx *sandboxengine.Sandbox) error {
-	if b.Config == nil || agent == nil || sbx == nil {
+func (b *Broker) installConfiguredSkills(ctx context.Context, chatID modeluuid.UUID, agentImpl agent.Agent, sbx *sandboxengine.Sandbox) error {
+	if b.Config == nil || agentImpl == nil || sbx == nil {
 		return nil
 	}
-	installer, ok := agent.(SkillInstallingAgent)
+	installer, ok := agentImpl.(agent.SkillInstallingAgent)
 	if !ok {
 		return nil
 	}

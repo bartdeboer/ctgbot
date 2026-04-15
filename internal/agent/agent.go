@@ -1,0 +1,26 @@
+package agent
+
+import (
+	"context"
+
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+)
+
+type TurnResult struct {
+	Reply            string
+	ProviderThreadID string
+}
+
+type Agent interface {
+	Name() string
+	SetupEnvironment(ctx context.Context, sbx *sandboxengine.Sandbox) error
+	HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (TurnResult, error)
+}
+
+type PurgingAgent interface {
+	Purge(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string) error
+}
+
+type SkillInstallingAgent interface {
+	InstallSkill(ctx context.Context, sbx *sandboxengine.Sandbox, skillDir string) error
+}

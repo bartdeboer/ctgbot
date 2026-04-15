@@ -11,13 +11,14 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
-	"github.com/bartdeboer/ctgbot/internal/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/messenger/telegramengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
-	"github.com/bartdeboer/ctgbot/internal/telegramengine"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -68,7 +69,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 				if err != nil {
 					return fmt.Errorf("parse sandbox id: %w", err)
 				}
-				return broker.SendFile(ctx, chatbroker.OutgoingFile{
+				return broker.SendFile(ctx, messenger.OutgoingFile{
 					SandboxID: sandboxID,
 					Filename:  req.Filename,
 					Caption:   req.Caption,
