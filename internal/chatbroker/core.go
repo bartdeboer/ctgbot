@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
@@ -128,4 +129,31 @@ func (b *Broker) logf(format string, args ...any) {
 	if b.Logger != nil {
 		b.Logger.Printf(format, args...)
 	}
+}
+
+func (b *Broker) startThreadChatAction(ctx context.Context, thread *Thread, action messenger.ChatAction) func() {
+	stop := func() {}
+	if b == nil || b.Config == nil || thread == nil || thread.ChatID.IsNull() {
+		return stop
+	}
+	chatCfg, err := b.Config.FindChatByID(thread.ChatID)
+	if err != nil || chatCfg == nil {
+		return stop
+	}
+	provider, ok := b.OutboundProviders[strings.TrimSpace(chatCfg.ProviderType)]
+	if !ok || provider == nil {
+		return stop
+	}
+	stop, err = provider.StartChatAction(ctx, messenger.ChatTarget{
+		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
+		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
+	}, action)
+	if err != nil {
+		b.logf("start chat action failed chat=%s thread=%s action=%q err=%v", chatCfg.ID, thread.ID, action, err)
+		return func() {}
+	}
+	if stop == nil {
+		return func() {}
+	}
+	return stop
 }

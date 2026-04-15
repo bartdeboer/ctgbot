@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
+	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
@@ -213,6 +214,9 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 			b.logf("stop conversation sandbox %s failed: %v", conv.ContainerName(b.Config), stopErr)
 		}
 	}()
+
+	stopTyping := b.startThreadChatAction(ctx, conv, messenger.ChatActionTyping)
+	defer stopTyping()
 
 	result, runErr := agent.HandleTurn(ctx, sbx, conv.AgentThreadID, prompt)
 	if result.ProviderThreadID != "" {

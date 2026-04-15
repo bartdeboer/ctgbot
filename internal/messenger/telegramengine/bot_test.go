@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
+	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
@@ -51,9 +52,16 @@ type sentDocument struct {
 	content  []byte
 }
 
+type sentChatAction struct {
+	chatID   int64
+	threadID int
+	action   messenger.ChatAction
+}
+
 type fakeTelegramAPI struct {
 	messages  []sentMessage
 	documents []sentDocument
+	actions   []sentChatAction
 	downloads map[string][]byte
 }
 
@@ -82,11 +90,50 @@ func (f *fakeTelegramAPI) SendDocument(ctx context.Context, chatID int64, thread
 	return nil
 }
 
+func (f *fakeTelegramAPI) SendChatAction(ctx context.Context, chatID int64, threadID int, action messenger.ChatAction) error {
+	f.actions = append(f.actions, sentChatAction{
+		chatID:   chatID,
+		threadID: threadID,
+		action:   action,
+	})
+	return nil
+}
+
 func (f *fakeTelegramAPI) DownloadFile(ctx context.Context, fileID string) ([]byte, error) {
 	if data, ok := f.downloads[fileID]; ok {
 		return append([]byte(nil), data...), nil
 	}
 	return nil, fmt.Errorf("file not found: %s", fileID)
+}
+
+func TestStartChatActionSendsAndStopsHeartbeat(t *testing.T) {
+	prevInterval := chatActionRefreshInterval
+	chatActionRefreshInterval = 10 * time.Millisecond
+	t.Cleanup(func() {
+		chatActionRefreshInterval = prevInterval
+	})
+
+	api := &fakeTelegramAPI{}
+	tb := &TelegramBot{API: api}
+
+	stop, err := tb.StartChatAction(context.Background(), messenger.ChatTarget{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+	}, messenger.ChatActionTyping)
+	if err != nil {
+		t.Fatalf("StartChatAction: %v", err)
+	}
+	time.Sleep(25 * time.Millisecond)
+	stop()
+	count := len(api.actions)
+	if count < 2 {
+		t.Fatalf("expected repeated chat actions, got %d", count)
+	}
+	for _, action := range api.actions {
+		if action.chatID != 42 || action.threadID != 7 || action.action != messenger.ChatActionTyping {
+			t.Fatalf("unexpected action: %+v", action)
+		}
+	}
 }
 
 type fakeSessionStore struct {

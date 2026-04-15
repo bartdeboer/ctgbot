@@ -38,6 +38,8 @@ func TestBuildSendFileRequest(t *testing.T) {
 }
 
 func TestBuildSendFileRequestRequiresRuntimeIdentity(t *testing.T) {
+	t.Setenv("CTGBOT_SANDBOX_ID", "")
+
 	path := filepath.Join(t.TempDir(), "report.pdf")
 	if err := os.WriteFile(path, []byte("hello"), 0644); err != nil {
 		t.Fatalf("write file: %v", err)

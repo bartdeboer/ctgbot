@@ -37,6 +37,18 @@ type OutboundMessage struct {
 	Text string
 }
 
+type ChatAction string
+
+const (
+	ChatActionTyping         ChatAction = "typing"
+	ChatActionUploadDocument ChatAction = "upload_document"
+)
+
+type ChatTarget struct {
+	ProviderChatID   string
+	ProviderThreadID string
+}
+
 type IncomingResult struct {
 	Messages []OutboundMessage
 }
@@ -71,4 +83,5 @@ type OutboundChatProvider interface {
 	ProviderType() string
 	SendText(ctx context.Context, msg ResolvedOutgoingMessage) error
 	SendFile(ctx context.Context, file ResolvedOutgoingFile) error
+	StartChatAction(ctx context.Context, target ChatTarget, action ChatAction) (func(), error)
 }

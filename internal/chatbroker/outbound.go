@@ -43,6 +43,19 @@ func (b *Broker) SendFile(ctx context.Context, file messenger.OutgoingFile) erro
 		return fmt.Errorf("outbound provider not registered: %s", chatCfg.ProviderType)
 	}
 
+	stopUpload, err := provider.StartChatAction(ctx, messenger.ChatTarget{
+		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
+		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
+	}, messenger.ChatActionUploadDocument)
+	if err != nil {
+		b.logf("start file upload chat action failed chat=%s thread=%s err=%v", chatCfg.ID, thread.ID, err)
+		stopUpload = func() {}
+	}
+	if stopUpload == nil {
+		stopUpload = func() {}
+	}
+	defer stopUpload()
+
 	return provider.SendFile(ctx, messenger.ResolvedOutgoingFile{
 		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
 		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),

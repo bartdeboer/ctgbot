@@ -6,6 +6,8 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
@@ -20,6 +22,8 @@ type TelegramBot struct {
 	Config  *appstate.Config
 	Logger  *log.Logger
 }
+
+var chatActionRefreshInterval = 4 * time.Second
 
 func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, cfg *appstate.Config, logger *log.Logger) *TelegramBot {
 	return &TelegramBot{
@@ -56,6 +60,49 @@ func (tb *TelegramBot) SendFile(ctx context.Context, file messenger.ResolvedOutg
 		return err
 	}
 	return tb.API.SendDocument(ctx, chatID, threadID, file.Filename, file.Caption, file.Content)
+}
+
+func (tb *TelegramBot) StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error) {
+	chatID, err := strconv.ParseInt(strings.TrimSpace(target.ProviderChatID), 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse telegram chat id: %w", err)
+	}
+	threadID, err := parseTelegramProviderThreadID(target.ProviderThreadID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tb.API.SendChatAction(ctx, chatID, threadID, action); err != nil {
+		return nil, err
+	}
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	ticker := time.NewTicker(chatActionRefreshInterval)
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			ticker.Stop()
+			cancel()
+		})
+	}
+
+	go func() {
+		defer stop()
+		for {
+			select {
+			case <-runCtx.Done():
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := tb.API.SendChatAction(runCtx, chatID, threadID, action); err != nil {
+					tb.logf("telegram chat action failed chat=%d thread=%d action=%q err=%v", chatID, threadID, action, err)
+					return
+				}
+			}
+		}
+	}()
+
+	return stop, nil
 }
 
 func (tb *TelegramBot) AutoMigrate(ctx context.Context) error {

@@ -251,6 +251,64 @@ func TestHandleIncomingMessageRunsQuitCommand(t *testing.T) {
 	}
 }
 
+func TestHandleIncomingMessageStartsTypingChatAction(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+
+	sessions := &fakeBrokerSessionStore{}
+	provider := &fakeOutboundBrokerProvider{}
+	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker.RegisterAgent("codex", fakeBrokerAgent{})
+	broker.RegisterOutboundChatProvider("telegram", provider)
+
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Message:          "hello",
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if len(result.Messages) != 2 {
+		t.Fatalf("messages len = %d, want 2", len(result.Messages))
+	}
+	if !reflect.DeepEqual(provider.actions, []messenger.ChatAction{messenger.ChatActionTyping}) {
+		t.Fatalf("actions = %#v", provider.actions)
+	}
+	if !reflect.DeepEqual(provider.stoppedActions, []messenger.ChatAction{messenger.ChatActionTyping}) {
+		t.Fatalf("stopped actions = %#v", provider.stoppedActions)
+	}
+	if len(provider.actionTargets) != 1 {
+		t.Fatalf("action targets len = %d, want 1", len(provider.actionTargets))
+	}
+	if provider.actionTargets[0].ProviderChatID != "42" || provider.actionTargets[0].ProviderThreadID != "7" {
+		t.Fatalf("unexpected action target: %+v", provider.actionTargets[0])
+	}
+}
+
 func TestHandleIncomingMessageBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
@@ -760,6 +818,18 @@ func TestBrokerSendFileRoutesToOutboundProvider(t *testing.T) {
 	if string(provider.file.Content) != "hello" {
 		t.Fatalf("unexpected outbound content: %q", string(provider.file.Content))
 	}
+	if !reflect.DeepEqual(provider.actions, []messenger.ChatAction{messenger.ChatActionUploadDocument}) {
+		t.Fatalf("actions = %#v", provider.actions)
+	}
+	if !reflect.DeepEqual(provider.stoppedActions, []messenger.ChatAction{messenger.ChatActionUploadDocument}) {
+		t.Fatalf("stopped actions = %#v", provider.stoppedActions)
+	}
+	if len(provider.actionTargets) != 1 {
+		t.Fatalf("action targets len = %d, want 1", len(provider.actionTargets))
+	}
+	if provider.actionTargets[0].ProviderChatID != "42" || provider.actionTargets[0].ProviderThreadID != "7" {
+		t.Fatalf("unexpected action target: %+v", provider.actionTargets[0])
+	}
 }
 
 type fakeBrokerSessionStore struct {
@@ -821,7 +891,7 @@ func (fakeBrokerAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.
 }
 
 func (fakeBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (agent.TurnResult, error) {
-	return agent.TurnResult{}, nil
+	return agent.TurnResult{Reply: "reply text"}, nil
 }
 
 type fakePurgingBrokerAgent struct {
@@ -847,7 +917,10 @@ func (f *fakeSkillInstallingBrokerAgent) InstallSkill(ctx context.Context, sbx *
 }
 
 type fakeOutboundBrokerProvider struct {
-	file *messenger.ResolvedOutgoingFile
+	file           *messenger.ResolvedOutgoingFile
+	actions        []messenger.ChatAction
+	actionTargets  []messenger.ChatTarget
+	stoppedActions []messenger.ChatAction
 }
 
 func (f *fakeOutboundBrokerProvider) ProviderType() string { return "telegram" }
@@ -861,4 +934,12 @@ func (f *fakeOutboundBrokerProvider) SendFile(ctx context.Context, file messenge
 	copyFile.Content = append([]byte(nil), file.Content...)
 	f.file = &copyFile
 	return nil
+}
+
+func (f *fakeOutboundBrokerProvider) StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error) {
+	f.actions = append(f.actions, action)
+	f.actionTargets = append(f.actionTargets, target)
+	return func() {
+		f.stoppedActions = append(f.stoppedActions, action)
+	}, nil
 }

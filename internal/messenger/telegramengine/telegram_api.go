@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
+	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
@@ -115,6 +116,20 @@ func (a *TelegramAPIV2) SendDocument(ctx context.Context, chatID int64, threadID
 		Caption: strings.TrimSpace(caption),
 	}
 	_, err := b.SendDocument(ctx, p)
+	return err
+}
+
+func (a *TelegramAPIV2) SendChatAction(ctx context.Context, chatID int64, threadID int, action messenger.ChatAction) error {
+	b := a.getBot()
+	if b == nil {
+		return fmt.Errorf("telegram bot not initialized")
+	}
+	p := &bot.SendChatActionParams{
+		ChatID:          chatID,
+		MessageThreadID: threadID,
+		Action:          models.ChatAction(action),
+	}
+	_, err := b.SendChatAction(ctx, p)
 	return err
 }
 
