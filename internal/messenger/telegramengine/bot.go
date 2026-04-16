@@ -121,9 +121,13 @@ func (tb *TelegramBot) Run(ctx context.Context, onUpdate func(context.Context, m
 	if err := tb.Config.EnsurePaths(); err != nil {
 		return err
 	}
-	return tb.API.Run(ctx, tb.Config.PollTimeout(), func(cbCtx context.Context, u chatmodel.TelegramUpdate) {
+	handler := func(cbCtx context.Context, u chatmodel.TelegramUpdate) {
 		tb.handleUpdate(cbCtx, u, onUpdate)
-	})
+	}
+	if window := tb.Config.TelegramDebounceWindow(); window > 0 {
+		return NewDebouncer(window, tb.Logger, handler).Run(ctx, tb.API, tb.Config.PollTimeout())
+	}
+	return tb.API.Run(ctx, tb.Config.PollTimeout(), handler)
 }
 
 func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpdate, onUpdate func(context.Context, messenger.IncomingUpdate) (messenger.IncomingResult, error)) {
@@ -138,9 +142,9 @@ func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpd
 			tb.logf("persisting telegram event failed (chat=%d msg=%d): %v", u.ChatID, u.MessageID, err)
 		}
 	}
+
 	ctx = context.WithValue(ctx, tgEventKey{}, &event)
 	defer tb.persistEvent(ctx)
-
 	if err := tb.handleUpdateSerialized(ctx, u, text, onUpdate); err != nil {
 		tb.recordEventError(ctx, err)
 		tb.logf("telegram update handling failed chat=%d thread=%d msg=%d err=%v", u.ChatID, u.ThreadID, u.MessageID, err)

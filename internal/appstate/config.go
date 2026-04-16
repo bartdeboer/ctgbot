@@ -214,6 +214,17 @@ func (c *Config) PollTimeout() time.Duration {
 	return time.Duration(sec) * time.Second
 }
 
+func (c *Config) TelegramDebounceWindow() time.Duration {
+	ms := 800
+	if c != nil && c.Store != nil {
+		ms = c.Store.GetInt("telegram.defaults.debounce_ms", ms)
+	}
+	if ms <= 0 {
+		return 0
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
 func (c *Config) SessionTimeout() time.Duration {
 	minutes := 10
 	if c.Store != nil {

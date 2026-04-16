@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -166,20 +168,41 @@ func (f *fakeSessionStore) SaveThread(ctx context.Context, thread *chatbroker.Th
 }
 
 type fakeAgent struct {
+	mu          sync.Mutex
 	sentPrompt  string
+	prompts     []string
 	setupCalled bool
 }
 
 func (f *fakeAgent) Name() string { return "codex" }
 
 func (f *fakeAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.Sandbox) error {
+	f.mu.Lock()
 	f.setupCalled = true
+	f.mu.Unlock()
 	return nil
 }
 
 func (f *fakeAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (agent.TurnResult, error) {
+	f.mu.Lock()
 	f.sentPrompt = prompt
+	f.prompts = append(f.prompts, prompt)
+	f.mu.Unlock()
 	return agent.TurnResult{Reply: "reply text"}, nil
+}
+
+func (f *fakeAgent) PromptCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.prompts)
+}
+
+func (f *fakeAgent) PromptSnapshot() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]string, len(f.prompts))
+	copy(out, f.prompts)
+	return out
 }
 
 type fakeSandboxManager struct{}
@@ -458,5 +481,187 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 	}
 	if api.messages[0].text != "upload saved: /workspace/inbox/photo-101.jpg" {
 		t.Fatalf("unexpected first message: %q", api.messages[0].text)
+	}
+}
+
+func waitForCondition(t *testing.T, timeout time.Duration, fn func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		if fn() {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("condition not met within %v", timeout)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestHandleUpdateDebouncesSlidingPrompt(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistInt("telegram.defaults.debounce_ms", 40); err != nil {
+		t.Fatalf("persist debounce: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true)
+
+	api := &fakeTelegramAPI{}
+	sessions := &fakeSessionStore{}
+	agent := &fakeAgent{}
+	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	broker.RegisterAgent("codex", agent)
+	tb := &TelegramBot{API: api, Config: cfg}
+	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u chatmodel.TelegramUpdate) {
+		tb.handleUpdate(ctx, u, broker.HandleIncomingUpdate)
+	})
+
+	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+		ChatID: 42, ThreadID: 7, MessageID: 100, UserID: 1, Text: "hello",
+	})
+
+	time.Sleep(25 * time.Millisecond)
+	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+		ChatID: 42, ThreadID: 7, MessageID: 101, UserID: 1, Text: "world",
+	})
+
+	time.Sleep(25 * time.Millisecond)
+	if got := agent.PromptCount(); got != 0 {
+		t.Fatalf("prompt count after timer reset = %d, want 0", got)
+	}
+
+	waitForCondition(t, time.Second, func() bool { return agent.PromptCount() == 1 })
+	prompts := agent.PromptSnapshot()
+	if len(prompts) != 1 || prompts[0] != "hello\n\nworld" {
+		t.Fatalf("prompts = %#v, want merged prompt", prompts)
+	}
+}
+
+func TestHandleUpdateDebounceSeparatesUsers(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistInt("telegram.defaults.debounce_ms", 20); err != nil {
+		t.Fatalf("persist debounce: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true)
+
+	api := &fakeTelegramAPI{}
+	sessions := &fakeSessionStore{}
+	agent := &fakeAgent{}
+	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	broker.RegisterAgent("codex", agent)
+	tb := &TelegramBot{API: api, Config: cfg}
+	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u chatmodel.TelegramUpdate) {
+		tb.handleUpdate(ctx, u, broker.HandleIncomingUpdate)
+	})
+
+	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+		ChatID: 42, ThreadID: 7, MessageID: 100, UserID: 1, Text: "from alice",
+	})
+	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+		ChatID: 42, ThreadID: 7, MessageID: 101, UserID: 2, Text: "from bob",
+	})
+
+	waitForCondition(t, time.Second, func() bool { return agent.PromptCount() == 2 })
+	prompts := agent.PromptSnapshot()
+	seen := map[string]bool{}
+	for _, prompt := range prompts {
+		seen[prompt] = true
+	}
+	if !seen["from alice"] || !seen["from bob"] {
+		t.Fatalf("prompts = %#v, want separate per-user prompts", prompts)
+	}
+}
+
+func TestHandleUpdateCommandFlushesPendingDebounce(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistInt("telegram.defaults.debounce_ms", 200); err != nil {
+		t.Fatalf("persist debounce: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true)
+
+	api := &fakeTelegramAPI{}
+	sessions := &fakeSessionStore{}
+	agent := &fakeAgent{}
+	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	broker.RegisterAgent("codex", agent)
+	tb := &TelegramBot{API: api, Config: cfg}
+	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u chatmodel.TelegramUpdate) {
+		tb.handleUpdate(ctx, u, broker.HandleIncomingUpdate)
+	})
+
+	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+		ChatID: 42, ThreadID: 7, MessageID: 100, UserID: 1, Text: "please review",
+	})
+	if got := agent.PromptCount(); got != 0 {
+		t.Fatalf("prompt count before command = %d, want 0", got)
+	}
+
+	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+		ChatID: 42, ThreadID: 7, MessageID: 101, UserID: 1, Text: "/help",
+	})
+
+	waitForCondition(t, time.Second, func() bool { return agent.PromptCount() == 1 })
+	prompts := agent.PromptSnapshot()
+	if len(prompts) != 1 || prompts[0] != "please review" {
+		t.Fatalf("prompts = %#v, want flushed prompt before command", prompts)
+	}
+	if len(api.messages) == 0 || !strings.HasPrefix(api.messages[len(api.messages)-1].text, "Commands:\n/new") {
+		t.Fatalf("last message = %#v, want help text", api.messages)
 	}
 }
