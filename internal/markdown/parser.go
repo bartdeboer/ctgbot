@@ -1,5 +1,7 @@
 package markdown
 
+import "strings"
+
 type Parser struct {
 	lx  *Lexer
 	cur Token
@@ -68,7 +70,30 @@ func (p *Parser) parseParagraphLine() *LineNode {
 		end = p.cur.Span.End
 		p.advance()
 	}
-	return &LineNode{StartPos: start, EndPos: end, Spans: parseInlineTokens(tokens)}
+	headingLevel, tokens := detectHeadingTokens(tokens)
+	return &LineNode{StartPos: start, EndPos: end, HeadingLevel: headingLevel, Spans: parseInlineTokens(tokens)}
+}
+
+func detectHeadingTokens(tokens []Token) (int, []Token) {
+	if len(tokens) == 0 || tokens[0].Kind != TokenText {
+		return 0, tokens
+	}
+	text := tokens[0].Text
+	level := 0
+	rest := ""
+	switch {
+	case strings.HasPrefix(text, "### "):
+		level, rest = 3, text[4:]
+	case strings.HasPrefix(text, "## "):
+		level, rest = 2, text[3:]
+	case strings.HasPrefix(text, "# "):
+		level, rest = 1, text[2:]
+	default:
+		return 0, tokens
+	}
+	cloned := append([]Token(nil), tokens...)
+	cloned[0].Text = rest
+	return level, cloned
 }
 
 func (p *Parser) parseCodeBlock() *BlockNode {

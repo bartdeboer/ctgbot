@@ -229,8 +229,9 @@ func (tb *TelegramBot) sendRenderedText(ctx context.Context, chatID int64, threa
 		}
 		return nil
 	}
-	for _, chunkDoc := range doc.Chunked(3500) {
-		if err := tb.sendDocumentChunk(ctx, chatID, threadID, replyTo, chunkDoc); err != nil {
+	chunkDocs := doc.Chunked(3500)
+	for i, chunkDoc := range chunkDocs {
+		if err := tb.sendDocumentChunk(ctx, chatID, threadID, replyTo, chunkDoc, i+1, len(chunkDocs)); err != nil {
 			return err
 		}
 	}
@@ -243,12 +244,13 @@ type telegramRenderAttempt struct {
 	name      string
 }
 
-func (tb *TelegramBot) sendPlainChunk(ctx context.Context, chatID int64, threadID int, replyTo int, doc *markdown.Document) error {
-	for _, plainDoc := range doc.Chunked(3500) {
+func (tb *TelegramBot) sendPlainChunk(ctx context.Context, chatID int64, threadID int, replyTo int, doc *markdown.Document, chunkIndex int, chunkCount int) error {
+	for i, plainDoc := range doc.Chunked(3500) {
 		text, err := plainDoc.Render(markdown.RenderOptions{Format: markdown.RenderPlain})
 		if err != nil {
 			return err
 		}
+		tb.logf("telegram chunk %d/%d using plain fallback segment %d preview=%q", chunkIndex, chunkCount, i+1, telegramPreview(text))
 		if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, text, ""); err != nil {
 			return err
 		}
@@ -256,27 +258,40 @@ func (tb *TelegramBot) sendPlainChunk(ctx context.Context, chatID int64, threadI
 	return nil
 }
 
-func (tb *TelegramBot) sendDocumentChunk(ctx context.Context, chatID int64, threadID int, replyTo int, doc *markdown.Document) error {
+func (tb *TelegramBot) sendDocumentChunk(ctx context.Context, chatID int64, threadID int, replyTo int, doc *markdown.Document, chunkIndex int, chunkCount int) error {
 	attempts := tb.telegramRenderAttempts()
 	for i, attempt := range attempts {
 		text, err := doc.Render(markdown.RenderOptions{Format: attempt.format})
 		if err != nil {
-			tb.logf("telegram %s render failed, trying fallback: %v", attempt.name, err)
+			tb.logf("telegram chunk %d/%d %s render failed, trying fallback: %v", chunkIndex, chunkCount, attempt.name, err)
 			continue
 		}
 		if telegramTextLen(text) > 3500 {
-			return tb.sendPlainChunk(ctx, chatID, threadID, replyTo, doc)
+			tb.logf("telegram chunk %d/%d %s too long len=%d preview=%q, falling back to plain", chunkIndex, chunkCount, attempt.name, telegramTextLen(text), telegramPreview(text))
+			return tb.sendPlainChunk(ctx, chatID, threadID, replyTo, doc, chunkIndex, chunkCount)
 		}
 		if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, text, attempt.parseMode); err != nil {
 			if attempt.parseMode != "" && isTelegramFormattingError(err) && i < len(attempts)-1 {
-				tb.logf("telegram %s send failed, trying fallback: %v", attempt.name, err)
+				tb.logf("telegram chunk %d/%d %s send failed, trying fallback: %v preview=%q", chunkIndex, chunkCount, attempt.name, err, telegramPreview(text))
 				continue
 			}
 			return err
 		}
+		if i > 0 {
+			tb.logf("telegram chunk %d/%d sent with fallback format=%s preview=%q", chunkIndex, chunkCount, attempt.name, telegramPreview(text))
+		}
 		return nil
 	}
 	return fmt.Errorf("no telegram render mode succeeded")
+}
+
+func telegramPreview(text string) string {
+	text = strings.ReplaceAll(strings.TrimSpace(text), "\n", " ")
+	if telegramTextLen(text) <= 80 {
+		return text
+	}
+	r := []rune(text)
+	return string(r[:80]) + "…"
 }
 func (tb *TelegramBot) telegramRenderAttempts() []telegramRenderAttempt {
 	preferred := telegramRenderAttempt{format: markdown.RenderPlain, parseMode: "", name: "plain"}

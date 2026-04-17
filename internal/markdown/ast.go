@@ -40,9 +40,10 @@ type BlockNode struct {
 }
 
 type LineNode struct {
-	StartPos Position    `json:"start_pos"`
-	EndPos   Position    `json:"end_pos"`
-	Spans    []*SpanNode `json:"spans,omitempty"`
+	StartPos     Position    `json:"start_pos"`
+	EndPos       Position    `json:"end_pos"`
+	HeadingLevel int         `json:"heading_level,omitempty"`
+	Spans        []*SpanNode `json:"spans,omitempty"`
 }
 
 type SpanNode struct {
@@ -111,6 +112,9 @@ func (l *LineNode) Size() int {
 		return 0
 	}
 	total := 0
+	if l.HeadingLevel > 0 {
+		total += l.HeadingLevel + 1
+	}
 	for _, span := range l.Spans {
 		total += span.Size()
 	}
@@ -206,7 +210,7 @@ func CloneLine(line *LineNode) *LineNode {
 	if line == nil {
 		return nil
 	}
-	out := &LineNode{StartPos: line.StartPos, EndPos: line.EndPos}
+	out := &LineNode{StartPos: line.StartPos, EndPos: line.EndPos, HeadingLevel: line.HeadingLevel}
 	if len(line.Spans) > 0 {
 		out.Spans = make([]*SpanNode, 0, len(line.Spans))
 		for _, span := range line.Spans {

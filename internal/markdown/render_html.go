@@ -44,7 +44,11 @@ func renderHTMLLine(line *LineNode) string {
 	for _, span := range line.Spans {
 		b.WriteString(renderHTMLSpan(span))
 	}
-	return b.String()
+	text := b.String()
+	if line.HeadingLevel > 0 {
+		return "<b>" + text + "</b>"
+	}
+	return text
 }
 
 func renderHTMLSpan(span *SpanNode) string {

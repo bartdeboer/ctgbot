@@ -64,3 +64,17 @@ func TestDocumentGetLinesAndLineSlice(t *testing.T) {
 		t.Fatalf("sliced line counts = %d,%d want 1,1", len(sliced.Blocks[0].Lines), len(sliced.Blocks[1].Lines))
 	}
 }
+
+func TestParseDetectsHeadingLines(t *testing.T) {
+	doc, err := Parse("## Quick take\nNormal line")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	line := doc.Blocks[0].Lines[0]
+	if line.HeadingLevel != 2 {
+		t.Fatalf("heading level = %d, want 2", line.HeadingLevel)
+	}
+	if got := renderTextLine(line); got != "## Quick take" {
+		t.Fatalf("rendered line = %q", got)
+	}
+}

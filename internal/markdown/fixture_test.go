@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"unicode/utf8"
 )
 
 func loadFixture(t *testing.T, name string) string {
@@ -73,5 +74,24 @@ func TestFixturesRenderAcrossFormats(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestReplyDiffsFirstChunkRenderedUnderTelegramLimit(t *testing.T) {
+	doc, err := Parse(loadFixture(t, "reply_diffs.md"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	chunks := doc.Chunked(3500)
+	if len(chunks) == 0 {
+		t.Fatalf("Chunked returned no chunks")
+	}
+	first := chunks[0]
+	got, err := first.Render(RenderOptions{Format: RenderMarkdownV2})
+	if err != nil {
+		t.Fatalf("Render markdown: %v", err)
+	}
+	if n := utf8.RuneCountInString(got); n > 4096 {
+		t.Fatalf("first chunk markdown length = %d, want <= 4096", n)
 	}
 }

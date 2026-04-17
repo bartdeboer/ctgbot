@@ -49,6 +49,10 @@ func renderTextLine(line *LineNode) string {
 		return ""
 	}
 	var b strings.Builder
+	if line.HeadingLevel > 0 {
+		b.WriteString(strings.Repeat("#", line.HeadingLevel))
+		b.WriteString(" ")
+	}
 	for _, span := range line.Spans {
 		b.WriteString(renderTextSpan(span))
 	}
