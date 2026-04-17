@@ -16,7 +16,7 @@ func renderTextDocument(doc *Document) string {
 		}
 		parts = append(parts, renderTextBlock(block))
 	}
-	return strings.Join(parts, "\n\n")
+	return strings.TrimRight(strings.Join(parts, "\n"), "\n")
 }
 
 func renderTextBlock(block *BlockNode) string {
@@ -32,7 +32,7 @@ func renderTextBlock(block *BlockNode) string {
 		}
 		return "```" + info + "\n" + body + "\n```"
 	default:
-		return renderTextLines(block.Lines)
+		return renderTextLines(block.Lines) + "\n"
 	}
 }
 
@@ -138,11 +138,4 @@ func byteIndexAtRuneLimit(text string, limit int) int {
 		count++
 	}
 	return len(text)
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

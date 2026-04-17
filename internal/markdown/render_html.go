@@ -16,7 +16,7 @@ func renderHTMLDocument(doc *Document) string {
 		}
 		parts = append(parts, renderHTMLBlock(block))
 	}
-	return strings.Join(parts, "\n\n")
+	return strings.TrimRight(strings.Join(parts, "\n"), "\n")
 }
 
 func renderHTMLBlock(block *BlockNode) string {
@@ -24,7 +24,7 @@ func renderHTMLBlock(block *BlockNode) string {
 	case CodeBlock:
 		return wrapHTMLCodeBlock(renderHTMLLines(block.Lines))
 	default:
-		return renderHTMLLines(block.Lines)
+		return renderHTMLLines(block.Lines) + "\n"
 	}
 }
 

@@ -13,7 +13,7 @@ func renderMarkdownDocument(doc *Document) string {
 		}
 		parts = append(parts, renderMarkdownBlock(block))
 	}
-	return strings.Join(parts, "\n\n")
+	return strings.TrimRight(strings.Join(parts, "\n"), "\n")
 }
 
 func renderMarkdownBlock(block *BlockNode) string {
@@ -26,7 +26,7 @@ func renderMarkdownBlock(block *BlockNode) string {
 		}
 		return wrapMarkdownCodeBlock(body, info)
 	default:
-		return renderMarkdownLines(block.Lines)
+		return renderMarkdownLines(block.Lines) + "\n"
 	}
 }
 
