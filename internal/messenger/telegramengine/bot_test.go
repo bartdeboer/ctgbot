@@ -897,3 +897,49 @@ func TestTelegramBotSendTextDoesNotFallbackOnNonFormattingError(t *testing.T) {
 		t.Fatalf("messages = %#v, want no fallback success messages", api.messages)
 	}
 }
+
+func TestTelegramBotSendTextAllowsRenderedTextAboveSemanticChunkLimit(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistString("telegram.defaults.render_format", "markdown"); err != nil {
+		t.Fatalf("persist render format: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	api := &fakeTelegramAPI{}
+	tb := &TelegramBot{API: api, Config: cfg}
+	text := strings.Repeat("a", 3190) + strings.Repeat(".", 300)
+	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             text,
+	}); err != nil {
+		t.Fatalf("SendText: %v", err)
+	}
+	if len(api.messages) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(api.messages))
+	}
+	if api.messages[0].parseMode != "MarkdownV2" {
+		t.Fatalf("parse mode = %q, want MarkdownV2", api.messages[0].parseMode)
+	}
+	if n := telegramTextLen(api.messages[0].text); n <= 3500 || n > 4096 {
+		t.Fatalf("rendered len = %d, want > 3500 and <= 4096", n)
+	}
+}

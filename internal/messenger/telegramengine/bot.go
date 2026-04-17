@@ -27,6 +27,11 @@ type TelegramBot struct {
 
 var chatActionRefreshInterval = 4 * time.Second
 
+const (
+	telegramSemanticChunkSize = 3500
+	telegramMessageMax        = 4096
+)
+
 func NewTelegramBot(api TelegramAPI, updates *UpdateStorage, cfg *appstate.Config, logger *log.Logger) *TelegramBot {
 	return &TelegramBot{
 		API:     api,
@@ -222,14 +227,14 @@ func (tb *TelegramBot) sendRenderedText(ctx context.Context, chatID int64, threa
 	doc, err := markdown.Parse(text)
 	if err != nil {
 		tb.logf("telegram markdown parse failed, falling back to plain split: %v", err)
-		for _, chunk := range splitTelegramText(text, 3500) {
+		for _, chunk := range splitTelegramText(text, telegramSemanticChunkSize) {
 			if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, chunk, ""); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
-	chunkDocs := doc.Chunked(3500)
+	chunkDocs := doc.Chunked(telegramSemanticChunkSize)
 	for i, chunkDoc := range chunkDocs {
 		if err := tb.sendDocumentChunk(ctx, chatID, threadID, replyTo, chunkDoc, i+1, len(chunkDocs)); err != nil {
 			return err
@@ -245,7 +250,7 @@ type telegramRenderAttempt struct {
 }
 
 func (tb *TelegramBot) sendPlainChunk(ctx context.Context, chatID int64, threadID int, replyTo int, doc *markdown.Document, chunkIndex int, chunkCount int) error {
-	for i, plainDoc := range doc.Chunked(3500) {
+	for i, plainDoc := range doc.Chunked(telegramSemanticChunkSize) {
 		text, err := plainDoc.Render(markdown.RenderOptions{Format: markdown.RenderPlain})
 		if err != nil {
 			return err
@@ -266,8 +271,8 @@ func (tb *TelegramBot) sendDocumentChunk(ctx context.Context, chatID int64, thre
 			tb.logf("telegram chunk %d/%d %s render failed, trying fallback: %v", chunkIndex, chunkCount, attempt.name, err)
 			continue
 		}
-		if telegramTextLen(text) > 3500 {
-			tb.logf("telegram chunk %d/%d %s too long len=%d preview=%q, falling back to plain", chunkIndex, chunkCount, attempt.name, telegramTextLen(text), telegramPreview(text))
+		if telegramTextLen(text) > telegramMessageMax {
+			tb.logf("telegram chunk %d/%d %s exceeds telegram max len=%d preview=%q, falling back to plain", chunkIndex, chunkCount, attempt.name, telegramTextLen(text), telegramPreview(text))
 			return tb.sendPlainChunk(ctx, chatID, threadID, replyTo, doc, chunkIndex, chunkCount)
 		}
 		if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, text, attempt.parseMode); err != nil {
