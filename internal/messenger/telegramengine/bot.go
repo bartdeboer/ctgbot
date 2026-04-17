@@ -12,7 +12,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
-	markdown "github.com/bartdeboer/ctgbot/internal/markdownv5"
+	markdown "github.com/bartdeboer/ctgbot/internal/markdown"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 

@@ -1,4 +1,4 @@
-package markdownv5
+package markdown
 
 import "testing"
 

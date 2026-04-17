@@ -1,4 +1,4 @@
-package markdownv5
+package markdown
 
 func (d *Document) Chunked(chunkSize int) []*Document {
 	if d == nil {
