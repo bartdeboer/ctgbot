@@ -75,6 +75,15 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 					Caption:   req.Caption,
 					Content:   req.Content,
 				})
+			}, func(ctx context.Context, req hostbridge.SendTextRequest) error {
+				sandboxID, err := modeluuid.Parse(strings.TrimSpace(req.SandboxID))
+				if err != nil {
+					return fmt.Errorf("parse sandbox id: %w", err)
+				}
+				return broker.SendText(ctx, messenger.OutgoingMessage{
+					SandboxID: sandboxID,
+					Text:      req.Text,
+				})
 			})
 
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)

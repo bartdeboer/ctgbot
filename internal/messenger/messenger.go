@@ -53,6 +53,11 @@ type IncomingResult struct {
 	Messages []OutboundMessage
 }
 
+type OutgoingMessage struct {
+	SandboxID modeluuid.UUID
+	Text      string
+}
+
 type OutgoingFile struct {
 	SandboxID modeluuid.UUID
 	Filename  string
