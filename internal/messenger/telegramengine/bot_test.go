@@ -40,10 +40,11 @@ func ensureTelegramChat(t *testing.T, cfg *appstate.Config, providerChatID int64
 }
 
 type sentMessage struct {
-	chatID   int64
-	threadID int
-	replyTo  int
-	text     string
+	chatID    int64
+	threadID  int
+	replyTo   int
+	text      string
+	parseMode string
 }
 
 type sentDocument struct {
@@ -61,22 +62,27 @@ type sentChatAction struct {
 }
 
 type fakeTelegramAPI struct {
-	messages  []sentMessage
-	documents []sentDocument
-	actions   []sentChatAction
-	downloads map[string][]byte
+	messages        []sentMessage
+	documents       []sentDocument
+	actions         []sentChatAction
+	downloads       map[string][]byte
+	failByParseMode map[string]error
 }
 
 func (f *fakeTelegramAPI) Run(ctx context.Context, _ time.Duration, _ func(context.Context, chatmodel.TelegramUpdate)) error {
 	return nil
 }
 
-func (f *fakeTelegramAPI) SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string) error {
+func (f *fakeTelegramAPI) SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string, parseMode string) error {
+	if err, ok := f.failByParseMode[parseMode]; ok {
+		return err
+	}
 	f.messages = append(f.messages, sentMessage{
-		chatID:   chatID,
-		threadID: threadID,
-		replyTo:  replyTo,
-		text:     text,
+		chatID:    chatID,
+		threadID:  threadID,
+		replyTo:   replyTo,
+		text:      text,
+		parseMode: parseMode,
 	})
 	return nil
 }
@@ -663,5 +669,95 @@ func TestHandleUpdateCommandFlushesPendingDebounce(t *testing.T) {
 	}
 	if len(api.messages) == 0 || !strings.HasPrefix(api.messages[len(api.messages)-1].text, "Commands:\n/new") {
 		t.Fatalf("last message = %#v, want help text", api.messages)
+	}
+}
+
+func TestTelegramBotSendTextUsesConfiguredMarkdownRenderMode(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistString("telegram.defaults.render_format", "markdown"); err != nil {
+		t.Fatalf("persist render format: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	api := &fakeTelegramAPI{}
+	tb := &TelegramBot{API: api, Config: cfg}
+	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             "Use **bold** and `code`.",
+	}); err != nil {
+		t.Fatalf("SendText: %v", err)
+	}
+	if len(api.messages) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(api.messages))
+	}
+	if api.messages[0].parseMode != "MarkdownV2" {
+		t.Fatalf("parse mode = %q, want %q", api.messages[0].parseMode, "MarkdownV2")
+	}
+	if api.messages[0].text != "Use *bold* and `code`\\." {
+		t.Fatalf("message text = %q", api.messages[0].text)
+	}
+}
+
+func TestTelegramBotSendTextFallsBackFromMarkdownToHTML(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistString("telegram.defaults.render_format", "markdown"); err != nil {
+		t.Fatalf("persist render format: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	api := &fakeTelegramAPI{failByParseMode: map[string]error{"MarkdownV2": fmt.Errorf("can't parse entities")}}
+	tb := &TelegramBot{API: api, Config: cfg}
+	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             "Use **bold** and `code`.",
+	}); err != nil {
+		t.Fatalf("SendText: %v", err)
+	}
+	if len(api.messages) != 1 {
+		t.Fatalf("messages len = %d, want 1 successful send", len(api.messages))
+	}
+	if api.messages[0].parseMode != "HTML" {
+		t.Fatalf("parse mode = %q, want HTML", api.messages[0].parseMode)
+	}
+	if api.messages[0].text != "Use <b>bold</b> and <code>code</code>." {
+		t.Fatalf("message text = %q", api.messages[0].text)
 	}
 }

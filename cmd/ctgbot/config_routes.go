@@ -64,6 +64,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			fmt.Printf("  codex.login_callback_port: %d (fixed)\n", appstate.CodexLoginCallbackPort)
 			fmt.Printf("  telegram.defaults.poll_timeout_sec: %d\n", int(cfg.PollTimeout().Seconds()))
 			fmt.Printf("  telegram.defaults.debounce_ms: %d\n", int(cfg.TelegramDebounceWindow().Milliseconds()))
+			fmt.Printf("  telegram.defaults.render_format: %q\n", cfg.TelegramRenderFormat())
 			fmt.Printf("  session.timeout_min: %d\n", int(cfg.SessionTimeout().Minutes()))
 			fmt.Println("  known_chats:")
 			chats := cfg.KnownChats()

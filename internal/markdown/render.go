@@ -9,8 +9,9 @@ import (
 type RenderFormat string
 
 const (
-	RenderPlain RenderFormat = "plain"
-	RenderHTML  RenderFormat = "html"
+	RenderPlain      RenderFormat = "plain"
+	RenderHTML       RenderFormat = "html"
+	RenderMarkdownV2 RenderFormat = "markdown_v2"
 )
 
 type RenderOptions struct {
@@ -46,7 +47,7 @@ func (d *Document) RenderChunked(opts RenderOptions) ([]Chunk, error) {
 	if format == "" {
 		format = RenderPlain
 	}
-	if format != RenderPlain && format != RenderHTML {
+	if format != RenderPlain && format != RenderHTML && format != RenderMarkdownV2 {
 		return nil, fmt.Errorf("unsupported render format %q", format)
 	}
 	limit := opts.ChunkSize
@@ -54,8 +55,61 @@ func (d *Document) RenderChunked(opts RenderOptions) ([]Chunk, error) {
 		limit = 3500
 	}
 
+	docs, err := d.Chunk(limit)
+	if err != nil {
+		return nil, err
+	}
+	if len(docs) == 0 {
+		return []Chunk{{Text: ""}}, nil
+	}
+
+	var out []Chunk
+	for _, doc := range docs {
+		text, ok, err := renderDocumentWithoutSplitting(doc, format, limit)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, Chunk{Text: text})
+			continue
+		}
+		fallback, err := renderDocumentWithSplitFallback(doc, format, limit)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, fallback...)
+	}
+	if len(out) == 0 {
+		return []Chunk{{Text: ""}}, nil
+	}
+	return out, nil
+}
+
+func renderDocumentWithoutSplitting(doc *Document, format RenderFormat, limit int) (string, bool, error) {
+	if doc == nil || doc.Root == nil {
+		return "", false, nil
+	}
 	var pieces []string
-	for _, child := range d.Root.Children {
+	for _, child := range doc.Root.Children {
+		piece, err := renderBlockWhole(child, format)
+		if err != nil {
+			return "", false, err
+		}
+		if strings.TrimSpace(piece) == "" {
+			continue
+		}
+		pieces = append(pieces, piece)
+	}
+	text := strings.Join(pieces, "\n\n")
+	if textLen(text) > limit {
+		return "", false, nil
+	}
+	return text, true, nil
+}
+
+func renderDocumentWithSplitFallback(doc *Document, format RenderFormat, limit int) ([]Chunk, error) {
+	var pieces []string
+	for _, child := range doc.Root.Children {
 		blockPieces, err := renderBlock(child, format, limit)
 		if err != nil {
 			return nil, err
@@ -68,9 +122,8 @@ func (d *Document) RenderChunked(opts RenderOptions) ([]Chunk, error) {
 		}
 	}
 	if len(pieces) == 0 {
-		return []Chunk{{Text: ""}}, nil
+		return nil, nil
 	}
-
 	var chunks []Chunk
 	current := ""
 	for _, piece := range pieces {
@@ -92,12 +145,77 @@ func (d *Document) RenderChunked(opts RenderOptions) ([]Chunk, error) {
 	return chunks, nil
 }
 
+func renderBlockWhole(node *Node, format RenderFormat) (string, error) {
+	switch node.Kind {
+	case NodeParagraph:
+		return renderSegments(flattenSegments(node.Children, 0), format), nil
+	case NodeCodeBlock:
+		info := ""
+		if node.Meta != nil {
+			info = node.Meta["info"]
+		}
+		return renderCodeLines(strings.Split(node.Text, "\n"), format, info), nil
+	case NodeList:
+		return renderListWhole(node, format)
+	default:
+		return "", fmt.Errorf("unsupported block kind %q", node.Kind)
+	}
+}
+
+func renderListWhole(list *Node, format RenderFormat) (string, error) {
+	var pieces []string
+	for _, item := range list.Children {
+		text, err := renderListItemWhole(item, format)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(text) == "" {
+			continue
+		}
+		pieces = append(pieces, text)
+	}
+	return strings.Join(pieces, "\n\n"), nil
+}
+
+func renderListItemWhole(item *Node, format RenderFormat) (string, error) {
+	if item == nil || item.Kind != NodeListItem {
+		return "", nil
+	}
+	var pieces []string
+	for i, child := range item.Children {
+		piece, err := renderBlockWhole(child, format)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(piece) == "" {
+			continue
+		}
+		prefix := "  "
+		if i == 0 {
+			prefix = "• "
+		}
+		pieces = append(pieces, prefix+indentAfterFirstLine(piece, strings.Repeat(" ", len(prefix))))
+	}
+	return strings.Join(pieces, "\n\n"), nil
+}
+
+func indentAfterFirstLine(text, indent string) string {
+	parts := strings.Split(text, "\n")
+	if len(parts) <= 1 {
+		return text
+	}
+	for i := 1; i < len(parts); i++ {
+		parts[i] = indent + parts[i]
+	}
+	return strings.Join(parts, "\n")
+}
+
 func renderBlock(node *Node, format RenderFormat, limit int) ([]string, error) {
 	switch node.Kind {
 	case NodeParagraph:
 		return renderParagraph(flattenSegments(node.Children, 0), format, limit, ""), nil
 	case NodeCodeBlock:
-		return renderCodeBlock(node.Text, format, limit), nil
+		return renderCodeBlock(node, format, limit), nil
 	case NodeList:
 		var pieces []string
 		for _, item := range node.Children {
@@ -123,7 +241,7 @@ func renderListItem(item *Node, format RenderFormat, limit int) []string {
 			}
 			pieces = append(pieces, renderParagraph(flattenSegments(child.Children, 0), format, limit, prefix)...)
 		case NodeCodeBlock:
-			for _, piece := range renderCodeBlock(child.Text, format, maxInt(1, limit-2)) {
+			for _, piece := range renderCodeBlock(child, format, maxInt(1, limit-2)) {
 				pieces = append(pieces, "  "+piece)
 			}
 		}
@@ -211,7 +329,15 @@ func renderParagraph(segments []segment, format RenderFormat, limit int, prefix 
 	return pieces
 }
 
-func renderCodeBlock(code string, format RenderFormat, limit int) []string {
+func renderCodeBlock(node *Node, format RenderFormat, limit int) []string {
+	code := ""
+	info := ""
+	if node != nil {
+		code = node.Text
+		if node.Meta != nil {
+			info = node.Meta["info"]
+		}
+	}
 	lines := strings.Split(code, "\n")
 	if len(lines) == 0 {
 		lines = []string{""}
@@ -222,29 +348,31 @@ func renderCodeBlock(code string, format RenderFormat, limit int) []string {
 		if len(current) == 0 {
 			return
 		}
-		pieces = append(pieces, renderCodeLines(current, format))
+		pieces = append(pieces, renderCodeLines(current, format, info))
 		current = nil
 	}
 	for _, line := range lines {
-		candidate := append(append([]string(nil), current...), line)
-		if textLen(renderCodeLines(candidate, format)) <= limit || len(current) == 0 {
-			current = append(current, line)
-			if textLen(renderCodeLines(current, format)) <= limit {
+		if len(current) == 0 {
+			current = []string{line}
+		} else {
+			candidate := append(append([]string(nil), current...), line)
+			if textLen(renderCodeLines(candidate, format, info)) <= limit {
+				current = candidate
 				continue
 			}
-		}
-		if len(current) > 1 {
-			last := current[len(current)-1]
-			current = current[:len(current)-1]
 			flush()
-			current = []string{last}
+			current = []string{line}
 		}
-		for textLen(renderCodeLines(current, format)) > limit {
-			part, rest := splitTextForLimit(current[0], limit-codeWrapperLen(format))
+		for len(current) > 0 && textLen(renderCodeLines(current, format, info)) > limit {
+			part, rest := splitTextForLimit(current[0], limit-codeWrapperLen(format, info))
 			if part == "" {
-				part, rest = forceSplit(current[0], maxInt(1, limit-codeWrapperLen(format)))
+				part, rest = forceSplit(current[0], maxInt(1, limit-codeWrapperLen(format, info)))
 			}
-			pieces = append(pieces, renderCodeLines([]string{part}, format))
+			pieces = append(pieces, renderCodeLines([]string{part}, format, info))
+			if rest == "" {
+				current = current[1:]
+				break
+			}
 			current[0] = rest
 		}
 	}
@@ -256,6 +384,8 @@ func renderSegments(segments []segment, format RenderFormat) string {
 	switch format {
 	case RenderHTML:
 		return renderHTMLSegments(segments)
+	case RenderMarkdownV2:
+		return renderMarkdownV2Segments(segments)
 	default:
 		return renderTextSegments(segments)
 	}
@@ -265,6 +395,8 @@ func renderedSegmentLen(seg segment, format RenderFormat) int {
 	switch format {
 	case RenderHTML:
 		return renderedHTMLSegmentLen(seg)
+	case RenderMarkdownV2:
+		return renderedMarkdownV2SegmentLen(seg)
 	default:
 		return renderedTextSegmentLen(seg)
 	}
@@ -274,24 +406,30 @@ func segmentWrapperLen(style inlineStyle, format RenderFormat) int {
 	switch format {
 	case RenderHTML:
 		return htmlSegmentWrapperLen(style)
+	case RenderMarkdownV2:
+		return markdownV2SegmentWrapperLen(style)
 	default:
 		return 0
 	}
 }
 
-func renderCodeLines(lines []string, format RenderFormat) string {
+func renderCodeLines(lines []string, format RenderFormat, info string) string {
 	switch format {
 	case RenderHTML:
 		return renderHTMLCodeLines(lines)
+	case RenderMarkdownV2:
+		return renderMarkdownV2CodeLines(lines, info)
 	default:
 		return renderTextCodeLines(lines)
 	}
 }
 
-func codeWrapperLen(format RenderFormat) int {
+func codeWrapperLen(format RenderFormat, info string) int {
 	switch format {
 	case RenderHTML:
 		return htmlCodeWrapperLen()
+	case RenderMarkdownV2:
+		return markdownV2CodeWrapperLen(info)
 	default:
 		return 0
 	}

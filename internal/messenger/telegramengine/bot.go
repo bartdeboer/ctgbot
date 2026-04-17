@@ -8,9 +8,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatmodel"
+	markdown "github.com/bartdeboer/ctgbot/internal/markdownv5"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 
@@ -47,7 +49,7 @@ func (tb *TelegramBot) SendText(ctx context.Context, msg messenger.ResolvedOutgo
 	if err != nil {
 		return err
 	}
-	return tb.API.SendMessage(ctx, chatID, threadID, 0, msg.Text)
+	return tb.sendRenderedText(ctx, chatID, threadID, 0, msg.Text)
 }
 
 func (tb *TelegramBot) SendFile(ctx context.Context, file messenger.ResolvedOutgoingFile) error {
@@ -209,18 +211,117 @@ func (tb *TelegramBot) replyText(ctx context.Context, u chatmodel.TelegramUpdate
 		text = "(empty response)"
 	}
 	tb.appendEventResponse(ctx, text)
+	return tb.sendRenderedText(ctx, u.ChatID, u.ThreadID, u.MessageID, text)
+}
 
-	for _, chunk := range splitTelegramText(text, 3500) {
-		if err := tb.API.SendMessage(ctx, u.ChatID, u.ThreadID, u.MessageID, chunk); err != nil {
+func (tb *TelegramBot) sendRenderedText(ctx context.Context, chatID int64, threadID int, replyTo int, text string) error {
+	text = cleanTextForTelegram(text)
+	if text == "" {
+		text = "(empty response)"
+	}
+	doc, err := markdown.Parse(text)
+	if err != nil {
+		tb.logf("telegram markdown parse failed, falling back to plain split: %v", err)
+		for _, chunk := range splitTelegramText(text, 3500) {
+			if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, chunk, ""); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, chunkDoc := range doc.Chunked(3500) {
+		if err := tb.sendDocumentChunk(ctx, chatID, threadID, replyTo, chunkDoc); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+type telegramRenderAttempt struct {
+	format    markdown.RenderFormat
+	parseMode string
+	name      string
+}
+
+func (tb *TelegramBot) sendDocumentChunk(ctx context.Context, chatID int64, threadID int, replyTo int, doc *markdown.Document) error {
+	attempts := tb.telegramRenderAttempts()
+	for i, attempt := range attempts {
+		text, err := doc.Render(markdown.RenderOptions{Format: attempt.format})
+		if err != nil {
+			tb.logf("telegram %s render failed, trying fallback: %v", attempt.name, err)
+			continue
+		}
+		if telegramTextLen(text) > 3500 {
+			if i < len(attempts)-1 {
+				continue
+			}
+			chunks, err := doc.RenderChunked(markdown.RenderOptions{Format: markdown.RenderPlain, ChunkSize: 3500})
+			if err != nil {
+				return err
+			}
+			for _, chunk := range chunks {
+				if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, chunk.Text, ""); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, text, attempt.parseMode); err != nil {
+			if attempt.parseMode != "" && isTelegramFormattingError(err) && i < len(attempts)-1 {
+				tb.logf("telegram %s send failed, trying fallback: %v", attempt.name, err)
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("no telegram render mode succeeded")
+}
+
+func (tb *TelegramBot) telegramRenderAttempts() []telegramRenderAttempt {
+	preferred := telegramRenderAttempt{format: markdown.RenderPlain, parseMode: "", name: "plain"}
+	if tb != nil && tb.Config != nil {
+		switch tb.Config.TelegramRenderFormat() {
+		case "html":
+			preferred = telegramRenderAttempt{format: markdown.RenderHTML, parseMode: "HTML", name: "html"}
+		case "markdown_v2":
+			preferred = telegramRenderAttempt{format: markdown.RenderMarkdownV2, parseMode: "MarkdownV2", name: "markdown_v2"}
+		}
+	}
+	all := []telegramRenderAttempt{
+		preferred,
+		{format: markdown.RenderHTML, parseMode: "HTML", name: "html"},
+		{format: markdown.RenderPlain, parseMode: "", name: "plain"},
+	}
+	seen := map[string]bool{}
+	out := make([]telegramRenderAttempt, 0, len(all))
+	for _, attempt := range all {
+		key := string(attempt.format) + "|" + attempt.parseMode
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, attempt)
+	}
+	return out
+}
+
+func isTelegramFormattingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "parse") || strings.Contains(msg, "entity") || strings.Contains(msg, "can't")
+}
+
+func telegramTextLen(text string) int {
+	return utf8.RuneCountInString(text)
+}
+
 func (tb *TelegramBot) logf(format string, args ...any) {
 	if tb.Logger != nil {
-		tb.Logger.Printf(format, args...)
+		b := tb.Logger
+		b.Printf(format, args...)
 	}
 }
 

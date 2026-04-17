@@ -137,3 +137,70 @@ func TestRenderChunkedHTMLSplitsCodeBlocksSafely(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderChunkedMarkdownV2RendersInlineFormatting(t *testing.T) {
+	doc, err := Parse("Use **bold** and *italic* and `code`.")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	chunks, err := doc.RenderChunked(RenderOptions{Format: RenderMarkdownV2, ChunkSize: 3500})
+	if err != nil {
+		t.Fatalf("RenderChunked: %v", err)
+	}
+	want := "Use *bold* and _italic_ and `code`\\."
+	if len(chunks) != 1 || chunks[0].Text != want {
+		t.Fatalf("chunks = %#v, want %q", chunks, want)
+	}
+}
+
+func TestRenderChunkedMarkdownV2EscapesSpecialCharacters(t *testing.T) {
+	doc, err := Parse("5 < 7 & **A > B** and `x < y && z`")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	chunks, err := doc.RenderChunked(RenderOptions{Format: RenderMarkdownV2, ChunkSize: 3500})
+	if err != nil {
+		t.Fatalf("RenderChunked: %v", err)
+	}
+	got := chunks[0].Text
+	if !strings.Contains(got, "5 < 7 & *A \\> B*") {
+		t.Fatalf("expected escaped markdown text, got %q", got)
+	}
+	if !strings.Contains(got, "`x < y && z`") {
+		t.Fatalf("expected inline code block, got %q", got)
+	}
+}
+
+func TestRenderChunkedMarkdownV2UsesLanguageTaggedCodeBlocks(t *testing.T) {
+	doc, err := Parse("```go\nfmt.Println(\"hi\")\n```")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	chunks, err := doc.RenderChunked(RenderOptions{Format: RenderMarkdownV2, ChunkSize: 3500})
+	if err != nil {
+		t.Fatalf("RenderChunked: %v", err)
+	}
+	want := "```go\nfmt.Println(\"hi\")\n```"
+	if len(chunks) != 1 || chunks[0].Text != want {
+		t.Fatalf("chunks = %#v, want %q", chunks, want)
+	}
+}
+
+func TestRenderChunkedMarkdownV2SplitsCodeBlocksSafely(t *testing.T) {
+	doc, err := Parse("```go\nline one\nline two\nline three\nline four\n```")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	chunks, err := doc.RenderChunked(RenderOptions{Format: RenderMarkdownV2, ChunkSize: 20})
+	if err != nil {
+		t.Fatalf("RenderChunked: %v", err)
+	}
+	if len(chunks) < 2 {
+		t.Fatalf("chunks len = %d, want at least 2", len(chunks))
+	}
+	for _, chunk := range chunks {
+		if !strings.HasPrefix(chunk.Text, "```go\n") || !strings.HasSuffix(chunk.Text, "\n```") {
+			t.Fatalf("invalid markdown code block chunk %q", chunk.Text)
+		}
+	}
+}

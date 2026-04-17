@@ -225,6 +225,23 @@ func (c *Config) TelegramDebounceWindow() time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
+func (c *Config) TelegramRenderFormat() string {
+	format := "plain"
+	if c != nil && c.Store != nil {
+		format = strings.TrimSpace(strings.ToLower(c.Store.GetString("telegram.defaults.render_format", format)))
+	}
+	switch format {
+	case "text", "plain", "":
+		return "plain"
+	case "html":
+		return "html"
+	case "markdown", "markdownv2", "markdown_v2":
+		return "markdown_v2"
+	default:
+		return "plain"
+	}
+}
+
 func (c *Config) SessionTimeout() time.Duration {
 	minutes := 10
 	if c.Store != nil {

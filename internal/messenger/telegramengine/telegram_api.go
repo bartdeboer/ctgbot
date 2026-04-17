@@ -80,7 +80,7 @@ func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUp
 	return ctx.Err()
 }
 
-func (a *TelegramAPIV2) SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string) error {
+func (a *TelegramAPIV2) SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string, parseMode string) error {
 	b := a.getBot()
 	if b == nil {
 		return fmt.Errorf("telegram bot not initialized")
@@ -90,6 +90,9 @@ func (a *TelegramAPIV2) SendMessage(ctx context.Context, chatID int64, threadID 
 		ChatID:          chatID,
 		MessageThreadID: threadID,
 		Text:            text,
+	}
+	if strings.TrimSpace(parseMode) != "" {
+		p.ParseMode = models.ParseMode(parseMode)
 	}
 
 	_, err := b.SendMessage(ctx, p)

@@ -49,6 +49,7 @@ func (p *Parser) parseCodeBlock() *Node {
 	p.advance()
 	textStart := startTok.Span.End
 	textEnd := textStart
+	setMetaPosition(meta, "content_start", textStart)
 	code := ""
 	for p.cur.Kind != TokenEOF && p.cur.Kind != TokenFence {
 		code += p.cur.Text
@@ -60,12 +61,8 @@ func (p *Parser) parseCodeBlock() *Node {
 		end = p.cur.Span.End
 		p.advance()
 	}
-	node := &Node{Kind: NodeCodeBlock, Text: trimTrailingNewline(code), Span: Span{Start: startTok.Span.Start, End: end}}
-	if len(meta) > 0 {
-		node.Meta = meta
-	}
-	_ = textStart
-	return node
+	setMetaPosition(meta, "content_end", textEnd)
+	return &Node{Kind: NodeCodeBlock, Text: trimTrailingNewline(code), Span: Span{Start: startTok.Span.Start, End: end}, Meta: meta}
 }
 
 func (p *Parser) parseList() *Node {
@@ -152,7 +149,10 @@ func parseInlineSeq(tokens []Token, idx int, stop TokenKind) ([]*Node, int, bool
 		case TokenBacktick:
 			inner, next, closed := collectRawUntil(tokens, idx+1, TokenBacktick)
 			if closed {
-				nodes = append(nodes, &Node{Kind: NodeInlineCode, Text: inner, Span: Span{Start: tok.Span.Start, End: tokens[next-1].Span.End}})
+				meta := map[string]string{}
+				setMetaPosition(meta, "content_start", tok.Span.End)
+				setMetaPosition(meta, "content_end", tokens[next-1].Span.Start)
+				nodes = append(nodes, &Node{Kind: NodeInlineCode, Text: inner, Span: Span{Start: tok.Span.Start, End: tokens[next-1].Span.End}, Meta: meta})
 			} else {
 				nodes = append(nodes, &Node{Kind: NodeText, Text: tok.Text + inner, Span: tok.Span})
 			}
@@ -232,4 +232,35 @@ func trimTrailingNewline(s string) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+func setMetaPosition(meta map[string]string, prefix string, pos Position) {
+	if meta == nil {
+		return
+	}
+	meta[prefix+"_offset"] = itoa(pos.Offset)
+	meta[prefix+"_line"] = itoa(pos.Line)
+	meta[prefix+"_column"] = itoa(pos.Column)
+}
+
+func itoa(v int) string {
+	if v == 0 {
+		return "0"
+	}
+	neg := v < 0
+	if neg {
+		v = -v
+	}
+	var buf [20]byte
+	i := len(buf)
+	for v > 0 {
+		i--
+		buf[i] = byte('0' + (v % 10))
+		v /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
 }
