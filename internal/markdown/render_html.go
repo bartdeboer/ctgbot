@@ -5,6 +5,48 @@ import (
 	"strings"
 )
 
+func renderHTMLDocument(doc *Document) string {
+	if doc == nil || len(doc.Blocks) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(doc.Blocks))
+	for _, block := range doc.Blocks {
+		if block == nil {
+			continue
+		}
+		parts = append(parts, renderHTMLBlock(block))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func renderHTMLBlock(block *BlockNode) string {
+	switch block.Kind {
+	case CodeBlock:
+		return wrapHTMLCodeBlock(renderHTMLLines(block.Lines))
+	default:
+		return renderHTMLLines(block.Lines)
+	}
+}
+
+func renderHTMLLines(lines []*LineNode) string {
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		parts = append(parts, renderHTMLLine(line))
+	}
+	return strings.Join(parts, "\n")
+}
+
+func renderHTMLLine(line *LineNode) string {
+	if line == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, span := range line.Spans {
+		b.WriteString(renderHTMLSpan(span))
+	}
+	return b.String()
+}
+
 func renderHTMLSpan(span *SpanNode) string {
 	if span == nil {
 		return ""
@@ -29,38 +71,6 @@ func renderHTMLChildren(children []*SpanNode) string {
 	return b.String()
 }
 
-func renderHTMLSegment(seg segment) string {
-	text := html.EscapeString(seg.Text)
-	if seg.Style&styleCode != 0 {
-		return "<code>" + text + "</code>"
-	}
-	if seg.Style&styleItalic != 0 {
-		text = "<i>" + text + "</i>"
-	}
-	if seg.Style&styleBold != 0 {
-		text = "<b>" + text + "</b>"
-	}
-	return text
-}
-
-func htmlSegmentWrapperLen(style inlineStyle) int {
-	if style&styleCode != 0 {
-		return len("<code></code>")
-	}
-	n := 0
-	if style&styleItalic != 0 {
-		n += len("<i></i>")
-	}
-	if style&styleBold != 0 {
-		n += len("<b></b>")
-	}
-	return n
-}
-
 func wrapHTMLCodeBlock(body string) string {
 	return "<pre><code>" + body + "</code></pre>"
-}
-
-func escapeHTMLText(text string) string {
-	return html.EscapeString(text)
 }

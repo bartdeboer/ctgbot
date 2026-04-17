@@ -243,6 +243,19 @@ type telegramRenderAttempt struct {
 	name      string
 }
 
+func (tb *TelegramBot) sendPlainChunk(ctx context.Context, chatID int64, threadID int, replyTo int, doc *markdown.Document) error {
+	for _, plainDoc := range doc.Chunked(3500) {
+		text, err := plainDoc.Render(markdown.RenderOptions{Format: markdown.RenderPlain})
+		if err != nil {
+			return err
+		}
+		if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, text, ""); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (tb *TelegramBot) sendDocumentChunk(ctx context.Context, chatID int64, threadID int, replyTo int, doc *markdown.Document) error {
 	attempts := tb.telegramRenderAttempts()
 	for i, attempt := range attempts {
@@ -252,19 +265,7 @@ func (tb *TelegramBot) sendDocumentChunk(ctx context.Context, chatID int64, thre
 			continue
 		}
 		if telegramTextLen(text) > 3500 {
-			if i < len(attempts)-1 {
-				continue
-			}
-			chunks, err := doc.RenderChunked(markdown.RenderOptions{Format: markdown.RenderPlain, ChunkSize: 3500})
-			if err != nil {
-				return err
-			}
-			for _, chunk := range chunks {
-				if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, chunk.Text, ""); err != nil {
-					return err
-				}
-			}
-			return nil
+			return tb.sendPlainChunk(ctx, chatID, threadID, replyTo, doc)
 		}
 		if err := tb.API.SendMessage(ctx, chatID, threadID, replyTo, text, attempt.parseMode); err != nil {
 			if attempt.parseMode != "" && isTelegramFormattingError(err) && i < len(attempts)-1 {
@@ -277,7 +278,6 @@ func (tb *TelegramBot) sendDocumentChunk(ctx context.Context, chatID int64, thre
 	}
 	return fmt.Errorf("no telegram render mode succeeded")
 }
-
 func (tb *TelegramBot) telegramRenderAttempts() []telegramRenderAttempt {
 	preferred := telegramRenderAttempt{format: markdown.RenderPlain, parseMode: "", name: "plain"}
 	if tb != nil && tb.Config != nil {
@@ -311,9 +311,13 @@ func isTelegramFormattingError(err error) bool {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "parse") || strings.Contains(msg, "entity") || strings.Contains(msg, "can't")
+	for _, needle := range []string{"can't parse entities", "parse entities", "unsupported start tag", "entity"} {
+		if strings.Contains(msg, needle) {
+			return true
+		}
+	}
+	return false
 }
-
 func telegramTextLen(text string) int {
 	return utf8.RuneCountInString(text)
 }

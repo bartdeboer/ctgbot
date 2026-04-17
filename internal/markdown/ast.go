@@ -63,6 +63,23 @@ func (d *Document) GetLines() []*LineNode {
 	return out
 }
 
+func (d *Document) Size() int {
+	if d == nil {
+		return 0
+	}
+	total := 0
+	for i, block := range d.Blocks {
+		if block == nil {
+			continue
+		}
+		if i > 0 {
+			total += 2
+		}
+		total += block.Size()
+	}
+	return total
+}
+
 func (b *BlockNode) GetLines() []*LineNode {
 	if b == nil {
 		return nil
@@ -70,6 +87,48 @@ func (b *BlockNode) GetLines() []*LineNode {
 	out := make([]*LineNode, 0, len(b.Lines))
 	out = append(out, b.Lines...)
 	return out
+}
+
+func (b *BlockNode) Size() int {
+	if b == nil {
+		return 0
+	}
+	total := 0
+	for i, line := range b.Lines {
+		if line == nil {
+			continue
+		}
+		if i > 0 {
+			total++
+		}
+		total += line.Size()
+	}
+	return total
+}
+
+func (l *LineNode) Size() int {
+	if l == nil {
+		return 0
+	}
+	total := 0
+	for _, span := range l.Spans {
+		total += span.Size()
+	}
+	return total
+}
+
+func (s *SpanNode) Size() int {
+	if s == nil {
+		return 0
+	}
+	if len(s.Children) == 0 {
+		return textLen(s.Text)
+	}
+	total := 0
+	for _, child := range s.Children {
+		total += child.Size()
+	}
+	return total
 }
 
 func (d *Document) LineSlice(startPos, endPos Position) *Document {

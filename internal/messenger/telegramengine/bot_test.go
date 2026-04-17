@@ -67,6 +67,7 @@ type fakeTelegramAPI struct {
 	actions         []sentChatAction
 	downloads       map[string][]byte
 	failByParseMode map[string]error
+	sendHook        func(sentMessage) error
 }
 
 func (f *fakeTelegramAPI) Run(ctx context.Context, _ time.Duration, _ func(context.Context, chatmodel.TelegramUpdate)) error {
@@ -74,16 +75,17 @@ func (f *fakeTelegramAPI) Run(ctx context.Context, _ time.Duration, _ func(conte
 }
 
 func (f *fakeTelegramAPI) SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string, parseMode string) error {
+	msg := sentMessage{chatID: chatID, threadID: threadID, replyTo: replyTo, text: text, parseMode: parseMode}
+	if f.sendHook != nil {
+		if err := f.sendHook(msg); err != nil {
+			return err
+		}
+	}
 	if err, ok := f.failByParseMode[parseMode]; ok {
 		return err
 	}
-	f.messages = append(f.messages, sentMessage{
-		chatID:    chatID,
-		threadID:  threadID,
-		replyTo:   replyTo,
-		text:      text,
-		parseMode: parseMode,
-	})
+	f.messages = append(f.messages, msg)
+	return nil
 	return nil
 }
 
@@ -759,5 +761,139 @@ func TestTelegramBotSendTextFallsBackFromMarkdownToHTML(t *testing.T) {
 	}
 	if api.messages[0].text != "Use <b>bold</b> and <code>code</code>." {
 		t.Fatalf("message text = %q", api.messages[0].text)
+	}
+}
+
+func TestTelegramBotSendTextFallsBackFromHTMLToPlain(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prevWD) })
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistString("telegram.defaults.render_format", "html"); err != nil {
+		t.Fatalf("persist render format: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	api := &fakeTelegramAPI{failByParseMode: map[string]error{"HTML": fmt.Errorf("unsupported start tag")}}
+	tb := &TelegramBot{API: api, Config: cfg}
+	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             "Use **bold** and `code`.",
+	}); err != nil {
+		t.Fatalf("SendText: %v", err)
+	}
+	if len(api.messages) != 1 {
+		t.Fatalf("messages len = %d, want 1 successful send", len(api.messages))
+	}
+	if api.messages[0].parseMode != "" {
+		t.Fatalf("parse mode = %q, want plain", api.messages[0].parseMode)
+	}
+	if api.messages[0].text != "Use **bold** and `code`." {
+		t.Fatalf("message text = %q", api.messages[0].text)
+	}
+}
+
+func TestTelegramBotSendTextFallsBackOnlyFailedChunk(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prevWD) })
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistString("telegram.defaults.render_format", "markdown"); err != nil {
+		t.Fatalf("persist render format: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	api := &fakeTelegramAPI{sendHook: func(msg sentMessage) error {
+		if msg.parseMode == "MarkdownV2" && strings.Contains(msg.text, "second chunk") {
+			return fmt.Errorf("can't parse entities")
+		}
+		return nil
+	}}
+	tb := &TelegramBot{API: api, Config: cfg}
+	text := strings.Repeat("first chunk line\n", 120) + "\n" + strings.Repeat("second chunk line\n", 120)
+	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             text,
+	}); err != nil {
+		t.Fatalf("SendText: %v", err)
+	}
+	seenMarkdown := 0
+	seenHTML := 0
+	for _, msg := range api.messages {
+		if msg.parseMode == "MarkdownV2" {
+			seenMarkdown++
+		}
+		if msg.parseMode == "HTML" {
+			seenHTML++
+		}
+	}
+	if seenHTML == 0 {
+		t.Fatalf("messages = %#v, want mixed markdown/html success", api.messages)
+	}
+}
+
+func TestTelegramBotSendTextDoesNotFallbackOnNonFormattingError(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prevWD) })
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistString("telegram.defaults.render_format", "markdown"); err != nil {
+		t.Fatalf("persist render format: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	api := &fakeTelegramAPI{failByParseMode: map[string]error{"MarkdownV2": fmt.Errorf("network timeout")}}
+	tb := &TelegramBot{API: api, Config: cfg}
+	err = tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             "Use **bold**.",
+	})
+	if err == nil {
+		t.Fatalf("expected send error")
+	}
+	if len(api.messages) != 0 {
+		t.Fatalf("messages = %#v, want no fallback success messages", api.messages)
 	}
 }

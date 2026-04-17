@@ -2,6 +2,53 @@ package markdown
 
 import "strings"
 
+func renderMarkdownDocument(doc *Document) string {
+	if doc == nil || len(doc.Blocks) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(doc.Blocks))
+	for _, block := range doc.Blocks {
+		if block == nil {
+			continue
+		}
+		parts = append(parts, renderMarkdownBlock(block))
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+func renderMarkdownBlock(block *BlockNode) string {
+	switch block.Kind {
+	case CodeBlock:
+		body := renderMarkdownLines(block.Lines)
+		info := ""
+		if block.Meta != nil {
+			info = strings.TrimSpace(block.Meta["info"])
+		}
+		return wrapMarkdownCodeBlock(body, info)
+	default:
+		return renderMarkdownLines(block.Lines)
+	}
+}
+
+func renderMarkdownLines(lines []*LineNode) string {
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		parts = append(parts, renderMarkdownLine(line))
+	}
+	return strings.Join(parts, "\n")
+}
+
+func renderMarkdownLine(line *LineNode) string {
+	if line == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, span := range line.Spans {
+		b.WriteString(renderMarkdownSpan(span))
+	}
+	return b.String()
+}
+
 func renderMarkdownSpan(span *SpanNode) string {
 	if span == nil {
 		return ""
@@ -24,34 +71,6 @@ func renderMarkdownChildren(children []*SpanNode) string {
 		b.WriteString(renderMarkdownSpan(child))
 	}
 	return b.String()
-}
-
-func renderMarkdownSegment(seg segment) string {
-	if seg.Style&styleCode != 0 {
-		return "`" + escapeMarkdownCode(seg.Text) + "`"
-	}
-	text := escapeMarkdownText(seg.Text)
-	if seg.Style&styleItalic != 0 {
-		text = "_" + text + "_"
-	}
-	if seg.Style&styleBold != 0 {
-		text = "*" + text + "*"
-	}
-	return text
-}
-
-func markdownSegmentWrapperLen(style inlineStyle) int {
-	if style&styleCode != 0 {
-		return len("``")
-	}
-	n := 0
-	if style&styleItalic != 0 {
-		n += len("__")
-	}
-	if style&styleBold != 0 {
-		n += len("**")
-	}
-	return n
 }
 
 func wrapMarkdownCodeBlock(body, info string) string {
