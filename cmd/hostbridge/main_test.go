@@ -49,3 +49,41 @@ func TestBuildSendFileRequestRequiresRuntimeIdentity(t *testing.T) {
 		t.Fatalf("expected missing runtime identity error")
 	}
 }
+
+func TestBuildSendTextRequestPlain(t *testing.T) {
+	t.Setenv("CTGBOT_SANDBOX_ID", "thread-456")
+	req, err := buildSendTextRequest("hello\nworld\n", false, "")
+	if err != nil {
+		t.Fatalf("build sendtext request: %v", err)
+	}
+	if req.Op != hostbridge.OpSendText {
+		t.Fatalf("req.Op = %q, want %q", req.Op, hostbridge.OpSendText)
+	}
+	if req.SandboxID != "thread-456" {
+		t.Fatalf("req.SandboxID = %q", req.SandboxID)
+	}
+	if req.Text != "hello\nworld\n" {
+		t.Fatalf("req.Text = %q", req.Text)
+	}
+	if req.Fenced {
+		t.Fatalf("req.Fenced = true, want false")
+	}
+}
+
+func TestBuildSendTextRequestFencedLanguageImpliesFence(t *testing.T) {
+	t.Setenv("CTGBOT_SANDBOX_ID", "thread-456")
+	req, err := buildSendTextRequest("git diff --stat\n", false, "diff")
+	if err != nil {
+		t.Fatalf("build sendtext request: %v", err)
+	}
+	if !req.Fenced {
+		t.Fatalf("req.Fenced = false, want true")
+	}
+	if req.Language != "diff" {
+		t.Fatalf("req.Language = %q", req.Language)
+	}
+	want := "```diff\ngit diff --stat\n```"
+	if req.Text != want {
+		t.Fatalf("req.Text = %q, want %q", req.Text, want)
+	}
+}

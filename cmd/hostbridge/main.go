@@ -60,6 +60,25 @@ func main() {
 			}
 			return sendHostbridgeRequest(payload)
 		})
+
+		b.Handle("sendstdin", "Send stdin to the current Telegram chat/thread via the host bridge", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("hostbridge sendstdin", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			fenced := fs.Bool("fenced", false, "Wrap stdin in a fenced code block")
+			language := fs.String("language", "", "Optional fence language; implies --fenced")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+			stdinData, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				return fmt.Errorf("read stdin: %w", err)
+			}
+			payload, err := buildSendTextRequest(string(stdinData), *fenced, strings.TrimSpace(*language))
+			if err != nil {
+				return err
+			}
+			return sendHostbridgeRequest(payload)
+		})
 	})
 
 	if err := r.Run(context.Background(), args); err != nil {
@@ -71,7 +90,7 @@ func main() {
 
 func isHostbridgeManagementCommand(arg string) bool {
 	switch arg {
-	case "", "run", "sendfile":
+	case "", "run", "sendfile", "sendstdin":
 		return true
 	default:
 		return false
@@ -88,6 +107,7 @@ func printHostbridgeHelp() {
 	fmt.Fprintln(os.Stdout, "examples:")
 	fmt.Fprintln(os.Stdout, "  hostbridge ls -la")
 	fmt.Fprintln(os.Stdout, "  hostbridge sendfile /workspace/out/report.pdf --caption \"Weekly report\"")
+	fmt.Fprintln(os.Stdout, "  git diff | hostbridge sendstdin --fenced --language diff")
 }
 
 func getenv(key, fallback string) string {
@@ -188,4 +208,38 @@ func buildSendFileRequest(path string, caption string) (hostbridge.Request, erro
 		Caption:   strings.TrimSpace(caption),
 		Content:   content,
 	}, nil
+}
+
+func buildSendTextRequest(text string, fenced bool, language string) (hostbridge.Request, error) {
+	sandboxID := getenv("CTGBOT_SANDBOX_ID", "")
+	if strings.TrimSpace(sandboxID) == "" {
+		return hostbridge.Request{}, fmt.Errorf("missing CTGBOT_SANDBOX_ID")
+	}
+	if strings.TrimSpace(language) != "" {
+		fenced = true
+	}
+	if text == "" {
+		return hostbridge.Request{}, fmt.Errorf("missing stdin content")
+	}
+	payloadText := wrapSendText(text, fenced, language)
+	return hostbridge.Request{
+		Op:        hostbridge.OpSendText,
+		Timeout:   30,
+		SandboxID: sandboxID,
+		Text:      payloadText,
+		Fenced:    fenced,
+		Language:  strings.TrimSpace(language),
+	}, nil
+}
+
+func wrapSendText(text string, fenced bool, language string) string {
+	if !fenced {
+		return text
+	}
+	language = strings.TrimSpace(language)
+	text = strings.TrimRight(text, "\n")
+	if language == "" {
+		return "```\n" + text + "\n```"
+	}
+	return "```" + language + "\n" + text + "\n```"
 }

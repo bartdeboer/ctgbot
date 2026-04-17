@@ -5,6 +5,7 @@ type Operation string
 const (
 	OpRunCommand Operation = "run-command"
 	OpSendFile   Operation = "send-file"
+	OpSendText   Operation = "send-text"
 )
 
 const MaxSendFileBytes = 50 * 1024 * 1024
@@ -22,6 +23,10 @@ type Request struct {
 	Filename  string
 	Caption   string
 	Content   []byte
+
+	Text     string
+	Fenced   bool
+	Language string
 }
 
 type StreamKind uint8

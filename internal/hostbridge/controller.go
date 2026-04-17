@@ -44,11 +44,18 @@ type SendFileRequest struct {
 
 type SendFileHandler func(ctx context.Context, req SendFileRequest) error
 
+type SendTextRequest struct {
+	SandboxID string
+	Text      string
+}
+
+type SendTextHandler func(ctx context.Context, req SendTextRequest) error
+
 type tlsListenerConfig interface {
 	HostbridgeTCPListenAddr() string
 }
 
-func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, sendFile SendFileHandler, logger *log.Logger) error {
+func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, sendFile SendFileHandler, sendText SendTextHandler, logger *log.Logger) error {
 	if strings.TrimSpace(address) == "" {
 		return fmt.Errorf("missing address")
 	}
@@ -68,10 +75,10 @@ func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed m
 	}
 	defer ln.Close()
 
-	return ServeListener(ctx, ln, defaultTimeoutSec, StaticAllowedCommandResolver(allowed), sendFile, logger)
+	return ServeListener(ctx, ln, defaultTimeoutSec, StaticAllowedCommandResolver(allowed), sendFile, sendText, logger)
 }
 
-func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, resolve AllowedCommandResolver, sendFile SendFileHandler, logger *log.Logger) error {
+func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, resolve AllowedCommandResolver, sendFile SendFileHandler, sendText SendTextHandler, logger *log.Logger) error {
 	if ln == nil {
 		return fmt.Errorf("missing listener")
 	}
@@ -101,7 +108,7 @@ func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, 
 			logger.Printf("accept error: %v", err)
 			continue
 		}
-		go handleConn(conn, resolve, sendFile, defaultTimeoutSec, logger)
+		go handleConn(conn, resolve, sendFile, sendText, defaultTimeoutSec, logger)
 	}
 }
 
@@ -152,7 +159,7 @@ func validateLoopbackListenAddress(address string) error {
 	return nil
 }
 
-func handleConn(conn net.Conn, resolve AllowedCommandResolver, sendFile SendFileHandler, defaultTimeoutSec int, logger *log.Logger) {
+func handleConn(conn net.Conn, resolve AllowedCommandResolver, sendFile SendFileHandler, sendText SendTextHandler, defaultTimeoutSec int, logger *log.Logger) {
 	defer conn.Close()
 
 	dec := gob.NewDecoder(conn)
@@ -170,6 +177,8 @@ func handleConn(conn net.Conn, resolve AllowedCommandResolver, sendFile SendFile
 		handleRunCommand(conn, send, req, resolve, defaultTimeoutSec, logger)
 	case OpSendFile:
 		handleSendFile(conn, send, req, sendFile, defaultTimeoutSec, logger)
+	case OpSendText:
+		handleSendText(conn, send, req, sendText, defaultTimeoutSec, logger)
 	default:
 		_ = send.Encode(Frame{Kind: StreamError, Message: "unsupported operation: " + string(req.Op)})
 	}
@@ -552,4 +561,42 @@ func (s *safeEncoder) Encode(v any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.enc.Encode(v)
+}
+
+func handleSendText(conn net.Conn, send *safeEncoder, req Request, sendText SendTextHandler, defaultTimeoutSec int, logger *log.Logger) {
+	if sendText == nil {
+		_ = send.Encode(Frame{Kind: StreamError, Message: "sendtext not configured"})
+		return
+	}
+	if strings.TrimSpace(req.SandboxID) == "" {
+		_ = send.Encode(Frame{Kind: StreamError, Message: "missing sandbox id"})
+		return
+	}
+	if req.Text == "" {
+		_ = send.Encode(Frame{Kind: StreamError, Message: "missing text"})
+		return
+	}
+
+	timeout := time.Duration(defaultTimeoutSec) * time.Second
+	if req.Timeout > 0 && req.Timeout <= 600 {
+		timeout = time.Duration(req.Timeout) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	logger.Printf("hostbridge sendtext bytes=%d fenced=%t language=%q security=%s client=%q sandbox=%q", len(req.Text), req.Fenced, req.Language, connectionSecurityMode(conn), connectionClientIdentity(conn), req.SandboxID)
+
+	err := sendText(ctx, SendTextRequest{
+		SandboxID: req.SandboxID,
+		Text:      req.Text,
+	})
+	if err != nil {
+		_ = send.Encode(Frame{Kind: StreamError, Message: err.Error()})
+		return
+	}
+	_ = send.Encode(Frame{
+		Kind: StreamStdout,
+		Data: []byte("sent text\n"),
+	})
+	_ = send.Encode(Frame{Kind: StreamExit, ExitCode: 0})
 }

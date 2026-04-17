@@ -23,10 +23,11 @@ type Runtime struct {
 	Logger            *log.Logger
 	ResolveAllowed    AllowedCommandResolver
 	SendFile          SendFileHandler
+	SendText          SendTextHandler
 	DefaultTimeoutSec int
 }
 
-func NewRuntime(cfg runtimeConfig, logger *log.Logger, resolve AllowedCommandResolver, sendFile SendFileHandler) *Runtime {
+func NewRuntime(cfg runtimeConfig, logger *log.Logger, resolve AllowedCommandResolver, sendFile SendFileHandler, sendText SendTextHandler) *Runtime {
 	if logger == nil {
 		logger = log.New(os.Stdout, "", log.LstdFlags)
 	}
@@ -35,6 +36,7 @@ func NewRuntime(cfg runtimeConfig, logger *log.Logger, resolve AllowedCommandRes
 		Logger:            logger,
 		ResolveAllowed:    resolve,
 		SendFile:          sendFile,
+		SendText:          sendText,
 		DefaultTimeoutSec: 30,
 	}
 }
@@ -60,5 +62,5 @@ func (r *Runtime) Run(ctx context.Context) error {
 	if timeout <= 0 {
 		timeout = 30
 	}
-	return ServeListener(ctx, ln, timeout, resolveAllowed, r.SendFile, r.Logger)
+	return ServeListener(ctx, ln, timeout, resolveAllowed, r.SendFile, r.SendText, r.Logger)
 }

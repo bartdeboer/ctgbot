@@ -104,7 +104,7 @@ func TestHandleConnDispatchesSendFileRequests(t *testing.T) {
 		handleConn(server, StaticAllowedCommandResolver(nil), func(ctx context.Context, req SendFileRequest) error {
 			got = req
 			return nil
-		}, 30, log.New(io.Discard, "", 0))
+		}, nil, 30, log.New(io.Discard, "", 0))
 	}()
 
 	enc := gob.NewEncoder(client)
@@ -149,5 +149,58 @@ func TestHandleConnDispatchesSendFileRequests(t *testing.T) {
 	}
 	if string(got.Content) != "hello" {
 		t.Fatalf("unexpected content: %q", string(got.Content))
+	}
+}
+
+func TestHandleConnDispatchesSendTextRequests(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	defer client.Close()
+
+	var got SendTextRequest
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		handleConn(server, StaticAllowedCommandResolver(nil), nil, func(ctx context.Context, req SendTextRequest) error {
+			got = req
+			return nil
+		}, 30, log.New(io.Discard, "", 0))
+	}()
+
+	enc := gob.NewEncoder(client)
+	dec := gob.NewDecoder(client)
+	if err := enc.Encode(Request{
+		Op:        OpSendText,
+		SandboxID: "thread-2",
+		Text:      "hello world",
+	}); err != nil {
+		t.Fatalf("encode request: %v", err)
+	}
+
+	var frame Frame
+	if err := dec.Decode(&frame); err != nil {
+		t.Fatalf("decode frame: %v", err)
+	}
+	if frame.Kind != StreamStdout {
+		t.Fatalf("frame.Kind = %d, want stdout", frame.Kind)
+	}
+	if string(frame.Data) != "sent text\n" {
+		t.Fatalf("frame.Data = %q", string(frame.Data))
+	}
+
+	if err := dec.Decode(&frame); err != nil {
+		t.Fatalf("decode exit frame: %v", err)
+	}
+	if frame.Kind != StreamExit {
+		t.Fatalf("frame.Kind = %d, want exit", frame.Kind)
+	}
+	if frame.ExitCode != 0 {
+		t.Fatalf("frame.ExitCode = %d, want 0", frame.ExitCode)
+	}
+	<-done
+
+	if got.SandboxID != "thread-2" || got.Text != "hello world" {
+		t.Fatalf("unexpected sendtext request: %+v", got)
 	}
 }
