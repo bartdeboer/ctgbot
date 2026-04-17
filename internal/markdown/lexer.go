@@ -1,4 +1,4 @@
-package markdownv4
+package markdown
 
 import "strings"
 
