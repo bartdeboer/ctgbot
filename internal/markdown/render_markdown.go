@@ -19,7 +19,7 @@ func renderMarkdownDocument(doc *Document) string {
 func renderMarkdownBlock(block *BlockNode) string {
 	switch block.Kind {
 	case CodeBlock:
-		body := renderMarkdownLines(block.Lines)
+		body := renderMarkdownCodeLines(block.Lines)
 		info := ""
 		if block.Meta != nil {
 			info = strings.TrimSpace(block.Meta["info"])
@@ -38,6 +38,14 @@ func renderMarkdownLines(lines []*LineNode) string {
 	return strings.Join(parts, "\n")
 }
 
+func renderMarkdownCodeLines(lines []*LineNode) string {
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		parts = append(parts, renderMarkdownCodeLine(line))
+	}
+	return strings.Join(parts, "\n")
+}
+
 func renderMarkdownLine(line *LineNode) string {
 	if line == nil {
 		return ""
@@ -45,6 +53,21 @@ func renderMarkdownLine(line *LineNode) string {
 	var b strings.Builder
 	for _, span := range line.Spans {
 		b.WriteString(renderMarkdownSpan(span))
+	}
+	text := b.String()
+	if line.HeadingLevel > 0 {
+		return "*" + text + "*"
+	}
+	return text
+}
+
+func renderMarkdownCodeLine(line *LineNode) string {
+	if line == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, span := range line.Spans {
+		b.WriteString(renderMarkdownCodeSpan(span))
 	}
 	return b.String()
 }
@@ -63,6 +86,20 @@ func renderMarkdownSpan(span *SpanNode) string {
 	default:
 		return escapeMarkdownText(span.Text)
 	}
+}
+
+func renderMarkdownCodeSpan(span *SpanNode) string {
+	if span == nil {
+		return ""
+	}
+	if len(span.Children) > 0 {
+		var b strings.Builder
+		for _, child := range span.Children {
+			b.WriteString(renderMarkdownCodeSpan(child))
+		}
+		return b.String()
+	}
+	return escapeMarkdownCode(span.Text)
 }
 
 func renderMarkdownChildren(children []*SpanNode) string {
