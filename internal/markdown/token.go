@@ -7,6 +7,7 @@ const (
 	TokenText      TokenKind = "text"
 	TokenNewline   TokenKind = "newline"
 	TokenBlankLine TokenKind = "blank_line"
+	TokenHeading   TokenKind = "heading"
 	TokenStrong    TokenKind = "strong"
 	TokenEmphasis  TokenKind = "emphasis"
 	TokenBacktick  TokenKind = "backtick"

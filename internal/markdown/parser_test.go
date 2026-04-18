@@ -65,16 +65,22 @@ func TestDocumentGetLinesAndLineSlice(t *testing.T) {
 	}
 }
 
-func TestParseDetectsHeadingLines(t *testing.T) {
+func TestParseBuildsHeadingBlocks(t *testing.T) {
 	doc, err := Parse("## Quick take\nNormal line")
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	line := doc.Blocks[0].Lines[0]
-	if line.HeadingLevel != 2 {
-		t.Fatalf("heading level = %d, want 2", line.HeadingLevel)
+	if len(doc.Blocks) != 2 {
+		t.Fatalf("blocks len = %d, want 2", len(doc.Blocks))
 	}
-	if got := renderTextLine(line); got != "## Quick take" {
-		t.Fatalf("rendered line = %q", got)
+	block := doc.Blocks[0]
+	if block.Kind != HeadingBlock {
+		t.Fatalf("kind = %q, want heading", block.Kind)
+	}
+	if block.HeadingLevel != 2 {
+		t.Fatalf("heading level = %d, want 2", block.HeadingLevel)
+	}
+	if got := renderTextBlock(block); got != "## Quick take\n" {
+		t.Fatalf("rendered block = %q", got)
 	}
 }

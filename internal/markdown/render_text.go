@@ -31,6 +31,8 @@ func renderTextBlock(block *BlockNode) string {
 			return "```\n" + body + "\n```"
 		}
 		return "```" + info + "\n" + body + "\n```"
+	case HeadingBlock:
+		return strings.Repeat("#", block.HeadingLevel) + " " + renderTextLines(block.Lines) + "\n"
 	default:
 		return renderTextLines(block.Lines) + "\n"
 	}
@@ -49,10 +51,6 @@ func renderTextLine(line *LineNode) string {
 		return ""
 	}
 	var b strings.Builder
-	if line.HeadingLevel > 0 {
-		b.WriteString(strings.Repeat("#", line.HeadingLevel))
-		b.WriteString(" ")
-	}
 	for _, span := range line.Spans {
 		b.WriteString(renderTextSpan(span))
 	}

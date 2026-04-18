@@ -15,6 +15,7 @@ type BlockKind string
 
 const (
 	ParagraphBlock BlockKind = "paragraph"
+	HeadingBlock   BlockKind = "heading"
 	CodeBlock      BlockKind = "code_block"
 )
 
@@ -33,17 +34,17 @@ type Document struct {
 }
 
 type BlockNode struct {
-	Kind  BlockKind         `json:"kind"`
-	Lines []*LineNode       `json:"lines,omitempty"`
-	Meta  map[string]string `json:"meta,omitempty"`
-	Span  Span              `json:"span"`
+	Kind         BlockKind         `json:"kind"`
+	HeadingLevel int               `json:"heading_level,omitempty"`
+	Lines        []*LineNode       `json:"lines,omitempty"`
+	Meta         map[string]string `json:"meta,omitempty"`
+	Span         Span              `json:"span"`
 }
 
 type LineNode struct {
-	StartPos     Position    `json:"start_pos"`
-	EndPos       Position    `json:"end_pos"`
-	HeadingLevel int         `json:"heading_level,omitempty"`
-	Spans        []*SpanNode `json:"spans,omitempty"`
+	StartPos Position    `json:"start_pos"`
+	EndPos   Position    `json:"end_pos"`
+	Spans    []*SpanNode `json:"spans,omitempty"`
 }
 
 type SpanNode struct {
@@ -95,6 +96,9 @@ func (b *BlockNode) Size() int {
 		return 0
 	}
 	total := 0
+	if b.Kind == HeadingBlock && b.HeadingLevel > 0 {
+		total += b.HeadingLevel + 1
+	}
 	for i, line := range b.Lines {
 		if line == nil {
 			continue
@@ -112,9 +116,6 @@ func (l *LineNode) Size() int {
 		return 0
 	}
 	total := 0
-	if l.HeadingLevel > 0 {
-		total += l.HeadingLevel + 1
-	}
 	for _, span := range l.Spans {
 		total += span.Size()
 	}
@@ -173,7 +174,7 @@ func (b *BlockNode) LineSlice(startPos, endPos Position) *BlockNode {
 	if len(lines) == 0 {
 		return nil
 	}
-	out := &BlockNode{Kind: b.Kind, Lines: lines, Meta: cloneMeta(b.Meta)}
+	out := &BlockNode{Kind: b.Kind, HeadingLevel: b.HeadingLevel, Lines: lines, Meta: cloneMeta(b.Meta)}
 	out.Span = Span{Start: lines[0].StartPos, End: lines[len(lines)-1].EndPos}
 	return out
 }
@@ -196,7 +197,7 @@ func CloneBlock(block *BlockNode) *BlockNode {
 	if block == nil {
 		return nil
 	}
-	out := &BlockNode{Kind: block.Kind, Span: block.Span, Meta: cloneMeta(block.Meta)}
+	out := &BlockNode{Kind: block.Kind, HeadingLevel: block.HeadingLevel, Span: block.Span, Meta: cloneMeta(block.Meta)}
 	if len(block.Lines) > 0 {
 		out.Lines = make([]*LineNode, 0, len(block.Lines))
 		for _, line := range block.Lines {
@@ -210,7 +211,7 @@ func CloneLine(line *LineNode) *LineNode {
 	if line == nil {
 		return nil
 	}
-	out := &LineNode{StartPos: line.StartPos, EndPos: line.EndPos, HeadingLevel: line.HeadingLevel}
+	out := &LineNode{StartPos: line.StartPos, EndPos: line.EndPos}
 	if len(line.Spans) > 0 {
 		out.Spans = make([]*SpanNode, 0, len(line.Spans))
 		for _, span := range line.Spans {
@@ -234,12 +235,12 @@ func CloneSpan(span *SpanNode) *SpanNode {
 	return out
 }
 
-func cloneMeta(meta map[string]string) map[string]string {
-	if len(meta) == 0 {
+func cloneMeta(in map[string]string) map[string]string {
+	if len(in) == 0 {
 		return nil
 	}
-	out := make(map[string]string, len(meta))
-	for k, v := range meta {
+	out := make(map[string]string, len(in))
+	for k, v := range in {
 		out[k] = v
 	}
 	return out

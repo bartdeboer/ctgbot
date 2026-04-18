@@ -25,6 +25,8 @@ func renderMarkdownBlock(block *BlockNode) string {
 			info = strings.TrimSpace(block.Meta["info"])
 		}
 		return wrapMarkdownCodeBlock(body, info)
+	case HeadingBlock:
+		return "*" + renderMarkdownLines(block.Lines) + "*\n"
 	default:
 		return renderMarkdownLines(block.Lines) + "\n"
 	}
@@ -54,11 +56,7 @@ func renderMarkdownLine(line *LineNode) string {
 	for _, span := range line.Spans {
 		b.WriteString(renderMarkdownSpan(span))
 	}
-	text := b.String()
-	if line.HeadingLevel > 0 {
-		return "*" + text + "*"
-	}
-	return text
+	return b.String()
 }
 
 func renderMarkdownCodeLine(line *LineNode) string {

@@ -28,6 +28,9 @@ func (l *Lexer) Next() Token {
 		if tok, ok := l.scanFence(); ok {
 			return tok
 		}
+		if tok, ok := l.scanHeading(); ok {
+			return tok
+		}
 	}
 	start := l.position()
 	switch {
@@ -56,7 +59,7 @@ func (l *Lexer) scanText() Token {
 			if _, ok := l.scanBlankLinePreview(); ok {
 				break
 			}
-			if l.match("```") {
+			if l.match("```") || l.matchHeadingMarker() > 0 {
 				break
 			}
 		}
@@ -104,6 +107,34 @@ func (l *Lexer) scanFence() (Token, bool) {
 		l.advanceRune()
 	}
 	return Token{Kind: TokenFence, Text: b.String(), Span: Span{Start: start, End: l.position()}}, true
+}
+
+func (l *Lexer) scanHeading() (Token, bool) {
+	count := l.matchHeadingMarker()
+	if count == 0 {
+		return Token{}, false
+	}
+	start := l.position()
+	for i := 0; i < count; i++ {
+		l.advanceRune()
+	}
+	end := l.position()
+	l.advanceRune() // consume required space
+	return Token{Kind: TokenHeading, Text: strings.Repeat("#", count), Span: Span{Start: start, End: end}}, true
+}
+
+func (l *Lexer) matchHeadingMarker() int {
+	count := 0
+	for i := l.idx; i < len(l.src) && l.src[i] == '#'; i++ {
+		count++
+	}
+	if count == 0 || count > 3 {
+		return 0
+	}
+	if l.idx+count >= len(l.src) || l.src[l.idx+count] != ' ' {
+		return 0
+	}
+	return count
 }
 
 func (l *Lexer) eof() bool { return l.idx >= len(l.src) }

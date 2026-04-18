@@ -23,6 +23,8 @@ func renderHTMLBlock(block *BlockNode) string {
 	switch block.Kind {
 	case CodeBlock:
 		return wrapHTMLCodeBlock(renderHTMLLines(block.Lines))
+	case HeadingBlock:
+		return "<b>" + renderHTMLLines(block.Lines) + "</b>\n"
 	default:
 		return renderHTMLLines(block.Lines) + "\n"
 	}
@@ -44,11 +46,7 @@ func renderHTMLLine(line *LineNode) string {
 	for _, span := range line.Spans {
 		b.WriteString(renderHTMLSpan(span))
 	}
-	text := b.String()
-	if line.HeadingLevel > 0 {
-		return "<b>" + text + "</b>"
-	}
-	return text
+	return b.String()
 }
 
 func renderHTMLSpan(span *SpanNode) string {
