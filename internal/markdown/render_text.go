@@ -28,9 +28,9 @@ func renderTextBlock(block *BlockNode) string {
 			info = strings.TrimSpace(block.Meta["info"])
 		}
 		if info == "" {
-			return "```\n" + body + "\n```"
+			return "```\n" + body + "\n```\n"
 		}
-		return "```" + info + "\n" + body + "\n```"
+		return "```" + info + "\n" + body + "\n```\n"
 	case HeadingBlock:
 		return strings.Repeat("#", block.HeadingLevel) + " " + renderTextLines(block.Lines) + "\n"
 	default:

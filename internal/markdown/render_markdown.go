@@ -24,7 +24,7 @@ func renderMarkdownBlock(block *BlockNode) string {
 		if block.Meta != nil {
 			info = strings.TrimSpace(block.Meta["info"])
 		}
-		return wrapMarkdownCodeBlock(body, info)
+		return wrapMarkdownCodeBlock(body, info) + "\n"
 	case HeadingBlock:
 		return "*" + renderMarkdownLines(block.Lines) + "*\n"
 	default:
@@ -53,8 +53,8 @@ func renderMarkdownLine(line *LineNode) string {
 		return ""
 	}
 	var b strings.Builder
-	for _, span := range line.Spans {
-		b.WriteString(renderMarkdownSpan(span))
+	for i, span := range line.Spans {
+		b.WriteString(renderMarkdownSpan(span, i == 0))
 	}
 	return b.String()
 }
@@ -70,7 +70,7 @@ func renderMarkdownCodeLine(line *LineNode) string {
 	return b.String()
 }
 
-func renderMarkdownSpan(span *SpanNode) string {
+func renderMarkdownSpan(span *SpanNode, lineStart bool) string {
 	if span == nil {
 		return ""
 	}
@@ -82,7 +82,7 @@ func renderMarkdownSpan(span *SpanNode) string {
 	case InlineCodeSpan:
 		return "`" + escapeMarkdownCode(span.Text) + "`"
 	default:
-		return escapeMarkdownText(span.Text)
+		return escapeMarkdownText(span.Text, lineStart)
 	}
 }
 
@@ -103,7 +103,7 @@ func renderMarkdownCodeSpan(span *SpanNode) string {
 func renderMarkdownChildren(children []*SpanNode) string {
 	var b strings.Builder
 	for _, child := range children {
-		b.WriteString(renderMarkdownSpan(child))
+		b.WriteString(renderMarkdownSpan(child, false))
 	}
 	return b.String()
 }
@@ -115,10 +115,14 @@ func wrapMarkdownCodeBlock(body, info string) string {
 	return "```" + escapeMarkdownCode(info) + "\n" + body + "\n```"
 }
 
-func escapeMarkdownText(text string) string {
+func escapeMarkdownText(text string, lineStart bool) string {
 	const special = "_*[]()~`>#+-=|{}.!\\"
 	var b strings.Builder
-	for _, r := range text {
+	for i, r := range text {
+		if lineStart && i == 0 && r == '-' && strings.HasPrefix(text, "- ") {
+			b.WriteRune(r)
+			continue
+		}
 		if strings.ContainsRune(special, r) {
 			b.WriteRune('\\')
 		}

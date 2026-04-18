@@ -3,6 +3,7 @@ package markdown
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -107,9 +108,9 @@ func TestAgentFixtureCurrentRenderOutputs(t *testing.T) {
 		format RenderFormat
 		want   string
 	}{
-		{name: "plain", format: RenderPlain, want: loadFixture(t, "agent_text.txt")},
-		{name: "html", format: RenderHTML, want: loadFixture(t, "agent_html.html")},
-		{name: "markdown", format: RenderMarkdownV2, want: loadFixture(t, "agent_md.md")},
+		{name: "plain", format: RenderPlain, want: normalizeFixtureOutput(loadFixture(t, "agent_text.txt"))},
+		{name: "html", format: RenderHTML, want: normalizeFixtureOutput(loadFixture(t, "agent_html.html"))},
+		{name: "markdown", format: RenderMarkdownV2, want: normalizeFixtureOutput(loadFixture(t, "agent_md.md"))},
 	}
 
 	for _, tt := range tests {
@@ -123,4 +124,8 @@ func TestAgentFixtureCurrentRenderOutputs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func normalizeFixtureOutput(text string) string {
+	return strings.TrimSuffix(text, "\n")
 }

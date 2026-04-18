@@ -22,7 +22,7 @@ func renderHTMLDocument(doc *Document) string {
 func renderHTMLBlock(block *BlockNode) string {
 	switch block.Kind {
 	case CodeBlock:
-		return wrapHTMLCodeBlock(renderHTMLLines(block.Lines))
+		return wrapHTMLCodeBlock(renderHTMLLines(block.Lines)) + "\n"
 	case HeadingBlock:
 		return "<b>" + renderHTMLLines(block.Lines) + "</b>\n"
 	default:
