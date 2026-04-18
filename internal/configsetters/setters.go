@@ -67,11 +67,11 @@ type SetCodexSharedHomePathInput struct {
 }
 
 type SetSessionTimeoutMinInput struct {
-	SetSessionTimeoutMin int `flag:"set-session-timeout-min"`
+	SetSessionTimeoutMin string `flag:"set-session-timeout-min"`
 }
 
 type SetPollTimeoutSecInput struct {
-	SetPollTimeoutSec int `flag:"set-poll-timeout-sec"`
+	SetPollTimeoutSec string `flag:"set-poll-timeout-sec"`
 }
 
 type SetChatEnabledInput struct {
@@ -112,6 +112,11 @@ type SetChatHostbridgeAliasArgsInput struct {
 type SetChatHostbridgeAliasAllowExtraArgsInput struct {
 	ChatHostbridgeAliasRoute
 	SetAllowExtraArgs bool `flag:"set-allow-extra-args"`
+}
+
+type SetChatHostbridgeAliasDelayInput struct {
+	ChatHostbridgeAliasRoute
+	SetDelay string `flag:"set-delay"`
 }
 
 type SetChatHostbridgeAliasRemovedInput struct {
@@ -211,14 +216,14 @@ func (c *ConfigSetters) SetSessionTimeoutMin(in SetSessionTimeoutMinInput) error
 	if c == nil || c.Local == nil {
 		return fmt.Errorf("missing local config store")
 	}
-	return c.Local.PersistInt("session.timeout_min", in.SetSessionTimeoutMin)
+	return c.Local.PersistString("session.timeout_min", strings.TrimSpace(in.SetSessionTimeoutMin))
 }
 
 func (c *ConfigSetters) SetPollTimeoutSec(in SetPollTimeoutSecInput) error {
 	if c == nil || c.Local == nil {
 		return fmt.Errorf("missing local config store")
 	}
-	return c.Local.PersistInt("telegram.defaults.poll_timeout_sec", in.SetPollTimeoutSec)
+	return c.Local.PersistString("telegram.defaults.poll_timeout_sec", strings.TrimSpace(in.SetPollTimeoutSec))
 }
 
 func (c *ConfigSetters) SetChatEnabled(in SetChatEnabledInput) error {
@@ -318,6 +323,19 @@ func (c *ConfigSetters) SetChatHostbridgeAliasAllowExtraArgs(in SetChatHostbridg
 		return err
 	}
 	command.AllowExtraArgs = in.SetAllowExtraArgs
+	return c.State.SetChatHostbridgeAllowedCommandByID(chatID, in.Alias, command)
+}
+
+func (c *ConfigSetters) SetChatHostbridgeAliasDelay(in SetChatHostbridgeAliasDelayInput) error {
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
+	command, err := c.chatHostbridgeAliasCommand(chatID, in.Alias)
+	if err != nil {
+		return err
+	}
+	command.Delay = strings.TrimSpace(in.SetDelay)
 	return c.State.SetChatHostbridgeAllowedCommandByID(chatID, in.Alias, command)
 }
 

@@ -8,6 +8,7 @@ import (
 	"net"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestBuildExecutionPlanUsesFixedCommandShape(t *testing.T) {
@@ -202,5 +203,30 @@ func TestHandleConnDispatchesSendTextRequests(t *testing.T) {
 
 	if got.SandboxID != "thread-2" || got.Text != "hello world" {
 		t.Fatalf("unexpected sendtext request: %+v", got)
+	}
+}
+
+func TestBuildExecutionPlanParsesDelayMillisecondsByDefault(t *testing.T) {
+	plan, err := buildExecutionPlan(Request{Command: "git-push-ctgbot"}, AllowedCommand{
+		Name:  "git",
+		Args:  []string{"push"},
+		Dir:   "/workspace/src/ctgbot",
+		Delay: "250",
+	})
+	if err != nil {
+		t.Fatalf("build execution plan: %v", err)
+	}
+	if plan.Delay != 250*time.Millisecond {
+		t.Fatalf("plan.Delay = %s, want 250ms", plan.Delay)
+	}
+}
+
+func TestBuildExecutionPlanRejectsInvalidDelay(t *testing.T) {
+	_, err := buildExecutionPlan(Request{Command: "git-push-ctgbot"}, AllowedCommand{
+		Name:  "git",
+		Delay: "soon",
+	})
+	if err == nil {
+		t.Fatalf("expected invalid delay error")
 	}
 }

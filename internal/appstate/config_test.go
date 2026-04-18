@@ -746,3 +746,45 @@ func TestEnsureCodexCLIHomeImportsAuthIntoSelectedLocalHome(t *testing.T) {
 		t.Fatalf("copied auth = %q, want %q", string(body), "host-auth")
 	}
 }
+
+func TestConfigDurationParsingSupportsStringDurations(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := store.PersistString("telegram.defaults.poll_timeout_sec", "1500ms"); err != nil {
+		t.Fatalf("persist poll timeout: %v", err)
+	}
+	if err := store.PersistString("telegram.defaults.debounce_ms", "1s"); err != nil {
+		t.Fatalf("persist debounce: %v", err)
+	}
+	if err := store.PersistString("session.timeout_min", "90s"); err != nil {
+		t.Fatalf("persist session timeout: %v", err)
+	}
+
+	if got := cfg.PollTimeout(); got.String() != "1.5s" {
+		t.Fatalf("PollTimeout() = %s, want 1.5s", got)
+	}
+	if got := cfg.TelegramDebounceWindow(); got.String() != "1s" {
+		t.Fatalf("TelegramDebounceWindow() = %s, want 1s", got)
+	}
+	if got := cfg.SessionTimeout(); got.String() != "1m30s" {
+		t.Fatalf("SessionTimeout() = %s, want 1m30s", got)
+	}
+}

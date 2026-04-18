@@ -18,12 +18,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bartdeboer/ctgbot/internal/durationparse"
 )
 
 type AllowedCommand struct {
 	Name           string
 	Args           []string
 	Dir            string
+	Delay          string
 	Env            map[string]string
 	AllowExtraArgs bool
 }
@@ -214,6 +217,16 @@ func handleRunCommand(conn net.Conn, send *safeEncoder, req Request, resolve All
 	cmd := exec.CommandContext(ctx, plan.Name, plan.Args...)
 	cmd.Dir = plan.Dir
 	cmd.Env = plan.Env
+	if plan.Delay > 0 {
+		timer := time.NewTimer(plan.Delay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			_ = send.Encode(Frame{Kind: StreamError, Message: ctx.Err().Error()})
+			return
+		}
+	}
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -334,16 +347,21 @@ func streamReader(enc *safeEncoder, r io.Reader, kind StreamKind, done chan<- st
 }
 
 type executionPlan struct {
-	Name string
-	Args []string
-	Dir  string
-	Env  []string
+	Name  string
+	Args  []string
+	Dir   string
+	Delay time.Duration
+	Env   []string
 }
 
 func buildExecutionPlan(req Request, spec AllowedCommand) (executionPlan, error) {
 	spec, ok := normalizeAllowedCommand(spec)
 	if !ok {
 		return executionPlan{}, fmt.Errorf("allowed command %q has empty executable name", req.Command)
+	}
+	delay, err := parseAllowedCommandDelay(req.Command, spec.Delay)
+	if err != nil {
+		return executionPlan{}, err
 	}
 
 	args := append([]string{}, spec.Args...)
@@ -355,10 +373,11 @@ func buildExecutionPlan(req Request, spec AllowedCommand) (executionPlan, error)
 	}
 
 	return executionPlan{
-		Name: spec.Name,
-		Args: args,
-		Dir:  spec.Dir,
-		Env:  sanitizedEnv(spec.Env),
+		Name:  spec.Name,
+		Args:  args,
+		Dir:   spec.Dir,
+		Delay: delay,
+		Env:   sanitizedEnv(spec.Env),
 	}, nil
 }
 
@@ -457,6 +476,7 @@ func AllowedCommandsFromSpecs(specs []string) map[string]AllowedCommand {
 func normalizeAllowedCommand(spec AllowedCommand) (AllowedCommand, bool) {
 	spec.Name = strings.TrimSpace(spec.Name)
 	spec.Dir = strings.TrimSpace(spec.Dir)
+	spec.Delay = strings.TrimSpace(spec.Delay)
 	spec.Args = cleanCommandArgs(spec.Args)
 	spec.Env = cleanCommandEnv(spec.Env)
 	if spec.Name == "" {
@@ -599,4 +619,19 @@ func handleSendText(conn net.Conn, send *safeEncoder, req Request, sendText Send
 		Data: []byte("sent text\n"),
 	})
 	_ = send.Encode(Frame{Kind: StreamExit, ExitCode: 0})
+}
+
+func parseAllowedCommandDelay(commandName string, raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	d, err := durationparse.Parse(raw, time.Millisecond)
+	if err != nil {
+		return 0, fmt.Errorf("invalid delay %q for command %s: %w", raw, commandName, err)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("invalid delay %q for command %s: must be >= 0", raw, commandName)
+	}
+	return d, nil
 }

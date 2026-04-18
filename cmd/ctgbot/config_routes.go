@@ -97,7 +97,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 					fmt.Printf("      hostbridge.allowed_commands: names=%v\n", names)
 					for _, name := range names {
 						spec := commands[name]
-						fmt.Printf("        %s => name=%q args=%v dir=%q allow_extra_args=%t\n", name, spec.Name, spec.Args, spec.Dir, spec.AllowExtraArgs)
+						fmt.Printf("        %s => name=%q args=%v dir=%q allow_extra_args=%t delay=%q\n", name, spec.Name, spec.Args, spec.Dir, spec.AllowExtraArgs, spec.Delay)
 					}
 				}
 			}
@@ -110,6 +110,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			fmt.Println("    set a chat hostbridge command with: ctgbot config chat <chat-id> hostbridge <alias> --set-command <command>")
 			fmt.Println("    set a chat hostbridge dir with: ctgbot config chat <chat-id> hostbridge <alias> --set-dir <dir>")
 			fmt.Println("    set a chat hostbridge args with: ctgbot config chat <chat-id> hostbridge <alias> --set-args arg1,arg2")
+			fmt.Println("    set a chat hostbridge delay with: ctgbot config chat <chat-id> hostbridge <alias> --set-delay <ms|duration>")
 			fmt.Println("    remove a chat hostbridge alias with: ctgbot config chat <chat-id> hostbridge <alias> --remove true")
 			fmt.Println("    add a chat skill with: ctgbot config chat <chat-id> --add-skill <absolute-skill-dir>")
 			fmt.Println("    remove a chat skill with: ctgbot config chat <chat-id> --remove-skill <absolute-skill-dir>")

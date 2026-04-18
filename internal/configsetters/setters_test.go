@@ -86,4 +86,19 @@ func TestConfigSettersRegisterRoutes(t *testing.T) {
 	if command.Dir != "/repo" {
 		t.Fatalf("command.Dir = %q, want %q", command.Dir, "/repo")
 	}
+
+	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "hostbridge", "origin", "--set-delay", "250ms"}); err != nil {
+		t.Fatalf("Run hostbridge alias delay setter: %v", err)
+	}
+	command = state.ChatHostbridgeAllowedCommandsByID(entry.ID)["origin"]
+	if command.Delay != "250ms" {
+		t.Fatalf("command.Delay = %q, want %q", command.Delay, "250ms")
+	}
+
+	if err := router.Run(context.Background(), []string{"config", "--set-session-timeout-min", "90s"}); err != nil {
+		t.Fatalf("Run session timeout setter: %v", err)
+	}
+	if got := local.GetString("session.timeout_min", ""); got != "90s" {
+		t.Fatalf("session.timeout_min = %q, want %q", got, "90s")
+	}
 }

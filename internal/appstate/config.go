@@ -3,6 +3,7 @@ package appstate
 import (
 	"context"
 	"fmt"
+	"github.com/bartdeboer/ctgbot/internal/durationparse"
 	"io"
 	"os"
 	"os/exec"
@@ -207,22 +208,15 @@ func (c *Config) TelegramToken() string {
 }
 
 func (c *Config) PollTimeout() time.Duration {
-	sec := 60
-	if c.Store != nil {
-		sec = c.Store.GetInt("telegram.defaults.poll_timeout_sec", sec)
-	}
-	return time.Duration(sec) * time.Second
+	return c.durationFromConfig("telegram.defaults.poll_timeout_sec", 60, time.Second)
 }
 
 func (c *Config) TelegramDebounceWindow() time.Duration {
-	ms := 800
-	if c != nil && c.Store != nil {
-		ms = c.Store.GetInt("telegram.defaults.debounce_ms", ms)
-	}
-	if ms <= 0 {
+	d := c.durationFromConfig("telegram.defaults.debounce_ms", 800, time.Millisecond)
+	if d <= 0 {
 		return 0
 	}
-	return time.Duration(ms) * time.Millisecond
+	return d
 }
 
 func (c *Config) TelegramRenderFormat() string {
@@ -243,11 +237,20 @@ func (c *Config) TelegramRenderFormat() string {
 }
 
 func (c *Config) SessionTimeout() time.Duration {
-	minutes := 10
-	if c.Store != nil {
-		minutes = c.Store.GetInt("session.timeout_min", minutes)
+	return c.durationFromConfig("session.timeout_min", 10, time.Minute)
+}
+
+func (c *Config) durationFromConfig(key string, fallback int, unit time.Duration) time.Duration {
+	if c == nil || c.Store == nil {
+		return time.Duration(fallback) * unit
 	}
-	return time.Duration(minutes) * time.Minute
+	if raw := strings.TrimSpace(c.Store.GetString(key, "")); raw != "" {
+		d, err := durationparse.Parse(raw, unit)
+		if err == nil {
+			return d
+		}
+	}
+	return time.Duration(c.Store.GetInt(key, fallback)) * unit
 }
 
 func (c *Config) DockerImage() string {
@@ -1044,6 +1047,7 @@ func normalizeAllowedCommands(raw map[string]hostbridge.AllowedCommand) map[stri
 func hostbridgeNormalizeAllowedCommand(spec hostbridge.AllowedCommand) (hostbridge.AllowedCommand, bool) {
 	spec.Name = strings.TrimSpace(spec.Name)
 	spec.Dir = strings.TrimSpace(spec.Dir)
+	spec.Delay = strings.TrimSpace(spec.Delay)
 	if spec.Name == "" {
 		return hostbridge.AllowedCommand{}, false
 	}
