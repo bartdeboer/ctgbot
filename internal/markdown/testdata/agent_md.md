@@ -14,6 +14,13 @@ It also has a second line in the same paragraph\.
 These characters should stay readable: \_ \* \[ \] \( \) \~ \` \> \# \+ \- \= \| \{ \} \. \!
 Paths and values: `C:\\temp\\demo`, `a_b`, `x.y`, and `hello-world`\.
 
+*Upload paths*
+
+Uploads saved:
+
+- /workspace/inbox/photo\-1453\.jpg
+- /workspace/inbox/photo\-1454\.jpg
+
 *Go example*
 
 ```go
