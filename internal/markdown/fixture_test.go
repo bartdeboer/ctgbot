@@ -95,3 +95,32 @@ func TestReplyDiffsFirstChunkRenderedUnderTelegramLimit(t *testing.T) {
 		t.Fatalf("first chunk markdown length = %d, want <= 4096", n)
 	}
 }
+
+func TestAgentFixtureCurrentRenderOutputs(t *testing.T) {
+	doc, err := Parse(loadFixture(t, "agent_input.md"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		format RenderFormat
+		want   string
+	}{
+		{name: "plain", format: RenderPlain, want: loadFixture(t, "agent_text.txt")},
+		{name: "html", format: RenderHTML, want: loadFixture(t, "agent_html.html")},
+		{name: "markdown", format: RenderMarkdownV2, want: loadFixture(t, "agent_md.md")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := doc.Render(RenderOptions{Format: tt.format})
+			if err != nil {
+				t.Fatalf("Render(%s): %v", tt.format, err)
+			}
+			if got != tt.want {
+				t.Fatalf("Render(%s) mismatch\n--- got ---\n%s\n--- want ---\n%s", tt.format, got, tt.want)
+			}
+		})
+	}
+}

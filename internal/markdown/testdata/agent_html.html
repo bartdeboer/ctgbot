@@ -1,0 +1,28 @@
+<b>Agent formatting fixture</b>
+
+This paragraph has <b>bold</b>, <i>italic</i>, and <code>inline code</code>.
+It also has a second line in the same paragraph.
+
+<b>Bullet-like lines</b>
+
+- first item
+- second item with <code>code</code>
+- third item with <b>bold</b> text
+
+<b>Escapes and punctuation</b>
+
+These characters should stay readable: _ * [ ] ( ) ~ ` &gt; # + - = | { } . !
+Paths and values: <code>C:\temp\demo</code>, <code>a_b</code>, <code>x.y</code>, and <code>hello-world</code>.
+
+<b>Go example</b>
+
+<pre><code>package main
+
+import &#34;fmt&#34;
+
+func main() {
+	fmt.Println(&#34;hello&#34;)
+}</code></pre>
+<pre><code>- old_value := call(&#34;a_b&#34;)
++ new_value := call(&#34;x.y&#34;)</code></pre>
+Final paragraph after the code blocks.
