@@ -27,9 +27,23 @@ func renderMarkdownBlock(block *BlockNode) string {
 		return wrapMarkdownCodeBlock(body, info) + "\n"
 	case HeadingBlock:
 		return "*" + renderMarkdownLines(block.Lines) + "*\n"
+	case ListBlock:
+		return renderMarkdownList(block) + "\n"
 	default:
 		return renderMarkdownLines(block.Lines) + "\n"
 	}
+}
+
+func renderMarkdownList(block *BlockNode) string {
+	parts := make([]string, 0, len(block.Items))
+	for _, item := range block.Items {
+		if item == nil {
+			continue
+		}
+		prefix := strings.Repeat(" ", item.ListIndent) + listMarkerText(item) + " "
+		parts = append(parts, prefix+renderMarkdownLines(item.Lines))
+	}
+	return strings.Join(parts, "\n")
 }
 
 func renderMarkdownLines(lines []*LineNode) string {
@@ -118,11 +132,7 @@ func wrapMarkdownCodeBlock(body, info string) string {
 func escapeMarkdownText(text string, lineStart bool) string {
 	const special = "_*[]()~`>#+-=|{}.!\\"
 	var b strings.Builder
-	for i, r := range text {
-		if lineStart && i == 0 && r == '-' && strings.HasPrefix(text, "- ") {
-			b.WriteRune(r)
-			continue
-		}
+	for _, r := range text {
 		if strings.ContainsRune(special, r) {
 			b.WriteRune('\\')
 		}

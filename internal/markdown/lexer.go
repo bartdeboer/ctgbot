@@ -31,6 +31,9 @@ func (l *Lexer) Next() Token {
 		if tok, ok := l.scanHeading(); ok {
 			return tok
 		}
+		if tok, ok := l.scanListMarker(); ok {
+			return tok
+		}
 	}
 	start := l.position()
 	switch {
@@ -59,7 +62,7 @@ func (l *Lexer) scanText() Token {
 			if _, ok := l.scanBlankLinePreview(); ok {
 				break
 			}
-			if l.match("```") || l.matchHeadingMarker() > 0 {
+			if l.match("```") || l.matchHeadingMarkerLength() > 0 || l.matchListMarkerLength() > 0 {
 				break
 			}
 		}
@@ -110,20 +113,57 @@ func (l *Lexer) scanFence() (Token, bool) {
 }
 
 func (l *Lexer) scanHeading() (Token, bool) {
-	count := l.matchHeadingMarker()
+	startIdx := l.idx
+	lineStart := l.position()
+	indent := l.scanIndent()
+	count := l.matchHeadingMarkerLength()
 	if count == 0 {
+		l.idx = startIdx
+		l.restorePosition(lineStart)
 		return Token{}, false
 	}
-	start := l.position()
+	markerStart := l.position()
 	for i := 0; i < count; i++ {
 		l.advanceRune()
 	}
 	end := l.position()
 	l.advanceRune() // consume required space
-	return Token{Kind: TokenHeading, Text: strings.Repeat("#", count), Span: Span{Start: start, End: end}}, true
+	return Token{Kind: TokenHeading, Text: strings.Repeat("#", count), Span: Span{Start: markerStart, End: end}, Indent: indent}, true
 }
 
-func (l *Lexer) matchHeadingMarker() int {
+func (l *Lexer) scanListMarker() (Token, bool) {
+	startIdx := l.idx
+	lineStart := l.position()
+	indent := l.scanIndent()
+	length := l.matchListMarkerLength()
+	if length == 0 {
+		l.idx = startIdx
+		l.restorePosition(lineStart)
+		return Token{}, false
+	}
+	start := l.position()
+	l.advanceN(length)
+	return Token{Kind: TokenListMarker, Text: string(l.src[startIdx:l.idx]), Span: Span{Start: start, End: l.position()}, Indent: indent}, true
+}
+
+func (l *Lexer) scanIndent() int {
+	indent := 0
+	for !l.eof() {
+		switch l.peek() {
+		case ' ':
+			indent++
+			l.advanceRune()
+		case '\t':
+			indent += 4
+			l.advanceRune()
+		default:
+			return indent
+		}
+	}
+	return indent
+}
+
+func (l *Lexer) matchHeadingMarkerLength() int {
 	count := 0
 	for i := l.idx; i < len(l.src) && l.src[i] == '#'; i++ {
 		count++
@@ -135,6 +175,23 @@ func (l *Lexer) matchHeadingMarker() int {
 		return 0
 	}
 	return count
+}
+
+func (l *Lexer) matchListMarkerLength() int {
+	if l.eof() {
+		return 0
+	}
+	if (l.peek() == '-' || l.peek() == '*') && l.idx+1 < len(l.src) && l.src[l.idx+1] == ' ' {
+		return 2
+	}
+	j := l.idx
+	for j < len(l.src) && l.src[j] >= '0' && l.src[j] <= '9' {
+		j++
+	}
+	if j == l.idx || j+1 >= len(l.src) || l.src[j] != '.' || l.src[j+1] != ' ' {
+		return 0
+	}
+	return j + 2 - l.idx
 }
 
 func (l *Lexer) eof() bool { return l.idx >= len(l.src) }

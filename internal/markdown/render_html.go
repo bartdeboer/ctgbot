@@ -25,9 +25,22 @@ func renderHTMLBlock(block *BlockNode) string {
 		return wrapHTMLCodeBlock(renderHTMLLines(block.Lines)) + "\n"
 	case HeadingBlock:
 		return "<b>" + renderHTMLLines(block.Lines) + "</b>\n"
+	case ListBlock:
+		return renderHTMLList(block) + "\n"
 	default:
 		return renderHTMLLines(block.Lines) + "\n"
 	}
+}
+
+func renderHTMLList(block *BlockNode) string {
+	parts := make([]string, 0, len(block.Items))
+	for _, item := range block.Items {
+		if item == nil {
+			continue
+		}
+		parts = append(parts, strings.Repeat(" ", item.ListIndent)+html.EscapeString(listMarkerText(item))+" "+renderHTMLLines(item.Lines))
+	}
+	return strings.Join(parts, "\n")
 }
 
 func renderHTMLLines(lines []*LineNode) string {

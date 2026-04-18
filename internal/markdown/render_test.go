@@ -121,3 +121,40 @@ func TestRenderHeadings(t *testing.T) {
 		t.Fatalf("markdown = %q", md)
 	}
 }
+
+func TestRenderPlainListBlock(t *testing.T) {
+	doc, err := Parse("- item 1\n  - item 2\n1. item 3")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	got, err := doc.Render(RenderOptions{Format: RenderPlain})
+	if err != nil {
+		t.Fatalf("Render plain: %v", err)
+	}
+	want := "- item 1\n  - item 2\n1. item 3"
+	if got != want {
+		t.Fatalf("plain = %q, want %q", got, want)
+	}
+}
+
+func TestRenderMarkdownListBlock(t *testing.T) {
+	doc, err := Parse(`uploads saved:
+- /workspace/inbox/photo-1408.jpg
+  - child-item
+1. item 3`)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	got, err := doc.Render(RenderOptions{Format: RenderMarkdownV2})
+	if err != nil {
+		t.Fatalf("Render markdown: %v", err)
+	}
+	want := `uploads saved:
+
+- /workspace/inbox/photo\-1408\.jpg
+  - child\-item
+1. item 3`
+	if got != want {
+		t.Fatalf("markdown = %q, want %q", got, want)
+	}
+}

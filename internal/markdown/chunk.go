@@ -50,13 +50,28 @@ func (d *Document) Chunked(chunkSize int) []*Document {
 
 func findLineOwner(doc *Document, target *LineNode) (*BlockNode, *LineNode) {
 	for _, block := range doc.Blocks {
-		for _, line := range block.Lines {
-			if line == target {
-				return block, line
-			}
+		if owner, line := findLineOwnerInBlock(block, target); line != nil {
+			return owner, line
 		}
 	}
 	return nil, target
+}
+
+func findLineOwnerInBlock(block *BlockNode, target *LineNode) (*BlockNode, *LineNode) {
+	if block == nil {
+		return nil, nil
+	}
+	for _, line := range block.Lines {
+		if line == target {
+			return block, line
+		}
+	}
+	for _, item := range block.Items {
+		if owner, line := findLineOwnerInBlock(item, target); line != nil {
+			return owner, line
+		}
+	}
+	return nil, nil
 }
 
 func fitChunkLineWindow(doc *Document, lines []*LineNode, start int, limit int) int {
@@ -78,6 +93,9 @@ func splitOversizedLineDocuments(block *BlockNode, line *LineNode, limit int) []
 	if block.Kind == CodeBlock {
 		return splitOversizedCodeLineDocuments(block, line, limit)
 	}
+	if block.Kind == ListItemBlock {
+		return splitOversizedListItemLineDocuments(block, line, limit)
+	}
 	return splitOversizedParagraphLineDocuments(line, limit)
 }
 
@@ -89,6 +107,19 @@ func splitOversizedParagraphLineDocuments(line *LineNode, limit int) []*Document
 		lineCopy := &LineNode{StartPos: line.StartPos, EndPos: line.EndPos, Spans: segmentsToSpans(part)}
 		block := &BlockNode{Kind: ParagraphBlock, Lines: []*LineNode{lineCopy}, Span: Span{Start: lineCopy.StartPos, End: lineCopy.EndPos}}
 		out = append(out, &Document{Blocks: []*BlockNode{block}, Span: block.Span})
+	}
+	return out
+}
+
+func splitOversizedListItemLineDocuments(block *BlockNode, line *LineNode, limit int) []*Document {
+	segments := flattenLineSegments(line.Spans, 0)
+	parts := splitSegments(segments, maxInt(1, limit-block.ListIndent-len([]rune(block.Marker))-1))
+	out := make([]*Document, 0, len(parts))
+	for _, part := range parts {
+		lineCopy := &LineNode{StartPos: line.StartPos, EndPos: line.EndPos, Spans: segmentsToSpans(part)}
+		item := &BlockNode{Kind: ListItemBlock, ListIndent: block.ListIndent, Marker: block.Marker, Ordered: block.Ordered, Lines: []*LineNode{lineCopy}, Span: Span{Start: lineCopy.StartPos, End: lineCopy.EndPos}}
+		list := &BlockNode{Kind: ListBlock, Items: []*BlockNode{item}, Span: item.Span}
+		out = append(out, &Document{Blocks: []*BlockNode{list}, Span: list.Span})
 	}
 	return out
 }

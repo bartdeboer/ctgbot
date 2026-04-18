@@ -84,3 +84,26 @@ func TestParseBuildsHeadingBlocks(t *testing.T) {
 		t.Fatalf("rendered block = %q", got)
 	}
 }
+
+func TestParseBuildsListBlock(t *testing.T) {
+	doc, err := Parse("- item 1\n  - item 2\n1. item 3")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(doc.Blocks) != 1 {
+		t.Fatalf("blocks len = %d, want 1", len(doc.Blocks))
+	}
+	block := doc.Blocks[0]
+	if block.Kind != ListBlock {
+		t.Fatalf("kind = %q, want list", block.Kind)
+	}
+	if len(block.Items) != 3 {
+		t.Fatalf("items len = %d, want 3", len(block.Items))
+	}
+	if block.Items[1].ListIndent != 2 {
+		t.Fatalf("item[1] indent = %d, want 2", block.Items[1].ListIndent)
+	}
+	if !block.Items[2].Ordered {
+		t.Fatalf("item[2] expected ordered")
+	}
+}

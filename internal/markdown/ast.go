@@ -1,5 +1,7 @@
 package markdown
 
+import "strings"
+
 type Position struct {
 	Offset int `json:"offset"`
 	Line   int `json:"line"`
@@ -17,6 +19,8 @@ const (
 	ParagraphBlock BlockKind = "paragraph"
 	HeadingBlock   BlockKind = "heading"
 	CodeBlock      BlockKind = "code_block"
+	ListBlock      BlockKind = "list"
+	ListItemBlock  BlockKind = "list_item"
 )
 
 type SpanKind string
@@ -36,7 +40,11 @@ type Document struct {
 type BlockNode struct {
 	Kind         BlockKind         `json:"kind"`
 	HeadingLevel int               `json:"heading_level,omitempty"`
+	ListIndent   int               `json:"list_indent,omitempty"`
+	Marker       string            `json:"marker,omitempty"`
+	Ordered      bool              `json:"ordered,omitempty"`
 	Lines        []*LineNode       `json:"lines,omitempty"`
+	Items        []*BlockNode      `json:"items,omitempty"`
 	Meta         map[string]string `json:"meta,omitempty"`
 	Span         Span              `json:"span"`
 }
@@ -86,6 +94,13 @@ func (b *BlockNode) GetLines() []*LineNode {
 	if b == nil {
 		return nil
 	}
+	if b.Kind == ListBlock {
+		var out []*LineNode
+		for _, item := range b.Items {
+			out = append(out, item.GetLines()...)
+		}
+		return out
+	}
 	out := make([]*LineNode, 0, len(b.Lines))
 	out = append(out, b.Lines...)
 	return out
@@ -95,20 +110,59 @@ func (b *BlockNode) Size() int {
 	if b == nil {
 		return 0
 	}
-	total := 0
-	if b.Kind == HeadingBlock && b.HeadingLevel > 0 {
-		total += b.HeadingLevel + 1
-	}
-	for i, line := range b.Lines {
-		if line == nil {
-			continue
+	switch b.Kind {
+	case HeadingBlock:
+		total := 0
+		if b.HeadingLevel > 0 {
+			total += b.HeadingLevel + 1
 		}
-		if i > 0 {
-			total++
+		for i, line := range b.Lines {
+			if line == nil {
+				continue
+			}
+			if i > 0 {
+				total++
+			}
+			total += line.Size()
 		}
-		total += line.Size()
+		return total
+	case ListBlock:
+		total := 0
+		for i, item := range b.Items {
+			if item == nil {
+				continue
+			}
+			if i > 0 {
+				total++
+			}
+			total += item.Size()
+		}
+		return total
+	case ListItemBlock:
+		total := b.ListIndent + len([]rune(b.Marker)) + 1
+		for i, line := range b.Lines {
+			if line == nil {
+				continue
+			}
+			if i > 0 {
+				total++
+			}
+			total += line.Size()
+		}
+		return total
+	default:
+		total := 0
+		for i, line := range b.Lines {
+			if line == nil {
+				continue
+			}
+			if i > 0 {
+				total++
+			}
+			total += line.Size()
+		}
+		return total
 	}
-	return total
 }
 
 func (l *LineNode) Size() int {
@@ -161,6 +215,20 @@ func (b *BlockNode) LineSlice(startPos, endPos Position) *BlockNode {
 	if b == nil {
 		return nil
 	}
+	if b.Kind == ListBlock {
+		var items []*BlockNode
+		for _, item := range b.Items {
+			sliced := item.LineSlice(startPos, endPos)
+			if sliced != nil {
+				items = append(items, sliced)
+			}
+		}
+		if len(items) == 0 {
+			return nil
+		}
+		out := &BlockNode{Kind: b.Kind, Items: items, Meta: cloneMeta(b.Meta), Span: Span{Start: items[0].Span.Start, End: items[len(items)-1].Span.End}}
+		return out
+	}
 	var lines []*LineNode
 	for _, line := range b.Lines {
 		if line == nil {
@@ -174,7 +242,7 @@ func (b *BlockNode) LineSlice(startPos, endPos Position) *BlockNode {
 	if len(lines) == 0 {
 		return nil
 	}
-	out := &BlockNode{Kind: b.Kind, HeadingLevel: b.HeadingLevel, Lines: lines, Meta: cloneMeta(b.Meta)}
+	out := &BlockNode{Kind: b.Kind, HeadingLevel: b.HeadingLevel, ListIndent: b.ListIndent, Marker: b.Marker, Ordered: b.Ordered, Lines: lines, Meta: cloneMeta(b.Meta)}
 	out.Span = Span{Start: lines[0].StartPos, End: lines[len(lines)-1].EndPos}
 	return out
 }
@@ -197,11 +265,17 @@ func CloneBlock(block *BlockNode) *BlockNode {
 	if block == nil {
 		return nil
 	}
-	out := &BlockNode{Kind: block.Kind, HeadingLevel: block.HeadingLevel, Span: block.Span, Meta: cloneMeta(block.Meta)}
+	out := &BlockNode{Kind: block.Kind, HeadingLevel: block.HeadingLevel, ListIndent: block.ListIndent, Marker: block.Marker, Ordered: block.Ordered, Span: block.Span, Meta: cloneMeta(block.Meta)}
 	if len(block.Lines) > 0 {
 		out.Lines = make([]*LineNode, 0, len(block.Lines))
 		for _, line := range block.Lines {
 			out.Lines = append(out.Lines, CloneLine(line))
+		}
+	}
+	if len(block.Items) > 0 {
+		out.Items = make([]*BlockNode, 0, len(block.Items))
+		for _, item := range block.Items {
+			out.Items = append(out.Items, CloneBlock(item))
 		}
 	}
 	return out
@@ -244,4 +318,18 @@ func cloneMeta(in map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+func listMarkerText(block *BlockNode) string {
+	if block == nil {
+		return "-"
+	}
+	marker := strings.TrimSpace(block.Marker)
+	if marker == "" {
+		if block.Ordered {
+			return "1."
+		}
+		return "-"
+	}
+	return marker
 }

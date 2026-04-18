@@ -33,9 +33,22 @@ func renderTextBlock(block *BlockNode) string {
 		return "```" + info + "\n" + body + "\n```\n"
 	case HeadingBlock:
 		return strings.Repeat("#", block.HeadingLevel) + " " + renderTextLines(block.Lines) + "\n"
+	case ListBlock:
+		return renderTextList(block) + "\n"
 	default:
 		return renderTextLines(block.Lines) + "\n"
 	}
+}
+
+func renderTextList(block *BlockNode) string {
+	parts := make([]string, 0, len(block.Items))
+	for _, item := range block.Items {
+		if item == nil {
+			continue
+		}
+		parts = append(parts, strings.Repeat(" ", item.ListIndent)+listMarkerText(item)+" "+renderTextLines(item.Lines))
+	}
+	return strings.Join(parts, "\n")
 }
 
 func renderTextLines(lines []*LineNode) string {

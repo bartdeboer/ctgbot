@@ -1,5 +1,7 @@
 package markdown
 
+import "strings"
+
 type Parser struct {
 	lx  *Lexer
 	cur Token
@@ -29,8 +31,11 @@ func (p *Parser) parseDocument() *Document {
 }
 
 func (p *Parser) parseBlock() *BlockNode {
-	if p.cur.Kind == TokenFence {
+	switch p.cur.Kind {
+	case TokenFence:
 		return p.parseCodeBlock()
+	case TokenListMarker:
+		return p.parseListBlock()
 	}
 	line, headingLevel := p.parseParagraphLineAndHeading()
 	if headingLevel > 0 {
@@ -48,7 +53,7 @@ func (p *Parser) parseParagraphBlockFromFirstLine(first *LineNode) *BlockNode {
 	if first != nil {
 		block.Lines = append(block.Lines, first)
 	}
-	for p.cur.Kind != TokenEOF && p.cur.Kind != TokenBlankLine && p.cur.Kind != TokenFence {
+	for p.cur.Kind != TokenEOF && p.cur.Kind != TokenBlankLine && p.cur.Kind != TokenFence && p.cur.Kind != TokenListMarker {
 		line := p.parseParagraphLine()
 		if line != nil {
 			block.Lines = append(block.Lines, line)
@@ -69,7 +74,7 @@ func (p *Parser) parseParagraphLine() *LineNode {
 }
 
 func (p *Parser) parseParagraphLineAndHeading() (*LineNode, int) {
-	if p.cur.Kind == TokenEOF || p.cur.Kind == TokenBlankLine || p.cur.Kind == TokenFence {
+	if p.cur.Kind == TokenEOF || p.cur.Kind == TokenBlankLine || p.cur.Kind == TokenFence || p.cur.Kind == TokenListMarker {
 		return nil, 0
 	}
 	start := p.cur.Span.Start
@@ -81,7 +86,7 @@ func (p *Parser) parseParagraphLineAndHeading() (*LineNode, int) {
 	}
 	var tokens []Token
 	end := start
-	for p.cur.Kind != TokenEOF && p.cur.Kind != TokenBlankLine && p.cur.Kind != TokenNewline && p.cur.Kind != TokenFence {
+	for p.cur.Kind != TokenEOF && p.cur.Kind != TokenBlankLine && p.cur.Kind != TokenNewline && p.cur.Kind != TokenFence && p.cur.Kind != TokenListMarker {
 		tokens = append(tokens, p.cur)
 		end = p.cur.Span.End
 		p.advance()
@@ -91,6 +96,65 @@ func (p *Parser) parseParagraphLineAndHeading() (*LineNode, int) {
 		p.advance()
 	}
 	return &LineNode{StartPos: start, EndPos: end, Spans: parseInlineTokens(tokens)}, headingLevel
+}
+
+func (p *Parser) parseListBlock() *BlockNode {
+	block := &BlockNode{Kind: ListBlock}
+	for p.cur.Kind == TokenListMarker {
+		item := p.parseListItem()
+		if item != nil {
+			block.Items = append(block.Items, item)
+		}
+		if p.cur.Kind == TokenBlankLine {
+			break
+		}
+	}
+	if len(block.Items) > 0 {
+		block.Span = Span{Start: block.Items[0].Span.Start, End: block.Items[len(block.Items)-1].Span.End}
+	}
+	return block
+}
+
+func (p *Parser) parseListItem() *BlockNode {
+	if p.cur.Kind != TokenListMarker {
+		return nil
+	}
+	markerTok := p.cur
+	start := markerTok.Span.Start
+	marker := strings.TrimSpace(markerTok.Text)
+	ordered := isOrderedListMarker(marker)
+	indent := markerTok.Indent
+	p.advance()
+	var tokens []Token
+	end := start
+	for p.cur.Kind != TokenEOF && p.cur.Kind != TokenBlankLine && p.cur.Kind != TokenNewline && p.cur.Kind != TokenFence && p.cur.Kind != TokenListMarker {
+		tokens = append(tokens, p.cur)
+		end = p.cur.Span.End
+		p.advance()
+	}
+	if p.cur.Kind == TokenNewline {
+		end = p.cur.Span.End
+		p.advance()
+	}
+	lineStart := start
+	if len(tokens) > 0 {
+		lineStart = tokens[0].Span.Start
+	}
+	line := &LineNode{StartPos: lineStart, EndPos: end, Spans: parseInlineTokens(tokens)}
+	item := &BlockNode{Kind: ListItemBlock, ListIndent: indent, Marker: marker, Ordered: ordered, Lines: []*LineNode{line}, Span: Span{Start: start, End: end}}
+	return item
+}
+
+func isOrderedListMarker(marker string) bool {
+	if !strings.HasSuffix(marker, ".") || len(marker) < 2 {
+		return false
+	}
+	for _, r := range marker[:len(marker)-1] {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Parser) parseCodeBlock() *BlockNode {
@@ -147,7 +211,7 @@ func parseInlineSeq(tokens []Token, idx int, stop TokenKind) ([]*SpanNode, int, 
 			return nodes, idx + 1, true
 		}
 		switch tok.Kind {
-		case TokenText:
+		case TokenText, TokenListMarker:
 			nodes = append(nodes, &SpanNode{Kind: TextSpan, Text: tok.Text, Span: tok.Span})
 			idx++
 		case TokenStrong:
