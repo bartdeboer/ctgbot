@@ -59,6 +59,9 @@ func (d *Debouncer) HandleUpdate(ctx context.Context, u chatmodel.TelegramUpdate
 	if text == "" && len(u.Attachments) == 0 {
 		return
 	}
+	if len(u.Attachments) > 0 {
+		d.logf("telegram debounce received chat=%d thread=%d user=%d msg=%d text=%q attachments=%d details=%s", u.ChatID, u.ThreadID, u.UserID, u.MessageID, text, len(u.Attachments), formatDebounceAttachments(u.Attachments))
+	}
 	if d.Window <= 0 {
 		d.Next(ctx, u)
 		return
@@ -84,6 +87,9 @@ func (d *Debouncer) HandleUpdate(ctx context.Context, u chatmodel.TelegramUpdate
 		}
 		d.pending[key] = pending
 	} else {
+		if len(u.Attachments) > 0 {
+			d.logf("telegram debounce merging chat=%d thread=%d user=%d pending_msg=%d new_msg=%d attachments_before=%d attachments_added=%d", u.ChatID, u.ThreadID, u.UserID, pending.update.MessageID, u.MessageID, len(pending.update.Attachments), len(u.Attachments))
+		}
 		pending.update.ChatTitle = u.ChatTitle
 		pending.update.MessageID = u.MessageID
 		pending.update.UserID = u.UserID
@@ -138,6 +144,9 @@ func (d *Debouncer) emitPending(pending *pendingUpdate) {
 	}
 	if textCount > 1 {
 		d.logf("telegram debounced update merged chat=%d thread=%d user=%d messages=%d final_msg=%d", merged.ChatID, merged.ThreadID, merged.UserID, textCount, merged.MessageID)
+	}
+	if len(merged.Attachments) > 0 {
+		d.logf("telegram debounced attachments chat=%d thread=%d user=%d msg=%d attachments=%d details=%s", merged.ChatID, merged.ThreadID, merged.UserID, merged.MessageID, len(merged.Attachments), formatDebounceAttachments(merged.Attachments))
 	}
 	d.Next(context.Background(), merged)
 }
@@ -225,4 +234,15 @@ func isTelegramCommand(text string) bool {
 
 func sameChatThread(a debounceKey, chatID int64, threadID int) bool {
 	return a.ChatID == chatID && a.ThreadID == threadID
+}
+
+func formatDebounceAttachments(attachments []chatmodel.TelegramAttachment) string {
+	if len(attachments) == 0 {
+		return "[]"
+	}
+	parts := make([]string, 0, len(attachments))
+	for _, attachment := range attachments {
+		parts = append(parts, fmt.Sprintf("%s:%s(%s)", strings.TrimSpace(attachment.Kind), strings.TrimSpace(attachment.Filename), strings.TrimSpace(attachment.FileID)))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
