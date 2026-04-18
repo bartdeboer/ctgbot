@@ -410,18 +410,15 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
-	if agent.sentPrompt != "please review it" {
-		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "please review it")
+	if agent.sentPrompt != "Files made available:\n- /workspace/inbox/notes.txt\n\nplease review it" {
+		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "Files made available:\n- /workspace/inbox/notes.txt\n\nplease review it")
 	}
 	inboxPath := filepath.Join(cfg.ChatWorkspaceDirByID(entry.ID), "inbox", "notes.txt")
 	if _, err := os.Stat(inboxPath); err != nil {
 		t.Fatalf("stat saved upload: %v", err)
 	}
-	if len(api.messages) != 3 {
-		t.Fatalf("expected 3 messages, got %d", len(api.messages))
-	}
-	if api.messages[0].text != "upload saved: /workspace/inbox/notes.txt" {
-		t.Fatalf("unexpected first message: %q", api.messages[0].text)
+	if len(api.messages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(api.messages))
 	}
 }
 
@@ -473,8 +470,8 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
-	if agent.sentPrompt != "please inspect" {
-		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "please inspect")
+	if agent.sentPrompt != "Files made available:\n- /workspace/inbox/photo-101.jpg\n\nplease inspect" {
+		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "Files made available:\n- /workspace/inbox/photo-101.jpg\n\nplease inspect")
 	}
 	inboxPath := filepath.Join(cfg.ChatWorkspaceDirByID(entry.ID), "inbox", "photo-101.jpg")
 	data, err := os.ReadFile(inboxPath)
@@ -484,11 +481,8 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 	if string(data) != "jpeg-bytes" {
 		t.Fatalf("saved upload contents = %q", string(data))
 	}
-	if len(api.messages) != 3 {
-		t.Fatalf("expected 3 messages, got %d", len(api.messages))
-	}
-	if api.messages[0].text != "upload saved: /workspace/inbox/photo-101.jpg" {
-		t.Fatalf("unexpected first message: %q", api.messages[0].text)
+	if len(api.messages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(api.messages))
 	}
 }
 

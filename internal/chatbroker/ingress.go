@@ -27,25 +27,32 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.IncomingU
 		ProviderMessageID: strings.TrimSpace(u.ProviderMessageID),
 	}
 
-	var messages []messenger.OutboundMessage
+	var savedPaths []string
 	if len(u.Attachments) > 0 {
-		attachmentMessages, err := b.handleIncomingAttachments(ctx, msg, u.Attachments)
+		var err error
+		savedPaths, err = b.handleIncomingAttachments(ctx, msg, u.Attachments)
 		if err != nil {
 			return messenger.IncomingResult{}, err
 		}
-		messages = append(messages, attachmentMessages...)
 	}
 
 	if text == "" {
-		return messenger.IncomingResult{Messages: messages}, nil
+		if len(savedPaths) == 0 {
+			return messenger.IncomingResult{}, nil
+		}
+		return messenger.IncomingResult{Messages: []messenger.OutboundMessage{{Text: uploadSavedMessage(savedPaths)}}}, nil
+	}
+
+	if len(savedPaths) > 0 {
+		text = injectFilesIntoPrompt(savedPaths, text)
+		msg.Message = text
 	}
 
 	result, err := b.HandleIncomingMessage(ctx, msg)
 	if err != nil {
 		return messenger.IncomingResult{}, err
 	}
-	messages = append(messages, result.Messages...)
-	return messenger.IncomingResult{Messages: messages}, nil
+	return result, nil
 }
 
 func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.IncomingMessage) (messenger.IncomingResult, error) {
@@ -160,7 +167,7 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.Incomi
 	return chatCfg, thread, nil
 }
 
-func (b *Broker) handleIncomingAttachments(ctx context.Context, msg messenger.IncomingMessage, attachments []messenger.IncomingAttachment) ([]messenger.OutboundMessage, error) {
+func (b *Broker) handleIncomingAttachments(ctx context.Context, msg messenger.IncomingMessage, attachments []messenger.IncomingAttachment) ([]string, error) {
 	if len(attachments) == 0 {
 		return nil, nil
 	}
@@ -186,16 +193,16 @@ func (b *Broker) handleIncomingAttachments(ctx context.Context, msg messenger.In
 		return nil, err
 	}
 
-	replies := make([]messenger.OutboundMessage, 0, len(attachments))
+	savedPaths := make([]string, 0, len(attachments))
 	for _, attachment := range attachments {
 		filename := safeIncomingFilename(attachment.Filename)
 		targetHost := filepath.Join(inboxHost, filename)
 		if err := os.WriteFile(targetHost, attachment.Content, 0o644); err != nil {
 			return nil, err
 		}
-		replies = append(replies, messenger.OutboundMessage{Text: fmt.Sprintf("upload saved: /workspace/inbox/%s", filename)})
+		savedPaths = append(savedPaths, fmt.Sprintf("/workspace/inbox/%s", filename))
 	}
-	return replies, nil
+	return savedPaths, nil
 }
 
 func normalizeIncomingCommand(providerType string, text string) []string {
@@ -219,4 +226,33 @@ func safeIncomingFilename(name string) string {
 		return "upload.bin"
 	}
 	return name
+}
+
+func uploadSavedMessage(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	if len(paths) == 1 {
+		return "upload saved: " + paths[0]
+	}
+	return "uploads saved:\n- " + strings.Join(paths, "\n- ")
+}
+
+func injectFilesIntoPrompt(paths []string, prompt string) string {
+	prompt = strings.TrimSpace(prompt)
+	if len(paths) == 0 {
+		return prompt
+	}
+	var b strings.Builder
+	b.WriteString("Files made available:\n")
+	for _, path := range paths {
+		b.WriteString("- ")
+		b.WriteString(path)
+		b.WriteString("\n")
+	}
+	if prompt != "" {
+		b.WriteString("\n")
+		b.WriteString(prompt)
+	}
+	return b.String()
 }
