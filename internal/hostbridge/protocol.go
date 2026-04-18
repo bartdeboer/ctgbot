@@ -1,46 +1,23 @@
 package hostbridge
 
-type Operation string
+import hbprotocol "github.com/bartdeboer/ctgbot/internal/hostbridge/protocol"
+
+type Operation = hbprotocol.Operation
 
 const (
-	OpRunCommand Operation = "run-command"
-	OpSendFile   Operation = "send-file"
-	OpSendText   Operation = "send-text"
+	OpRunCommand   = hbprotocol.OpRunCommand
+	OpSendFile     = hbprotocol.OpSendFile
+	OpSendText     = hbprotocol.OpSendText
+	MaxSendFileBytes = hbprotocol.MaxSendFileBytes
 )
 
-const MaxSendFileBytes = 50 * 1024 * 1024
-
-type Request struct {
-	Op      Operation
-	Command string
-	Args    []string
-	Stdin   []byte
-	Cwd     string
-	Env     map[string]string
-	Timeout int
-
-	SandboxID string
-	Filename  string
-	Caption   string
-	Content   []byte
-
-	Text     string
-	Fenced   bool
-	Language string
-}
-
-type StreamKind uint8
+type Request = hbprotocol.Request
+type StreamKind = hbprotocol.StreamKind
+type Frame = hbprotocol.Frame
 
 const (
-	StreamStdout StreamKind = 1
-	StreamStderr StreamKind = 2
-	StreamExit   StreamKind = 3
-	StreamError  StreamKind = 4
+	StreamStdout = hbprotocol.StreamStdout
+	StreamStderr = hbprotocol.StreamStderr
+	StreamExit   = hbprotocol.StreamExit
+	StreamError  = hbprotocol.StreamError
 )
-
-type Frame struct {
-	Kind     StreamKind
-	Data     []byte
-	ExitCode int
-	Message  string
-}

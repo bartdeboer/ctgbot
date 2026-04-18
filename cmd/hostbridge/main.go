@@ -2,19 +2,16 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"encoding/gob"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
-	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	hbclient "github.com/bartdeboer/ctgbot/internal/hostbridge/client"
+	hbprotocol "github.com/bartdeboer/ctgbot/internal/hostbridge/protocol"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -37,7 +34,7 @@ func main() {
 				return fmt.Errorf("read stdin: %w", err)
 			}
 
-			payload := hostbridge.Request{
+			payload := hbprotocol.Request{
 				Op:      hostbridge.OpRunCommand,
 				Command: req.Params["command"],
 				Args:    req.Extra,
@@ -117,91 +114,40 @@ func getenv(key, fallback string) string {
 	return fallback
 }
 
-func connectHostbridge(address string, tlsDir string) (net.Conn, error) {
-	if strings.TrimSpace(tlsDir) == "" {
-		return net.Dial("tcp", address)
-	}
-	tlsConfig, err := hostbridgetls.LoadClientTLSConfig(tlsDir)
-	if err != nil {
-		return nil, err
-	}
-	return tls.Dial("tcp", address, tlsConfig)
-}
-
-func sendHostbridgeRequest(payload hostbridge.Request) error {
+func sendHostbridgeRequest(payload hbprotocol.Request) error {
 	address := getenv("HOSTBRIDGE_ADDR", "host.docker.internal:4567")
 	tlsDir := getenv("HOSTBRIDGE_TLS_DIR", "")
-	conn, err := connectHostbridge(address, tlsDir)
-	if err != nil {
-		if strings.TrimSpace(tlsDir) != "" {
-			return fmt.Errorf("connect tls %s: %w", address, err)
-		}
-		return fmt.Errorf("connect tcp %s: %w", address, err)
-	}
-	defer conn.Close()
-
-	enc := gob.NewEncoder(conn)
-	dec := gob.NewDecoder(conn)
-
-	if err := enc.Encode(payload); err != nil {
-		return fmt.Errorf("send request: %w", err)
-	}
-
-	for {
-		var frame hostbridge.Frame
-		if err := dec.Decode(&frame); err != nil {
-			return fmt.Errorf("read response: %w", err)
-		}
-		switch frame.Kind {
-		case hostbridge.StreamStdout:
-			if _, err := os.Stdout.Write(frame.Data); err != nil {
-				return err
-			}
-		case hostbridge.StreamStderr:
-			if _, err := os.Stderr.Write(frame.Data); err != nil {
-				return err
-			}
-		case hostbridge.StreamError:
-			return errors.New(frame.Message)
-		case hostbridge.StreamExit:
-			if frame.ExitCode != 0 {
-				os.Exit(frame.ExitCode)
-			}
-			return nil
-		default:
-			return fmt.Errorf("unknown frame kind: %d", frame.Kind)
-		}
-	}
+	return hbclient.SendRequest(address, tlsDir, payload, os.Stdout, os.Stderr)
 }
 
-func buildSendFileRequest(path string, caption string) (hostbridge.Request, error) {
+func buildSendFileRequest(path string, caption string) (hbprotocol.Request, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return hostbridge.Request{}, fmt.Errorf("missing file path")
+		return hbprotocol.Request{}, fmt.Errorf("missing file path")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return hostbridge.Request{}, fmt.Errorf("stat %s: %w", path, err)
+		return hbprotocol.Request{}, fmt.Errorf("stat %s: %w", path, err)
 	}
 	if !info.Mode().IsRegular() {
-		return hostbridge.Request{}, fmt.Errorf("not a regular file: %s", path)
+		return hbprotocol.Request{}, fmt.Errorf("not a regular file: %s", path)
 	}
 	if info.Size() > hostbridge.MaxSendFileBytes {
-		return hostbridge.Request{}, fmt.Errorf("file exceeds %d byte limit: %s", hostbridge.MaxSendFileBytes, path)
+		return hbprotocol.Request{}, fmt.Errorf("file exceeds %d byte limit: %s", hostbridge.MaxSendFileBytes, path)
 	}
 
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return hostbridge.Request{}, fmt.Errorf("read file %s: %w", path, err)
+		return hbprotocol.Request{}, fmt.Errorf("read file %s: %w", path, err)
 	}
 
 	sandboxID := getenv("CTGBOT_SANDBOX_ID", "")
 	if strings.TrimSpace(sandboxID) == "" {
-		return hostbridge.Request{}, fmt.Errorf("missing CTGBOT_SANDBOX_ID")
+		return hbprotocol.Request{}, fmt.Errorf("missing CTGBOT_SANDBOX_ID")
 	}
 
-	return hostbridge.Request{
-		Op:        hostbridge.OpSendFile,
+	return hbprotocol.Request{
+		Op:        hbprotocol.OpSendFile,
 		Timeout:   30,
 		SandboxID: sandboxID,
 		Filename:  filepath.Base(path),
@@ -210,20 +156,20 @@ func buildSendFileRequest(path string, caption string) (hostbridge.Request, erro
 	}, nil
 }
 
-func buildSendTextRequest(text string, fenced bool, language string) (hostbridge.Request, error) {
+func buildSendTextRequest(text string, fenced bool, language string) (hbprotocol.Request, error) {
 	sandboxID := getenv("CTGBOT_SANDBOX_ID", "")
 	if strings.TrimSpace(sandboxID) == "" {
-		return hostbridge.Request{}, fmt.Errorf("missing CTGBOT_SANDBOX_ID")
+		return hbprotocol.Request{}, fmt.Errorf("missing CTGBOT_SANDBOX_ID")
 	}
 	if strings.TrimSpace(language) != "" {
 		fenced = true
 	}
 	if text == "" {
-		return hostbridge.Request{}, fmt.Errorf("missing stdin content")
+		return hbprotocol.Request{}, fmt.Errorf("missing stdin content")
 	}
 	payloadText := wrapSendText(text, fenced, language)
-	return hostbridge.Request{
-		Op:        hostbridge.OpSendText,
+	return hbprotocol.Request{
+		Op:        hbprotocol.OpSendText,
 		Timeout:   30,
 		SandboxID: sandboxID,
 		Text:      payloadText,

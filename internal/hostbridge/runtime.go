@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
 )
 
@@ -31,14 +32,7 @@ func NewRuntime(cfg runtimeConfig, logger *log.Logger, resolve AllowedCommandRes
 	if logger == nil {
 		logger = log.New(os.Stdout, "", log.LstdFlags)
 	}
-	return &Runtime{
-		Config:            cfg,
-		Logger:            logger,
-		ResolveAllowed:    resolve,
-		SendFile:          sendFile,
-		SendText:          sendText,
-		DefaultTimeoutSec: 30,
-	}
+	return &Runtime{Config: cfg, Logger: logger, ResolveAllowed: resolve, SendFile: sendFile, SendText: sendText, DefaultTimeoutSec: 30}
 }
 
 func (r *Runtime) Run(ctx context.Context) error {
@@ -49,18 +43,17 @@ func (r *Runtime) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("init hostbridge tls config: %w", err)
 	}
-	ln, err := NewTLSListener(r.Config, tlsConfig)
+	ln, err := server.NewTLSListener(r.Config, tlsConfig)
 	if err != nil {
 		return fmt.Errorf("start hostbridge listener: %w", err)
 	}
-
 	resolveAllowed := r.ResolveAllowed
 	if resolveAllowed == nil {
-		resolveAllowed = StaticAllowedCommandResolver(nil)
+		resolveAllowed = server.StaticAllowedCommandResolver(nil)
 	}
 	timeout := r.DefaultTimeoutSec
 	if timeout <= 0 {
 		timeout = 30
 	}
-	return ServeListener(ctx, ln, timeout, resolveAllowed, r.SendFile, r.SendText, r.Logger)
+	return server.ServeListener(ctx, ln, timeout, resolveAllowed, r.SendFile, r.SendText, r.Logger)
 }
