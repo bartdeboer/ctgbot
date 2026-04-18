@@ -96,11 +96,11 @@ func (d *Debouncer) HandleUpdate(ctx context.Context, u chatmodel.TelegramUpdate
 		pending.update.FirstName = u.FirstName
 		pending.update.LastName = u.LastName
 		pending.update.Username = u.Username
+		pending.update.Attachments = append(pending.update.Attachments, u.Attachments...)
 	}
 	if text != "" {
 		pending.textParts = append(pending.textParts, text)
 	}
-	pending.update.Attachments = append(pending.update.Attachments, u.Attachments...)
 	pending.generation++
 	generation := pending.generation
 	if pending.timer != nil {

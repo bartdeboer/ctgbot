@@ -937,3 +937,28 @@ func TestTelegramBotSendTextAllowsRenderedTextAboveSemanticChunkLimit(t *testing
 		t.Fatalf("rendered len = %d, want > 3500 and <= 4096", n)
 	}
 }
+
+func TestDebouncerDoesNotDuplicateSingleUpdateAttachments(t *testing.T) {
+	updates := make(chan chatmodel.TelegramUpdate, 1)
+	debouncer := NewDebouncer(10*time.Millisecond, nil, func(ctx context.Context, u chatmodel.TelegramUpdate) {
+		updates <- u
+	})
+
+	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+		ChatID: 42, ThreadID: 7, MessageID: 1408, UserID: 1,
+		Attachments: []chatmodel.TelegramAttachment{{
+			Kind:     "photo",
+			FileID:   "photo-file-id",
+			Filename: "photo-1408.jpg",
+		}},
+	})
+
+	select {
+	case got := <-updates:
+		if len(got.Attachments) != 1 {
+			t.Fatalf("len(attachments) = %d, want 1", len(got.Attachments))
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for debounced update")
+	}
+}
