@@ -151,9 +151,9 @@ func TestRenderMarkdownListBlock(t *testing.T) {
 	}
 	want := `uploads saved:
 
-- /workspace/inbox/photo\-1408\.jpg
-  - child\-item
-1. item 3`
+\- /workspace/inbox/photo\-1408\.jpg
+  \- child\-item
+1\. item 3`
 	if got != want {
 		t.Fatalf("markdown = %q, want %q", got, want)
 	}

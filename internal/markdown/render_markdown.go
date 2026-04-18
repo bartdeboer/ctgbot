@@ -40,10 +40,18 @@ func renderMarkdownList(block *BlockNode) string {
 		if item == nil {
 			continue
 		}
-		prefix := strings.Repeat(" ", item.ListIndent) + listMarkerText(item) + " "
-		parts = append(parts, prefix+renderMarkdownLines(item.Lines))
+		parts = append(parts, renderMarkdownListPrefix(item)+renderMarkdownLines(item.Lines))
 	}
 	return strings.Join(parts, "\n")
+}
+
+func renderMarkdownListPrefix(item *BlockNode) string {
+	prefix := strings.Repeat(" ", item.ListIndent)
+	marker := listMarkerText(item)
+	if item.Ordered {
+		return prefix + strings.ReplaceAll(marker, ".", "\\.") + " "
+	}
+	return prefix + "\\- "
 }
 
 func renderMarkdownLines(lines []*LineNode) string {

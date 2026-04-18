@@ -8,6 +8,10 @@ It also has a second line in the same paragraph.
 - second item with `code`
 - third item with **bold** text
 
+## Ordered lines
+1. first ordered item
+2. second ordered item
+
 ### Escapes and punctuation
 These characters should stay readable: _ * [ ] ( ) ~ ` > # + - = | { } . !
 Paths and values: `C:\temp\demo`, `a_b`, `x.y`, and `hello-world`.
