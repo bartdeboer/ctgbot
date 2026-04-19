@@ -63,7 +63,7 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 		if conv == nil {
 			return "no active conversation", nil
 		}
-		if !b.interruptThread(conv.ID) {
+		if !b.interruptThread(conv.ID, b.sandboxForThread(conv)) {
 			return "no active run to interrupt", nil
 		}
 		return "current run cancelled", nil

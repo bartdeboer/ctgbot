@@ -2,8 +2,15 @@ package containerengine
 
 import (
 	"context"
+	"errors"
 	"io"
+	"os"
 	"os/exec"
+	"strings"
+	"sync"
+	"syscall"
+
+	"github.com/creack/pty"
 )
 
 type State string
@@ -36,15 +43,19 @@ type ContainerSpec struct {
 }
 
 type ExecOptions struct {
-	Env     []string
-	Workdir string
-	Stdout  io.Writer
-	Stderr  io.Writer
+	Env         []string
+	Workdir     string
+	Stdout      io.Writer
+	Stderr      io.Writer
+	Interactive bool
 }
 
 type Container struct {
 	ContainerSpec
 	manager *Manager
+
+	mu          sync.Mutex
+	activeStdin io.WriteCloser
 }
 
 func (c *Container) ApplySpec(spec ContainerSpec) {
@@ -81,9 +92,34 @@ func (c *Container) Remove(ctx context.Context) error {
 
 func (c *Container) Exec(ctx context.Context, opts ExecOptions, name string, args ...string) error {
 	cmd := c.CommandContext(ctx, opts, name, args...)
-	cmd.Stdout = opts.Stdout
-	cmd.Stderr = opts.Stderr
-	return cmd.Run()
+	if !opts.Interactive {
+		cmd.Stdout = opts.Stdout
+		cmd.Stderr = opts.Stderr
+		return cmd.Run()
+	}
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return err
+	}
+	c.setActiveStdin(ptmx)
+	defer c.clearActiveStdin(ptmx)
+	defer ptmx.Close()
+
+	target := execOutputTarget(opts)
+	var copyErr error
+	if target != nil {
+		_, copyErr = io.Copy(target, ptmx)
+	} else {
+		_, copyErr = io.Copy(io.Discard, ptmx)
+	}
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		return waitErr
+	}
+	if isBenignPTYReadError(copyErr) {
+		return nil
+	}
+	return copyErr
 }
 
 func (c *Container) CombinedOutput(ctx context.Context, opts ExecOptions, name string, args ...string) ([]byte, error) {
@@ -92,6 +128,9 @@ func (c *Container) CombinedOutput(ctx context.Context, opts ExecOptions, name s
 
 func (c *Container) CommandContext(ctx context.Context, opts ExecOptions, name string, args ...string) *exec.Cmd {
 	dockerArgs := []string{"exec"}
+	if opts.Interactive {
+		dockerArgs = append(dockerArgs, "-i", "-t")
+	}
 	for _, env := range opts.Env {
 		if env == "" {
 			continue
@@ -104,4 +143,65 @@ func (c *Container) CommandContext(ctx context.Context, opts ExecOptions, name s
 	dockerArgs = append(dockerArgs, c.Name, name)
 	dockerArgs = append(dockerArgs, args...)
 	return exec.CommandContext(ctx, "docker", dockerArgs...)
+}
+
+func (c *Container) Interrupt() error {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	stdin := c.activeStdin
+	c.mu.Unlock()
+	if stdin == nil {
+		return nil
+	}
+	_, err := stdin.Write([]byte{3})
+	if isBenignInterruptWriteError(err) {
+		return nil
+	}
+	return err
+}
+
+func (c *Container) setActiveStdin(stdin io.WriteCloser) {
+	if c == nil || stdin == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.activeStdin = stdin
+}
+
+func (c *Container) clearActiveStdin(stdin io.WriteCloser) {
+	if c == nil || stdin == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.activeStdin != stdin {
+		return
+	}
+	c.activeStdin = nil
+}
+
+func execOutputTarget(opts ExecOptions) io.Writer {
+	switch {
+	case opts.Stdout != nil && opts.Stderr != nil:
+		return io.MultiWriter(opts.Stdout, opts.Stderr)
+	case opts.Stdout != nil:
+		return opts.Stdout
+	default:
+		return opts.Stderr
+	}
+}
+
+func isBenignPTYReadError(err error) bool {
+	return err == nil || errors.Is(err, os.ErrClosed) || errors.Is(err, io.EOF) || errors.Is(err, syscall.EIO)
+}
+
+func isBenignInterruptWriteError(err error) bool {
+	if err == nil || errors.Is(err, os.ErrClosed) || errors.Is(err, syscall.EPIPE) {
+		return true
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "closed") || strings.Contains(text, "broken pipe")
 }

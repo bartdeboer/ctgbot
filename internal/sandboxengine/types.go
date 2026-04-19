@@ -115,6 +115,15 @@ func (s *Sandbox) ensureContainer() *containerengine.Container {
 	return s.container
 }
 
+func (s *Sandbox) containerInstance() *containerengine.Container {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.container
+}
+
 func (s *Sandbox) setContainer(container *containerengine.Container) {
 	if s == nil || container == nil {
 		return
@@ -211,4 +220,15 @@ func (s *Sandbox) CombinedOutput(ctx context.Context, name string, args ...strin
 		return nil, nil
 	}
 	return s.docker.combinedOutput(ctx, s, name, args...)
+}
+
+func (s *Sandbox) Interrupt() error {
+	if s == nil {
+		return nil
+	}
+	container := s.containerInstance()
+	if container == nil {
+		return nil
+	}
+	return container.Interrupt()
 }

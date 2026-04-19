@@ -190,7 +190,9 @@ func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer
 		}
 		token := sbx.beginCommand(name, args...)
 		defer sbx.endCommand(token)
-		return container.Exec(ctx, sbx.execOptions(stdout, stderr), name, args...)
+		opts := sbx.execOptions(stdout, stderr)
+		opts.Interactive = true
+		return container.Exec(ctx, opts, name, args...)
 	})
 }
 

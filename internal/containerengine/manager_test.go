@@ -1,7 +1,9 @@
 package containerengine
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"testing"
 )
 
@@ -112,3 +114,47 @@ func TestContainerCommandContextBuildsDockerExec(t *testing.T) {
 		}
 	}
 }
+
+func TestContainerInterruptWritesCtrlC(t *testing.T) {
+	t.Parallel()
+	buf := &recordingWriteCloser{}
+	container := &Container{}
+	container.setActiveStdin(buf)
+	if err := container.Interrupt(); err != nil {
+		t.Fatalf("Interrupt: %v", err)
+	}
+	if got := buf.String(); got != string([]byte{3}) {
+		t.Fatalf("stdin write = %q, want ctrl-c", got)
+	}
+}
+
+func TestContainerInterruptIgnoresClosedPipe(t *testing.T) {
+	t.Parallel()
+	container := &Container{}
+	container.setActiveStdin(&errWriteCloser{err: io.ErrClosedPipe})
+	if err := container.Interrupt(); err != nil {
+		t.Fatalf("Interrupt: %v", err)
+	}
+}
+
+func TestExecOutputTargetPrefersCombinedWriters(t *testing.T) {
+	t.Parallel()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	target := execOutputTarget(ExecOptions{Stdout: &stdout, Stderr: &stderr})
+	if _, err := target.Write([]byte("hello")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if stdout.String() != "hello" || stderr.String() != "hello" {
+		t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
+type recordingWriteCloser struct{ bytes.Buffer }
+
+func (r *recordingWriteCloser) Close() error { return nil }
+
+type errWriteCloser struct{ err error }
+
+func (w *errWriteCloser) Write(p []byte) (int, error) { return 0, w.err }
+func (w *errWriteCloser) Close() error                { return nil }
