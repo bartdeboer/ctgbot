@@ -32,7 +32,7 @@ type sandboxLock struct {
 func NewSandboxManager(logger *log.Logger) *DockerManager {
 	return &DockerManager{
 		Logger:     logger,
-		Containers: &containerengine.Manager{Logger: logger},
+		Containers: containerengine.NewManager(logger),
 		locks:      &sandboxLocks{locks: map[string]*sandboxLock{}},
 		sandboxes:  map[string]*Sandbox{},
 	}
@@ -137,10 +137,11 @@ func (m *DockerManager) ensureReady(ctx context.Context, sbx *Sandbox) error {
 	case StateCreated, StateExited:
 		return m.containerManager().Start(ctx, sbx.Name)
 	case StateMissing:
-		if err := m.containerManager().Create(ctx, m.toContainerSpec(sbx)); err != nil {
+		container, err := m.containerManager().Create(ctx, m.toContainerSpec(sbx))
+		if err != nil {
 			return err
 		}
-		return m.containerManager().Start(ctx, sbx.Name)
+		return container.Start(ctx)
 	default:
 		return fmt.Errorf("unsupported sandbox state %q for %s", state, sbx.Name)
 	}

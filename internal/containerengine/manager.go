@@ -7,13 +7,39 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type Manager struct {
-	Logger *log.Logger
+	mu         sync.Mutex
+	Logger     *log.Logger
+	containers map[string]*Container
+}
+
+func NewManager(logger *log.Logger) *Manager {
+	return &Manager{Logger: logger, containers: map[string]*Container{}}
+}
+
+func (m *Manager) Container(name string) *Container {
+	name = strings.TrimSpace(name)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.containers == nil {
+		m.containers = map[string]*Container{}
+	}
+	if c := m.containers[name]; c != nil {
+		return c
+	}
+	c := &Container{ContainerSpec: ContainerSpec{Name: name}, manager: m}
+	m.containers[name] = c
+	return c
 }
 
 func (m *Manager) InspectState(ctx context.Context, containerName string) (State, error) {
+	return m.inspectState(ctx, containerName)
+}
+
+func (m *Manager) inspectState(ctx context.Context, containerName string) (State, error) {
 	out, err := runCommand(ctx, "docker", "inspect", "-f", "{{.State.Status}}", containerName)
 	if err != nil {
 		trimmed := strings.TrimSpace(out)
@@ -25,17 +51,19 @@ func (m *Manager) InspectState(ctx context.Context, containerName string) (State
 	return State(strings.TrimSpace(out)), nil
 }
 
-func (m *Manager) Create(ctx context.Context, spec ContainerSpec) error {
+func (m *Manager) Create(ctx context.Context, spec ContainerSpec) (*Container, error) {
+	container := m.Container(spec.Name)
+	container.ApplySpec(spec)
 	args := buildCreateArgs(spec)
 	if len(args) == 0 {
-		return fmt.Errorf("missing container image")
+		return container, fmt.Errorf("missing container image")
 	}
 	out, err := runCommand(ctx, "docker", args...)
 	if err != nil {
-		return fmt.Errorf("docker create: %w: %s", err, strings.TrimSpace(out))
+		return container, fmt.Errorf("docker create: %w: %s", err, strings.TrimSpace(out))
 	}
 	m.logf("conversation container created name=%s docker=%s", spec.Name, strings.TrimSpace(out))
-	return nil
+	return container, nil
 }
 
 func buildCreateArgs(spec ContainerSpec) []string {
@@ -98,6 +126,10 @@ func buildCreateArgs(spec ContainerSpec) []string {
 }
 
 func (m *Manager) Start(ctx context.Context, containerName string) error {
+	return m.Container(containerName).Start(ctx)
+}
+
+func (m *Manager) start(ctx context.Context, containerName string) error {
 	if _, err := runCommand(ctx, "docker", "start", containerName); err != nil {
 		return fmt.Errorf("docker start %s: %w", containerName, err)
 	}
@@ -106,7 +138,11 @@ func (m *Manager) Start(ctx context.Context, containerName string) error {
 }
 
 func (m *Manager) Stop(ctx context.Context, containerName string) error {
-	state, err := m.InspectState(ctx, containerName)
+	return m.Container(containerName).Stop(ctx)
+}
+
+func (m *Manager) stop(ctx context.Context, containerName string) error {
+	state, err := m.inspectState(ctx, containerName)
 	if err != nil {
 		return err
 	}
@@ -121,7 +157,11 @@ func (m *Manager) Stop(ctx context.Context, containerName string) error {
 }
 
 func (m *Manager) Remove(ctx context.Context, containerName string) error {
-	state, err := m.InspectState(ctx, containerName)
+	return m.Container(containerName).Remove(ctx)
+}
+
+func (m *Manager) remove(ctx context.Context, containerName string) error {
+	state, err := m.inspectState(ctx, containerName)
 	if err != nil {
 		return err
 	}
