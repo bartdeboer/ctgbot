@@ -103,10 +103,10 @@ func (m *DockerManager) CreateSandbox(spec *SandboxSpec) *Sandbox {
 	}
 	if sbx := m.sandboxes[copySpec.Name]; sbx != nil {
 		sbx.ApplySpec(&copySpec)
-		sbx.runtime = m
+		sbx.docker = m
 		return sbx
 	}
-	sbx := &Sandbox{runtime: m}
+	sbx := &Sandbox{docker: m}
 	sbx.ApplySpec(&copySpec)
 	m.sandboxes[copySpec.Name] = sbx
 	return sbx
@@ -117,11 +117,11 @@ func (m *DockerManager) ensure(ctx context.Context, sbx *Sandbox) error {
 		return fmt.Errorf("missing sandbox name")
 	}
 	return m.withLock(sbx.Name, func() error {
-		return sbx.ensureReady(ctx, m.containerManager())
+		return sbx.ensureReady(ctx)
 	})
 }
 
-func (s *Sandbox) ensureReady(ctx context.Context, containers *containerengine.Manager) error {
+func (s *Sandbox) ensureReady(ctx context.Context) error {
 	if s == nil {
 		return fmt.Errorf("missing sandbox")
 	}
@@ -130,7 +130,7 @@ func (s *Sandbox) ensureReady(ctx context.Context, containers *containerengine.M
 			return err
 		}
 	}
-	container := s.ensureContainer(containers)
+	container := s.ensureContainer()
 	if container == nil {
 		return fmt.Errorf("missing backing container")
 	}
@@ -144,7 +144,7 @@ func (s *Sandbox) ensureReady(ctx context.Context, containers *containerengine.M
 	case StateCreated, StateExited:
 		return container.Start(ctx)
 	case StateMissing:
-		container, err := containers.Create(ctx, s.ContainerSpec())
+		container, err := s.docker.containerManager().Create(ctx, s.ContainerSpec())
 		if err != nil {
 			return err
 		}
@@ -181,10 +181,10 @@ func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer
 		return fmt.Errorf("missing executable name")
 	}
 	return m.withLock(sbx.Name, func() error {
-		if err := sbx.ensureReady(ctx, m.containerManager()); err != nil {
+		if err := sbx.ensureReady(ctx); err != nil {
 			return err
 		}
-		container := sbx.ensureContainer(m.containerManager())
+		container := sbx.ensureContainer()
 		if container == nil {
 			return fmt.Errorf("missing backing container")
 		}
@@ -203,10 +203,10 @@ func (m *DockerManager) combinedOutput(ctx context.Context, sbx *Sandbox, name s
 	}
 	var out []byte
 	err := m.withLock(sbx.Name, func() error {
-		if err := sbx.ensureReady(ctx, m.containerManager()); err != nil {
+		if err := sbx.ensureReady(ctx); err != nil {
 			return err
 		}
-		container := sbx.ensureContainer(m.containerManager())
+		container := sbx.ensureContainer()
 		if container == nil {
 			return fmt.Errorf("missing backing container")
 		}

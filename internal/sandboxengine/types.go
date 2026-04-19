@@ -54,7 +54,7 @@ type SandboxSpec struct {
 type Sandbox struct {
 	SandboxSpec
 
-	runtime runtime
+	docker *DockerManager
 
 	mu                 sync.Mutex
 	activeCommand      *SandboxCommand
@@ -69,14 +69,6 @@ type SandboxCommand struct {
 
 type Manager interface {
 	CreateSandbox(spec *SandboxSpec) *Sandbox
-}
-
-type runtime interface {
-	ensure(ctx context.Context, sbx *Sandbox) error
-	stop(ctx context.Context, sbx *Sandbox) error
-	remove(ctx context.Context, sbx *Sandbox) error
-	exec(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error
-	combinedOutput(ctx context.Context, sbx *Sandbox, name string, args ...string) ([]byte, error)
 }
 
 func (s *Sandbox) ApplySpec(spec *SandboxSpec) {
@@ -110,14 +102,14 @@ func (s *Sandbox) ContainerSpec() containerengine.ContainerSpec {
 	}
 }
 
-func (s *Sandbox) ensureContainer(containers *containerengine.Manager) *containerengine.Container {
-	if s == nil || containers == nil {
+func (s *Sandbox) ensureContainer() *containerengine.Container {
+	if s == nil || s.docker == nil {
 		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.container == nil || s.container.Name != s.Name {
-		s.container = containers.Container(s.Name)
+		s.container = s.docker.containerManager().Container(s.Name)
 	}
 	s.container.ApplySpec(s.ContainerSpec())
 	return s.container
@@ -187,36 +179,36 @@ func (s *Sandbox) ActiveCommand() (SandboxCommand, bool) {
 }
 
 func (s *Sandbox) Ensure(ctx context.Context) error {
-	if s == nil || s.runtime == nil {
+	if s == nil || s.docker == nil {
 		return nil
 	}
-	return s.runtime.ensure(ctx, s)
+	return s.docker.ensure(ctx, s)
 }
 
 func (s *Sandbox) Stop(ctx context.Context) error {
-	if s == nil || s.runtime == nil {
+	if s == nil || s.docker == nil {
 		return nil
 	}
-	return s.runtime.stop(ctx, s)
+	return s.docker.stop(ctx, s)
 }
 
 func (s *Sandbox) Remove(ctx context.Context) error {
-	if s == nil || s.runtime == nil {
+	if s == nil || s.docker == nil {
 		return nil
 	}
-	return s.runtime.remove(ctx, s)
+	return s.docker.remove(ctx, s)
 }
 
 func (s *Sandbox) Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
-	if s == nil || s.runtime == nil {
+	if s == nil || s.docker == nil {
 		return nil
 	}
-	return s.runtime.exec(ctx, s, stdout, stderr, name, args...)
+	return s.docker.exec(ctx, s, stdout, stderr, name, args...)
 }
 
 func (s *Sandbox) CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
-	if s == nil || s.runtime == nil {
+	if s == nil || s.docker == nil {
 		return nil, nil
 	}
-	return s.runtime.combinedOutput(ctx, s, name, args...)
+	return s.docker.combinedOutput(ctx, s, name, args...)
 }
