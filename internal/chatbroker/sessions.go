@@ -56,7 +56,7 @@ func (b *Broker) startSession(ctx context.Context, chatID modeluuid.UUID, thread
 		if !replace {
 			return current, nil
 		}
-		_ = b.newSandbox(current).Remove(ctx)
+		_ = b.sandboxForThread(current).Remove(ctx)
 		if b.Sessions != nil {
 			current.Active = false
 			current.LastError = "replaced by /new"
@@ -73,7 +73,7 @@ func (b *Broker) startSession(ctx context.Context, chatID modeluuid.UUID, thread
 	}
 	if b.Sessions != nil {
 		if err := b.Sessions.SaveThread(ctx, conv); err != nil {
-			_ = b.newSandbox(conv).Remove(context.Background())
+			_ = b.sandboxForThread(conv).Remove(context.Background())
 			return nil, err
 		}
 	}
@@ -111,7 +111,7 @@ func (b *Broker) stopSession(ctx context.Context, conv *Thread) error {
 	if conv == nil {
 		return nil
 	}
-	if err := b.newSandbox(conv).Remove(ctx); err != nil {
+	if err := b.sandboxForThread(conv).Remove(ctx); err != nil {
 		return err
 	}
 	if b.Sessions == nil {
@@ -126,7 +126,7 @@ func (b *Broker) refreshSession(ctx context.Context, conv *Thread) error {
 	if conv == nil {
 		return nil
 	}
-	if err := b.newSandbox(conv).Remove(ctx); err != nil {
+	if err := b.sandboxForThread(conv).Remove(ctx); err != nil {
 		return err
 	}
 	conv.Initialized = false
@@ -145,7 +145,7 @@ func (b *Broker) purgeSession(ctx context.Context, conv *Thread) error {
 	if conv == nil {
 		return nil
 	}
-	if err := b.newSandbox(conv).Remove(ctx); err != nil {
+	if err := b.sandboxForThread(conv).Remove(ctx); err != nil {
 		return err
 	}
 	agentImpl, err := b.agent(conv.AgentProviderType)
@@ -153,7 +153,7 @@ func (b *Broker) purgeSession(ctx context.Context, conv *Thread) error {
 		return err
 	}
 	if purgingAgent, ok := agentImpl.(agent.PurgingAgent); ok && strings.TrimSpace(conv.AgentThreadID) != "" {
-		if err := purgingAgent.Purge(ctx, b.newSandbox(conv), conv.AgentThreadID); err != nil {
+		if err := purgingAgent.Purge(ctx, b.sandboxForThread(conv), conv.AgentThreadID); err != nil {
 			if b.Sessions != nil {
 				conv.LastError = err.Error()
 				_ = b.Sessions.SaveThread(ctx, conv)
@@ -291,7 +291,7 @@ func (b *Broker) prepareThread(ctx context.Context, chatID modeluuid.UUID, threa
 	thread.AgentThreadID = ""
 	thread.LastError = ""
 
-	if err := b.newSandbox(thread).Remove(ctx); err != nil {
+	if err := b.sandboxForThread(thread).Remove(ctx); err != nil {
 		b.logf("ignoring stale sandbox cleanup error for %s: %v", thread.ContainerName(b.Config), err)
 	}
 	b.logf("thread prepared name=%s workspace=%s", thread.ContainerName(b.Config), thread.WorkspaceHost)

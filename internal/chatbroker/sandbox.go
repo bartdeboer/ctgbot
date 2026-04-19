@@ -7,7 +7,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
-func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
+func (b *Broker) newSandboxSpec(conv *Thread) *sandboxengine.SandboxSpec {
 	containerName := conv.ContainerName(b.Config)
 	spec := sandboxengine.NewBuilder(containerName).
 		WorkspaceDir(conv.WorkspaceHost).
@@ -41,7 +41,14 @@ func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 		spec = spec.GPUs(gpus)
 	}
 
-	return b.sandboxManager().CreateSandbox(spec.Build())
+	return spec.Build()
+}
+
+func (b *Broker) sandboxForThread(conv *Thread) *sandboxengine.Sandbox {
+	if conv == nil {
+		return nil
+	}
+	return b.sandboxManager().CreateSandbox(b.newSandboxSpec(conv))
 }
 
 func (b *Broker) sandboxEnv(conv *Thread) []string {

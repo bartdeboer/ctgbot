@@ -70,7 +70,7 @@ func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
 	chatID := modeluuid.New()
 	threadID := modeluuid.New()
 	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
-	sbx := broker.newSandbox(&Thread{
+	sbx := broker.sandboxForThread(&Thread{
 		ID:                 threadID,
 		ChatID:             chatID,
 		RuntimeName:        "ctgbot-test",
@@ -89,7 +89,7 @@ func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
 	if err := cfg.SetChatGPUsByID(chatID, "all"); err != nil {
 		t.Fatalf("set chat gpus: %v", err)
 	}
-	sbx = broker.newSandbox(&Thread{
+	sbx = broker.sandboxForThread(&Thread{
 		ID:                 threadID,
 		ChatID:             chatID,
 		RuntimeName:        "ctgbot-test",

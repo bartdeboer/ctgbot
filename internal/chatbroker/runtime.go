@@ -23,7 +23,7 @@ func (b *Broker) prepareRuntime(ctx context.Context, conv *Thread, forceSetup bo
 	if err != nil {
 		return nil, nil, err
 	}
-	sbx := b.newSandbox(conv)
+	sbx := b.sandboxForThread(conv)
 	if forceSetup || !conv.Initialized {
 		if err := agent.SetupEnvironment(ctx, sbx); err != nil {
 			return nil, nil, err
