@@ -8,6 +8,7 @@ COPY internal/hostbridge ./internal/hostbridge
 COPY internal/hostbridge/client ./internal/hostbridge/client
 COPY internal/hostbridge/protocol ./internal/hostbridge/protocol
 COPY internal/hostbridge/server ./internal/hostbridge/server
+COPY internal/durationparse ./internal/durationparse
 COPY internal/hostbridgetls ./internal/hostbridgetls
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} go build -o /out/hostbridge ./cmd/hostbridge
 
