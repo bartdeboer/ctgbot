@@ -145,3 +145,14 @@ func TestDockerManagerExecEnsuresImageFirst(t *testing.T) {
 		t.Fatalf("ensure calls = %d, want 1", img.ensureCalls)
 	}
 }
+
+func TestNewSandboxManagerInitializesSharedState(t *testing.T) {
+	t.Parallel()
+	mgr := NewSandboxManager(nil)
+	if mgr.Containers == nil {
+		t.Fatalf("expected container manager")
+	}
+	if mgr.locks == nil || mgr.locks.locks == nil {
+		t.Fatalf("expected sandbox locks to be initialized")
+	}
+}

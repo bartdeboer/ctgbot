@@ -28,17 +28,18 @@ type sandboxLock struct {
 }
 
 func NewSandboxManager(logger *log.Logger) *DockerManager {
-	return &DockerManager{Logger: logger}
+	return &DockerManager{
+		Logger:     logger,
+		Containers: &containerengine.Manager{Logger: logger},
+		locks:      &sandboxLocks{locks: map[string]*sandboxLock{}},
+	}
 }
 
 func (m *DockerManager) ensureLocks() *sandboxLocks {
-	if m.locks == nil {
-		m.locks = &sandboxLocks{locks: map[string]*sandboxLock{}}
-	}
 	return m.locks
 }
 
-func (m *DockerManager) withSandboxLock(name string, fn func() error) error {
+func (m *DockerManager) withLock(name string, fn func() error) error {
 	if strings.TrimSpace(name) == "" {
 		if fn == nil {
 			return nil
@@ -95,12 +96,12 @@ func (m *DockerManager) ensure(ctx context.Context, sbx *Sandbox) error {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
 		return fmt.Errorf("missing sandbox name")
 	}
-	return m.withSandboxLock(sbx.Name, func() error {
-		return m.ensureUnlocked(ctx, sbx)
+	return m.withLock(sbx.Name, func() error {
+		return m.ensureReady(ctx, sbx)
 	})
 }
 
-func (m *DockerManager) ensureUnlocked(ctx context.Context, sbx *Sandbox) error {
+func (m *DockerManager) ensureReady(ctx context.Context, sbx *Sandbox) error {
 	if sbx != nil && sbx.ImageBuilder != nil {
 		if err := sbx.ImageBuilder.EnsureImage(ctx); err != nil {
 			return err
@@ -129,7 +130,7 @@ func (m *DockerManager) stop(ctx context.Context, sbx *Sandbox) error {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
 		return nil
 	}
-	return m.withSandboxLock(sbx.Name, func() error {
+	return m.withLock(sbx.Name, func() error {
 		return m.containerManager().Stop(ctx, sbx.Name)
 	})
 }
@@ -138,7 +139,7 @@ func (m *DockerManager) remove(ctx context.Context, sbx *Sandbox) error {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
 		return nil
 	}
-	return m.withSandboxLock(sbx.Name, func() error {
+	return m.withLock(sbx.Name, func() error {
 		return m.containerManager().Remove(ctx, sbx.Name)
 	})
 }
@@ -150,8 +151,8 @@ func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("missing executable name")
 	}
-	return m.withSandboxLock(sbx.Name, func() error {
-		if err := m.ensureUnlocked(ctx, sbx); err != nil {
+	return m.withLock(sbx.Name, func() error {
+		if err := m.ensureReady(ctx, sbx); err != nil {
 			return err
 		}
 		cmd := sbx.CommandContext(ctx, name, args...)
@@ -169,8 +170,8 @@ func (m *DockerManager) combinedOutput(ctx context.Context, sbx *Sandbox, name s
 		return nil, fmt.Errorf("missing executable name")
 	}
 	var out []byte
-	err := m.withSandboxLock(sbx.Name, func() error {
-		if err := m.ensureUnlocked(ctx, sbx); err != nil {
+	err := m.withLock(sbx.Name, func() error {
+		if err := m.ensureReady(ctx, sbx); err != nil {
 			return err
 		}
 		cmd := sbx.CommandContext(ctx, name, args...)
@@ -190,9 +191,6 @@ func (m *DockerManager) inspectState(ctx context.Context, name string) (State, e
 }
 
 func (m *DockerManager) containerManager() *containerengine.Manager {
-	if m.Containers == nil {
-		m.Containers = &containerengine.Manager{Logger: m.Logger}
-	}
 	return m.Containers
 }
 
