@@ -5,6 +5,8 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+
+	"github.com/bartdeboer/ctgbot/internal/containerengine"
 )
 
 type State string
@@ -57,6 +59,7 @@ type Sandbox struct {
 
 	mu            sync.Mutex
 	activeCommand *SandboxCommand
+	container     *containerengine.Container
 }
 
 type SandboxCommand struct {
@@ -82,6 +85,52 @@ func (s *Sandbox) ApplySpec(spec *SandboxSpec) {
 		return
 	}
 	s.SandboxSpec = *spec
+}
+
+func (s *Sandbox) ContainerSpec() containerengine.ContainerSpec {
+	mounts := make([]containerengine.Mount, 0, len(s.Mounts))
+	for _, mount := range s.Mounts {
+		mounts = append(mounts, containerengine.Mount{
+			Source:   mount.Source,
+			Target:   mount.Target,
+			ReadOnly: mount.ReadOnly,
+		})
+	}
+	return containerengine.ContainerSpec{
+		Name:         s.Name,
+		Hostname:     s.Hostname,
+		Image:        s.Image,
+		Workdir:      s.Workdir,
+		GPUs:         s.GPUs,
+		Labels:       s.Labels,
+		Env:          s.Env,
+		Mounts:       mounts,
+		SecurityOpts: s.SecurityOpts,
+		AddHosts:     s.AddHosts,
+		Cmd:          s.Cmd,
+	}
+}
+
+func (s *Sandbox) ensureContainer(containers *containerengine.Manager) *containerengine.Container {
+	if s == nil || containers == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.container == nil || s.container.Name != s.Name {
+		s.container = containers.Container(s.Name)
+	}
+	s.container.ApplySpec(s.ContainerSpec())
+	return s.container
+}
+
+func (s *Sandbox) setContainer(container *containerengine.Container) {
+	if s == nil || container == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.container = container
 }
 
 func (s *Sandbox) setActiveCommand(cmd *exec.Cmd, name string, args ...string) {

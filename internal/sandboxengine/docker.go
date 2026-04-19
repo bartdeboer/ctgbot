@@ -117,33 +117,41 @@ func (m *DockerManager) ensure(ctx context.Context, sbx *Sandbox) error {
 		return fmt.Errorf("missing sandbox name")
 	}
 	return m.withLock(sbx.Name, func() error {
-		return m.ensureReady(ctx, sbx)
+		return sbx.ensureReady(ctx, m.containerManager())
 	})
 }
 
-func (m *DockerManager) ensureReady(ctx context.Context, sbx *Sandbox) error {
-	if sbx != nil && sbx.ImageBuilder != nil {
-		if err := sbx.ImageBuilder.EnsureImage(ctx); err != nil {
+func (s *Sandbox) ensureReady(ctx context.Context, containers *containerengine.Manager) error {
+	if s == nil {
+		return fmt.Errorf("missing sandbox")
+	}
+	if s.ImageBuilder != nil {
+		if err := s.ImageBuilder.EnsureImage(ctx); err != nil {
 			return err
 		}
 	}
-	state, err := m.inspectState(ctx, sbx.Name)
+	container := s.ensureContainer(containers)
+	if container == nil {
+		return fmt.Errorf("missing backing container")
+	}
+	state, err := container.InspectState(ctx)
 	if err != nil {
 		return err
 	}
-	switch state {
+	switch State(state) {
 	case StateRunning:
 		return nil
 	case StateCreated, StateExited:
-		return m.containerManager().Start(ctx, sbx.Name)
+		return container.Start(ctx)
 	case StateMissing:
-		container, err := m.containerManager().Create(ctx, m.toContainerSpec(sbx))
+		container, err := containers.Create(ctx, s.ContainerSpec())
 		if err != nil {
 			return err
 		}
+		s.setContainer(container)
 		return container.Start(ctx)
 	default:
-		return fmt.Errorf("unsupported sandbox state %q for %s", state, sbx.Name)
+		return fmt.Errorf("unsupported sandbox state %q for %s", state, s.Name)
 	}
 }
 
@@ -173,7 +181,7 @@ func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer
 		return fmt.Errorf("missing executable name")
 	}
 	return m.withLock(sbx.Name, func() error {
-		if err := m.ensureReady(ctx, sbx); err != nil {
+		if err := sbx.ensureReady(ctx, m.containerManager()); err != nil {
 			return err
 		}
 		cmd := sbx.CommandContext(ctx, name, args...)
@@ -194,7 +202,7 @@ func (m *DockerManager) combinedOutput(ctx context.Context, sbx *Sandbox, name s
 	}
 	var out []byte
 	err := m.withLock(sbx.Name, func() error {
-		if err := m.ensureReady(ctx, sbx); err != nil {
+		if err := sbx.ensureReady(ctx, m.containerManager()); err != nil {
 			return err
 		}
 		cmd := sbx.CommandContext(ctx, name, args...)
@@ -205,38 +213,6 @@ func (m *DockerManager) combinedOutput(ctx context.Context, sbx *Sandbox, name s
 	return out, err
 }
 
-func (m *DockerManager) inspectState(ctx context.Context, name string) (State, error) {
-	state, err := m.containerManager().InspectState(ctx, name)
-	if err != nil {
-		return StateMissing, err
-	}
-	return State(state), nil
-}
-
 func (m *DockerManager) containerManager() *containerengine.Manager {
 	return m.Containers
-}
-
-func (m *DockerManager) toContainerSpec(sbx *Sandbox) containerengine.ContainerSpec {
-	mounts := make([]containerengine.Mount, 0, len(sbx.Mounts))
-	for _, mount := range sbx.Mounts {
-		mounts = append(mounts, containerengine.Mount{
-			Source:   mount.Source,
-			Target:   mount.Target,
-			ReadOnly: mount.ReadOnly,
-		})
-	}
-	return containerengine.ContainerSpec{
-		Name:         sbx.Name,
-		Hostname:     sbx.Hostname,
-		Image:        sbx.Image,
-		Workdir:      sbx.Workdir,
-		GPUs:         sbx.GPUs,
-		Labels:       sbx.Labels,
-		Env:          sbx.Env,
-		Mounts:       mounts,
-		SecurityOpts: sbx.SecurityOpts,
-		AddHosts:     sbx.AddHosts,
-		Cmd:          sbx.Cmd,
-	}
 }

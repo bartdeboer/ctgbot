@@ -7,6 +7,8 @@ import (
 	"io"
 	"os/exec"
 	"testing"
+
+	"github.com/bartdeboer/ctgbot/internal/containerengine"
 )
 
 func TestDockerSandboxCommandContextBuildsDockerExec(t *testing.T) {
@@ -202,5 +204,46 @@ func TestSandboxActiveCommandTracking(t *testing.T) {
 	sbx.clearActiveCommand(cmd)
 	if _, ok := sbx.ActiveCommand(); ok {
 		t.Fatalf("expected active command to be cleared")
+	}
+}
+
+func TestSandboxContainerSpecMapsFields(t *testing.T) {
+	t.Parallel()
+	sbx := &Sandbox{SandboxSpec: SandboxSpec{
+		Name:         "ctgbot-test",
+		Hostname:     "ctgbot-test",
+		Image:        "ctgbot:latest",
+		Workdir:      "/workspace",
+		GPUs:         "all",
+		Labels:       map[string]string{"a": "b"},
+		Env:          []string{"HOME=/codex-home"},
+		Mounts:       []Mount{{Source: "/src", Target: "/dst", ReadOnly: true}},
+		SecurityOpts: []string{"seccomp=unconfined"},
+		AddHosts:     []string{"host.docker.internal:host-gateway"},
+		Cmd:          []string{"tail", "-f", "/dev/null"},
+	}}
+	spec := sbx.ContainerSpec()
+	if spec.Name != sbx.Name || spec.Image != sbx.Image || spec.Workdir != sbx.Workdir {
+		t.Fatalf("unexpected spec: %#v", spec)
+	}
+	if len(spec.Mounts) != 1 || spec.Mounts[0].Source != "/src" || !spec.Mounts[0].ReadOnly {
+		t.Fatalf("mounts = %#v", spec.Mounts)
+	}
+}
+
+func TestSandboxEnsureContainerStoresResolvedInstance(t *testing.T) {
+	t.Parallel()
+	mgr := containerengine.NewManager(nil)
+	sbx := &Sandbox{SandboxSpec: SandboxSpec{Name: "ctgbot-test", Image: "ctgbot:latest"}}
+	first := sbx.ensureContainer(mgr)
+	second := sbx.ensureContainer(mgr)
+	if first == nil || second == nil {
+		t.Fatalf("expected resolved container instance")
+	}
+	if first != second {
+		t.Fatalf("expected same resolved container instance")
+	}
+	if first.Name != "ctgbot-test" || first.Image != "ctgbot:latest" {
+		t.Fatalf("unexpected container: %#v", first)
 	}
 }
