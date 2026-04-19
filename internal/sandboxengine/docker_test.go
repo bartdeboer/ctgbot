@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os/exec"
 	"testing"
 )
 
@@ -180,5 +181,26 @@ func TestCreateSandboxKeepsDifferentNamesDistinct(t *testing.T) {
 	second := mgr.CreateSandbox(&SandboxSpec{Name: "two"})
 	if first == second {
 		t.Fatalf("expected different sandbox instances")
+	}
+}
+
+func TestSandboxActiveCommandTracking(t *testing.T) {
+	t.Parallel()
+	sbx := &Sandbox{}
+	cmd := exec.Command("true")
+	sbx.setActiveCommand(cmd, "codex", "exec", "hello")
+	active, ok := sbx.ActiveCommand()
+	if !ok {
+		t.Fatalf("expected active command")
+	}
+	if active.Name != "codex" {
+		t.Fatalf("name = %q, want codex", active.Name)
+	}
+	if len(active.Args) != 2 || active.Args[0] != "exec" || active.Args[1] != "hello" {
+		t.Fatalf("args = %#v", active.Args)
+	}
+	sbx.clearActiveCommand(cmd)
+	if _, ok := sbx.ActiveCommand(); ok {
+		t.Fatalf("expected active command to be cleared")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os/exec"
+	"sync"
 )
 
 type State string
@@ -53,6 +54,15 @@ type Sandbox struct {
 	SandboxSpec
 
 	runtime runtime
+
+	mu            sync.Mutex
+	activeCommand *SandboxCommand
+}
+
+type SandboxCommand struct {
+	Name string
+	Args []string
+	cmd  *exec.Cmd
 }
 
 type Manager interface {
@@ -72,6 +82,46 @@ func (s *Sandbox) ApplySpec(spec *SandboxSpec) {
 		return
 	}
 	s.SandboxSpec = *spec
+}
+
+func (s *Sandbox) setActiveCommand(cmd *exec.Cmd, name string, args ...string) {
+	if s == nil || cmd == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.activeCommand = &SandboxCommand{
+		Name: name,
+		Args: append([]string(nil), args...),
+		cmd:  cmd,
+	}
+}
+
+func (s *Sandbox) clearActiveCommand(cmd *exec.Cmd) {
+	if s == nil || cmd == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.activeCommand == nil || s.activeCommand.cmd != cmd {
+		return
+	}
+	s.activeCommand = nil
+}
+
+func (s *Sandbox) ActiveCommand() (SandboxCommand, bool) {
+	if s == nil {
+		return SandboxCommand{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.activeCommand == nil {
+		return SandboxCommand{}, false
+	}
+	return SandboxCommand{
+		Name: s.activeCommand.Name,
+		Args: append([]string(nil), s.activeCommand.Args...),
+	}, true
 }
 
 func (s *Sandbox) Ensure(ctx context.Context) error {

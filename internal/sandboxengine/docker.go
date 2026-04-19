@@ -176,6 +176,8 @@ func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer
 			return err
 		}
 		cmd := sbx.CommandContext(ctx, name, args...)
+		sbx.setActiveCommand(cmd, name, args...)
+		defer sbx.clearActiveCommand(cmd)
 		cmd.Stdout = stdout
 		cmd.Stderr = stderr
 		return cmd.Run()
