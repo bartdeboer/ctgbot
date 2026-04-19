@@ -92,6 +92,30 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 		}, nil
 	}
 
+	started := false
+	startSent := false
+	conv, err := b.GetActiveSession(ctx, thread)
+	if err != nil {
+		return messenger.IncomingResult{
+			Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
+		}, nil
+	}
+	if conv == nil {
+		started = true
+		conv, err = b.StartSession(ctx, chatCfg.ID, thread, "", false)
+		if err != nil {
+			return messenger.IncomingResult{
+				Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
+			}, nil
+		}
+		if conv != nil {
+			if sendErr := b.sendThreadText(ctx, conv, fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName(b.Config), conv.WorkspaceHost)); sendErr == nil {
+				startSent = true
+			}
+			thread = conv
+		}
+	}
+
 	outcome, err := b.HandlePrompt(ctx, chatCfg.ID, thread, text)
 	if err != nil {
 		return messenger.IncomingResult{
@@ -100,9 +124,9 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 	}
 
 	var messages []messenger.OutboundMessage
-	if outcome.Started && outcome.Thread != nil {
+	if started && !startSent && thread != nil {
 		messages = append(messages, messenger.OutboundMessage{
-			Text: fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", outcome.Thread.ContainerName(b.Config), outcome.Thread.WorkspaceHost),
+			Text: fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", thread.ContainerName(b.Config), thread.WorkspaceHost),
 		})
 	}
 	if strings.TrimSpace(outcome.Reply) != "" {

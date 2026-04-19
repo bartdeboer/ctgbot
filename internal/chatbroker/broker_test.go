@@ -292,8 +292,8 @@ func TestHandleIncomingMessageStartsTypingChatAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if len(result.Messages) != 2 {
-		t.Fatalf("messages len = %d, want 2", len(result.Messages))
+	if len(result.Messages) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(result.Messages))
 	}
 	if !reflect.DeepEqual(provider.actions, []messenger.ChatAction{messenger.ChatActionTyping}) {
 		t.Fatalf("actions = %#v", provider.actions)
