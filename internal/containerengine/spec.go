@@ -86,6 +86,10 @@ func (c *Container) Exec(ctx context.Context, opts ExecOptions, name string, arg
 	return cmd.Run()
 }
 
+func (c *Container) CombinedOutput(ctx context.Context, opts ExecOptions, name string, args ...string) ([]byte, error) {
+	return c.CommandContext(ctx, opts, name, args...).CombinedOutput()
+}
+
 func (c *Container) CommandContext(ctx context.Context, opts ExecOptions, name string, args ...string) *exec.Cmd {
 	dockerArgs := []string{"exec"}
 	for _, env := range opts.Env {

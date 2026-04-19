@@ -5,70 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 )
-
-func TestDockerSandboxCommandContextBuildsDockerExec(t *testing.T) {
-	t.Parallel()
-
-	sbx := Sandbox{
-		SandboxSpec: SandboxSpec{
-			Name:    "ctgbot-test",
-			Workdir: "/workspace",
-			Env:     []string{"HOME=/codex-home", "CODEX_HOME=/codex-home"},
-		},
-	}
-	cmd := sbx.CommandContext(context.Background(), "codex", "exec", "hello")
-
-	got := cmd.Args
-	want := []string{
-		"docker",
-		"exec",
-		"-e", "HOME=/codex-home",
-		"-e", "CODEX_HOME=/codex-home",
-		"-w", "/workspace",
-		"ctgbot-test",
-		"codex",
-		"exec",
-		"hello",
-	}
-	if len(got) != len(want) {
-		t.Fatalf("args len = %d, want %d: %#v", len(got), len(want), got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("arg[%d] = %q, want %q; all args: %#v", i, got[i], want[i], got)
-		}
-	}
-}
-
-type fakeSandboxRuntime struct {
-	execCalls []struct {
-		name string
-		args []string
-	}
-	combinedOut []byte
-}
-
-func (f *fakeSandboxRuntime) ensure(ctx context.Context, sbx *Sandbox) error { return nil }
-func (f *fakeSandboxRuntime) stop(ctx context.Context, sbx *Sandbox) error   { return nil }
-func (f *fakeSandboxRuntime) remove(ctx context.Context, sbx *Sandbox) error { return nil }
-func (f *fakeSandboxRuntime) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
-	f.execCalls = append(f.execCalls, struct {
-		name string
-		args []string
-	}{name: name, args: append([]string(nil), args...)})
-	if stdout != nil {
-		_, _ = stdout.Write([]byte("out"))
-	}
-	return nil
-}
-func (f *fakeSandboxRuntime) combinedOutput(ctx context.Context, sbx *Sandbox, name string, args ...string) ([]byte, error) {
-	return append([]byte(nil), f.combinedOut...), nil
-}
 
 func TestSandboxExecDelegatesToRuntime(t *testing.T) {
 	t.Parallel()
@@ -113,6 +53,31 @@ func TestSandboxLocksAcquireRelease(t *testing.T) {
 	if len(locks.locks) != 0 {
 		t.Fatalf("locks map = %#v", locks.locks)
 	}
+}
+
+type fakeSandboxRuntime struct {
+	execCalls []struct {
+		name string
+		args []string
+	}
+	combinedOut []byte
+}
+
+func (f *fakeSandboxRuntime) ensure(ctx context.Context, sbx *Sandbox) error { return nil }
+func (f *fakeSandboxRuntime) stop(ctx context.Context, sbx *Sandbox) error   { return nil }
+func (f *fakeSandboxRuntime) remove(ctx context.Context, sbx *Sandbox) error { return nil }
+func (f *fakeSandboxRuntime) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	f.execCalls = append(f.execCalls, struct {
+		name string
+		args []string
+	}{name: name, args: append([]string(nil), args...)})
+	if stdout != nil {
+		_, _ = stdout.Write([]byte("out"))
+	}
+	return nil
+}
+func (f *fakeSandboxRuntime) combinedOutput(ctx context.Context, sbx *Sandbox, name string, args ...string) ([]byte, error) {
+	return append([]byte(nil), f.combinedOut...), nil
 }
 
 type fakeImageBuilder struct {
@@ -189,8 +154,7 @@ func TestCreateSandboxKeepsDifferentNamesDistinct(t *testing.T) {
 func TestSandboxActiveCommandTracking(t *testing.T) {
 	t.Parallel()
 	sbx := &Sandbox{}
-	cmd := exec.Command("true")
-	sbx.setActiveCommand(cmd, "codex", "exec", "hello")
+	token := sbx.beginCommand("codex", "exec", "hello")
 	active, ok := sbx.ActiveCommand()
 	if !ok {
 		t.Fatalf("expected active command")
@@ -201,7 +165,7 @@ func TestSandboxActiveCommandTracking(t *testing.T) {
 	if len(active.Args) != 2 || active.Args[0] != "exec" || active.Args[1] != "hello" {
 		t.Fatalf("args = %#v", active.Args)
 	}
-	sbx.clearActiveCommand(cmd)
+	sbx.endCommand(token)
 	if _, ok := sbx.ActiveCommand(); ok {
 		t.Fatalf("expected active command to be cleared")
 	}

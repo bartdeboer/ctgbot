@@ -184,12 +184,13 @@ func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer
 		if err := sbx.ensureReady(ctx, m.containerManager()); err != nil {
 			return err
 		}
-		cmd := sbx.CommandContext(ctx, name, args...)
-		sbx.setActiveCommand(cmd, name, args...)
-		defer sbx.clearActiveCommand(cmd)
-		cmd.Stdout = stdout
-		cmd.Stderr = stderr
-		return cmd.Run()
+		container := sbx.ensureContainer(m.containerManager())
+		if container == nil {
+			return fmt.Errorf("missing backing container")
+		}
+		token := sbx.beginCommand(name, args...)
+		defer sbx.endCommand(token)
+		return container.Exec(ctx, sbx.execOptions(stdout, stderr), name, args...)
 	})
 }
 
@@ -205,8 +206,11 @@ func (m *DockerManager) combinedOutput(ctx context.Context, sbx *Sandbox, name s
 		if err := sbx.ensureReady(ctx, m.containerManager()); err != nil {
 			return err
 		}
-		cmd := sbx.CommandContext(ctx, name, args...)
-		buf, err := cmd.CombinedOutput()
+		container := sbx.ensureContainer(m.containerManager())
+		if container == nil {
+			return fmt.Errorf("missing backing container")
+		}
+		buf, err := container.CombinedOutput(ctx, sbx.execOptions(nil, nil), name, args...)
 		out = append([]byte(nil), buf...)
 		return err
 	})

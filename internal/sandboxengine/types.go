@@ -3,7 +3,6 @@ package sandboxengine
 import (
 	"context"
 	"io"
-	"os/exec"
 	"sync"
 
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
@@ -57,15 +56,15 @@ type Sandbox struct {
 
 	runtime runtime
 
-	mu            sync.Mutex
-	activeCommand *SandboxCommand
-	container     *containerengine.Container
+	mu                 sync.Mutex
+	activeCommand      *SandboxCommand
+	activeCommandToken uint64
+	container          *containerengine.Container
 }
 
 type SandboxCommand struct {
 	Name string
 	Args []string
-	cmd  *exec.Cmd
 }
 
 type Manager interface {
@@ -133,26 +132,40 @@ func (s *Sandbox) setContainer(container *containerengine.Container) {
 	s.container = container
 }
 
-func (s *Sandbox) setActiveCommand(cmd *exec.Cmd, name string, args ...string) {
-	if s == nil || cmd == nil {
-		return
+func (s *Sandbox) execOptions(stdout io.Writer, stderr io.Writer) containerengine.ExecOptions {
+	if s == nil {
+		return containerengine.ExecOptions{Stdout: stdout, Stderr: stderr}
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.activeCommand = &SandboxCommand{
-		Name: name,
-		Args: append([]string(nil), args...),
-		cmd:  cmd,
+	return containerengine.ExecOptions{
+		Env:     append([]string(nil), s.Env...),
+		Workdir: s.Workdir,
+		Stdout:  stdout,
+		Stderr:  stderr,
 	}
 }
 
-func (s *Sandbox) clearActiveCommand(cmd *exec.Cmd) {
-	if s == nil || cmd == nil {
+func (s *Sandbox) beginCommand(name string, args ...string) uint64 {
+	if s == nil {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.activeCommandToken++
+	token := s.activeCommandToken
+	s.activeCommand = &SandboxCommand{
+		Name: name,
+		Args: append([]string(nil), args...),
+	}
+	return token
+}
+
+func (s *Sandbox) endCommand(token uint64) {
+	if s == nil || token == 0 {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.activeCommand == nil || s.activeCommand.cmd != cmd {
+	if s.activeCommandToken != token {
 		return
 	}
 	s.activeCommand = nil
@@ -206,20 +219,4 @@ func (s *Sandbox) CombinedOutput(ctx context.Context, name string, args ...strin
 		return nil, nil
 	}
 	return s.runtime.combinedOutput(ctx, s, name, args...)
-}
-
-func (s *Sandbox) CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
-	dockerArgs := []string{"exec"}
-	for _, env := range s.Env {
-		if env == "" {
-			continue
-		}
-		dockerArgs = append(dockerArgs, "-e", env)
-	}
-	if s.Workdir != "" {
-		dockerArgs = append(dockerArgs, "-w", s.Workdir)
-	}
-	dockerArgs = append(dockerArgs, s.Name, name)
-	dockerArgs = append(dockerArgs, args...)
-	return exec.CommandContext(ctx, "docker", dockerArgs...)
 }
