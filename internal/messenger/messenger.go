@@ -59,10 +59,11 @@ type OutgoingMessage struct {
 }
 
 type OutgoingFile struct {
-	SandboxID modeluuid.UUID
-	Filename  string
-	Caption   string
-	Content   []byte
+	SandboxID   modeluuid.UUID
+	Filename    string
+	Caption     string
+	ContentType string
+	Content     []byte
 }
 
 type ResolvedOutgoingMessage struct {
@@ -76,6 +77,7 @@ type ResolvedOutgoingFile struct {
 	ProviderThreadID string
 	Filename         string
 	Caption          string
+	ContentType      string
 	Content          []byte
 }
 

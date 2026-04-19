@@ -16,7 +16,7 @@ func TestBuildSendFileRequest(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	req, err := buildSendFileRequest(path, "Weekly report")
+	req, err := buildSendFileRequest(path, "Weekly report", "")
 	if err != nil {
 		t.Fatalf("build sendfile request: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestBuildSendFileRequestRequiresRuntimeIdentity(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	if _, err := buildSendFileRequest(path, ""); err == nil {
+	if _, err := buildSendFileRequest(path, "", ""); err == nil {
 		t.Fatalf("expected missing runtime identity error")
 	}
 }
@@ -85,5 +85,20 @@ func TestBuildSendTextRequestFencedLanguageImpliesFence(t *testing.T) {
 	want := "```diff\ngit diff --stat\n```"
 	if req.Text != want {
 		t.Fatalf("req.Text = %q, want %q", req.Text, want)
+	}
+}
+
+func TestBuildSendFileRequestPreservesContentType(t *testing.T) {
+	t.Setenv("CTGBOT_SANDBOX_ID", "thread-456")
+	path := filepath.Join(t.TempDir(), "report.md")
+	if err := os.WriteFile(path, []byte("hello"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	req, err := buildSendFileRequest(path, "", "text/markdown")
+	if err != nil {
+		t.Fatalf("build sendfile request: %v", err)
+	}
+	if req.ContentType != "text/markdown" {
+		t.Fatalf("req.ContentType = %q", req.ContentType)
 	}
 }

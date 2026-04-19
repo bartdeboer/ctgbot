@@ -103,6 +103,7 @@ func (b *Broker) SendFile(ctx context.Context, file messenger.OutgoingFile) erro
 		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
 		Filename:         strings.TrimSpace(file.Filename),
 		Caption:          strings.TrimSpace(file.Caption),
+		ContentType:      strings.TrimSpace(file.ContentType),
 		Content:          append([]byte(nil), file.Content...),
 	})
 }

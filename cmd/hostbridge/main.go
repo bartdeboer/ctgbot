@@ -48,10 +48,11 @@ func main() {
 			fs := flag.NewFlagSet("hostbridge sendfile", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			caption := fs.String("caption", "", "Optional Telegram caption")
+			contentType := fs.String("type", "", "Optional MIME-like content type")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
-			payload, err := buildSendFileRequest(req.Params["path"], strings.TrimSpace(*caption))
+			payload, err := buildSendFileRequest(req.Params["path"], strings.TrimSpace(*caption), strings.TrimSpace(*contentType))
 			if err != nil {
 				return err
 			}
@@ -138,7 +139,7 @@ func sendHostbridgeRequest(payload hbprotocol.Request) error {
 	return hbclient.SendRequest(address, tlsDir, payload, os.Stdout, os.Stderr)
 }
 
-func buildSendFileRequest(path string, caption string) (hbprotocol.Request, error) {
+func buildSendFileRequest(path string, caption string, contentType string) (hbprotocol.Request, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return hbprotocol.Request{}, fmt.Errorf("missing file path")
@@ -165,12 +166,13 @@ func buildSendFileRequest(path string, caption string) (hbprotocol.Request, erro
 	}
 
 	return hbprotocol.Request{
-		Op:        hbprotocol.OpSendFile,
-		Timeout:   30,
-		SandboxID: sandboxID,
-		Filename:  filepath.Base(path),
-		Caption:   strings.TrimSpace(caption),
-		Content:   content,
+		Op:          hbprotocol.OpSendFile,
+		Timeout:     30,
+		SandboxID:   sandboxID,
+		Filename:    filepath.Base(path),
+		Caption:     strings.TrimSpace(caption),
+		ContentType: strings.TrimSpace(contentType),
+		Content:     content,
 	}, nil
 }
 

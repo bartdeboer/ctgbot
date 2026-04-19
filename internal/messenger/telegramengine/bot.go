@@ -66,7 +66,29 @@ func (tb *TelegramBot) SendFile(ctx context.Context, file messenger.ResolvedOutg
 	if err != nil {
 		return err
 	}
-	return tb.API.SendDocument(ctx, chatID, threadID, file.Filename, file.Caption, file.Content)
+	contentType := strings.TrimSpace(strings.ToLower(file.ContentType))
+	switch {
+	case contentType == "text/markdown":
+		text := string(file.Content)
+		if strings.TrimSpace(file.Caption) != "" {
+			text = strings.TrimSpace(file.Caption) + "\n\n" + text
+		}
+		return tb.sendRenderedText(ctx, chatID, threadID, 0, text)
+	case contentType == "text/plain":
+		text := string(file.Content)
+		if strings.TrimSpace(file.Caption) != "" {
+			text = strings.TrimSpace(file.Caption) + "\n\n" + text
+		}
+		return tb.API.SendMessage(ctx, chatID, threadID, 0, text, "")
+	case strings.HasPrefix(contentType, "image/"):
+		return tb.API.SendPhoto(ctx, chatID, threadID, file.Filename, file.Caption, file.Content)
+	case strings.HasPrefix(contentType, "video/"):
+		return tb.API.SendVideo(ctx, chatID, threadID, file.Filename, file.Caption, file.Content)
+	case strings.HasPrefix(contentType, "audio/"):
+		return tb.API.SendAudio(ctx, chatID, threadID, file.Filename, file.Caption, file.Content)
+	default:
+		return tb.API.SendDocument(ctx, chatID, threadID, file.Filename, file.Caption, file.Content)
+	}
 }
 
 func (tb *TelegramBot) StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error) {

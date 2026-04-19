@@ -21,10 +21,11 @@ type Request struct {
 	Env     map[string]string
 	Timeout int
 
-	SandboxID string
-	Filename  string
-	Caption   string
-	Content   []byte
+	SandboxID   string
+	Filename    string
+	Caption     string
+	ContentType string
+	Content     []byte
 
 	Text     string
 	Fenced   bool

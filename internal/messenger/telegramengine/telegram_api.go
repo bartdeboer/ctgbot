@@ -121,6 +121,50 @@ func (a *TelegramAPIV2) SendDocument(ctx context.Context, chatID int64, threadID
 	_, err := b.SendDocument(ctx, p)
 	return err
 }
+func (a *TelegramAPIV2) SendPhoto(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+	b := a.getBot()
+	if b == nil {
+		return fmt.Errorf("telegram bot not initialized")
+	}
+	p := &bot.SendPhotoParams{
+		ChatID:          chatID,
+		MessageThreadID: threadID,
+		Photo:           &models.InputFileUpload{Filename: strings.TrimSpace(filename), Data: bytes.NewReader(content)},
+		Caption:         strings.TrimSpace(caption),
+	}
+	_, err := b.SendPhoto(ctx, p)
+	return err
+}
+
+func (a *TelegramAPIV2) SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+	b := a.getBot()
+	if b == nil {
+		return fmt.Errorf("telegram bot not initialized")
+	}
+	p := &bot.SendVideoParams{
+		ChatID:          chatID,
+		MessageThreadID: threadID,
+		Video:           &models.InputFileUpload{Filename: strings.TrimSpace(filename), Data: bytes.NewReader(content)},
+		Caption:         strings.TrimSpace(caption),
+	}
+	_, err := b.SendVideo(ctx, p)
+	return err
+}
+
+func (a *TelegramAPIV2) SendAudio(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+	b := a.getBot()
+	if b == nil {
+		return fmt.Errorf("telegram bot not initialized")
+	}
+	p := &bot.SendAudioParams{
+		ChatID:          chatID,
+		MessageThreadID: threadID,
+		Audio:           &models.InputFileUpload{Filename: strings.TrimSpace(filename), Data: bytes.NewReader(content)},
+		Caption:         strings.TrimSpace(caption),
+	}
+	_, err := b.SendAudio(ctx, p)
+	return err
+}
 
 func (a *TelegramAPIV2) SendChatAction(ctx context.Context, chatID int64, threadID int, action messenger.ChatAction) error {
 	b := a.getBot()

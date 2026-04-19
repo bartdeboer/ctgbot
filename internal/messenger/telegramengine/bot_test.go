@@ -64,6 +64,9 @@ type sentChatAction struct {
 type fakeTelegramAPI struct {
 	messages        []sentMessage
 	documents       []sentDocument
+	photos          []sentDocument
+	videos          []sentDocument
+	audios          []sentDocument
 	actions         []sentChatAction
 	downloads       map[string][]byte
 	failByParseMode map[string]error
@@ -90,13 +93,22 @@ func (f *fakeTelegramAPI) SendMessage(ctx context.Context, chatID int64, threadI
 }
 
 func (f *fakeTelegramAPI) SendDocument(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
-	f.documents = append(f.documents, sentDocument{
-		chatID:   chatID,
-		threadID: threadID,
-		filename: filename,
-		caption:  caption,
-		content:  append([]byte(nil), content...),
-	})
+	f.documents = append(f.documents, sentDocument{chatID: chatID, threadID: threadID, filename: filename, caption: caption, content: append([]byte(nil), content...)})
+	return nil
+}
+
+func (f *fakeTelegramAPI) SendPhoto(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+	f.photos = append(f.photos, sentDocument{chatID: chatID, threadID: threadID, filename: filename, caption: caption, content: append([]byte(nil), content...)})
+	return nil
+}
+
+func (f *fakeTelegramAPI) SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+	f.videos = append(f.videos, sentDocument{chatID: chatID, threadID: threadID, filename: filename, caption: caption, content: append([]byte(nil), content...)})
+	return nil
+}
+
+func (f *fakeTelegramAPI) SendAudio(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+	f.audios = append(f.audios, sentDocument{chatID: chatID, threadID: threadID, filename: filename, caption: caption, content: append([]byte(nil), content...)})
 	return nil
 }
 
@@ -960,5 +972,47 @@ func TestDebouncerDoesNotDuplicateSingleUpdateAttachments(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatalf("timed out waiting for debounced update")
+	}
+}
+
+func TestSendFileMarkdownUsesRenderedText(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	err := tb.SendFile(context.Background(), messenger.ResolvedOutgoingFile{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Filename:         "note.md",
+		ContentType:      "text/markdown",
+		Content:          []byte("# Title\n\n- item"),
+	})
+	if err != nil {
+		t.Fatalf("SendFile: %v", err)
+	}
+	if len(api.messages) == 0 {
+		t.Fatalf("expected markdown file to send message")
+	}
+	if len(api.documents) != 0 {
+		t.Fatalf("did not expect document upload")
+	}
+}
+
+func TestSendFileImageUsesPhoto(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	err := tb.SendFile(context.Background(), messenger.ResolvedOutgoingFile{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Filename:         "pic.jpg",
+		ContentType:      "image/jpeg",
+		Content:          []byte("img"),
+	})
+	if err != nil {
+		t.Fatalf("SendFile: %v", err)
+	}
+	if len(api.photos) != 1 {
+		t.Fatalf("photos = %d, want 1", len(api.photos))
+	}
+	if len(api.documents) != 0 {
+		t.Fatalf("did not expect document upload")
 	}
 }

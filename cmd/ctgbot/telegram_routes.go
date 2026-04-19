@@ -75,7 +75,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 					if err != nil {
 						return fmt.Errorf("parse sandbox id: %w", err)
 					}
-					return broker.SendFile(ctx, messenger.OutgoingFile{SandboxID: sandboxID, Filename: req.Filename, Caption: req.Caption, Content: req.Content})
+					return broker.SendFile(ctx, messenger.OutgoingFile{SandboxID: sandboxID, Filename: req.Filename, Caption: req.Caption, ContentType: req.ContentType, Content: req.Content})
 				},
 				func(ctx context.Context, req hostbridge.SendTextRequest) error {
 					sandboxID, err := modeluuid.Parse(strings.TrimSpace(req.SandboxID))

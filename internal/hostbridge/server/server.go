@@ -40,10 +40,11 @@ type securityTaggedListener struct {
 type AllowedCommandResolver func(clientIdentity string) map[string]AllowedCommand
 
 type SendFileRequest struct {
-	SandboxID string
-	Filename  string
-	Caption   string
-	Content   []byte
+	SandboxID   string
+	Filename    string
+	Caption     string
+	ContentType string
+	Content     []byte
 }
 
 type SendFileHandler func(ctx context.Context, req SendFileRequest) error
@@ -330,10 +331,11 @@ func handleSendFile(conn net.Conn, send *safeEncoder, req hbprotocol.Request, se
 	logger.Printf("hostbridge sendfile filename=%q bytes=%d security=%s client=%q sandbox=%q", req.Filename, len(req.Content), connectionSecurityMode(conn), connectionClientIdentity(conn), req.SandboxID)
 
 	err := sendFile(ctx, SendFileRequest{
-		SandboxID: req.SandboxID,
-		Filename:  req.Filename,
-		Caption:   req.Caption,
-		Content:   req.Content,
+		SandboxID:   req.SandboxID,
+		Filename:    req.Filename,
+		Caption:     req.Caption,
+		ContentType: req.ContentType,
+		Content:     req.Content,
 	})
 	if err != nil {
 		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: err.Error()})
