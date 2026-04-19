@@ -55,6 +55,18 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 			return "", err
 		}
 		return "conversation stopped", nil
+	case "interrupt":
+		conv, err := b.GetActiveSession(ctx, thread)
+		if err != nil {
+			return "", err
+		}
+		if conv == nil {
+			return "no active conversation", nil
+		}
+		if !b.interruptThread(conv.ID) {
+			return "no active run to interrupt", nil
+		}
+		return "current run cancelled", nil
 	case "status":
 		conv, err := b.GetActiveSession(ctx, thread)
 		if err != nil {

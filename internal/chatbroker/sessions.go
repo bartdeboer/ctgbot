@@ -2,6 +2,7 @@ package chatbroker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -205,7 +206,12 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 		started = true
 	}
 
-	agent, sbx, err := b.prepareRuntime(ctx, conv, false)
+	runCtx, cancel := context.WithCancel(ctx)
+	b.setActiveRun(conv.ID, cancel)
+	defer b.clearActiveRun(conv.ID, cancel)
+	defer cancel()
+
+	agent, sbx, err := b.prepareRuntime(runCtx, conv, false)
 	if err != nil {
 		return PromptOutcome{}, err
 	}
@@ -215,20 +221,26 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 		}
 	}()
 
-	stopTyping := b.startThreadChatAction(ctx, conv, messenger.ChatActionTyping)
+	stopTyping := b.startThreadChatAction(runCtx, conv, messenger.ChatActionTyping)
 	defer stopTyping()
 
-	result, runErr := agent.HandleTurn(ctx, sbx, conv.AgentThreadID, prompt)
+	result, runErr := agent.HandleTurn(runCtx, sbx, conv.AgentThreadID, prompt)
 	if result.ProviderThreadID != "" {
 		conv.AgentThreadID = result.ProviderThreadID
 	}
+	interrupted := errors.Is(runErr, context.Canceled)
 	if b.Sessions != nil {
-		if runErr != nil {
+		if interrupted {
+			conv.LastError = "interrupted"
+		} else if runErr != nil {
 			conv.LastError = runErr.Error()
 		} else {
 			conv.LastError = ""
 		}
 		_ = b.Sessions.SaveThread(ctx, conv)
+	}
+	if interrupted {
+		return PromptOutcome{Thread: conv, Started: started}, nil
 	}
 
 	return PromptOutcome{

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
@@ -19,7 +20,7 @@ type PromptOutcome struct {
 	Reply   string
 }
 
-const helpText = "Commands:\n/new [absolute-host-path]\n/refresh\n/purge\n/status\n/stop\n/upgrade\n/quit\n/help\n\nAny non-command message is sent to the active Codex conversation."
+const helpText = "Commands:\n/new [absolute-host-path]\n/refresh\n/purge\n/status\n/stop\n/interrupt\n/upgrade\n/quit\n/help\n\nAny non-command message is sent to the active Codex conversation."
 
 type Broker struct {
 	Config            *appstate.Config
@@ -32,6 +33,9 @@ type Broker struct {
 	OutboundProviders map[string]messenger.OutboundChatProvider
 	DefaultAgent      string
 	Logger            *log.Logger
+
+	activeRunsMu sync.Mutex
+	activeRuns   map[modeluuid.UUID]context.CancelFunc
 }
 
 func New(cfg *appstate.Config, sessions SessionStore, sandboxes sandboxengine.Manager, logger *log.Logger) *Broker {
@@ -156,4 +160,48 @@ func (b *Broker) startThreadChatAction(ctx context.Context, thread *Thread, acti
 		return func() {}
 	}
 	return stop
+}
+
+func (b *Broker) setActiveRun(threadID modeluuid.UUID, cancel context.CancelFunc) {
+	if b == nil || threadID.IsNull() || cancel == nil {
+		return
+	}
+	b.activeRunsMu.Lock()
+	defer b.activeRunsMu.Unlock()
+	if b.activeRuns == nil {
+		b.activeRuns = map[modeluuid.UUID]context.CancelFunc{}
+	}
+	b.activeRuns[threadID] = cancel
+}
+
+func (b *Broker) clearActiveRun(threadID modeluuid.UUID, cancel context.CancelFunc) {
+	if b == nil || threadID.IsNull() {
+		return
+	}
+	b.activeRunsMu.Lock()
+	defer b.activeRunsMu.Unlock()
+	if b.activeRuns == nil {
+		return
+	}
+	current := b.activeRuns[threadID]
+	if cancel != nil && current != nil {
+		if fmt.Sprintf("%p", current) != fmt.Sprintf("%p", cancel) {
+			return
+		}
+	}
+	delete(b.activeRuns, threadID)
+}
+
+func (b *Broker) interruptThread(threadID modeluuid.UUID) bool {
+	if b == nil || threadID.IsNull() {
+		return false
+	}
+	b.activeRunsMu.Lock()
+	cancel := b.activeRuns[threadID]
+	b.activeRunsMu.Unlock()
+	if cancel == nil {
+		return false
+	}
+	cancel()
+	return true
 }
