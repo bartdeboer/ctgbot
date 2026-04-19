@@ -121,10 +121,12 @@ func TestSetupEnvironmentWritesManagedFiles(t *testing.T) {
 
 	exec := &SessionExecutor{Config: cfg}
 	sbx := &sandboxengine.Sandbox{
-		ProfileDir:            filepath.Join(root, "chat", ".codex"),
-		ContainerHome:         "/codex-home",
-		ContainerWorkspace:    "/workspace",
-		DeveloperInstructions: "bootstrap text",
+		SandboxSpec: sandboxengine.SandboxSpec{
+			ProfileDir:            filepath.Join(root, "chat", ".codex"),
+			ContainerHome:         "/codex-home",
+			ContainerWorkspace:    "/workspace",
+			DeveloperInstructions: "bootstrap text",
+		},
 	}
 
 	if err := exec.SetupEnvironment(t.Context(), sbx); err != nil {
@@ -182,7 +184,9 @@ func TestInstallSkillCopiesSkillDirectoryIntoChatHome(t *testing.T) {
 
 	exec := &SessionExecutor{Config: cfg}
 	sbx := &sandboxengine.Sandbox{
-		ProfileDir: filepath.Join(root, "chat", ".codex"),
+		SandboxSpec: sandboxengine.SandboxSpec{
+			ProfileDir: filepath.Join(root, "chat", ".codex"),
+		},
 	}
 
 	if err := exec.InstallSkill(t.Context(), sbx, skillDir); err != nil {

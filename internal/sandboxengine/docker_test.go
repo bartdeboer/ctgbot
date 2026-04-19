@@ -12,9 +12,11 @@ func TestDockerSandboxCommandContextBuildsDockerExec(t *testing.T) {
 	t.Parallel()
 
 	sbx := Sandbox{
-		Name:    "ctgbot-test",
-		Workdir: "/workspace",
-		Env:     []string{"HOME=/codex-home", "CODEX_HOME=/codex-home"},
+		SandboxSpec: SandboxSpec{
+			Name:    "ctgbot-test",
+			Workdir: "/workspace",
+			Env:     []string{"HOME=/codex-home", "CODEX_HOME=/codex-home"},
+		},
 	}
 	cmd := sbx.CommandContext(context.Background(), "codex", "exec", "hello")
 
@@ -68,7 +70,7 @@ func (f *fakeSandboxRuntime) combinedOutput(ctx context.Context, sbx *Sandbox, n
 func TestSandboxExecDelegatesToRuntime(t *testing.T) {
 	t.Parallel()
 	rt := &fakeSandboxRuntime{}
-	sbx := &Sandbox{Name: "ctgbot-test", runtime: rt}
+	sbx := &Sandbox{SandboxSpec: SandboxSpec{Name: "ctgbot-test"}, runtime: rt}
 	var stdout bytes.Buffer
 	if err := sbx.Exec(context.Background(), &stdout, nil, "codex", "exec", "hello"); err != nil {
 		t.Fatalf("Exec: %v", err)
@@ -87,7 +89,7 @@ func TestSandboxExecDelegatesToRuntime(t *testing.T) {
 func TestSandboxCombinedOutputDelegatesToRuntime(t *testing.T) {
 	t.Parallel()
 	rt := &fakeSandboxRuntime{combinedOut: []byte("hello")}
-	sbx := &Sandbox{Name: "ctgbot-test", runtime: rt}
+	sbx := &Sandbox{SandboxSpec: SandboxSpec{Name: "ctgbot-test"}, runtime: rt}
 	out, err := sbx.CombinedOutput(context.Background(), "cat", "/tmp/file")
 	if err != nil {
 		t.Fatalf("CombinedOutput: %v", err)
@@ -126,7 +128,8 @@ func TestBuilderSetsImageBuilder(t *testing.T) {
 	t.Parallel()
 	img := &fakeImageBuilder{}
 	mgr := NewSandboxManager(nil)
-	sbx := NewBuilder(mgr, "ctgbot-test").ImageBuilder(img).Build()
+	spec := NewBuilder("ctgbot-test").ImageBuilder(img).Build()
+	sbx := mgr.CreateSandbox(spec)
 	if sbx.ImageBuilder != img {
 		t.Fatalf("image builder not attached")
 	}
@@ -136,7 +139,7 @@ func TestDockerManagerExecEnsuresImageFirst(t *testing.T) {
 	t.Parallel()
 	img := &fakeImageBuilder{ensureErr: fmt.Errorf("boom")}
 	mgr := NewSandboxManager(nil)
-	sbx := mgr.NewSandbox("ctgbot-test")
+	sbx := mgr.CreateSandbox(&SandboxSpec{Name: "ctgbot-test"})
 	sbx.ImageBuilder = img
 	if err := sbx.Exec(context.Background(), nil, nil, "codex", "exec"); err == nil {
 		t.Fatalf("expected ensure image error")

@@ -9,7 +9,7 @@ import (
 
 func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 	containerName := conv.ContainerName(b.Config)
-	builder := sandboxengine.NewBuilder(b.sandboxManager(), containerName).
+	spec := sandboxengine.NewBuilder(containerName).
 		WorkspaceDir(conv.WorkspaceHost).
 		ProfileDir(conv.HomeHost).
 		ContainerWorkspace(conv.ContainerWorkspace).
@@ -38,10 +38,10 @@ func (b *Broker) newSandbox(conv *Thread) *sandboxengine.Sandbox {
 		AddHosts(b.sandboxAddHosts())
 
 	if gpus := b.Config.ChatGPUsByID(conv.ChatID); gpus != "" {
-		builder = builder.GPUs(gpus)
+		spec = spec.GPUs(gpus)
 	}
 
-	return builder.Build()
+	return b.sandboxManager().CreateSandbox(spec.Build())
 }
 
 func (b *Broker) sandboxEnv(conv *Thread) []string {

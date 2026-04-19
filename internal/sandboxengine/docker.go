@@ -85,11 +85,16 @@ func (l *sandboxLocks) release(name string, lock *sandboxLock) {
 	}
 }
 
-func (m *DockerManager) NewSandbox(name string) *Sandbox {
-	return &Sandbox{
-		Name:    strings.TrimSpace(name),
-		runtime: m,
+func (m *DockerManager) CreateSandbox(spec *SandboxSpec) *Sandbox {
+	if spec == nil {
+		spec = &SandboxSpec{}
 	}
+	sbx := &Sandbox{
+		SandboxSpec: *spec,
+		runtime:     m,
+	}
+	sbx.Name = strings.TrimSpace(sbx.Name)
+	return sbx
 }
 
 func (m *DockerManager) ensure(ctx context.Context, sbx *Sandbox) error {

@@ -863,8 +863,11 @@ func (f *fakeBrokerSessionStore) SaveThread(ctx context.Context, thread *Thread)
 
 type fakeBrokerSandboxManager struct{}
 
-func (f fakeBrokerSandboxManager) NewSandbox(name string) *sandboxengine.Sandbox {
-	return &sandboxengine.Sandbox{Name: name}
+func (f fakeBrokerSandboxManager) CreateSandbox(spec *sandboxengine.SandboxSpec) *sandboxengine.Sandbox {
+	if spec == nil {
+		spec = &sandboxengine.SandboxSpec{}
+	}
+	return &sandboxengine.Sandbox{SandboxSpec: *spec}
 }
 
 type fakeProcessActions struct {

@@ -26,7 +26,7 @@ type ImageBuilder interface {
 	Build(ctx context.Context, noCache bool) error
 }
 
-type Sandbox struct {
+type SandboxSpec struct {
 	Name string
 
 	WorkspaceDir string
@@ -47,12 +47,16 @@ type Sandbox struct {
 	AddHosts     []string
 	Cmd          []string
 	ImageBuilder ImageBuilder
+}
+
+type Sandbox struct {
+	SandboxSpec
 
 	runtime runtime
 }
 
 type Manager interface {
-	NewSandbox(name string) *Sandbox
+	CreateSandbox(spec *SandboxSpec) *Sandbox
 }
 
 type runtime interface {

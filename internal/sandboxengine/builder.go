@@ -1,93 +1,93 @@
 package sandboxengine
 
 type Builder struct {
-	sbx *Sandbox
+	spec *SandboxSpec
 }
 
-func NewBuilder(manager Manager, name string) Builder {
-	return Builder{sbx: manager.NewSandbox(name)}
+func NewBuilder(name string) Builder {
+	return Builder{spec: &SandboxSpec{Name: name}}
 }
 
 func (b Builder) WorkspaceDir(v string) Builder {
-	b.sbx.WorkspaceDir = v
+	b.spec.WorkspaceDir = v
 	return b
 }
 
 func (b Builder) ProfileDir(v string) Builder {
-	b.sbx.ProfileDir = v
+	b.spec.ProfileDir = v
 	return b
 }
 
 func (b Builder) ContainerWorkspace(v string) Builder {
-	b.sbx.ContainerWorkspace = v
+	b.spec.ContainerWorkspace = v
 	return b
 }
 
 func (b Builder) ContainerHome(v string) Builder {
-	b.sbx.ContainerHome = v
+	b.spec.ContainerHome = v
 	return b
 }
 
 func (b Builder) DeveloperInstructions(v string) Builder {
-	b.sbx.DeveloperInstructions = v
+	b.spec.DeveloperInstructions = v
 	return b
 }
 
 func (b Builder) Hostname(v string) Builder {
-	b.sbx.Hostname = v
+	b.spec.Hostname = v
 	return b
 }
 
 func (b Builder) Image(v string) Builder {
-	b.sbx.Image = v
+	b.spec.Image = v
 	return b
 }
 
 func (b Builder) Workdir(v string) Builder {
-	b.sbx.Workdir = v
+	b.spec.Workdir = v
 	return b
 }
 
 func (b Builder) GPUs(v string) Builder {
-	b.sbx.GPUs = v
+	b.spec.GPUs = v
 	return b
 }
 
 func (b Builder) Labels(v map[string]string) Builder {
-	b.sbx.Labels = v
+	b.spec.Labels = v
 	return b
 }
 
 func (b Builder) Env(v []string) Builder {
-	b.sbx.Env = v
+	b.spec.Env = v
 	return b
 }
 
 func (b Builder) Mounts(v []Mount) Builder {
-	b.sbx.Mounts = v
+	b.spec.Mounts = v
 	return b
 }
 
 func (b Builder) SecurityOpts(v []string) Builder {
-	b.sbx.SecurityOpts = v
+	b.spec.SecurityOpts = v
 	return b
 }
 
 func (b Builder) AddHosts(v []string) Builder {
-	b.sbx.AddHosts = v
+	b.spec.AddHosts = v
 	return b
 }
 
 func (b Builder) Cmd(v []string) Builder {
-	b.sbx.Cmd = v
+	b.spec.Cmd = v
 	return b
 }
 
 func (b Builder) ImageBuilder(v ImageBuilder) Builder {
-	b.sbx.ImageBuilder = v
+	b.spec.ImageBuilder = v
 	return b
 }
 
-func (b Builder) Build() *Sandbox {
-	return b.sbx
+func (b Builder) Build() *SandboxSpec {
+	return b.spec
 }

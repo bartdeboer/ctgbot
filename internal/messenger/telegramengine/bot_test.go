@@ -227,8 +227,11 @@ func (f *fakeAgent) PromptSnapshot() []string {
 
 type fakeSandboxManager struct{}
 
-func (f fakeSandboxManager) NewSandbox(name string) *sandboxengine.Sandbox {
-	return &sandboxengine.Sandbox{Name: name}
+func (f fakeSandboxManager) CreateSandbox(spec *sandboxengine.SandboxSpec) *sandboxengine.Sandbox {
+	if spec == nil {
+		spec = &sandboxengine.SandboxSpec{}
+	}
+	return &sandboxengine.Sandbox{SandboxSpec: *spec}
 }
 
 func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
