@@ -465,11 +465,6 @@ func DefaultAllowedCommands() map[string]AllowedCommand {
 	allowed := map[string]AllowedCommand{}
 
 	if runtime.GOOS == "windows" {
-		allowed["dir"] = AllowedCommand{
-			Name:           `C:\Windows\System32\cmd.exe`,
-			Args:           []string{"/c", "dir"},
-			AllowExtraArgs: true,
-		}
 		return allowed
 	}
 
