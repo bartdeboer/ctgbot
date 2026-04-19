@@ -31,6 +31,8 @@ type ImageBuilder interface {
 type SandboxSpec struct {
 	Name string
 
+	InteractiveInterruptEnabled bool
+
 	WorkspaceDir string
 	ProfileDir   string
 

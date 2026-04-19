@@ -84,6 +84,11 @@ type SetChatProcessToolsEnabledInput struct {
 	SetProcessToolsEnabled bool `flag:"set-process-tools-enabled"`
 }
 
+type SetChatInteractiveInterruptEnabledInput struct {
+	ChatRoute
+	SetInteractiveInterruptEnabled bool `flag:"set-interactive-interrupt-enabled"`
+}
+
 type SetChatGPUsInput struct {
 	ChatRoute
 	SetGPUs string `flag:"set-gpus"`
@@ -246,6 +251,17 @@ func (c *ConfigSetters) SetChatProcessToolsEnabled(in SetChatProcessToolsEnabled
 		return fmt.Errorf("missing app state")
 	}
 	return c.State.SetChatProcessToolsEnabledByID(chatID, in.SetProcessToolsEnabled)
+}
+
+func (c *ConfigSetters) SetChatInteractiveInterruptEnabled(in SetChatInteractiveInterruptEnabledInput) error {
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
+	if c == nil || c.State == nil {
+		return fmt.Errorf("missing app state")
+	}
+	return c.State.SetChatInteractiveInterruptEnabledByID(chatID, in.SetInteractiveInterruptEnabled)
 }
 
 func (c *ConfigSetters) SetChatGPUs(in SetChatGPUsInput) error {

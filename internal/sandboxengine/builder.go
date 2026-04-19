@@ -8,6 +8,11 @@ func NewBuilder(name string) Builder {
 	return Builder{spec: &SandboxSpec{Name: name}}
 }
 
+func (b Builder) InteractiveInterruptEnabled(v bool) Builder {
+	b.spec.InteractiveInterruptEnabled = v
+	return b
+}
+
 func (b Builder) WorkspaceDir(v string) Builder {
 	b.spec.WorkspaceDir = v
 	return b

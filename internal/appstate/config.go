@@ -32,11 +32,12 @@ const (
 )
 
 type ChatConfigEntry struct {
-	ID                modeluuid.UUID
-	ProviderType      string
-	ProviderChatID    string
-	ProviderChatTitle string
-	Enabled           bool
+	ID                          modeluuid.UUID
+	ProviderType                string
+	ProviderChatID              string
+	ProviderChatTitle           string
+	Enabled                     bool
+	InteractiveInterruptEnabled bool
 }
 
 type GitIdentity struct {
@@ -614,6 +615,23 @@ func (c *Config) ChatProcessToolsEnabledByID(chatID modeluuid.UUID) bool {
 		return false
 	}
 	return c.Store.GetBool(c.ChatKey(chatID, "process_tools"), false)
+}
+
+func (c *Config) SetChatInteractiveInterruptEnabledByID(chatID modeluuid.UUID, enabled bool) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	if chatID.IsNull() {
+		return fmt.Errorf("chat id is null")
+	}
+	return c.Store.PersistBool(c.ChatKey(chatID, "interactive_interrupt"), enabled)
+}
+
+func (c *Config) ChatInteractiveInterruptEnabledByID(chatID modeluuid.UUID) bool {
+	if c == nil || c.Store == nil || chatID.IsNull() {
+		return true
+	}
+	return c.Store.GetBool(c.ChatKey(chatID, "interactive_interrupt"), true)
 }
 
 func (c *Config) SetChatGPUsByID(chatID modeluuid.UUID, raw string) error {

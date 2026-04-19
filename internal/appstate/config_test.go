@@ -788,3 +788,40 @@ func TestConfigDurationParsingSupportsStringDurations(t *testing.T) {
 		t.Fatalf("SessionTimeout() = %s, want 1m30s", got)
 	}
 }
+
+func TestChatInteractiveInterruptEnabledDefaultsTrueAndRoundTrips(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	entry := ensureTelegramChat(t, cfg, -123, "Test Chat")
+
+	if !cfg.ChatInteractiveInterruptEnabledByID(entry.ID) {
+		t.Fatalf("expected interactive interrupt enabled by default")
+	}
+	if err := cfg.SetChatInteractiveInterruptEnabledByID(entry.ID, false); err != nil {
+		t.Fatalf("set false: %v", err)
+	}
+	if cfg.ChatInteractiveInterruptEnabledByID(entry.ID) {
+		t.Fatalf("expected interactive interrupt disabled")
+	}
+}

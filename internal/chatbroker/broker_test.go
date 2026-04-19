@@ -947,29 +947,7 @@ func (f *fakeOutboundBrokerProvider) StartChatAction(ctx context.Context, target
 	}, nil
 }
 
-type fakeInterruptibleBrokerAgent struct {
-	started chan struct{}
-	done    chan struct{}
-}
-
-func (f *fakeInterruptibleBrokerAgent) Name() string { return "codex" }
-func (f *fakeInterruptibleBrokerAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.Sandbox) error {
-	return nil
-}
-func (f *fakeInterruptibleBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (agent.TurnResult, error) {
-	select {
-	case <-f.started:
-	default:
-		close(f.started)
-	}
-	<-ctx.Done()
-	if f.done != nil {
-		close(f.done)
-	}
-	return agent.TurnResult{}, ctx.Err()
-}
-
-func TestHandleIncomingMessageInterruptCancelsActiveRun(t *testing.T) {
+func TestHandleIncomingMessageInterruptDisabledForChat(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -989,39 +967,18 @@ func TestHandleIncomingMessageInterruptCancelsActiveRun(t *testing.T) {
 		t.Fatalf("new config: %v", err)
 	}
 	chat := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
-	thread := &Thread{ID: modeluuid.New(), ChatID: chat.ID, ProviderThreadID: "7", Active: true, RuntimeName: cfg.ThreadContainerName(modeluuid.New())}
+	if err := cfg.SetChatInteractiveInterruptEnabledByID(chat.ID, false); err != nil {
+		t.Fatalf("disable interrupt: %v", err)
+	}
+	thread := &Thread{ID: modeluuid.New(), ChatID: chat.ID, ProviderThreadID: "7", Active: true}
 	sessions := &fakeBrokerSessionStore{thread: thread}
-	agent := &fakeInterruptibleBrokerAgent{started: make(chan struct{}), done: make(chan struct{})}
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
-	broker.RegisterAgent("codex", agent)
-	broker.RegisterOutboundChatProvider("telegram", &fakeOutboundBrokerProvider{})
 
-	resultCh := make(chan messenger.IncomingResult, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{ProviderType: "telegram", ProviderChatID: "42", ProviderThreadID: "7", Message: "test"})
-		resultCh <- result
-		errCh <- err
-	}()
-
-	<-agent.started
-	interruptResult, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{ProviderType: "telegram", ProviderChatID: "42", ProviderThreadID: "7", Message: "/interrupt"})
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{ProviderType: "telegram", ProviderChatID: "42", ProviderThreadID: "7", Message: "/interrupt"})
 	if err != nil {
 		t.Fatalf("interrupt err: %v", err)
 	}
-	if len(interruptResult.Messages) != 1 || interruptResult.Messages[0].Text != "current run cancelled" {
-		t.Fatalf("interrupt messages = %#v", interruptResult.Messages)
-	}
-
-	<-agent.done
-	result := <-resultCh
-	if err := <-errCh; err != nil {
-		t.Fatalf("prompt err: %v", err)
-	}
-	if len(result.Messages) != 0 {
-		t.Fatalf("prompt messages = %#v", result.Messages)
-	}
-	if sessions.thread.LastError != "interrupted" {
-		t.Fatalf("LastError = %q", sessions.thread.LastError)
+	if len(result.Messages) != 1 || result.Messages[0].Text != "interrupt is disabled for this chat" {
+		t.Fatalf("interrupt messages = %#v", result.Messages)
 	}
 }

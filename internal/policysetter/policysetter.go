@@ -95,6 +95,7 @@ func NewDefaultRegistry(cfg *configsetters.ConfigSetters) *Registry {
 		SessionTimeoutSetter(cfg),
 		PollTimeoutSetter(cfg),
 		ChatProcessToolsSetter(cfg),
+		ChatInteractiveInterruptSetter(cfg),
 		ChatEnabledSetter(cfg),
 	)
 }
@@ -170,6 +171,34 @@ func ChatProcessToolsSetter(cfg *configsetters.ConfigSetters) Setter {
 			return "", fmt.Errorf("invalid bool %q", value)
 		}
 		if err := cfg.SetChatProcessToolsEnabled(configsetters.SetChatProcessToolsEnabledInput{ChatRoute: configsetters.ChatRoute{ChatID: ctx.ChatID.String()}, SetProcessToolsEnabled: parsed}); err != nil {
+			return "", err
+		}
+		return strconv.FormatBool(parsed), nil
+	}
+	return setter
+}
+
+func ChatInteractiveInterruptSetter(cfg *configsetters.ConfigSetters) Setter {
+	setter := Setter{
+		Name:              "chat.interactive_interrupt_enabled",
+		Help:              "Enable or disable interactive PTY-backed interrupt support for the current chat",
+		RequiredElevation: ElevationElevated,
+	}
+	setter.Get = func(ctx Context) (string, error) {
+		if cfg == nil || cfg.State == nil {
+			return "", fmt.Errorf("missing app state")
+		}
+		return strconv.FormatBool(cfg.State.ChatInteractiveInterruptEnabledByID(ctx.ChatID)), nil
+	}
+	setter.Set = func(ctx Context, value string) (string, error) {
+		if !setter.Allowed(ctx) {
+			return "", fmt.Errorf("setting %s requires %s chat access", setter.Name, setter.RequiredElevation)
+		}
+		parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err != nil {
+			return "", fmt.Errorf("invalid bool %q", value)
+		}
+		if err := cfg.SetChatInteractiveInterruptEnabled(configsetters.SetChatInteractiveInterruptEnabledInput{ChatRoute: configsetters.ChatRoute{ChatID: ctx.ChatID.String()}, SetInteractiveInterruptEnabled: parsed}); err != nil {
 			return "", err
 		}
 		return strconv.FormatBool(parsed), nil
