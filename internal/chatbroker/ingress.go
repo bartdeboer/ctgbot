@@ -92,7 +92,7 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 		}, nil
 	}
 
-	outcome, err := b.handlePrompt(ctx, chatCfg.ID, thread, text)
+	outcome, err := b.HandlePrompt(ctx, chatCfg.ID, thread, text)
 	if err != nil {
 		return messenger.IncomingResult{
 			Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
