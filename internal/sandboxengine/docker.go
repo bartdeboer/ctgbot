@@ -12,9 +12,11 @@ import (
 )
 
 type DockerManager struct {
+	mu         sync.Mutex
 	Containers *containerengine.Manager
 	Logger     *log.Logger
 	locks      *sandboxLocks
+	sandboxes  map[string]*Sandbox
 }
 
 type sandboxLocks struct {
@@ -32,6 +34,7 @@ func NewSandboxManager(logger *log.Logger) *DockerManager {
 		Logger:     logger,
 		Containers: &containerengine.Manager{Logger: logger},
 		locks:      &sandboxLocks{locks: map[string]*sandboxLock{}},
+		sandboxes:  map[string]*Sandbox{},
 	}
 }
 
@@ -89,11 +92,23 @@ func (m *DockerManager) CreateSandbox(spec *SandboxSpec) *Sandbox {
 	if spec == nil {
 		spec = &SandboxSpec{}
 	}
-	sbx := &Sandbox{
-		SandboxSpec: *spec,
-		runtime:     m,
+	copySpec := *spec
+	copySpec.Name = strings.TrimSpace(copySpec.Name)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.sandboxes == nil {
+		m.sandboxes = map[string]*Sandbox{}
 	}
-	sbx.Name = strings.TrimSpace(sbx.Name)
+	if sbx := m.sandboxes[copySpec.Name]; sbx != nil {
+		sbx.ApplySpec(&copySpec)
+		sbx.runtime = m
+		return sbx
+	}
+	sbx := &Sandbox{runtime: m}
+	sbx.ApplySpec(&copySpec)
+	m.sandboxes[copySpec.Name] = sbx
 	return sbx
 }
 

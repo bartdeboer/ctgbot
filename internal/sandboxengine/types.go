@@ -67,6 +67,13 @@ type runtime interface {
 	combinedOutput(ctx context.Context, sbx *Sandbox, name string, args ...string) ([]byte, error)
 }
 
+func (s *Sandbox) ApplySpec(spec *SandboxSpec) {
+	if s == nil || spec == nil {
+		return
+	}
+	s.SandboxSpec = *spec
+}
+
 func (s *Sandbox) Ensure(ctx context.Context) error {
 	if s == nil || s.runtime == nil {
 		return nil

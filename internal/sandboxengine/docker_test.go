@@ -127,10 +127,8 @@ func (f *fakeImageBuilder) Build(ctx context.Context, noCache bool) error { retu
 func TestBuilderSetsImageBuilder(t *testing.T) {
 	t.Parallel()
 	img := &fakeImageBuilder{}
-	mgr := NewSandboxManager(nil)
 	spec := NewBuilder("ctgbot-test").ImageBuilder(img).Build()
-	sbx := mgr.CreateSandbox(spec)
-	if sbx.ImageBuilder != img {
+	if spec.ImageBuilder != img {
 		t.Fatalf("image builder not attached")
 	}
 }
@@ -139,8 +137,7 @@ func TestDockerManagerExecEnsuresImageFirst(t *testing.T) {
 	t.Parallel()
 	img := &fakeImageBuilder{ensureErr: fmt.Errorf("boom")}
 	mgr := NewSandboxManager(nil)
-	sbx := mgr.CreateSandbox(&SandboxSpec{Name: "ctgbot-test"})
-	sbx.ImageBuilder = img
+	sbx := mgr.CreateSandbox(&SandboxSpec{Name: "ctgbot-test", ImageBuilder: img})
 	if err := sbx.Exec(context.Background(), nil, nil, "codex", "exec"); err == nil {
 		t.Fatalf("expected ensure image error")
 	}
@@ -157,5 +154,31 @@ func TestNewSandboxManagerInitializesSharedState(t *testing.T) {
 	}
 	if mgr.locks == nil || mgr.locks.locks == nil {
 		t.Fatalf("expected sandbox locks to be initialized")
+	}
+	if mgr.sandboxes == nil {
+		t.Fatalf("expected sandbox registry to be initialized")
+	}
+}
+
+func TestCreateSandboxReusesInstanceByName(t *testing.T) {
+	t.Parallel()
+	mgr := NewSandboxManager(nil)
+	first := mgr.CreateSandbox(&SandboxSpec{Name: "ctgbot-test", Workdir: "/workspace"})
+	second := mgr.CreateSandbox(&SandboxSpec{Name: "ctgbot-test", Workdir: "/repo"})
+	if first != second {
+		t.Fatalf("expected same sandbox instance")
+	}
+	if second.Workdir != "/repo" {
+		t.Fatalf("workdir = %q, want /repo", second.Workdir)
+	}
+}
+
+func TestCreateSandboxKeepsDifferentNamesDistinct(t *testing.T) {
+	t.Parallel()
+	mgr := NewSandboxManager(nil)
+	first := mgr.CreateSandbox(&SandboxSpec{Name: "one"})
+	second := mgr.CreateSandbox(&SandboxSpec{Name: "two"})
+	if first == second {
+		t.Fatalf("expected different sandbox instances")
 	}
 }
