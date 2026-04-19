@@ -135,6 +135,25 @@ func (b *Broker) logf(format string, args ...any) {
 	}
 }
 
+func (b *Broker) sendThreadText(ctx context.Context, thread *Thread, text string) error {
+	if b == nil || b.Config == nil || thread == nil || thread.ChatID.IsNull() || strings.TrimSpace(text) == "" {
+		return nil
+	}
+	chatCfg, err := b.Config.FindChatByID(thread.ChatID)
+	if err != nil || chatCfg == nil {
+		return err
+	}
+	provider, ok := b.OutboundProviders[strings.TrimSpace(chatCfg.ProviderType)]
+	if !ok || provider == nil {
+		return fmt.Errorf("outbound provider not registered: %s", chatCfg.ProviderType)
+	}
+	return provider.SendText(ctx, messenger.ResolvedOutgoingMessage{
+		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
+		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
+		Text:             text,
+	})
+}
+
 func (b *Broker) startThreadChatAction(ctx context.Context, thread *Thread, action messenger.ChatAction) func() {
 	stop := func() {}
 	if b == nil || b.Config == nil || thread == nil || thread.ChatID.IsNull() {
