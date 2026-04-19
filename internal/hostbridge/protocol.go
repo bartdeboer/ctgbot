@@ -5,9 +5,11 @@ import hbprotocol "github.com/bartdeboer/ctgbot/internal/hostbridge/protocol"
 type Operation = hbprotocol.Operation
 
 const (
-	OpRunCommand   = hbprotocol.OpRunCommand
-	OpSendFile     = hbprotocol.OpSendFile
-	OpSendText     = hbprotocol.OpSendText
+	OpRunCommand     = hbprotocol.OpRunCommand
+	OpSendFile       = hbprotocol.OpSendFile
+	OpSendText       = hbprotocol.OpSendText
+	OpConfigList     = hbprotocol.OpConfigList
+	OpConfigSet      = hbprotocol.OpConfigSet
 	MaxSendFileBytes = hbprotocol.MaxSendFileBytes
 )
 

@@ -105,7 +105,7 @@ func TestHandleConnDispatchesSendFileRequests(t *testing.T) {
 		handleConn(server, StaticAllowedCommandResolver(nil), func(ctx context.Context, req SendFileRequest) error {
 			got = req
 			return nil
-		}, nil, 30, log.New(io.Discard, "", 0))
+		}, nil, nil, nil, 30, log.New(io.Discard, "", 0))
 	}()
 
 	enc := gob.NewEncoder(client)
@@ -166,7 +166,7 @@ func TestHandleConnDispatchesSendTextRequests(t *testing.T) {
 		handleConn(server, StaticAllowedCommandResolver(nil), nil, func(ctx context.Context, req SendTextRequest) error {
 			got = req
 			return nil
-		}, 30, log.New(io.Discard, "", 0))
+		}, nil, nil, 30, log.New(io.Discard, "", 0))
 	}()
 
 	enc := gob.NewEncoder(client)

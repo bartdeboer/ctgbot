@@ -55,11 +55,25 @@ type SendTextRequest struct {
 
 type SendTextHandler func(ctx context.Context, req SendTextRequest) error
 
+type ConfigListRequest struct {
+	SandboxID string
+}
+
+type ConfigListHandler func(ctx context.Context, req ConfigListRequest) (string, error)
+
+type ConfigSetRequest struct {
+	SandboxID string
+	Setting   string
+	Value     string
+}
+
+type ConfigSetHandler func(ctx context.Context, req ConfigSetRequest) (string, error)
+
 type tlsListenerConfig interface {
 	HostbridgeTCPListenAddr() string
 }
 
-func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, sendFile SendFileHandler, sendText SendTextHandler, logger *log.Logger) error {
+func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed map[string]AllowedCommand, sendFile SendFileHandler, sendText SendTextHandler, configList ConfigListHandler, configSet ConfigSetHandler, logger *log.Logger) error {
 	if strings.TrimSpace(address) == "" {
 		return fmt.Errorf("missing address")
 	}
@@ -79,10 +93,10 @@ func Serve(ctx context.Context, address string, defaultTimeoutSec int, allowed m
 	}
 	defer ln.Close()
 
-	return ServeListener(ctx, ln, defaultTimeoutSec, StaticAllowedCommandResolver(allowed), sendFile, sendText, logger)
+	return ServeListener(ctx, ln, defaultTimeoutSec, StaticAllowedCommandResolver(allowed), sendFile, sendText, configList, configSet, logger)
 }
 
-func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, resolve AllowedCommandResolver, sendFile SendFileHandler, sendText SendTextHandler, logger *log.Logger) error {
+func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, resolve AllowedCommandResolver, sendFile SendFileHandler, sendText SendTextHandler, configList ConfigListHandler, configSet ConfigSetHandler, logger *log.Logger) error {
 	if ln == nil {
 		return fmt.Errorf("missing listener")
 	}
@@ -112,7 +126,7 @@ func ServeListener(ctx context.Context, ln net.Listener, defaultTimeoutSec int, 
 			logger.Printf("accept error: %v", err)
 			continue
 		}
-		go HandleConn(conn, resolve, sendFile, sendText, defaultTimeoutSec, logger)
+		go HandleConn(conn, resolve, sendFile, sendText, configList, configSet, defaultTimeoutSec, logger)
 	}
 }
 
@@ -163,7 +177,7 @@ func validateLoopbackListenAddress(address string) error {
 	return nil
 }
 
-func HandleConn(conn net.Conn, resolve AllowedCommandResolver, sendFile SendFileHandler, sendText SendTextHandler, defaultTimeoutSec int, logger *log.Logger) {
+func HandleConn(conn net.Conn, resolve AllowedCommandResolver, sendFile SendFileHandler, sendText SendTextHandler, configList ConfigListHandler, configSet ConfigSetHandler, defaultTimeoutSec int, logger *log.Logger) {
 	defer conn.Close()
 
 	dec := gob.NewDecoder(conn)
@@ -183,6 +197,10 @@ func HandleConn(conn net.Conn, resolve AllowedCommandResolver, sendFile SendFile
 		handleSendFile(conn, send, req, sendFile, defaultTimeoutSec, logger)
 	case hbprotocol.OpSendText:
 		handleSendText(conn, send, req, sendText, defaultTimeoutSec, logger)
+	case hbprotocol.OpConfigList:
+		handleConfigList(conn, send, req, configList, defaultTimeoutSec, logger)
+	case hbprotocol.OpConfigSet:
+		handleConfigSet(conn, send, req, configSet, defaultTimeoutSec, logger)
 	default:
 		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: "unsupported operation: " + string(req.Op)})
 	}
@@ -325,6 +343,64 @@ func handleSendFile(conn net.Conn, send *safeEncoder, req hbprotocol.Request, se
 		Kind: hbprotocol.StreamStdout,
 		Data: []byte(fmt.Sprintf("sent file: %s\n", req.Filename)),
 	})
+	_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamExit, ExitCode: 0})
+}
+
+func handleConfigList(conn net.Conn, send *safeEncoder, req hbprotocol.Request, configList ConfigListHandler, defaultTimeoutSec int, logger *log.Logger) {
+	if configList == nil {
+		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: "config list not configured"})
+		return
+	}
+	if strings.TrimSpace(req.SandboxID) == "" {
+		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: "missing sandbox id"})
+		return
+	}
+	timeout := time.Duration(defaultTimeoutSec) * time.Second
+	if req.Timeout > 0 && req.Timeout <= 600 {
+		timeout = time.Duration(req.Timeout) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	logger.Printf("hostbridge config list security=%s client=%q sandbox=%q", connectionSecurityMode(conn), connectionClientIdentity(conn), req.SandboxID)
+	out, err := configList(ctx, ConfigListRequest{SandboxID: req.SandboxID})
+	if err != nil {
+		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: err.Error()})
+		return
+	}
+	if strings.TrimSpace(out) != "" {
+		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamStdout, Data: []byte(out + "\n")})
+	}
+	_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamExit, ExitCode: 0})
+}
+
+func handleConfigSet(conn net.Conn, send *safeEncoder, req hbprotocol.Request, configSet ConfigSetHandler, defaultTimeoutSec int, logger *log.Logger) {
+	if configSet == nil {
+		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: "config set not configured"})
+		return
+	}
+	if strings.TrimSpace(req.SandboxID) == "" {
+		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: "missing sandbox id"})
+		return
+	}
+	if strings.TrimSpace(req.Setting) == "" {
+		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: "missing setting"})
+		return
+	}
+	timeout := time.Duration(defaultTimeoutSec) * time.Second
+	if req.Timeout > 0 && req.Timeout <= 600 {
+		timeout = time.Duration(req.Timeout) * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	logger.Printf("hostbridge config set setting=%q security=%s client=%q sandbox=%q", req.Setting, connectionSecurityMode(conn), connectionClientIdentity(conn), req.SandboxID)
+	out, err := configSet(ctx, ConfigSetRequest{SandboxID: req.SandboxID, Setting: req.Setting, Value: req.Value})
+	if err != nil {
+		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: err.Error()})
+		return
+	}
+	if strings.TrimSpace(out) != "" {
+		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamStdout, Data: []byte(out + "\n")})
+	}
 	_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamExit, ExitCode: 0})
 }
 

@@ -50,7 +50,7 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 			}
 
 			if strings.TrimSpace(resolvedTLSDir) == "" {
-				return hostbridge.Serve(ctx, *addr, *timeoutSec, allow.Commands(), nil, nil, logger)
+				return hostbridge.Serve(ctx, *addr, *timeoutSec, allow.Commands(), nil, nil, nil, nil, logger)
 			}
 
 			if err := hostbridgetls.EnsureServerMaterials(resolvedTLSDir); err != nil {
@@ -64,7 +64,7 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			return hostbridge.ServeListener(ctx, ln, *timeoutSec, hostbridge.StaticAllowedCommandResolver(allow.Commands()), nil, nil, logger)
+			return hostbridge.ServeListener(ctx, ln, *timeoutSec, hostbridge.StaticAllowedCommandResolver(allow.Commands()), nil, nil, nil, nil, logger)
 		})
 	})
 }

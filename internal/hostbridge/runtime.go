@@ -15,9 +15,7 @@ type runtimeConfig interface {
 	tlsListenerConfig
 }
 
-type hostbridgetlsServerTLSRootConfig interface {
-	HostbridgeTLSRoot() string
-}
+type hostbridgetlsServerTLSRootConfig interface{ HostbridgeTLSRoot() string }
 
 type Runtime struct {
 	Config            runtimeConfig
@@ -25,14 +23,16 @@ type Runtime struct {
 	ResolveAllowed    AllowedCommandResolver
 	SendFile          SendFileHandler
 	SendText          SendTextHandler
+	ConfigList        ConfigListHandler
+	ConfigSet         ConfigSetHandler
 	DefaultTimeoutSec int
 }
 
-func NewRuntime(cfg runtimeConfig, logger *log.Logger, resolve AllowedCommandResolver, sendFile SendFileHandler, sendText SendTextHandler) *Runtime {
+func NewRuntime(cfg runtimeConfig, logger *log.Logger, resolve AllowedCommandResolver, sendFile SendFileHandler, sendText SendTextHandler, configList ConfigListHandler, configSet ConfigSetHandler) *Runtime {
 	if logger == nil {
 		logger = log.New(os.Stdout, "", log.LstdFlags)
 	}
-	return &Runtime{Config: cfg, Logger: logger, ResolveAllowed: resolve, SendFile: sendFile, SendText: sendText, DefaultTimeoutSec: 30}
+	return &Runtime{Config: cfg, Logger: logger, ResolveAllowed: resolve, SendFile: sendFile, SendText: sendText, ConfigList: configList, ConfigSet: configSet, DefaultTimeoutSec: 30}
 }
 
 func (r *Runtime) Run(ctx context.Context) error {
@@ -55,5 +55,5 @@ func (r *Runtime) Run(ctx context.Context) error {
 	if timeout <= 0 {
 		timeout = 30
 	}
-	return server.ServeListener(ctx, ln, timeout, resolveAllowed, r.SendFile, r.SendText, r.Logger)
+	return server.ServeListener(ctx, ln, timeout, resolveAllowed, r.SendFile, r.SendText, r.ConfigList, r.ConfigSet, r.Logger)
 }

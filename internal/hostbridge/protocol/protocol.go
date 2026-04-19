@@ -6,6 +6,8 @@ const (
 	OpRunCommand Operation = "run-command"
 	OpSendFile   Operation = "send-file"
 	OpSendText   Operation = "send-text"
+	OpConfigList Operation = "config-list"
+	OpConfigSet  Operation = "config-set"
 )
 
 const MaxSendFileBytes = 50 * 1024 * 1024
@@ -27,6 +29,9 @@ type Request struct {
 	Text     string
 	Fenced   bool
 	Language string
+
+	Setting string
+	Value   string
 }
 
 type StreamKind uint8

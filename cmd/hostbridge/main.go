@@ -58,6 +58,22 @@ func main() {
 			return sendHostbridgeRequest(payload)
 		})
 
+		b.Handle("config list", "List settings available through the host bridge", func(req *clir.Request) error {
+			payload, err := buildConfigListRequest()
+			if err != nil {
+				return err
+			}
+			return sendHostbridgeRequest(payload)
+		})
+
+		b.Handle("config set <name> <value>", "Set a policy-controlled config value through the host bridge", func(req *clir.Request) error {
+			payload, err := buildConfigSetRequest(req.Params["name"], req.Params["value"])
+			if err != nil {
+				return err
+			}
+			return sendHostbridgeRequest(payload)
+		})
+
 		b.Handle("sendstdin", "Send stdin to the current Telegram chat/thread via the host bridge", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("hostbridge sendstdin", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
@@ -87,7 +103,7 @@ func main() {
 
 func isHostbridgeManagementCommand(arg string) bool {
 	switch arg {
-	case "", "run", "sendfile", "sendstdin":
+	case "", "run", "sendfile", "sendstdin", "config":
 		return true
 	default:
 		return false
@@ -105,6 +121,8 @@ func printHostbridgeHelp() {
 	fmt.Fprintln(os.Stdout, "  hostbridge ls -la")
 	fmt.Fprintln(os.Stdout, "  hostbridge sendfile /workspace/out/report.pdf --caption \"Weekly report\"")
 	fmt.Fprintln(os.Stdout, "  git diff | hostbridge sendstdin --fenced --language diff")
+	fmt.Fprintln(os.Stdout, "  hostbridge config list")
+	fmt.Fprintln(os.Stdout, "  hostbridge config set chat.process_tools_enabled true")
 }
 
 func getenv(key, fallback string) string {
@@ -188,4 +206,25 @@ func wrapSendText(text string, fenced bool, language string) string {
 		return "```\n" + text + "\n```"
 	}
 	return "```" + language + "\n" + text + "\n```"
+}
+
+func buildConfigListRequest() (hbprotocol.Request, error) {
+	sandboxID := getenv("CTGBOT_SANDBOX_ID", "")
+	if strings.TrimSpace(sandboxID) == "" {
+		return hbprotocol.Request{}, fmt.Errorf("missing CTGBOT_SANDBOX_ID")
+	}
+	return hbprotocol.Request{Op: hbprotocol.OpConfigList, Timeout: 30, SandboxID: sandboxID}, nil
+}
+
+func buildConfigSetRequest(name string, value string) (hbprotocol.Request, error) {
+	sandboxID := getenv("CTGBOT_SANDBOX_ID", "")
+	if strings.TrimSpace(sandboxID) == "" {
+		return hbprotocol.Request{}, fmt.Errorf("missing CTGBOT_SANDBOX_ID")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return hbprotocol.Request{}, fmt.Errorf("missing setting name")
+	}
+	value = strings.TrimSpace(value)
+	return hbprotocol.Request{Op: hbprotocol.OpConfigSet, Timeout: 30, SandboxID: sandboxID, Setting: name, Value: value}, nil
 }
