@@ -50,8 +50,9 @@ type SendFileRequest struct {
 type SendFileHandler func(ctx context.Context, req SendFileRequest) error
 
 type SendTextRequest struct {
-	SandboxID string
-	Text      string
+	SandboxID   string
+	Text        string
+	ContentType string
 }
 
 type SendTextHandler func(ctx context.Context, req SendTextRequest) error
@@ -686,8 +687,9 @@ func handleSendText(conn net.Conn, send *safeEncoder, req hbprotocol.Request, se
 	logger.Printf("hostbridge sendtext bytes=%d fenced=%t language=%q security=%s client=%q sandbox=%q", len(req.Text), req.Fenced, req.Language, connectionSecurityMode(conn), connectionClientIdentity(conn), req.SandboxID)
 
 	err := sendText(ctx, SendTextRequest{
-		SandboxID: req.SandboxID,
-		Text:      req.Text,
+		SandboxID:   req.SandboxID,
+		Text:        req.Text,
+		ContentType: req.ContentType,
 	})
 	if err != nil {
 		_ = send.Encode(hbprotocol.Frame{Kind: hbprotocol.StreamError, Message: err.Error()})

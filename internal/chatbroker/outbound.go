@@ -47,6 +47,7 @@ func (b *Broker) SendText(ctx context.Context, msg messenger.OutgoingMessage) er
 		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
 		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
 		Text:             msg.Text,
+		ContentType:      strings.TrimSpace(msg.ContentType),
 	})
 }
 

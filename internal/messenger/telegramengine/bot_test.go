@@ -1016,3 +1016,43 @@ func TestSendFileImageUsesPhoto(t *testing.T) {
 		t.Fatalf("did not expect document upload")
 	}
 }
+
+func TestSendTextPlainUsesPlainParseMode(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             "plain * text",
+		ContentType:      "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("SendText: %v", err)
+	}
+	if len(api.messages) != 1 {
+		t.Fatalf("messages = %d, want 1", len(api.messages))
+	}
+	if api.messages[0].parseMode != "" {
+		t.Fatalf("parseMode = %q, want empty", api.messages[0].parseMode)
+	}
+	if api.messages[0].text != "plain * text" {
+		t.Fatalf("text = %q", api.messages[0].text)
+	}
+}
+
+func TestSendTextMarkdownUsesRenderedPath(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             "# Title\n\n- item",
+		ContentType:      "text/markdown",
+	})
+	if err != nil {
+		t.Fatalf("SendText: %v", err)
+	}
+	if len(api.messages) == 0 {
+		t.Fatalf("expected rendered markdown messages")
+	}
+}

@@ -50,9 +50,9 @@ func TestBuildSendFileRequestRequiresRuntimeIdentity(t *testing.T) {
 	}
 }
 
-func TestBuildSendTextRequestPlain(t *testing.T) {
+func TestBuildSendTextRequestPlainDefaultsToTextPlain(t *testing.T) {
 	t.Setenv("CTGBOT_SANDBOX_ID", "thread-456")
-	req, err := buildSendTextRequest("hello\nworld\n", false, "")
+	req, err := buildSendTextRequest("hello\nworld\n", "", false, "", "")
 	if err != nil {
 		t.Fatalf("build sendtext request: %v", err)
 	}
@@ -65,14 +65,17 @@ func TestBuildSendTextRequestPlain(t *testing.T) {
 	if req.Text != "hello\nworld\n" {
 		t.Fatalf("req.Text = %q", req.Text)
 	}
+	if req.ContentType != "text/plain" {
+		t.Fatalf("req.ContentType = %q", req.ContentType)
+	}
 	if req.Fenced {
 		t.Fatalf("req.Fenced = true, want false")
 	}
 }
 
-func TestBuildSendTextRequestFencedLanguageImpliesFence(t *testing.T) {
+func TestBuildSendTextRequestSyntaxFencesText(t *testing.T) {
 	t.Setenv("CTGBOT_SANDBOX_ID", "thread-456")
-	req, err := buildSendTextRequest("git diff --stat\n", false, "diff")
+	req, err := buildSendTextRequest("git diff --stat\n", "text/plain", false, "", "diff")
 	if err != nil {
 		t.Fatalf("build sendtext request: %v", err)
 	}
@@ -85,6 +88,27 @@ func TestBuildSendTextRequestFencedLanguageImpliesFence(t *testing.T) {
 	want := "```diff\ngit diff --stat\n```"
 	if req.Text != want {
 		t.Fatalf("req.Text = %q, want %q", req.Text, want)
+	}
+}
+
+func TestBuildSendTextRequestLegacyLanguageImpliesFence(t *testing.T) {
+	t.Setenv("CTGBOT_SANDBOX_ID", "thread-456")
+	req, err := buildSendTextRequest("git diff --stat\n", "text/plain", false, "diff", "")
+	if err != nil {
+		t.Fatalf("build sendtext request: %v", err)
+	}
+	if !req.Fenced {
+		t.Fatalf("req.Fenced = false, want true")
+	}
+	if req.Language != "diff" {
+		t.Fatalf("req.Language = %q", req.Language)
+	}
+}
+
+func TestBuildSendTextRequestRejectsSyntaxWithMarkdown(t *testing.T) {
+	t.Setenv("CTGBOT_SANDBOX_ID", "thread-456")
+	if _, err := buildSendTextRequest("# hi\n", "text/markdown", false, "", "go"); err == nil {
+		t.Fatalf("expected syntax+markdown error")
 	}
 }
 

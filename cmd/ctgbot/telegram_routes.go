@@ -82,7 +82,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 					if err != nil {
 						return fmt.Errorf("parse sandbox id: %w", err)
 					}
-					return broker.SendText(ctx, messenger.OutgoingMessage{SandboxID: sandboxID, Text: req.Text})
+					return broker.SendText(ctx, messenger.OutgoingMessage{SandboxID: sandboxID, Text: req.Text, ContentType: req.ContentType})
 				},
 				func(ctx context.Context, req hostbridge.ConfigListRequest) (string, error) {
 					pctx, err := policyContextForSandbox(ctx, cfg, sessions, req.SandboxID)

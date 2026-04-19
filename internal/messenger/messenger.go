@@ -54,8 +54,9 @@ type IncomingResult struct {
 }
 
 type OutgoingMessage struct {
-	SandboxID modeluuid.UUID
-	Text      string
+	SandboxID   modeluuid.UUID
+	Text        string
+	ContentType string
 }
 
 type OutgoingFile struct {
@@ -70,6 +71,7 @@ type ResolvedOutgoingMessage struct {
 	ProviderChatID   string
 	ProviderThreadID string
 	Text             string
+	ContentType      string
 }
 
 type ResolvedOutgoingFile struct {

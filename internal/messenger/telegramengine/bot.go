@@ -54,7 +54,15 @@ func (tb *TelegramBot) SendText(ctx context.Context, msg messenger.ResolvedOutgo
 	if err != nil {
 		return err
 	}
-	return tb.sendRenderedText(ctx, chatID, threadID, 0, msg.Text)
+	contentType := strings.TrimSpace(strings.ToLower(msg.ContentType))
+	switch contentType {
+	case "", "text/markdown":
+		return tb.sendRenderedText(ctx, chatID, threadID, 0, msg.Text)
+	case "text/plain":
+		return tb.API.SendMessage(ctx, chatID, threadID, 0, msg.Text, "")
+	default:
+		return tb.sendRenderedText(ctx, chatID, threadID, 0, msg.Text)
+	}
 }
 
 func (tb *TelegramBot) SendFile(ctx context.Context, file messenger.ResolvedOutgoingFile) error {

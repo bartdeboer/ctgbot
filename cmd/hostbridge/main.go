@@ -78,8 +78,10 @@ func main() {
 		b.Handle("sendstdin", "Send stdin to the current Telegram chat/thread via the host bridge", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("hostbridge sendstdin", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			fenced := fs.Bool("fenced", false, "Wrap stdin in a fenced code block")
-			language := fs.String("language", "", "Optional fence language; implies --fenced")
+			fenced := fs.Bool("fenced", false, "Wrap stdin in a fenced code block (legacy)")
+			language := fs.String("language", "", "Optional fence language; implies --fenced (legacy)")
+			contentType := fs.String("type", "text/plain", "Optional MIME-like content type")
+			syntax := fs.String("syntax", "", "Optional syntax hint for fenced text")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
@@ -87,7 +89,7 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("read stdin: %w", err)
 			}
-			payload, err := buildSendTextRequest(string(stdinData), *fenced, strings.TrimSpace(*language))
+			payload, err := buildSendTextRequest(string(stdinData), strings.TrimSpace(*contentType), *fenced, strings.TrimSpace(*language), strings.TrimSpace(*syntax))
 			if err != nil {
 				return err
 			}
@@ -121,7 +123,7 @@ func printHostbridgeHelp() {
 	fmt.Fprintln(os.Stdout, "examples:")
 	fmt.Fprintln(os.Stdout, "  hostbridge ls -la")
 	fmt.Fprintln(os.Stdout, "  hostbridge sendfile /workspace/out/report.pdf --caption \"Weekly report\"")
-	fmt.Fprintln(os.Stdout, "  git diff | hostbridge sendstdin --fenced --language diff")
+	fmt.Fprintln(os.Stdout, "  git diff | hostbridge sendstdin --type text/plain --syntax diff")
 	fmt.Fprintln(os.Stdout, "  hostbridge config list")
 	fmt.Fprintln(os.Stdout, "  hostbridge config set chat.process_tools_enabled true")
 }
@@ -176,25 +178,36 @@ func buildSendFileRequest(path string, caption string, contentType string) (hbpr
 	}, nil
 }
 
-func buildSendTextRequest(text string, fenced bool, language string) (hbprotocol.Request, error) {
+func buildSendTextRequest(text string, contentType string, fenced bool, legacyLanguage string, syntax string) (hbprotocol.Request, error) {
 	sandboxID := getenv("CTGBOT_SANDBOX_ID", "")
 	if strings.TrimSpace(sandboxID) == "" {
 		return hbprotocol.Request{}, fmt.Errorf("missing CTGBOT_SANDBOX_ID")
 	}
-	if strings.TrimSpace(language) != "" {
+	contentType = strings.TrimSpace(strings.ToLower(contentType))
+	if contentType == "" {
+		contentType = "text/plain"
+	}
+	if strings.TrimSpace(legacyLanguage) != "" {
 		fenced = true
+		if strings.TrimSpace(syntax) == "" {
+			syntax = strings.TrimSpace(legacyLanguage)
+		}
 	}
 	if text == "" {
 		return hbprotocol.Request{}, fmt.Errorf("missing stdin content")
 	}
-	payloadText := wrapSendText(text, fenced, language)
+	if contentType == "text/markdown" && strings.TrimSpace(syntax) != "" {
+		return hbprotocol.Request{}, fmt.Errorf("--syntax is not supported with text/markdown")
+	}
+	payloadText := wrapSendText(text, fenced || strings.TrimSpace(syntax) != "", syntax)
 	return hbprotocol.Request{
-		Op:        hbprotocol.OpSendText,
-		Timeout:   30,
-		SandboxID: sandboxID,
-		Text:      payloadText,
-		Fenced:    fenced,
-		Language:  strings.TrimSpace(language),
+		Op:          hbprotocol.OpSendText,
+		Timeout:     30,
+		SandboxID:   sandboxID,
+		Text:        payloadText,
+		Fenced:      fenced || strings.TrimSpace(syntax) != "",
+		Language:    strings.TrimSpace(syntax),
+		ContentType: contentType,
 	}, nil
 }
 
