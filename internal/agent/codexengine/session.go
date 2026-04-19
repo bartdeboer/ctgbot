@@ -82,13 +82,6 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 		defer cancel()
 	}
 
-	if err := (&ImageBuilder{Config: e.Config, Logger: e.Logger}).EnsureImage(ctx); err != nil {
-		return agent.TurnResult{}, err
-	}
-	if err := sbx.Ensure(ctx); err != nil {
-		return agent.TurnResult{}, err
-	}
-
 	outputPath := "/tmp/ctgbot-last-message.txt"
 	args := []string{
 		"codex",
@@ -113,10 +106,7 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
-	cmd := sbx.CommandContext(ctx, args[0], args[1:]...)
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
-	err := cmd.Run()
+	err := sbx.Exec(ctx, &stdoutBuf, io.MultiWriter(os.Stderr, &stderrBuf), args[0], args[1:]...)
 
 	nextProviderThreadID := strings.TrimSpace(providerThreadID)
 	if nextProviderThreadID == "" {
@@ -125,8 +115,8 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 	if nextProviderThreadID != "" {
 		e.logf("codex thread started provider_thread_id=%s", nextProviderThreadID)
 	}
-	lastMessage, readErr := runSandboxCommand(ctx, sbx, "cat", outputPath)
-	lastMessage = strings.TrimSpace(lastMessage)
+	lastMessageBytes, readErr := sbx.CombinedOutput(ctx, "cat", outputPath)
+	lastMessage := strings.TrimSpace(string(lastMessageBytes))
 
 	if err != nil {
 		if readErr == nil && lastMessage != "" {
@@ -151,10 +141,4 @@ func (e *SessionExecutor) logf(format string, args ...any) {
 	if e.Logger != nil {
 		e.Logger.Printf(format, args...)
 	}
-}
-
-func runSandboxCommand(ctx context.Context, sbx *sandboxengine.Sandbox, name string, args ...string) (string, error) {
-	cmd := sbx.CommandContext(ctx, name, args...)
-	out, err := cmd.CombinedOutput()
-	return string(out), err
 }

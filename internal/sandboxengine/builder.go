@@ -83,6 +83,11 @@ func (b Builder) Cmd(v []string) Builder {
 	return b
 }
 
+func (b Builder) ImageBuilder(v ImageBuilder) Builder {
+	b.sbx.ImageBuilder = v
+	return b
+}
+
 func (b Builder) Build() *Sandbox {
 	return b.sbx
 }

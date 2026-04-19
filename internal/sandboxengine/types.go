@@ -2,6 +2,7 @@ package sandboxengine
 
 import (
 	"context"
+	"io"
 	"os/exec"
 )
 
@@ -18,6 +19,11 @@ type Mount struct {
 	Source   string
 	Target   string
 	ReadOnly bool
+}
+
+type ImageBuilder interface {
+	EnsureImage(ctx context.Context) error
+	Build(ctx context.Context, noCache bool) error
 }
 
 type Sandbox struct {
@@ -40,6 +46,7 @@ type Sandbox struct {
 	SecurityOpts []string
 	AddHosts     []string
 	Cmd          []string
+	ImageBuilder ImageBuilder
 
 	runtime runtime
 }
@@ -52,6 +59,8 @@ type runtime interface {
 	ensure(ctx context.Context, sbx *Sandbox) error
 	stop(ctx context.Context, sbx *Sandbox) error
 	remove(ctx context.Context, sbx *Sandbox) error
+	exec(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error
+	combinedOutput(ctx context.Context, sbx *Sandbox, name string, args ...string) ([]byte, error)
 }
 
 func (s *Sandbox) Ensure(ctx context.Context) error {
@@ -73,6 +82,20 @@ func (s *Sandbox) Remove(ctx context.Context) error {
 		return nil
 	}
 	return s.runtime.remove(ctx, s)
+}
+
+func (s *Sandbox) Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	if s == nil || s.runtime == nil {
+		return nil
+	}
+	return s.runtime.exec(ctx, s, stdout, stderr, name, args...)
+}
+
+func (s *Sandbox) CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if s == nil || s.runtime == nil {
+		return nil, nil
+	}
+	return s.runtime.combinedOutput(ctx, s, name, args...)
 }
 
 func (s *Sandbox) CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {

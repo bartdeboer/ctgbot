@@ -26,6 +26,7 @@ func (e *SessionExecutor) SetupEnvironment(ctx context.Context, sbx *sandboxengi
 	if err := e.Config.EnsureCodexCLIHome(); err != nil {
 		return err
 	}
+	sbx.ImageBuilder = &ImageBuilder{Config: e.Config, Logger: e.Logger}
 	return ensureConversationCodexHome(e.Config, sbx.ProfileDir, sbx.ContainerHome, sbx.ContainerWorkspace, sbx.DeveloperInstructions)
 }
 
