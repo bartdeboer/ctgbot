@@ -44,7 +44,7 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 		"--env", "HOME=" + m.Config.DockerContainerHomePath(),
 		"--env", "CODEX_HOME=" + m.Config.DockerContainerHomePath(),
 		"--workdir", m.Config.DockerContainerHomePath(),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.CodexCLIHomeRoot(), m.Config.DockerContainerHomePath()),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.CodexProfileHostPath(), m.Config.DockerContainerHomePath()),
 		m.Config.DockerImage(),
 		"codex",
 		"login",
@@ -60,7 +60,7 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	m.logf("starting containerized codex signin codex_home=%s callback_port=%d", m.Config.CodexCLIHomeRoot(), appstate.CodexLoginCallbackPort)
+	m.logf("starting containerized codex signin codex_home=%s callback_port=%d", m.Config.CodexProfileHostPath(), appstate.CodexLoginCallbackPort)
 	return cmd.Run()
 }
 
@@ -85,7 +85,7 @@ func (m *CodexManager) LoginStatus(ctx context.Context) error {
 		"--env", "HOME="+m.Config.DockerContainerHomePath(),
 		"--env", "CODEX_HOME="+m.Config.DockerContainerHomePath(),
 		"--workdir", m.Config.DockerContainerHomePath(),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.CodexCLIHomeRoot(), m.Config.DockerContainerHomePath()),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.CodexProfileHostPath(), m.Config.DockerContainerHomePath()),
 		m.Config.DockerImage(),
 		"codex", "login", "status",
 	)
@@ -130,7 +130,7 @@ func (m *CodexManager) RunCLI(ctx context.Context, workdir string, args []string
 		"--env", "CODEX_HOME=" + m.Config.DockerContainerHomePath(),
 		"--workdir", m.Config.DockerContainerWorkspacePath(),
 		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", workspaceHostPath, m.Config.DockerContainerWorkspacePath()),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.CodexCLIHomeRoot(), m.Config.DockerContainerHomePath()),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.CodexProfileHostPath(), m.Config.DockerContainerHomePath()),
 	}
 	if isTerminal(os.Stdin) && isTerminal(os.Stdout) {
 		dockerArgs = append(dockerArgs, "-t")

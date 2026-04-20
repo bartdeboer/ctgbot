@@ -20,7 +20,7 @@ func (c *Config) CodexModel() string {
 	return strings.TrimSpace(c.Store.GetString("codex.model", ""))
 }
 
-func (c *Config) CodexCLIHomeRoot() string {
+func (c *Config) CodexProfileHostPath() string {
 	if c == nil {
 		return ""
 	}
@@ -33,6 +33,12 @@ func (c *Config) CodexCLIHomeRoot() string {
 		}
 	}
 	return c.LocalCodexCLIHomeRoot()
+}
+
+// CodexCLIHomeRoot is a legacy compatibility alias for the canonical
+// codex profile host path used by Codex on the host.
+func (c *Config) CodexCLIHomeRoot() string {
+	return c.CodexProfileHostPath()
 }
 
 func (c *Config) LocalCodexCLIHomeRoot() string {
