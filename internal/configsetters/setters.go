@@ -3,6 +3,8 @@ package configsetters
 import (
 	"encoding/csv"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -63,6 +65,10 @@ type SetCodexModelInput struct {
 	SetCodexModel string `flag:"set-codex-model"`
 }
 
+type SetCodexProfileHostPathInput struct {
+	SetCodexProfileHostPath string `flag:"set-codex-profile-host-path"`
+}
+
 type SetCodexCLIHomePathInput struct {
 	SetCodexCLIHomePath string `flag:"set-codex-cli-home-path"`
 }
@@ -97,6 +103,11 @@ type SetChatInteractiveInterruptEnabledInput struct {
 type SetChatGPUsInput struct {
 	ChatRoute
 	SetGPUs string `flag:"set-gpus"`
+}
+
+type SetChatCodexProfileHostPathInput struct {
+	ChatRoute
+	SetCodexProfileHostPath string `flag:"set-codex-profile-host-path"`
 }
 
 type SetChatWorkspaceHostPathInput struct {
@@ -216,18 +227,30 @@ func (c *ConfigSetters) SetCodexModel(in SetCodexModelInput) error {
 	return c.Local.PersistString("codex.model", in.SetCodexModel)
 }
 
-func (c *ConfigSetters) SetCodexCLIHomePath(in SetCodexCLIHomePathInput) error {
+func (c *ConfigSetters) SetCodexProfileHostPath(in SetCodexProfileHostPathInput) error {
 	if c == nil || c.Local == nil {
 		return fmt.Errorf("missing local config store")
 	}
-	return c.Local.PersistString("codex.cli_home_host_path", in.SetCodexCLIHomePath)
+	value := strings.TrimSpace(in.SetCodexProfileHostPath)
+	if value == "" {
+		return c.Local.PersistString("codex.profile_host_path", "")
+	}
+	abs, err := filepath.Abs(value)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(abs, 0o755); err != nil {
+		return err
+	}
+	return c.Local.PersistString("codex.profile_host_path", abs)
+}
+
+func (c *ConfigSetters) SetCodexCLIHomePath(in SetCodexCLIHomePathInput) error {
+	return c.SetCodexProfileHostPath(SetCodexProfileHostPathInput{SetCodexProfileHostPath: in.SetCodexCLIHomePath})
 }
 
 func (c *ConfigSetters) SetCodexSharedHomePath(in SetCodexSharedHomePathInput) error {
-	if c == nil || c.Local == nil {
-		return fmt.Errorf("missing local config store")
-	}
-	return c.Local.PersistString("codex.cli_home_host_path", in.SetCodexSharedHomePath)
+	return c.SetCodexProfileHostPath(SetCodexProfileHostPathInput{SetCodexProfileHostPath: in.SetCodexSharedHomePath})
 }
 
 func (c *ConfigSetters) SetSessionTimeoutMin(in SetSessionTimeoutMinInput) error {
@@ -297,6 +320,17 @@ func (c *ConfigSetters) SetChatWorkspaceHostPath(in SetChatWorkspaceHostPathInpu
 		return fmt.Errorf("missing app state")
 	}
 	return c.State.SetChatWorkspaceHostPathByID(chatID, in.SetWorkspaceHostPath)
+}
+
+func (c *ConfigSetters) SetChatCodexProfileHostPath(in SetChatCodexProfileHostPathInput) error {
+	chatID, err := parseChatID(in.ChatID)
+	if err != nil {
+		return err
+	}
+	if c == nil || c.State == nil {
+		return fmt.Errorf("missing app state")
+	}
+	return c.State.SetChatCodexProfileHostPathByID(chatID, in.SetCodexProfileHostPath)
 }
 
 func (c *ConfigSetters) SetChatHostbridgeAliasCommand(in SetChatHostbridgeAliasCommandInput) error {

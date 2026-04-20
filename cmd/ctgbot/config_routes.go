@@ -61,7 +61,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			fmt.Printf("  hostbridge.tcp_listen_addr: %q\n", cfg.HostbridgeTCPListenAddr())
 			fmt.Printf("  docker.container_hostbridge_tcp_addr: %q\n", cfg.DockerContainerHostbridgeTCPAddr())
 			fmt.Printf("  codex.model: %q\n", cfg.CodexModel())
-			fmt.Printf("  codex.cli_home_host_path: %q\n", cfg.CodexCLIHomeRoot())
+			fmt.Printf("  codex.profile_host_path: %q\n", cfg.CodexCLIHomeRoot())
 			fmt.Printf("  codex.login_callback_port: %d (fixed)\n", appstate.CodexLoginCallbackPort)
 			fmt.Printf("  telegram.defaults.poll_timeout_sec: %d\n", int(cfg.TelegramPollTimeout().Seconds()))
 			fmt.Printf("  telegram.defaults.debounce_ms: %d\n", int(cfg.TelegramDebounceWindow().Milliseconds()))

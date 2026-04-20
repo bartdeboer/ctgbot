@@ -96,6 +96,7 @@ func NewDefaultRegistry(cfg *configsetters.ConfigSetters) *Registry {
 		PollTimeoutSetter(cfg),
 		ChatProcessToolsSetter(cfg),
 		ChatInteractiveInterruptSetter(cfg),
+		ChatCodexProfileHostPathSetter(cfg),
 		ChatEnabledSetter(cfg),
 	)
 }
@@ -230,6 +231,31 @@ func ChatEnabledSetter(cfg *configsetters.ConfigSetters) Setter {
 			return "", err
 		}
 		return strconv.FormatBool(parsed), nil
+	}
+	return setter
+}
+
+func ChatCodexProfileHostPathSetter(cfg *configsetters.ConfigSetters) Setter {
+	setter := Setter{
+		Name:              "chat.codex_profile_host_path",
+		Help:              "Override the Codex profile host path for the current chat",
+		RequiredElevation: ElevationElevated,
+	}
+	setter.Get = func(ctx Context) (string, error) {
+		if cfg == nil || cfg.State == nil {
+			return "", fmt.Errorf("missing app state")
+		}
+		return cfg.State.ChatCodexProfileHostPathByID(ctx.ChatID), nil
+	}
+	setter.Set = func(ctx Context, value string) (string, error) {
+		if !setter.Allowed(ctx) {
+			return "", fmt.Errorf("setting %s requires %s chat access", setter.Name, setter.RequiredElevation)
+		}
+		value = strings.TrimSpace(value)
+		if err := cfg.SetChatCodexProfileHostPath(configsetters.SetChatCodexProfileHostPathInput{ChatRoute: configsetters.ChatRoute{ChatID: ctx.ChatID.String()}, SetCodexProfileHostPath: value}); err != nil {
+			return "", err
+		}
+		return cfg.State.ChatCodexProfileHostPathByID(ctx.ChatID), nil
 	}
 	return setter
 }
