@@ -161,3 +161,26 @@ type errWriteCloser struct{ err error }
 
 func (w *errWriteCloser) Write(p []byte) (int, error) { return 0, w.err }
 func (w *errWriteCloser) Close() error                { return nil }
+
+func TestContainerInterruptMarksInterrupted(t *testing.T) {
+	t.Parallel()
+	buf := &recordingWriteCloser{}
+	container := &Container{}
+	container.setActiveStdin(buf)
+	if err := container.Interrupt(); err != nil {
+		t.Fatalf("Interrupt: %v", err)
+	}
+	if !container.Interrupted() {
+		t.Fatalf("expected interrupted state to be set")
+	}
+}
+
+func TestContainerClearInterrupted(t *testing.T) {
+	t.Parallel()
+	container := &Container{}
+	container.markInterrupted()
+	container.clearInterrupted()
+	if container.Interrupted() {
+		t.Fatalf("expected interrupted state to be cleared")
+	}
+}

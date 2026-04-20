@@ -54,6 +54,7 @@ type Container struct {
 
 	mu          sync.Mutex
 	activeStdin io.WriteCloser
+	interrupted bool
 }
 
 func (c *Container) ApplySpec(spec ContainerSpec) {
@@ -90,6 +91,9 @@ func (c *Container) Remove(ctx context.Context) error {
 
 func (c *Container) Exec(ctx context.Context, opts ExecOptions, name string, args ...string) error {
 	cmd := c.CommandContext(ctx, opts, name, args...)
+	if opts.Interactive {
+		c.clearInterrupted()
+	}
 	cmd.Stdout = opts.Stdout
 	cmd.Stderr = opts.Stderr
 	if !opts.Interactive {
@@ -141,11 +145,39 @@ func (c *Container) Interrupt() error {
 	if stdin == nil {
 		return nil
 	}
+	c.markInterrupted()
 	_, err := stdin.Write([]byte{3})
 	if isBenignInterruptWriteError(err) {
 		return nil
 	}
 	return err
+}
+
+func (c *Container) Interrupted() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.interrupted
+}
+
+func (c *Container) markInterrupted() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.interrupted = true
+}
+
+func (c *Container) clearInterrupted() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.interrupted = false
 }
 
 func (c *Container) setActiveStdin(stdin io.WriteCloser) {
