@@ -100,10 +100,29 @@ func (c *Config) ChatGPUsByID(chatID modeluuid.UUID) string {
 }
 
 func (c *Config) ChatWorkspaceHostPathByID(chatID modeluuid.UUID) string {
-	if c == nil || c.Store == nil || chatID.IsNull() {
+	if c == nil || chatID.IsNull() {
 		return ""
 	}
-	return absOrEmpty(c.Store.GetString(c.ChatKey(chatID, "workspace_host_path"), ""))
+	if raw := c.chatWorkspaceHostPathOverrideByID(chatID); raw != "" {
+		return raw
+	}
+	if raw := c.DockerDefaultWorkspaceHostPath(); raw != "" {
+		return raw
+	}
+	return c.ChatWorkspaceDirByID(chatID)
+}
+
+func (c *Config) ChatCodexProfileHostPathByID(chatID modeluuid.UUID) string {
+	if c == nil || chatID.IsNull() {
+		return ""
+	}
+	if raw := c.chatCodexProfileHostPathOverrideByID(chatID); raw != "" {
+		return raw
+	}
+	if raw := c.codexProfileHostPathOverride(); raw != "" {
+		return raw
+	}
+	return c.ChatCodexHomeDirByID(chatID)
 }
 
 func (c *Config) ChatSkillsByID(chatID modeluuid.UUID) []string {
@@ -150,19 +169,27 @@ func (c *Config) ChatHostbridgeAllowedCommandSpecsByID(chatID modeluuid.UUID) []
 func (c *Config) ResolveChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string) (string, error) {
 	candidate := strings.TrimSpace(raw)
 	if candidate == "" {
-		candidate = c.ChatWorkspaceHostPathByID(chatID)
+		return c.ChatWorkspaceHostPathByID(chatID), nil
+	}
+	return c.ResolveWorkspaceHostPath(candidate)
+}
+
+func (c *Config) ResolveChatCodexProfileHostPathByID(chatID modeluuid.UUID, raw string) (string, error) {
+	candidate := strings.TrimSpace(raw)
+	if candidate == "" {
+		candidate = c.ChatCodexProfileHostPathByID(chatID)
 	}
 	if candidate == "" {
-		candidate = c.DockerDefaultWorkspaceHostPath()
+		return "", fmt.Errorf("missing codex profile host path")
 	}
-	if candidate != "" {
-		return c.ResolveWorkspaceHostPath(candidate)
+	abs := absOrEmpty(candidate)
+	if abs == "" {
+		return "", fmt.Errorf("missing codex profile host path")
 	}
-	workspace := c.ChatWorkspaceDirByID(chatID)
-	if err := os.MkdirAll(workspace, 0o755); err != nil {
+	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return "", err
 	}
-	return workspace, nil
+	return abs, nil
 }
 
 func (c *Config) KnownChats() []ChatConfigEntry {
@@ -320,6 +347,34 @@ func (c *Config) RemoveChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, n
 		}
 	}
 	return c.Store.PersistStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), commands)
+}
+
+func (c *Config) SetChatCodexProfileHostPathByID(chatID modeluuid.UUID, raw string) error {
+	if c == nil || c.Store == nil {
+		return fmt.Errorf("config store not available")
+	}
+	if chatID.IsNull() {
+		return fmt.Errorf("chat id is null")
+	}
+	resolved, err := c.ResolveChatCodexProfileHostPathByID(chatID, raw)
+	if err != nil {
+		return err
+	}
+	return c.Store.PersistString(c.ChatKey(chatID, "codex_profile_host_path"), resolved)
+}
+
+func (c *Config) chatWorkspaceHostPathOverrideByID(chatID modeluuid.UUID) string {
+	if c == nil || c.Store == nil || chatID.IsNull() {
+		return ""
+	}
+	return absOrEmpty(c.Store.GetString(c.ChatKey(chatID, "workspace_host_path"), ""))
+}
+
+func (c *Config) chatCodexProfileHostPathOverrideByID(chatID modeluuid.UUID) string {
+	if c == nil || c.Store == nil || chatID.IsNull() {
+		return ""
+	}
+	return absOrEmpty(c.Store.GetString(c.ChatKey(chatID, "codex_profile_host_path"), ""))
 }
 
 func (c *Config) findChatByIDNoMigrate(chatID modeluuid.UUID) *ChatConfigEntry {

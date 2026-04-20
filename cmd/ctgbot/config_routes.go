@@ -83,6 +83,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 						workspacePath = "<global/default>"
 					}
 					fmt.Printf("      workspace_host_path: %s\n", workspacePath)
+					fmt.Printf("      codex_profile_host_path: %s\n", cfg.ChatCodexProfileHostPathByID(chat.ID))
 					skills := cfg.ChatSkillsByID(chat.ID)
 					if len(skills) == 0 {
 						fmt.Println("      skills: <none>")

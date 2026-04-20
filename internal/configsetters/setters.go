@@ -184,7 +184,15 @@ func (c *ConfigSetters) SetWorkspaceHostPath(in SetWorkspaceHostPathInput) error
 	if c == nil || c.Local == nil {
 		return fmt.Errorf("missing local config store")
 	}
-	return c.Local.PersistString("docker.workspace_host_path", in.SetWorkspaceHostPath)
+	value := strings.TrimSpace(in.SetWorkspaceHostPath)
+	if c.State != nil {
+		resolved, err := c.State.ResolveWorkspaceHostPath(value)
+		if err != nil {
+			return err
+		}
+		value = resolved
+	}
+	return c.Local.PersistString("docker.workspace_host_path", value)
 }
 
 func (c *ConfigSetters) SetHostbridgeTCPListenAddr(in SetHostbridgeTCPListenAddrInput) error {

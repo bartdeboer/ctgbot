@@ -33,6 +33,7 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.IncomingU
 	if len(u.Attachments) > 0 {
 		var err error
 		savedPaths, err = b.handleIncomingAttachments(ctx, msg, u.Attachments)
+
 		if err != nil {
 			return messenger.IncomingResult{}, err
 		}
@@ -51,6 +52,7 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.IncomingU
 	}
 
 	result, err := b.HandleIncomingMessage(ctx, msg)
+
 	if err != nil {
 		return messenger.IncomingResult{}, err
 	}
@@ -64,6 +66,7 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 	}
 
 	chatCfg, thread, err := b.resolveIncomingThread(ctx, msg, true)
+
 	if err != nil {
 		return messenger.IncomingResult{}, err
 	}
@@ -81,6 +84,7 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 			return messenger.IncomingResult{}, nil
 		}
 		reply, err := b.handleCommand(ctx, chatCfg.ID, thread, msg.UserID, msg.IsAdmin, args[0], args[1:])
+
 		if err != nil {
 			return messenger.IncomingResult{
 				Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("command error: %v", err)}},
@@ -97,6 +101,7 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 	started := false
 	startSent := false
 	conv, err := b.GetActiveSession(ctx, thread)
+
 	if err != nil {
 		return messenger.IncomingResult{
 			Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
@@ -105,6 +110,7 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 	if conv == nil {
 		started = true
 		conv, err = b.StartSession(ctx, chatCfg.ID, thread, "", false)
+
 		if err != nil {
 			return messenger.IncomingResult{
 				Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
@@ -119,6 +125,7 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 	}
 
 	outcome, err := b.HandlePrompt(ctx, chatCfg.ID, thread, text)
+
 	if err != nil {
 		return messenger.IncomingResult{
 			Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
@@ -187,6 +194,7 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.Incomi
 	} else {
 		thread, err = b.Sessions.FindThread(ctx, chatCfg.ID, providerThreadID)
 	}
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -199,6 +207,7 @@ func (b *Broker) handleIncomingAttachments(ctx context.Context, msg messenger.In
 	}
 
 	chatCfg, _, err := b.resolveIncomingThread(ctx, msg, true)
+
 	if err != nil {
 		return nil, err
 	}
@@ -210,10 +219,7 @@ func (b *Broker) handleIncomingAttachments(ctx context.Context, msg messenger.In
 		return nil, nil
 	}
 
-	workspaceHost, err := b.Config.ResolveChatWorkspaceHostPathByID(chatCfg.ID, "")
-	if err != nil {
-		return nil, err
-	}
+	workspaceHost := b.Config.ChatWorkspaceHostPathByID(chatCfg.ID)
 	inboxHost := filepath.Join(workspaceHost, "inbox")
 	if err := os.MkdirAll(inboxHost, 0o755); err != nil {
 		return nil, err

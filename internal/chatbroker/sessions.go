@@ -284,7 +284,7 @@ func (b *Broker) prepareThread(ctx context.Context, chatID modeluuid.UUID, threa
 	thread.AgentProviderType = b.defaultAgentName()
 	thread.RuntimeName = b.Config.ThreadContainerName(thread.ID)
 	thread.WorkspaceHost = workspaceHostPath
-	thread.HomeHost = b.Config.ChatCodexHomeDirByID(thread.ChatID)
+	thread.HomeHost = b.Config.ChatCodexProfileHostPathByID(thread.ChatID)
 	thread.ContainerWorkspace = b.Config.DockerContainerWorkspacePath()
 	thread.ContainerHome = b.Config.DockerContainerHomePath()
 	thread.Initialized = false

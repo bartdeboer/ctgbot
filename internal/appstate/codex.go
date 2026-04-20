@@ -24,13 +24,8 @@ func (c *Config) CodexCLIHomeRoot() string {
 	if c == nil {
 		return ""
 	}
-	if c.Store != nil {
-		if raw := absOrEmpty(c.Store.GetString("codex.cli_home_host_path", "")); raw != "" {
-			return raw
-		}
-		if raw := absOrEmpty(c.Store.GetString("codex.shared_home_host_path", "")); raw != "" {
-			return raw
-		}
+	if raw := c.codexProfileHostPathOverride(); raw != "" {
+		return raw
 	}
 	for _, root := range c.codexCLIHomeCandidates() {
 		if fileExistsAndNonEmpty(filepath.Join(root, "auth.json")) {
@@ -77,6 +72,27 @@ func (c *Config) EnsureCodexCLIHome() error {
 	return c.importAuthIfNeeded()
 }
 
+func (c *Config) CodexCLIHomeAuthPath() string {
+	return filepath.Join(c.CodexCLIHomeRoot(), "auth.json")
+}
+
+func (c *Config) CodexAuthSearchPaths() []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, 4)
+	for _, root := range c.codexCLIHomeCandidates() {
+		if root == "" {
+			continue
+		}
+		authPath := filepath.Join(root, "auth.json")
+		if _, ok := seen[authPath]; ok {
+			continue
+		}
+		seen[authPath] = struct{}{}
+		out = append(out, authPath)
+	}
+	return out
+}
+
 func (c *Config) importAuthIfNeeded() error {
 	dst := c.CodexCLIHomeAuthPath()
 	if fileExistsAndNonEmpty(dst) {
@@ -107,31 +123,22 @@ func (c *Config) importAuthIfNeeded() error {
 	return nil
 }
 
-func (c *Config) CodexCLIHomeAuthPath() string {
-	return filepath.Join(c.CodexCLIHomeRoot(), "auth.json")
-}
-
-func (c *Config) CodexAuthSearchPaths() []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, 4)
-	for _, root := range c.codexCLIHomeCandidates() {
-		if root == "" {
-			continue
-		}
-		authPath := filepath.Join(root, "auth.json")
-		if _, ok := seen[authPath]; ok {
-			continue
-		}
-		seen[authPath] = struct{}{}
-		out = append(out, authPath)
-	}
-	return out
-}
-
 func (c *Config) codexCLIHomeCandidates() []string {
 	return []string{
 		c.LocalCodexCLIHomeRoot(),
 		c.ManagedHomeCodexCLIHomeRoot(),
 		c.HostCodexRoot(),
 	}
+}
+
+func (c *Config) codexProfileHostPathOverride() string {
+	if c == nil || c.Store == nil {
+		return ""
+	}
+	for _, key := range []string{"codex.profile_host_path", "codex.cli_home_host_path", "codex.shared_home_host_path"} {
+		if raw := absOrEmpty(c.Store.GetString(key, "")); raw != "" {
+			return raw
+		}
+	}
+	return ""
 }
