@@ -30,7 +30,7 @@ func (b *Broker) newSandboxSpec(conv *Thread) *sandboxengine.SandboxSpec {
 			{Source: conv.HomeHost, Target: conv.ContainerHome},
 			{
 				Source:   b.Config.ChatTLSDirByID(conv.ChatID),
-				Target:   b.Config.ContainerHostbridgeTLSDir(),
+				Target:   b.Config.DockerContainerHostbridgeTLSDir(),
 				ReadOnly: true,
 			},
 		}).
@@ -60,8 +60,8 @@ func (b *Broker) sandboxEnv(conv *Thread) []string {
 		"GOMODCACHE=/tmp/go-mod-cache",
 		"GOPATH=/tmp/go",
 		"XDG_CACHE_HOME=/tmp/.cache",
-		"HOSTBRIDGE_ADDR=" + b.Config.ContainerHostbridgeTCPAddr(),
-		"HOSTBRIDGE_TLS_DIR=" + b.Config.ContainerHostbridgeTLSDir(),
+		"HOSTBRIDGE_ADDR=" + b.Config.DockerContainerHostbridgeTCPAddr(),
+		"HOSTBRIDGE_TLS_DIR=" + b.Config.DockerContainerHostbridgeTLSDir(),
 		"CTGBOT_SANDBOX_ID=" + conv.ID.String(),
 	}
 	if b.Config == nil {

@@ -107,7 +107,7 @@ func (b *Broker) developerInstructions(chatID modeluuid.UUID, conv *Thread) stri
 		CodexHome:          conv.ContainerHome,
 		ContainerOS:        "linux",
 		HostOS:             runtime.GOOS,
-		HostbridgeAddr:     b.Config.ContainerHostbridgeTCPAddr(),
+		HostbridgeAddr:     b.Config.DockerContainerHostbridgeTCPAddr(),
 		Binaries:           allowedCommandsText,
 		ChatProvider:       chatProvider,
 		MessagePrefix:      messagePrefix,

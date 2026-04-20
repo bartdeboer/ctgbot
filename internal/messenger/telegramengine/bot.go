@@ -162,9 +162,9 @@ func (tb *TelegramBot) Run(ctx context.Context, onUpdate func(context.Context, m
 		tb.handleUpdate(cbCtx, u, onUpdate)
 	}
 	if window := tb.Config.TelegramDebounceWindow(); window > 0 {
-		return NewDebouncer(window, tb.Logger, handler).Run(ctx, tb.API, tb.Config.PollTimeout())
+		return NewDebouncer(window, tb.Logger, handler).Run(ctx, tb.API, tb.Config.TelegramPollTimeout())
 	}
-	return tb.API.Run(ctx, tb.Config.PollTimeout(), handler)
+	return tb.API.Run(ctx, tb.Config.TelegramPollTimeout(), handler)
 }
 
 func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpdate, onUpdate func(context.Context, messenger.IncomingUpdate) (messenger.IncomingResult, error)) {

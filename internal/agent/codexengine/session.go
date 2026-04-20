@@ -76,7 +76,7 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 		return agent.TurnResult{}, fmt.Errorf("missing prompt")
 	}
 
-	timeout := e.Config.SessionTimeout()
+	timeout := e.Config.CodexSessionTimeout()
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)

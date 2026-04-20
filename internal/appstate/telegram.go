@@ -28,7 +28,7 @@ func (c *Config) TelegramAdminUserID() int64 {
 	return id
 }
 
-func (c *Config) PollTimeout() time.Duration {
+func (c *Config) TelegramPollTimeout() time.Duration {
 	return c.durationFromConfig("telegram.defaults.poll_timeout_sec", 60, time.Second)
 }
 

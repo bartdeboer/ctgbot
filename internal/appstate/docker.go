@@ -23,28 +23,28 @@ func (c *Config) DockerCLIContainerName() string {
 	return name
 }
 
-func (c *Config) DefaultWorkspaceHostPath() string {
+func (c *Config) DockerDefaultWorkspaceHostPath() string {
 	if c == nil || c.Store == nil {
 		return ""
 	}
 	return absOrEmpty(c.Store.GetString("docker.workspace_host_path", ""))
 }
 
-func (c *Config) ContainerWorkspacePath() string {
+func (c *Config) DockerContainerWorkspacePath() string {
 	if c == nil || c.Store == nil {
 		return normalizeContainerPath("", "/workspace")
 	}
 	return normalizeContainerPath(c.Store.GetString("docker.container_workspace_path", "/workspace"), "/workspace")
 }
 
-func (c *Config) ContainerHomePath() string {
+func (c *Config) DockerContainerHomePath() string {
 	if c == nil || c.Store == nil {
 		return normalizeContainerPath("", "/codex-home")
 	}
 	return normalizeContainerPath(c.Store.GetString("docker.container_home_path", "/codex-home"), "/codex-home")
 }
 
-func (c *Config) ContainerHostbridgeTLSDir() string {
+func (c *Config) DockerContainerHostbridgeTLSDir() string {
 	if c == nil || c.Store == nil {
 		return normalizeContainerPath("", "/etc/ctgbot/hostbridge-tls")
 	}

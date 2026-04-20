@@ -153,7 +153,7 @@ func (c *Config) ResolveChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw str
 		candidate = c.ChatWorkspaceHostPathByID(chatID)
 	}
 	if candidate == "" {
-		candidate = c.DefaultWorkspaceHostPath()
+		candidate = c.DockerDefaultWorkspaceHostPath()
 	}
 	if candidate != "" {
 		return c.ResolveWorkspaceHostPath(candidate)

@@ -778,14 +778,14 @@ func TestConfigDurationParsingSupportsStringDurations(t *testing.T) {
 		t.Fatalf("persist session timeout: %v", err)
 	}
 
-	if got := cfg.PollTimeout(); got.String() != "1.5s" {
-		t.Fatalf("PollTimeout() = %s, want 1.5s", got)
+	if got := cfg.TelegramPollTimeout(); got.String() != "1.5s" {
+		t.Fatalf("TelegramPollTimeout() = %s, want 1.5s", got)
 	}
 	if got := cfg.TelegramDebounceWindow(); got.String() != "1s" {
 		t.Fatalf("TelegramDebounceWindow() = %s, want 1s", got)
 	}
-	if got := cfg.SessionTimeout(); got.String() != "1m30s" {
-		t.Fatalf("SessionTimeout() = %s, want 1m30s", got)
+	if got := cfg.CodexSessionTimeout(); got.String() != "1m30s" {
+		t.Fatalf("CodexSessionTimeout() = %s, want 1m30s", got)
 	}
 }
 

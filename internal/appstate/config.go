@@ -160,7 +160,7 @@ func (c *Config) migrateLegacyLocalLayout() error {
 func (c *Config) ResolveWorkspaceHostPath(raw string) (string, error) {
 	candidate := strings.TrimSpace(raw)
 	if candidate == "" {
-		candidate = c.DefaultWorkspaceHostPath()
+		candidate = c.DockerDefaultWorkspaceHostPath()
 	}
 	if candidate == "" {
 		return "", fmt.Errorf("missing workspace host path")

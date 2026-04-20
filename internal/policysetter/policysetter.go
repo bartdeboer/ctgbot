@@ -110,7 +110,7 @@ func SessionTimeoutSetter(cfg *configsetters.ConfigSetters) Setter {
 		if cfg == nil || cfg.State == nil {
 			return "", fmt.Errorf("missing app state")
 		}
-		return cfg.State.SessionTimeout().String(), nil
+		return cfg.State.CodexSessionTimeout().String(), nil
 	}
 	setter.Set = func(ctx Context, value string) (string, error) {
 		if !setter.Allowed(ctx) {
@@ -135,7 +135,7 @@ func PollTimeoutSetter(cfg *configsetters.ConfigSetters) Setter {
 		if cfg == nil || cfg.State == nil {
 			return "", fmt.Errorf("missing app state")
 		}
-		return cfg.State.PollTimeout().String(), nil
+		return cfg.State.TelegramPollTimeout().String(), nil
 	}
 	setter.Set = func(ctx Context, value string) (string, error) {
 		if !setter.Allowed(ctx) {

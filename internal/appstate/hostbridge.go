@@ -33,7 +33,7 @@ func (c *Config) HostbridgeTCPListenAddr() string {
 	return v
 }
 
-func (c *Config) ContainerHostbridgeTCPAddr() string {
+func (c *Config) DockerContainerHostbridgeTCPAddr() string {
 	if c == nil || c.Store == nil {
 		return "host.docker.internal:4567"
 	}

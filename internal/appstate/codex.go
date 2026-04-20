@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func (c *Config) SessionTimeout() time.Duration {
+func (c *Config) CodexSessionTimeout() time.Duration {
 	return c.durationFromConfig("session.timeout_min", 10, time.Minute)
 }
 
