@@ -13,6 +13,8 @@ type IncomingMessage struct {
 	Message           string
 	ChatLabel         string
 	UserLabel         string
+	UserID            int64
+	IsAdmin           bool
 	ProviderMessageID string
 }
 
@@ -29,6 +31,8 @@ type IncomingUpdate struct {
 	ProviderMessageID string
 	ChatLabel         string
 	UserLabel         string
+	UserID            int64
+	IsAdmin           bool
 	Text              string
 	Attachments       []IncomingAttachment
 }

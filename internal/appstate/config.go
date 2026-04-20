@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -206,6 +207,21 @@ func (c *Config) TelegramToken() string {
 		return ""
 	}
 	return strings.TrimSpace(c.Store.GetString("telegram.token", ""))
+}
+
+func (c *Config) TelegramAdminUserID() int64 {
+	if c == nil || c.Store == nil {
+		return 0
+	}
+	raw := strings.TrimSpace(c.Store.GetString("telegram.admin_user_id", ""))
+	if raw == "" {
+		return 0
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
 }
 
 func (c *Config) PollTimeout() time.Duration {

@@ -24,6 +24,8 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.IncomingU
 		Message:           text,
 		ChatLabel:         strings.TrimSpace(u.ChatLabel),
 		UserLabel:         strings.TrimSpace(u.UserLabel),
+		UserID:            u.UserID,
+		IsAdmin:           u.IsAdmin,
 		ProviderMessageID: strings.TrimSpace(u.ProviderMessageID),
 	}
 

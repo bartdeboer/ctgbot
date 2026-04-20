@@ -199,6 +199,8 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 		Text:              text,
 		ChatLabel:         strings.TrimSpace(u.ChatTitle),
 		UserLabel:         u.UserLabel(),
+		UserID:            u.UserID,
+		IsAdmin:           tb.Config != nil && u.UserID != 0 && u.UserID == tb.Config.TelegramAdminUserID(),
 		ProviderMessageID: fmt.Sprintf("%d", u.MessageID),
 	}
 

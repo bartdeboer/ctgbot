@@ -3,6 +3,7 @@ package configsetters
 import (
 	"encoding/csv"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
@@ -28,6 +29,10 @@ type ChatHostbridgeAliasRoute struct {
 
 type SetTelegramTokenInput struct {
 	SetTelegramToken string `flag:"set-telegram-token"`
+}
+
+type SetTelegramAdminUserIDInput struct {
+	SetTelegramAdminUserID int64 `flag:"set-telegram-admin-user-id"`
 }
 
 type SetBuildCompilerPathInput struct {
@@ -429,4 +434,11 @@ func parseConfigSetterArgsCSV(raw string) ([]string, error) {
 		return nil, nil
 	}
 	return args, nil
+}
+
+func (c *ConfigSetters) SetTelegramAdminUserID(in SetTelegramAdminUserIDInput) error {
+	if c == nil || c.Local == nil {
+		return fmt.Errorf("missing local config store")
+	}
+	return c.Local.PersistString("telegram.admin_user_id", strconv.FormatInt(in.SetTelegramAdminUserID, 10))
 }

@@ -54,6 +54,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 			fmt.Printf("  project_dir: %q\n", globalStore.GetString("project_dir", ""))
 			fmt.Printf("  build.compiler_path: %q\n", globalStore.GetString("build.compiler_path", ""))
 			fmt.Printf("  telegram.token: %q\n", store.GetString("telegram.token", ""))
+			fmt.Printf("  telegram.admin_user_id: %d\n", cfg.TelegramAdminUserID())
 			fmt.Printf("  docker.image: %q\n", cfg.DockerImage())
 			fmt.Printf("  docker.cli_container_name: %q\n", cfg.DockerCLIContainerName())
 			fmt.Printf("  docker.workspace_host_path: %q\n", cfg.DefaultWorkspaceHostPath())
