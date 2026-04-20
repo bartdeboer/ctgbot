@@ -15,6 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
+	"github.com/bartdeboer/ctgbot/internal/configcommands"
 	"github.com/bartdeboer/ctgbot/internal/configsetters"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
@@ -69,6 +70,9 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			policyRegistry := policysetter.NewDefaultRegistry(configsetters.NewConfigSetters(cfg, store, nil))
 
+			configService := configcommands.New(policyRegistry)
+			broker.ConfigCommands = configService
+
 			hostbridgeRuntime := hostbridge.NewRuntime(cfg, logger, cfg.ResolveHostbridgeAllowedCommands,
 				func(ctx context.Context, req hostbridge.SendFileRequest) error {
 					sandboxID, err := modeluuid.Parse(strings.TrimSpace(req.SandboxID))
@@ -89,25 +93,14 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 					if err != nil {
 						return "", err
 					}
-					return formatPolicySetterList(policyRegistry.List(pctx), pctx)
+					return configService.List(pctx)
 				},
 				func(ctx context.Context, req hostbridge.ConfigSetRequest) (string, error) {
 					pctx, err := policyContextForSandbox(ctx, cfg, sessions, req.SandboxID)
 					if err != nil {
 						return "", err
 					}
-					setter, ok := policyRegistry.Find(req.Setting)
-					if !ok {
-						return "", fmt.Errorf("unknown setting: %s", req.Setting)
-					}
-					if !setter.Allowed(pctx) {
-						return "", fmt.Errorf("setting %s is not allowed in this context", req.Setting)
-					}
-					value, err := setter.Set(pctx, req.Value)
-					if err != nil {
-						return "", err
-					}
-					return fmt.Sprintf("set %s = %s", setter.Name, value), nil
+					return configService.Set(pctx, req.Setting, req.Value)
 				},
 			)
 
@@ -195,14 +188,7 @@ func policyContextForSandbox(ctx context.Context, cfg *appstate.Config, sessions
 	if thread == nil {
 		return policysetter.Context{}, fmt.Errorf("thread not found: %s", sandboxID)
 	}
-	elevation := policysetter.ElevationNone
-	if cfg != nil && cfg.ChatEnabledByID(thread.ChatID) {
-		elevation = policysetter.ElevationChat
-		if cfg.ChatProcessToolsEnabledByID(thread.ChatID) {
-			elevation = policysetter.ElevationElevated
-		}
-	}
-	return policysetter.Context{ChatID: thread.ChatID, Elevation: elevation}, nil
+	return configcommands.ContextForChat(cfg, thread.ChatID, 0, false), nil
 }
 
 func formatPolicySetterList(setters []policysetter.Setter, ctx policysetter.Context) (string, error) {

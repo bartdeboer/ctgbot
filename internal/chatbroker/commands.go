@@ -3,11 +3,13 @@ package chatbroker
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/configcommands"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
-func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, thread *Thread, name string, args []string) (string, error) {
+func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, thread *Thread, userID int64, isAdmin bool, name string, args []string) (string, error) {
 	switch name {
 	case "new":
 		workspace := ""
@@ -70,6 +72,8 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 			return "no active run to interrupt", nil
 		}
 		return "interrupt requested", nil
+	case "config":
+		return b.handleConfigCommand(chatID, userID, isAdmin, args)
 	case "status":
 		conv, err := b.GetActiveSession(ctx, thread)
 		if err != nil {
@@ -114,5 +118,29 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 		return helpText, nil
 	default:
 		return "", fmt.Errorf("unknown command %q", name)
+	}
+}
+
+func (b *Broker) handleConfigCommand(chatID modeluuid.UUID, userID int64, isAdmin bool, args []string) (string, error) {
+	if b == nil || b.ConfigCommands == nil {
+		return "", fmt.Errorf("config commands are unavailable")
+	}
+	pctx := configcommands.ContextForChat(b.Config, chatID, userID, isAdmin)
+	if len(args) == 0 {
+		return "usage:\n/config list\n/config set <key> <value>", nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		if len(args) != 1 {
+			return "", fmt.Errorf("usage: /config list")
+		}
+		return b.ConfigCommands.List(pctx)
+	case "set":
+		if len(args) < 3 {
+			return "", fmt.Errorf("usage: /config set <key> <value>")
+		}
+		return b.ConfigCommands.Set(pctx, args[1], strings.Join(args[2:], " "))
+	default:
+		return "", fmt.Errorf("usage: /config list or /config set <key> <value>")
 	}
 }

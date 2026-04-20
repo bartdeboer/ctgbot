@@ -80,7 +80,7 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 		if len(args) == 0 {
 			return messenger.IncomingResult{}, nil
 		}
-		reply, err := b.handleCommand(ctx, chatCfg.ID, thread, args[0], args[1:])
+		reply, err := b.handleCommand(ctx, chatCfg.ID, thread, msg.UserID, msg.IsAdmin, args[0], args[1:])
 		if err != nil {
 			return messenger.IncomingResult{
 				Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("command error: %v", err)}},

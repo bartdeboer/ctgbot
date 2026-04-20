@@ -9,6 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/configcommands"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
@@ -28,6 +29,7 @@ type Broker struct {
 	Sandboxes         sandboxengine.Manager
 	Dispatch          *Dispatcher
 	ProcessActions    ProcessActions
+	ConfigCommands    *configcommands.Service
 	Agents            map[string]agent.Agent
 	InboundProviders  map[string]messenger.InboundChatProvider
 	OutboundProviders map[string]messenger.OutboundChatProvider
