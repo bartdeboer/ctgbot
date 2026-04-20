@@ -211,7 +211,7 @@ func (b *Broker) clearActiveRun(threadID modeluuid.UUID, cancel context.CancelFu
 	delete(b.activeRuns, threadID)
 }
 
-func (b *Broker) interruptThread(threadID modeluuid.UUID, sbx *sandboxengine.Sandbox) bool {
+func (b *Broker) interruptThread(threadID modeluuid.UUID) bool {
 	if b == nil || threadID.IsNull() {
 		return false
 	}
@@ -220,9 +220,6 @@ func (b *Broker) interruptThread(threadID modeluuid.UUID, sbx *sandboxengine.San
 	b.activeRunsMu.Unlock()
 	if cancel == nil {
 		return false
-	}
-	if sbx != nil {
-		_ = sbx.Interrupt()
 	}
 	cancel()
 	return true

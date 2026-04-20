@@ -66,7 +66,7 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 		if b.Config == nil || !b.Config.ChatInteractiveInterruptEnabledByID(chatID) {
 			return "interrupt is disabled for this chat", nil
 		}
-		if !b.interruptThread(conv.ID, b.sandboxForThread(conv)) {
+		if !b.interruptThread(conv.ID) {
 			return "no active run to interrupt", nil
 		}
 		return "interrupt requested", nil
