@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-
-	"github.com/creack/pty"
 )
 
 type State string
@@ -92,34 +90,22 @@ func (c *Container) Remove(ctx context.Context) error {
 
 func (c *Container) Exec(ctx context.Context, opts ExecOptions, name string, args ...string) error {
 	cmd := c.CommandContext(ctx, opts, name, args...)
+	cmd.Stdout = opts.Stdout
+	cmd.Stderr = opts.Stderr
 	if !opts.Interactive {
-		cmd.Stdout = opts.Stdout
-		cmd.Stderr = opts.Stderr
 		return cmd.Run()
 	}
-	ptmx, err := pty.Start(cmd)
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
-	c.setActiveStdin(ptmx)
-	defer c.clearActiveStdin(ptmx)
-	defer ptmx.Close()
-
-	target := execOutputTarget(opts)
-	var copyErr error
-	if target != nil {
-		_, copyErr = io.Copy(target, ptmx)
-	} else {
-		_, copyErr = io.Copy(io.Discard, ptmx)
+	c.setActiveStdin(stdin)
+	defer c.clearActiveStdin(stdin)
+	defer stdin.Close()
+	if err := cmd.Start(); err != nil {
+		return err
 	}
-	waitErr := cmd.Wait()
-	if waitErr != nil {
-		return waitErr
-	}
-	if isBenignPTYReadError(copyErr) {
-		return nil
-	}
-	return copyErr
+	return cmd.Wait()
 }
 
 func (c *Container) CombinedOutput(ctx context.Context, opts ExecOptions, name string, args ...string) ([]byte, error) {
@@ -129,7 +115,7 @@ func (c *Container) CombinedOutput(ctx context.Context, opts ExecOptions, name s
 func (c *Container) CommandContext(ctx context.Context, opts ExecOptions, name string, args ...string) *exec.Cmd {
 	dockerArgs := []string{"exec"}
 	if opts.Interactive {
-		dockerArgs = append(dockerArgs, "-i", "-t")
+		dockerArgs = append(dockerArgs, "-i")
 	}
 	for _, env := range opts.Env {
 		if env == "" {
@@ -181,21 +167,6 @@ func (c *Container) clearActiveStdin(stdin io.WriteCloser) {
 		return
 	}
 	c.activeStdin = nil
-}
-
-func execOutputTarget(opts ExecOptions) io.Writer {
-	switch {
-	case opts.Stdout != nil && opts.Stderr != nil:
-		return io.MultiWriter(opts.Stdout, opts.Stderr)
-	case opts.Stdout != nil:
-		return opts.Stdout
-	default:
-		return opts.Stderr
-	}
-}
-
-func isBenignPTYReadError(err error) bool {
-	return err == nil || errors.Is(err, os.ErrClosed) || errors.Is(err, io.EOF) || errors.Is(err, syscall.EIO)
 }
 
 func isBenignInterruptWriteError(err error) bool {

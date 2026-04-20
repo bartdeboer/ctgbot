@@ -137,16 +137,19 @@ func TestContainerInterruptIgnoresClosedPipe(t *testing.T) {
 	}
 }
 
-func TestExecOutputTargetPrefersCombinedWriters(t *testing.T) {
+func TestContainerCommandContextInteractiveAddsInputFlag(t *testing.T) {
 	t.Parallel()
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	target := execOutputTarget(ExecOptions{Stdout: &stdout, Stderr: &stderr})
-	if _, err := target.Write([]byte("hello")); err != nil {
-		t.Fatalf("Write: %v", err)
+	container := &Container{ContainerSpec: ContainerSpec{Name: "ctgbot-test"}}
+	cmd := container.CommandContext(context.Background(), ExecOptions{Interactive: true}, "codex", "exec")
+	got := cmd.Args
+	want := []string{"docker", "exec", "-i", "ctgbot-test", "codex", "exec"}
+	if len(got) != len(want) {
+		t.Fatalf("args len = %d, want %d: %#v", len(got), len(want), got)
 	}
-	if stdout.String() != "hello" || stderr.String() != "hello" {
-		t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("arg[%d] = %q, want %q; all args: %#v", i, got[i], want[i], got)
+		}
 	}
 }
 

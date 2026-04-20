@@ -4,8 +4,6 @@ github.com/bartdeboer/go-clistate v0.0.6 h1:lLoiE5dxKxaDKWBzcKxyhiNlr/4VaentdkNV
 github.com/bartdeboer/go-clistate v0.0.6/go.mod h1:aokoc6hgbN5JryA3kfyF60CZacZyLmKNaPYu3qVbllg=
 github.com/bartdeboer/words v0.0.3 h1:kcTX6Go4p4WYNp3l7887YbPMuV/vRIhiMKDuxEdM/to=
 github.com/bartdeboer/words v0.0.3/go.mod h1:PZTW5H9DV7Fsy6ap/78IrcMRZ7/lwsAAtow2aFXHj9A=
-github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
-github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=
 github.com/go-telegram/bot v1.17.0 h1:Hs0kGxSj97QFqOQP0zxduY/4tSx8QDzvNI9uVRS+zmY=
 github.com/go-telegram/bot v1.17.0/go.mod h1:i2TRs7fXWIeaceF3z7KzsMt/he0TwkVC680mvdTFYeM=
 github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD/E=
