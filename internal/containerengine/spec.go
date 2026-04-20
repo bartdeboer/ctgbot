@@ -2,14 +2,12 @@ package containerengine
 
 import (
 	"context"
-	"errors"
 	"io"
-	"os"
 	"os/exec"
-	"strings"
 	"sync"
-	"syscall"
 )
+
+const ActivePIDFile = "/tmp/ctgbot-codex.pid"
 
 type State string
 
@@ -53,7 +51,7 @@ type Container struct {
 	manager *Manager
 
 	mu          sync.Mutex
-	activeStdin io.WriteCloser
+	interrupted bool
 }
 
 func (c *Container) ApplySpec(spec ContainerSpec) {
@@ -89,23 +87,11 @@ func (c *Container) Remove(ctx context.Context) error {
 }
 
 func (c *Container) Exec(ctx context.Context, opts ExecOptions, name string, args ...string) error {
+	c.clearInterrupted()
 	cmd := c.CommandContext(ctx, opts, name, args...)
 	cmd.Stdout = opts.Stdout
 	cmd.Stderr = opts.Stderr
-	if !opts.Interactive {
-		return cmd.Run()
-	}
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	c.setActiveStdin(stdin)
-	defer c.clearActiveStdin(stdin)
-	defer stdin.Close()
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	return cmd.Wait()
+	return cmd.Run()
 }
 
 func (c *Container) CombinedOutput(ctx context.Context, opts ExecOptions, name string, args ...string) ([]byte, error) {
@@ -113,10 +99,12 @@ func (c *Container) CombinedOutput(ctx context.Context, opts ExecOptions, name s
 }
 
 func (c *Container) CommandContext(ctx context.Context, opts ExecOptions, name string, args ...string) *exec.Cmd {
+	dockerArgs := c.execArgs(opts, name, args...)
+	return exec.CommandContext(ctx, "docker", dockerArgs...)
+}
+
+func (c *Container) execArgs(opts ExecOptions, name string, args ...string) []string {
 	dockerArgs := []string{"exec"}
-	if opts.Interactive {
-		dockerArgs = append(dockerArgs, "-i")
-	}
 	for _, env := range opts.Env {
 		if env == "" {
 			continue
@@ -128,51 +116,51 @@ func (c *Container) CommandContext(ctx context.Context, opts ExecOptions, name s
 	}
 	dockerArgs = append(dockerArgs, c.Name, name)
 	dockerArgs = append(dockerArgs, args...)
-	return exec.CommandContext(ctx, "docker", dockerArgs...)
+	return dockerArgs
 }
 
 func (c *Container) Interrupt() error {
+	if c == nil || c.manager == nil || c.Name == "" {
+		return nil
+	}
+	c.markInterrupted()
+	cmd := c.interruptCommandContext(context.Background())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		c.manager.logf("interrupt attempt finished name=%s err=%v out=%s", c.Name, err, string(out))
+		return nil
+	}
+	return nil
+}
+
+func (c *Container) interruptCommandContext(ctx context.Context) *exec.Cmd {
+	script := "test -s " + ActivePIDFile + " && kill -INT $(cat " + ActivePIDFile + ") 2>/dev/null || true"
+	return exec.CommandContext(ctx, "docker", "exec", c.Name, "sh", "-lc", script)
+}
+
+func (c *Container) Interrupted() bool {
 	if c == nil {
-		return nil
+		return false
 	}
 	c.mu.Lock()
-	stdin := c.activeStdin
-	c.mu.Unlock()
-	if stdin == nil {
-		return nil
-	}
-	_, err := stdin.Write([]byte{3})
-	if isBenignInterruptWriteError(err) {
-		return nil
-	}
-	return err
+	defer c.mu.Unlock()
+	return c.interrupted
 }
 
-func (c *Container) setActiveStdin(stdin io.WriteCloser) {
-	if c == nil || stdin == nil {
+func (c *Container) markInterrupted() {
+	if c == nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.activeStdin = stdin
+	c.interrupted = true
 }
 
-func (c *Container) clearActiveStdin(stdin io.WriteCloser) {
-	if c == nil || stdin == nil {
+func (c *Container) clearInterrupted() {
+	if c == nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.activeStdin != stdin {
-		return
-	}
-	c.activeStdin = nil
-}
-
-func isBenignInterruptWriteError(err error) bool {
-	if err == nil || errors.Is(err, os.ErrClosed) || errors.Is(err, syscall.EPIPE) {
-		return true
-	}
-	text := strings.ToLower(err.Error())
-	return strings.Contains(text, "closed") || strings.Contains(text, "broken pipe")
+	c.interrupted = false
 }

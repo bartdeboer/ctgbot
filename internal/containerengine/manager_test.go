@@ -1,9 +1,7 @@
 package containerengine
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"testing"
 )
 
@@ -115,34 +113,19 @@ func TestContainerCommandContextBuildsDockerExec(t *testing.T) {
 	}
 }
 
-func TestContainerInterruptWritesCtrlC(t *testing.T) {
+func TestContainerInterruptCommandTargetsPIDFile(t *testing.T) {
 	t.Parallel()
-	buf := &recordingWriteCloser{}
-	container := &Container{}
-	container.setActiveStdin(buf)
-	if err := container.Interrupt(); err != nil {
-		t.Fatalf("Interrupt: %v", err)
-	}
-	if got := buf.String(); got != string([]byte{3}) {
-		t.Fatalf("stdin write = %q, want ctrl-c", got)
-	}
-}
-
-func TestContainerInterruptIgnoresClosedPipe(t *testing.T) {
-	t.Parallel()
-	container := &Container{}
-	container.setActiveStdin(&errWriteCloser{err: io.ErrClosedPipe})
-	if err := container.Interrupt(); err != nil {
-		t.Fatalf("Interrupt: %v", err)
-	}
-}
-
-func TestContainerCommandContextInteractiveAddsInputFlag(t *testing.T) {
-	t.Parallel()
-	container := &Container{ContainerSpec: ContainerSpec{Name: "ctgbot-test"}}
-	cmd := container.CommandContext(context.Background(), ExecOptions{Interactive: true}, "codex", "exec")
+	container := &Container{ContainerSpec: ContainerSpec{Name: "ctgbot-test"}, manager: NewManager(nil)}
+	cmd := container.interruptCommandContext(context.Background())
 	got := cmd.Args
-	want := []string{"docker", "exec", "-i", "ctgbot-test", "codex", "exec"}
+	want := []string{
+		"docker",
+		"exec",
+		"ctgbot-test",
+		"sh",
+		"-lc",
+		"test -s " + ActivePIDFile + " && kill -INT $(cat " + ActivePIDFile + ") 2>/dev/null || true",
+	}
 	if len(got) != len(want) {
 		t.Fatalf("args len = %d, want %d: %#v", len(got), len(want), got)
 	}
@@ -153,11 +136,15 @@ func TestContainerCommandContextInteractiveAddsInputFlag(t *testing.T) {
 	}
 }
 
-type recordingWriteCloser struct{ bytes.Buffer }
-
-func (r *recordingWriteCloser) Close() error { return nil }
-
-type errWriteCloser struct{ err error }
-
-func (w *errWriteCloser) Write(p []byte) (int, error) { return 0, w.err }
-func (w *errWriteCloser) Close() error                { return nil }
+func TestContainerInterruptMarksInterrupted(t *testing.T) {
+	t.Parallel()
+	container := &Container{}
+	container.markInterrupted()
+	if !container.Interrupted() {
+		t.Fatalf("expected interrupted state to be set")
+	}
+	container.clearInterrupted()
+	if container.Interrupted() {
+		t.Fatalf("expected interrupted state to be cleared")
+	}
+}

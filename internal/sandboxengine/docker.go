@@ -191,7 +191,6 @@ func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer
 		token := sbx.beginCommand(name, args...)
 		defer sbx.endCommand(token)
 		opts := sbx.execOptions(stdout, stderr)
-		opts.Interactive = sbx.InteractiveInterruptEnabled
 		return container.Exec(ctx, opts, name, args...)
 	})
 }

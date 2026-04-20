@@ -234,3 +234,14 @@ func (s *Sandbox) Interrupt() error {
 	}
 	return container.Interrupt()
 }
+
+func (s *Sandbox) Interrupted() bool {
+	if s == nil {
+		return false
+	}
+	container := s.containerInstance()
+	if container == nil {
+		return false
+	}
+	return container.Interrupted()
+}

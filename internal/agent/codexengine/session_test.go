@@ -202,3 +202,17 @@ func TestInstallSkillCopiesSkillDirectoryIntoChatHome(t *testing.T) {
 		}
 	}
 }
+
+func TestWrapWithPIDFile(t *testing.T) {
+	t.Parallel()
+	args := wrapWithPIDFile([]string{"codex", "exec", "hello"})
+	wantPrefix := []string{"sh", "-lc", `rm -f /tmp/ctgbot-codex.pid; echo $$ > /tmp/ctgbot-codex.pid; exec "$@"`, "sh", "codex", "exec", "hello"}
+	if len(args) != len(wantPrefix) {
+		t.Fatalf("args len = %d, want %d: %#v", len(args), len(wantPrefix), args)
+	}
+	for i := range wantPrefix {
+		if args[i] != wantPrefix[i] {
+			t.Fatalf("arg[%d] = %q, want %q; all args: %#v", i, args[i], wantPrefix[i], args)
+		}
+	}
+}

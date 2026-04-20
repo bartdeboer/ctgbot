@@ -12,6 +12,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -83,7 +84,7 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 	}
 
 	outputPath := "/tmp/ctgbot-last-message.txt"
-	args := []string{
+	innerArgs := []string{
 		"codex",
 		"-a", "never",
 		"-s", "workspace-write",
@@ -96,13 +97,14 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 	}
 
 	if model := e.Config.CodexModel(); model != "" {
-		args = append(args, "-m", model)
+		innerArgs = append(innerArgs, "-m", model)
 	}
 	if strings.TrimSpace(providerThreadID) != "" {
-		args = append(args, "resume", providerThreadID, prompt)
+		innerArgs = append(innerArgs, "resume", providerThreadID, prompt)
 	} else {
-		args = append(args, strings.TrimSpace(prompt))
+		innerArgs = append(innerArgs, strings.TrimSpace(prompt))
 	}
+	args := wrapWithPIDFile(innerArgs)
 
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
@@ -114,6 +116,9 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 	}
 	if nextProviderThreadID != "" {
 		e.logf("codex thread started provider_thread_id=%s", nextProviderThreadID)
+	}
+	if err != nil && sbx.Interrupted() {
+		return agent.TurnResult{ProviderThreadID: nextProviderThreadID}, context.Canceled
 	}
 	lastMessageBytes, readErr := sbx.CombinedOutput(ctx, "cat", outputPath)
 	lastMessage := strings.TrimSpace(string(lastMessageBytes))
@@ -135,6 +140,11 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 		return agent.TurnResult{}, fmt.Errorf("codex returned an empty response")
 	}
 	return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, nil
+}
+
+func wrapWithPIDFile(args []string) []string {
+	wrapped := []string{"sh", "-lc", "rm -f " + containerengine.ActivePIDFile + "; echo $$ > " + containerengine.ActivePIDFile + "; exec \"$@\"", "sh"}
+	return append(wrapped, args...)
 }
 
 func (e *SessionExecutor) logf(format string, args ...any) {
