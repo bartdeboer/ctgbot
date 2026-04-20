@@ -119,9 +119,6 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 	lastMessage := strings.TrimSpace(string(lastMessageBytes))
 
 	if err != nil {
-		if sbx.Interrupted() {
-			return agent.TurnResult{ProviderThreadID: nextProviderThreadID}, context.Canceled
-		}
 		if readErr == nil && lastMessage != "" {
 			return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
 		}
