@@ -17,10 +17,6 @@ func (c *Config) ChatsRoot() string {
 	return filepath.Join(c.ProjectRoot(), "chats")
 }
 
-func (c *Config) ChatFolderName(chatID int64, threadID int) string {
-	return fmt.Sprintf("%d-%d", chatID, threadID)
-}
-
 func (c *Config) ChatRuntimeName(chatID modeluuid.UUID) string {
 	return chatID.String()
 }
@@ -71,47 +67,24 @@ func (c *Config) ChatRuntimeRoot(chatID modeluuid.UUID) string {
 	return c.ChatRoot(c.ChatRuntimeName(chatID))
 }
 
-func (c *Config) ChatCodexHomeDir(name string) string {
-	return filepath.Join(c.ChatRoot(name), ".codex")
-}
-
-func (c *Config) ChatCodexHomeDirByID(chatID modeluuid.UUID) string {
+func (c *Config) DefaultChatCodexProfileDirByID(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), ".codex")
 }
 
-func (c *Config) ChatWorkspaceDir(name string) string {
-	return filepath.Join(c.ChatRoot(name), "workspace")
-}
-
-func (c *Config) ChatWorkspaceDirByID(chatID modeluuid.UUID) string {
+func (c *Config) DefaultChatWorkspaceDirByID(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), "workspace")
 }
 
-func (c *Config) ChatLogDir(name string) string {
-	return filepath.Join(c.ChatRoot(name), "logs")
-}
-
-func (c *Config) ChatLogDirByID(chatID modeluuid.UUID) string {
+func (c *Config) DefaultChatLogDirByID(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), "logs")
 }
 
-func (c *Config) ChatTLSDir(name string) string {
-	return filepath.Join(c.ChatRoot(name), "tls")
-}
-
-func (c *Config) ChatTLSDirByID(chatID modeluuid.UUID) string {
+func (c *Config) DefaultChatTLSDirByID(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), "tls")
 }
 
 func (c *Config) ChatThreadsRoot(chatID modeluuid.UUID) string {
 	return filepath.Join(c.ChatRuntimeRoot(chatID), "threads")
-}
-
-func (c *Config) ProjectDir() string {
-	if c == nil || c.Store == nil {
-		return ""
-	}
-	return strings.TrimSpace(c.Store.GetProjectDir())
 }
 
 func (c *Config) HostGitIdentity(ctx context.Context) GitIdentity {

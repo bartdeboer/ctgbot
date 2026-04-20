@@ -29,7 +29,7 @@ func (b *Broker) newSandboxSpec(conv *Thread) *sandboxengine.SandboxSpec {
 			{Source: conv.WorkspaceHost, Target: conv.ContainerWorkspace},
 			{Source: conv.HomeHost, Target: conv.ContainerHome},
 			{
-				Source:   b.Config.ChatTLSDirByID(conv.ChatID),
+				Source:   b.Config.DefaultChatTLSDirByID(conv.ChatID),
 				Target:   b.Config.DockerContainerHostbridgeTLSDir(),
 				ReadOnly: true,
 			},

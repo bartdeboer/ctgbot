@@ -6,13 +6,6 @@ import (
 	"time"
 )
 
-func (c *Config) TelegramToken() string {
-	if c == nil || c.Store == nil {
-		return ""
-	}
-	return strings.TrimSpace(c.Store.GetString("telegram.token", ""))
-}
-
 func (c *Config) TelegramAdminUserID() int64 {
 	if c == nil || c.Store == nil {
 		return 0

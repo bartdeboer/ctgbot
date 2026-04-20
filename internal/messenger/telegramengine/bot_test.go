@@ -361,7 +361,7 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
-	inboxPath := filepath.Join(cfg.ChatWorkspaceDirByID(entry.ID), "inbox", "poem.zip")
+	inboxPath := filepath.Join(cfg.DefaultChatWorkspaceDirByID(entry.ID), "inbox", "poem.zip")
 	data, err := os.ReadFile(inboxPath)
 	if err != nil {
 		t.Fatalf("read saved upload: %v", err)
@@ -428,7 +428,7 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 	if agent.sentPrompt != "Files made available:\n- /workspace/inbox/notes.txt\n\nplease review it" {
 		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "Files made available:\n- /workspace/inbox/notes.txt\n\nplease review it")
 	}
-	inboxPath := filepath.Join(cfg.ChatWorkspaceDirByID(entry.ID), "inbox", "notes.txt")
+	inboxPath := filepath.Join(cfg.DefaultChatWorkspaceDirByID(entry.ID), "inbox", "notes.txt")
 	if _, err := os.Stat(inboxPath); err != nil {
 		t.Fatalf("stat saved upload: %v", err)
 	}
@@ -488,7 +488,7 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 	if agent.sentPrompt != "Files made available:\n- /workspace/inbox/photo-101.jpg\n\nplease inspect" {
 		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "Files made available:\n- /workspace/inbox/photo-101.jpg\n\nplease inspect")
 	}
-	inboxPath := filepath.Join(cfg.ChatWorkspaceDirByID(entry.ID), "inbox", "photo-101.jpg")
+	inboxPath := filepath.Join(cfg.DefaultChatWorkspaceDirByID(entry.ID), "inbox", "photo-101.jpg")
 	data, err := os.ReadFile(inboxPath)
 	if err != nil {
 		t.Fatalf("read saved upload: %v", err)

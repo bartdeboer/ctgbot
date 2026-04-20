@@ -89,17 +89,17 @@ func (c *Config) EnsureChatRuntimePaths(chatID modeluuid.UUID) (string, error) {
 	name := c.ChatRuntimeName(chatID)
 	for _, dir := range []string{
 		c.ChatRuntimeRoot(chatID),
-		c.ChatCodexHomeDirByID(chatID),
-		c.ChatWorkspaceDirByID(chatID),
-		c.ChatLogDirByID(chatID),
-		c.ChatTLSDirByID(chatID),
+		c.DefaultChatCodexProfileDirByID(chatID),
+		c.DefaultChatWorkspaceDirByID(chatID),
+		c.DefaultChatLogDirByID(chatID),
+		c.DefaultChatTLSDirByID(chatID),
 		c.ChatThreadsRoot(chatID),
 	} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return "", err
 		}
 	}
-	if err := ensureGitWorkspace(c.ChatWorkspaceDirByID(chatID)); err != nil {
+	if err := ensureGitWorkspace(c.DefaultChatWorkspaceDirByID(chatID)); err != nil {
 		return "", err
 	}
 	return name, nil

@@ -141,7 +141,7 @@ func TestResolveChatWorkspaceHostPathByIDFallsBackToChatWorkspace(t *testing.T) 
 	if err != nil {
 		t.Fatalf("resolve chat workspace by id: %v", err)
 	}
-	want := cfg.ChatWorkspaceDirByID(chatID)
+	want := cfg.DefaultChatWorkspaceDirByID(chatID)
 	if got != want {
 		t.Fatalf("ResolveChatWorkspaceHostPathByID() = %q, want %q", got, want)
 	}
@@ -221,10 +221,10 @@ func TestChatTLSDirUsesChatScopedLayout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse chat uuid: %v", err)
 	}
-	got := cfg.ChatTLSDirByID(chatID)
+	got := cfg.DefaultChatTLSDirByID(chatID)
 	want := filepath.Join(root, "chats", chatID.String(), "tls")
 	if got != want {
-		t.Fatalf("ChatTLSDirByID() = %q, want %q", got, want)
+		t.Fatalf("DefaultChatTLSDirByID() = %q, want %q", got, want)
 	}
 }
 

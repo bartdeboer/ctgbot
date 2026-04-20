@@ -109,7 +109,7 @@ func (c *Config) ChatWorkspaceHostPathByID(chatID modeluuid.UUID) string {
 	if raw := c.DockerDefaultWorkspaceHostPath(); raw != "" {
 		return raw
 	}
-	return c.ChatWorkspaceDirByID(chatID)
+	return c.DefaultChatWorkspaceDirByID(chatID)
 }
 
 func (c *Config) ChatCodexProfileHostPathByID(chatID modeluuid.UUID) string {
@@ -122,7 +122,7 @@ func (c *Config) ChatCodexProfileHostPathByID(chatID modeluuid.UUID) string {
 	if raw := c.codexProfileHostPathOverride(); raw != "" {
 		return raw
 	}
-	return c.ChatCodexHomeDirByID(chatID)
+	return c.DefaultChatCodexProfileDirByID(chatID)
 }
 
 func (c *Config) ChatSkillsByID(chatID modeluuid.UUID) []string {
@@ -150,20 +150,6 @@ func (c *Config) ChatHostbridgeAllowedCommandsByID(chatID modeluuid.UUID) map[st
 		return nil
 	}
 	return hostbridge.AllowedCommandsFromSpecs(legacy)
-}
-
-func (c *Config) ChatHostbridgeAllowedCommandSpecsByID(chatID modeluuid.UUID) []string {
-	allowed := c.ChatHostbridgeAllowedCommandsByID(chatID)
-	if len(allowed) == 0 {
-		return nil
-	}
-	names := hostbridge.AllowedCommandNames(allowed)
-	out := make([]string, 0, len(names))
-	for _, name := range names {
-		spec := allowed[name]
-		out = append(out, spec.Name)
-	}
-	return out
 }
 
 func (c *Config) ResolveChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string) (string, error) {
