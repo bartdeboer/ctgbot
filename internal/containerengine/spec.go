@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 )
 
 type State string
@@ -91,7 +90,7 @@ func (c *Container) Remove(ctx context.Context) error {
 }
 
 func (c *Container) Exec(ctx context.Context, opts ExecOptions, name string, args ...string) error {
-	cmd := c.command(ctx, opts, name, args...)
+	cmd := c.CommandContext(ctx, opts, name, args...)
 	if opts.Interactive {
 		c.clearInterrupted()
 	}
@@ -110,38 +109,14 @@ func (c *Container) Exec(ctx context.Context, opts ExecOptions, name string, arg
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	done := make(chan struct{})
-	var watchWG sync.WaitGroup
-	if ctx != nil {
-		watchWG.Add(1)
-		go func() {
-			defer watchWG.Done()
-			c.watchCancel(ctx, cmd, done)
-		}()
-	}
-	err = cmd.Wait()
-	close(done)
-	watchWG.Wait()
-	return err
+	return cmd.Wait()
 }
 
 func (c *Container) CombinedOutput(ctx context.Context, opts ExecOptions, name string, args ...string) ([]byte, error) {
 	return c.CommandContext(ctx, opts, name, args...).CombinedOutput()
 }
 
-func (c *Container) command(ctx context.Context, opts ExecOptions, name string, args ...string) *exec.Cmd {
-	dockerArgs := c.execArgs(opts, name, args...)
-	if opts.Interactive {
-		return exec.Command("docker", dockerArgs...)
-	}
-	return exec.CommandContext(ctx, "docker", dockerArgs...)
-}
-
 func (c *Container) CommandContext(ctx context.Context, opts ExecOptions, name string, args ...string) *exec.Cmd {
-	return exec.CommandContext(ctx, "docker", c.execArgs(opts, name, args...)...)
-}
-
-func (c *Container) execArgs(opts ExecOptions, name string, args ...string) []string {
 	dockerArgs := []string{"exec"}
 	if opts.Interactive {
 		dockerArgs = append(dockerArgs, "-i")
@@ -157,26 +132,7 @@ func (c *Container) execArgs(opts ExecOptions, name string, args ...string) []st
 	}
 	dockerArgs = append(dockerArgs, c.Name, name)
 	dockerArgs = append(dockerArgs, args...)
-	return dockerArgs
-}
-
-func (c *Container) watchCancel(ctx context.Context, cmd *exec.Cmd, done <-chan struct{}) {
-	select {
-	case <-done:
-		return
-	case <-ctx.Done():
-	}
-	_ = c.Interrupt()
-	timer := time.NewTimer(2 * time.Second)
-	defer timer.Stop()
-	select {
-	case <-done:
-		return
-	case <-timer.C:
-		if cmd != nil && cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-	}
+	return exec.CommandContext(ctx, "docker", dockerArgs...)
 }
 
 func (c *Container) Interrupt() error {
