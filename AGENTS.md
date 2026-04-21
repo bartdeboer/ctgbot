@@ -21,7 +21,8 @@ The project has three major responsibilities:
 - `internal/messenger/telegramengine`: Telegram messenger implementation, API integration, and event logging
 - `internal/agent`: agent plugin contracts
 - `internal/agent/codexengine`: Codex runtime, Docker session execution, image builder, and Codex chat-session state
-- `internal/hostbridge`: shared hostbridge protocol and controller runtime
+- `internal/chatcommands`: shared typed chat/bridge command model and routing
+- `internal/hostbridge`: hostbridge request/response transport, client, and server
 - `internal/containerassets`: embeds an optional `assets/src.tar.gz` for Docker image builds
 - `docker/Dockerfile`: source Dockerfile for the embedded image build context
 
@@ -38,10 +39,10 @@ The project has three major responsibilities:
 
 - `go run ./cmd/ctgbot telegram monitor`
   Starts the Telegram bot loop.
-  This now also starts an in-process TCP hostbridge controller for Telegram conversations.
+  This also starts an in-process TCP hostbridge server for Telegram conversations.
 
 - `go run ./cmd/ctgbot hostbridge serve`
-  Starts the hostbridge controller over TCP.
+  Starts the hostbridge server over TCP.
 
 - `go run ./cmd/ctgbot image build --no-cache`
   Rebuilds the Docker image.
@@ -114,19 +115,19 @@ This was needed to get Codex file writes working in the Dockerized Telegram setu
   There is a recent upstream issue for similar behavior:
   - `openai/codex#16088`
 
+- `codex signin` depends on the host-side callback relay implemented in `internal/agent/codexengine/signin_relay.go`.
+  The callback port is fixed at `127.0.0.1:1455`.
+
 - After changing `docker/Dockerfile` or anything under the embedded build context, regenerate and rebuild:
   1. `go run ./cmd/ctgbot go-generate`
   2. `go run ./cmd/ctgbot image build --no-cache`
-
-- `codex signin` depends on the host-side callback relay implemented in `internal/agent/codexengine/signin_relay.go`.
-  The callback port is fixed at `127.0.0.1:1455`.
 
 ## Editing Guidance
 
 - Keep `cmd/` files focused on `clir` routing.
 - Put messenger transport logic in `internal/messenger`.
 - Put agent runtime logic in `internal/agent`.
-- Keep config/state access in `internal/appstate` and shared types in `internal/chatmodel`.
+- Keep config/state access in `internal/appstate` and shared conversation types in `internal/chatmodel`.
 - Prefer updating the embedded build-context source files and then regenerating `internal/containerassets/assets/src.tar.gz`.
 - Do not commit runtime chat data from `chats/` or local control data from `./.ctgbot/`.
 
