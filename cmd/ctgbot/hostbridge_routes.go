@@ -18,7 +18,7 @@ import (
 
 func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 	r.Routes(func(b *clir.Builder) {
-		b.Handle("hostbridge serve", "Serve the hostbridge controller over TCP", func(req *clir.Request) error {
+		b.Handle("hostbridge serve", "Serve the hostbridge server over TCP", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("hostbridge serve", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 
