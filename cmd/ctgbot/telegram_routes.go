@@ -8,19 +8,18 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sort"
 	"strings"
 	"syscall"
 
 	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
+	"github.com/bartdeboer/ctgbot/internal/chatcommands"
 	"github.com/bartdeboer/ctgbot/internal/configcommands"
 	"github.com/bartdeboer/ctgbot/internal/configsetters"
-	"github.com/bartdeboer/ctgbot/internal/hostbridge"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
+	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
 	"github.com/bartdeboer/ctgbot/internal/messenger/telegramengine"
-	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/policysetter"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clir"
@@ -69,40 +68,8 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			broker.RegisterOutboundChatProvider("telegram", bot)
 
 			policyRegistry := policysetter.NewDefaultRegistry(configsetters.NewConfigSetters(cfg, store, nil))
-
 			configService := configcommands.New(policyRegistry)
 			broker.ConfigCommands = configService
-
-			hostbridgeRuntime := hostbridge.NewRuntime(cfg, logger, cfg.ResolveHostbridgeAllowedCommands,
-				func(ctx context.Context, req hostbridge.SendFileRequest) error {
-					sandboxID, err := modeluuid.Parse(strings.TrimSpace(req.SandboxID))
-					if err != nil {
-						return fmt.Errorf("parse sandbox id: %w", err)
-					}
-					return broker.SendFile(ctx, messenger.OutgoingFile{SandboxID: sandboxID, Filename: req.Filename, Caption: req.Caption, ContentType: req.ContentType, Content: req.Content})
-				},
-				func(ctx context.Context, req hostbridge.SendTextRequest) error {
-					sandboxID, err := modeluuid.Parse(strings.TrimSpace(req.SandboxID))
-					if err != nil {
-						return fmt.Errorf("parse sandbox id: %w", err)
-					}
-					return broker.SendText(ctx, messenger.OutgoingMessage{SandboxID: sandboxID, Text: req.Text, ContentType: req.ContentType})
-				},
-				func(ctx context.Context, req hostbridge.ConfigListRequest) (string, error) {
-					pctx, err := policyContextForSandbox(ctx, cfg, sessions, req.SandboxID)
-					if err != nil {
-						return "", err
-					}
-					return configService.List(pctx)
-				},
-				func(ctx context.Context, req hostbridge.ConfigSetRequest) (string, error) {
-					pctx, err := policyContextForSandbox(ctx, cfg, sessions, req.SandboxID)
-					if err != nil {
-						return "", err
-					}
-					return configService.Set(pctx, req.Setting, req.Value)
-				},
-			)
 
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
@@ -116,14 +83,14 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			bridgeErrCh := make(chan error, 1)
-			go func() { bridgeErrCh <- hostbridgeRuntime.Run(runCtx) }()
+			hostbridgeErrCh := make(chan error, 1)
+			go func() { hostbridgeErrCh <- runHostbridgeV2(runCtx, cfg, broker) }()
 
 			botErrCh := make(chan error, 1)
 			go func() { botErrCh <- bot.Run(runCtx, broker.HandleIncomingUpdate) }()
 
 			select {
-			case err := <-bridgeErrCh:
+			case err := <-hostbridgeErrCh:
 				stop()
 				if errors.Is(err, context.Canceled) {
 					return nil
@@ -141,6 +108,28 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			}
 		})
 	})
+}
+
+func runHostbridgeV2(ctx context.Context, cfg *appstate.Config, broker *chatbroker.Broker) error {
+	if cfg == nil {
+		return fmt.Errorf("missing config")
+	}
+	if err := hostbridgetls.EnsureServerMaterials(cfg.HostbridgeTLSRoot()); err != nil {
+		return err
+	}
+	tlsConfig, err := hostbridgetls.LoadServerTLSConfig(cfg.HostbridgeTLSRoot())
+	if err != nil {
+		return err
+	}
+	ln, err := hostbridgev2server.ListenTLS(cfg.HostbridgeTCPListenAddr(), tlsConfig)
+	if err != nil {
+		return err
+	}
+	provider := chatbroker.NewChatCommandsProvider(broker)
+	srv := hostbridgev2server.NewWithRunnerFactory(func(clientIdentity string) chatcommands.Runner {
+		return hostbridgev2server.NewRunnerForClient(cfg.ResolveHostbridgeAllowedCommands, clientIdentity, 30, provider)
+	})
+	return hostbridgev2server.ServeListener(ctx, ln, srv)
 }
 
 func parseTelegramMonitorOptions(args []string, store *clistate.Store) (token string, stateRoot string, dbPath string, err error) {
@@ -174,39 +163,4 @@ func resolveTelegramToken(flagVal string, store *clistate.Store) string {
 		return ""
 	}
 	return strings.TrimSpace(store.GetString("telegram.token", ""))
-}
-
-func policyContextForSandbox(ctx context.Context, cfg *appstate.Config, sessions *chatbroker.SessionStorage, sandboxRaw string) (policysetter.Context, error) {
-	sandboxID, err := modeluuid.Parse(strings.TrimSpace(sandboxRaw))
-	if err != nil {
-		return policysetter.Context{}, fmt.Errorf("parse sandbox id: %w", err)
-	}
-	thread, err := sessions.FindThreadByID(ctx, sandboxID)
-	if err != nil {
-		return policysetter.Context{}, fmt.Errorf("find thread: %w", err)
-	}
-	if thread == nil {
-		return policysetter.Context{}, fmt.Errorf("thread not found: %s", sandboxID)
-	}
-	return configcommands.ContextForChat(cfg, thread.ChatID, 0, false), nil
-}
-
-func formatPolicySetterList(setters []policysetter.Setter, ctx policysetter.Context) (string, error) {
-	if len(setters) == 0 {
-		return "no settings available", nil
-	}
-	sort.Slice(setters, func(i, j int) bool { return setters[i].Name < setters[j].Name })
-	lines := make([]string, 0, len(setters))
-	for _, setter := range setters {
-		value, err := setter.Get(ctx)
-		if err != nil {
-			return "", err
-		}
-		line := fmt.Sprintf("%s = %s", setter.Name, value)
-		if setter.RequiredElevation != "" {
-			line += fmt.Sprintf(" (%s)", setter.RequiredElevation)
-		}
-		lines = append(lines, line)
-	}
-	return strings.Join(lines, "\n"), nil
 }

@@ -17,12 +17,17 @@ type AllowedCommandResolver = legacyserver.AllowedCommandResolver
 
 type RunCommandRunner struct {
 	ResolveAllowed    AllowedCommandResolver
+	ClientIdentity    string
 	DefaultTimeoutSec int
 }
 
 func NewRunner(resolve AllowedCommandResolver, defaultTimeoutSec int, provider chatcommands.Provider) chatcommands.Runner {
+	return NewRunnerForClient(resolve, "", defaultTimeoutSec, provider)
+}
+
+func NewRunnerForClient(resolve AllowedCommandResolver, clientIdentity string, defaultTimeoutSec int, provider chatcommands.Provider) chatcommands.Runner {
 	return chatcommands.NewDispatchRunner(
-		&RunCommandRunner{ResolveAllowed: resolve, DefaultTimeoutSec: defaultTimeoutSec},
+		&RunCommandRunner{ResolveAllowed: resolve, ClientIdentity: clientIdentity, DefaultTimeoutSec: defaultTimeoutSec},
 		chatcommands.NewProviderRunner(provider),
 	)
 }
@@ -30,7 +35,7 @@ func NewRunner(resolve AllowedCommandResolver, defaultTimeoutSec int, provider c
 func (r *RunCommandRunner) ExecuteRunCommand(ctx context.Context, req chatcommands.Request, cmd chatcommands.RunCommand) (chatcommands.Result, error) {
 	allowed := legacyserver.StaticAllowedCommandResolver(nil)("")
 	if r != nil && r.ResolveAllowed != nil {
-		allowed = r.ResolveAllowed("")
+		allowed = r.ResolveAllowed(r.ClientIdentity)
 	}
 	if allowed == nil {
 		allowed = legacyserver.DefaultAllowedCommands()
