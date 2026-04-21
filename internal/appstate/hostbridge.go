@@ -4,18 +4,18 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
 )
 
-func (c *Config) ResolveHostbridgeAllowedCommands(clientIdentity string) map[string]hostbridge.AllowedCommand {
+func (c *Config) ResolveHostbridgeAllowedCommands(clientIdentity string) map[string]hostbridgev2server.AllowedCommand {
 	if c == nil {
-		return hostbridge.DefaultAllowedCommands()
+		return hostbridgev2server.DefaultAllowedCommands()
 	}
 	chatID, ok := c.ParseChatClientIdentity(clientIdentity)
 	if !ok {
-		return hostbridge.DefaultAllowedCommands()
+		return hostbridgev2server.DefaultAllowedCommands()
 	}
-	return hostbridge.MergeNamedAllowedCommands(c.ChatHostbridgeAllowedCommandsByID(chatID))
+	return hostbridgev2server.MergeNamedAllowedCommands(c.ChatHostbridgeAllowedCommandsByID(chatID))
 }
 
 func (c *Config) HostbridgeTLSRoot() string {

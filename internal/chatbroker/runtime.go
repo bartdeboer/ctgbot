@@ -9,7 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
-	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
@@ -73,8 +73,8 @@ func (b *Broker) ensureSandboxRuntime(ctx context.Context, conv *Thread) error {
 }
 
 func (b *Broker) developerInstructions(chatID modeluuid.UUID, conv *Thread) string {
-	allowedCommands := append([]string{}, hostbridge.AllowedCommandNames(
-		hostbridge.MergeNamedAllowedCommands(b.Config.ChatHostbridgeAllowedCommandsByID(chatID)),
+	allowedCommands := append([]string{}, hostbridgev2server.AllowedCommandNames(
+		hostbridgev2server.MergeNamedAllowedCommands(b.Config.ChatHostbridgeAllowedCommandsByID(chatID)),
 	)...)
 	sort.Strings(allowedCommands)
 
