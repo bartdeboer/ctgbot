@@ -5,6 +5,7 @@ ARG TARGETARCH
 COPY go.mod go.sum ./
 COPY cmd/hostbridge ./cmd/hostbridge
 COPY internal/chatcommands ./internal/chatcommands
+COPY internal/durationparse ./internal/durationparse
 COPY internal/hostbridge ./internal/hostbridge
 COPY internal/hostbridgetls ./internal/hostbridgetls
 COPY internal/modeluuid ./internal/modeluuid

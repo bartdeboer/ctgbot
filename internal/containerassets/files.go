@@ -17,6 +17,7 @@ func SelectedFiles() []FileSpec {
 		{Source: "internal/chatcommands/chatcommands.go", Target: "internal/chatcommands/chatcommands.go"},
 		{Source: "internal/chatcommands/execute.go", Target: "internal/chatcommands/execute.go"},
 		{Source: "internal/chatcommands/types.go", Target: "internal/chatcommands/types.go"},
+		{Source: "internal/durationparse/duration.go", Target: "internal/durationparse/duration.go"},
 		{Source: "internal/hostbridge/types.go", Target: "internal/hostbridge/types.go"},
 		{Source: "internal/hostbridge/client/client.go", Target: "internal/hostbridge/client/client.go"},
 		{Source: "internal/hostbridge/server/allowed.go", Target: "internal/hostbridge/server/allowed.go"},
