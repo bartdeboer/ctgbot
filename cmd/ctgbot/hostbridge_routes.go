@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -11,7 +10,7 @@ import (
 	"syscall"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
@@ -33,7 +32,6 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			logger := log.New(os.Stdout, "", log.LstdFlags)
 			ctx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
@@ -49,8 +47,15 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 				resolvedTLSDir = cfg.HostbridgeTLSRoot()
 			}
 
+			runner := hostbridgev2server.NewRunner(hostbridgev2server.StaticAllowedCommandResolver(allow.Commands()), *timeoutSec, nil)
+			srv := hostbridgev2server.New(runner)
+
 			if strings.TrimSpace(resolvedTLSDir) == "" {
-				return hostbridge.Serve(ctx, *addr, *timeoutSec, allow.Commands(), nil, nil, nil, nil, logger)
+				ln, err := hostbridgev2server.Listen(*addr)
+				if err != nil {
+					return err
+				}
+				return hostbridgev2server.ServeListener(ctx, ln, srv)
 			}
 
 			if err := hostbridgetls.EnsureServerMaterials(resolvedTLSDir); err != nil {
@@ -60,11 +65,11 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			ln, err := hostbridge.ListenTLS(*addr, tlsConfig)
+			ln, err := hostbridgev2server.ListenTLS(*addr, tlsConfig)
 			if err != nil {
 				return err
 			}
-			return hostbridge.ServeListener(ctx, ln, *timeoutSec, hostbridge.StaticAllowedCommandResolver(allow.Commands()), nil, nil, nil, nil, logger)
+			return hostbridgev2server.ServeListener(ctx, ln, srv)
 		})
 	})
 }
@@ -104,8 +109,8 @@ func (f *allowHostbridgeServeFlag) Set(v string) error {
 	return nil
 }
 
-func (f *allowHostbridgeServeFlag) Commands() map[string]hostbridge.AllowedCommand {
-	return hostbridge.MergeAllowedCommands(f.values)
+func (f *allowHostbridgeServeFlag) Commands() map[string]hostbridgev2server.AllowedCommand {
+	return hostbridgev2server.MergeAllowedCommands(f.values)
 }
 
 func getenv(key, fallback string) string {
