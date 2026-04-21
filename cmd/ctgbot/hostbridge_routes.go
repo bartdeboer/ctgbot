@@ -10,7 +10,7 @@ import (
 	"syscall"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
@@ -47,15 +47,15 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 				resolvedTLSDir = cfg.HostbridgeTLSRoot()
 			}
 
-			runner := hostbridgev2server.NewRunner(hostbridgev2server.StaticAllowedCommandResolver(allow.Commands()), *timeoutSec, nil)
-			srv := hostbridgev2server.New(runner)
+			runner := hostbridgeserver.NewRunner(hostbridgeserver.StaticAllowedCommandResolver(allow.Commands()), *timeoutSec, nil)
+			srv := hostbridgeserver.New(runner)
 
 			if strings.TrimSpace(resolvedTLSDir) == "" {
-				ln, err := hostbridgev2server.Listen(*addr)
+				ln, err := hostbridgeserver.Listen(*addr)
 				if err != nil {
 					return err
 				}
-				return hostbridgev2server.ServeListener(ctx, ln, srv)
+				return hostbridgeserver.ServeListener(ctx, ln, srv)
 			}
 
 			if err := hostbridgetls.EnsureServerMaterials(resolvedTLSDir); err != nil {
@@ -65,11 +65,11 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			ln, err := hostbridgev2server.ListenTLS(*addr, tlsConfig)
+			ln, err := hostbridgeserver.ListenTLS(*addr, tlsConfig)
 			if err != nil {
 				return err
 			}
-			return hostbridgev2server.ServeListener(ctx, ln, srv)
+			return hostbridgeserver.ServeListener(ctx, ln, srv)
 		})
 	})
 }
@@ -109,8 +109,8 @@ func (f *allowHostbridgeServeFlag) Set(v string) error {
 	return nil
 }
 
-func (f *allowHostbridgeServeFlag) Commands() map[string]hostbridgev2server.AllowedCommand {
-	return hostbridgev2server.MergeAllowedCommands(f.values)
+func (f *allowHostbridgeServeFlag) Commands() map[string]hostbridgeserver.AllowedCommand {
+	return hostbridgeserver.MergeAllowedCommands(f.values)
 }
 
 func getenv(key, fallback string) string {

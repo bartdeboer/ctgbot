@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
@@ -136,11 +136,11 @@ func (c *Config) ChatSkillsByID(chatID modeluuid.UUID) []string {
 	return normalizeSkillPaths(out)
 }
 
-func (c *Config) ChatHostbridgeAllowedCommandsByID(chatID modeluuid.UUID) map[string]hostbridgev2server.AllowedCommand {
+func (c *Config) ChatHostbridgeAllowedCommandsByID(chatID modeluuid.UUID) map[string]hostbridgeserver.AllowedCommand {
 	if c == nil || c.Store == nil || chatID.IsNull() {
 		return nil
 	}
-	var out map[string]hostbridgev2server.AllowedCommand
+	var out map[string]hostbridgeserver.AllowedCommand
 	if c.Store.GetStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), &out) {
 		return normalizeAllowedCommands(out)
 	}
@@ -149,7 +149,7 @@ func (c *Config) ChatHostbridgeAllowedCommandsByID(chatID modeluuid.UUID) map[st
 	if !c.Store.GetStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), &legacy) {
 		return nil
 	}
-	return hostbridgev2server.AllowedCommandsFromSpecs(legacy)
+	return hostbridgeserver.AllowedCommandsFromSpecs(legacy)
 }
 
 func (c *Config) ResolveChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string) (string, error) {
@@ -287,7 +287,7 @@ func (c *Config) SetChatWorkspaceHostPathByID(chatID modeluuid.UUID, raw string)
 	return c.Store.PersistString(c.ChatKey(chatID, "workspace_host_path"), resolved)
 }
 
-func (c *Config) SetChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, name string, command hostbridgev2server.AllowedCommand) error {
+func (c *Config) SetChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, name string, command hostbridgeserver.AllowedCommand) error {
 	if c == nil || c.Store == nil {
 		return fmt.Errorf("config store not available")
 	}
@@ -305,7 +305,7 @@ func (c *Config) SetChatHostbridgeAllowedCommandByID(chatID modeluuid.UUID, name
 
 	commands := c.ChatHostbridgeAllowedCommandsByID(chatID)
 	if commands == nil {
-		commands = map[string]hostbridgev2server.AllowedCommand{}
+		commands = map[string]hostbridgeserver.AllowedCommand{}
 	}
 	commands[name] = normalized
 	return c.Store.PersistStruct(c.ChatKey(chatID, "hostbridge.allowed_commands"), commands)
@@ -454,11 +454,11 @@ func (c *Config) knownChatsNoMigrate() []ChatConfigEntry {
 	return out
 }
 
-func normalizeAllowedCommands(raw map[string]hostbridgev2server.AllowedCommand) map[string]hostbridgev2server.AllowedCommand {
+func normalizeAllowedCommands(raw map[string]hostbridgeserver.AllowedCommand) map[string]hostbridgeserver.AllowedCommand {
 	if len(raw) == 0 {
 		return nil
 	}
-	out := make(map[string]hostbridgev2server.AllowedCommand, len(raw))
+	out := make(map[string]hostbridgeserver.AllowedCommand, len(raw))
 	for name, spec := range raw {
 		name = strings.TrimSpace(name)
 		if name == "" {
@@ -474,12 +474,12 @@ func normalizeAllowedCommands(raw map[string]hostbridgev2server.AllowedCommand) 
 	return out
 }
 
-func hostbridgeNormalizeAllowedCommand(spec hostbridgev2server.AllowedCommand) (hostbridgev2server.AllowedCommand, bool) {
+func hostbridgeNormalizeAllowedCommand(spec hostbridgeserver.AllowedCommand) (hostbridgeserver.AllowedCommand, bool) {
 	spec.Name = strings.TrimSpace(spec.Name)
 	spec.Dir = strings.TrimSpace(spec.Dir)
 	spec.Delay = strings.TrimSpace(spec.Delay)
 	if spec.Name == "" {
-		return hostbridgev2server.AllowedCommand{}, false
+		return hostbridgeserver.AllowedCommand{}, false
 	}
 	if len(spec.Args) == 0 {
 		spec.Args = nil

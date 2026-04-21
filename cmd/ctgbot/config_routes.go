@@ -6,7 +6,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/clisetter"
 	"github.com/bartdeboer/ctgbot/internal/configsetters"
-	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -95,7 +95,7 @@ func registerConfigRoutes(r *clir.Router, store *clistate.Store, globalStore *cl
 						fmt.Println("      hostbridge.allowed_commands: <defaults only>")
 						continue
 					}
-					names := hostbridgev2server.AllowedCommandNames(commands)
+					names := hostbridgeserver.AllowedCommandNames(commands)
 					fmt.Printf("      hostbridge.allowed_commands: names=%v\n", names)
 					for _, name := range names {
 						spec := commands[name]

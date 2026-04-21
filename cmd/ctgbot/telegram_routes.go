@@ -17,7 +17,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/chatcommands"
 	"github.com/bartdeboer/ctgbot/internal/configcommands"
 	"github.com/bartdeboer/ctgbot/internal/configsetters"
-	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
 	"github.com/bartdeboer/ctgbot/internal/messenger/telegramengine"
 	"github.com/bartdeboer/ctgbot/internal/policysetter"
@@ -121,15 +121,15 @@ func runHostbridgeV2(ctx context.Context, cfg *appstate.Config, broker *chatbrok
 	if err != nil {
 		return err
 	}
-	ln, err := hostbridgev2server.ListenTLS(cfg.HostbridgeTCPListenAddr(), tlsConfig)
+	ln, err := hostbridgeserver.ListenTLS(cfg.HostbridgeTCPListenAddr(), tlsConfig)
 	if err != nil {
 		return err
 	}
 	provider := chatbroker.NewChatCommandsProvider(broker)
-	srv := hostbridgev2server.NewWithRunnerFactory(func(clientIdentity string) chatcommands.Runner {
-		return hostbridgev2server.NewRunnerForClient(cfg.ResolveHostbridgeAllowedCommands, clientIdentity, 30, provider)
+	srv := hostbridgeserver.NewWithRunnerFactory(func(clientIdentity string) chatcommands.Runner {
+		return hostbridgeserver.NewRunnerForClient(cfg.ResolveHostbridgeAllowedCommands, clientIdentity, 30, provider)
 	})
-	return hostbridgev2server.ServeListener(ctx, ln, srv)
+	return hostbridgeserver.ServeListener(ctx, ln, srv)
 }
 
 func parseTelegramMonitorOptions(args []string, store *clistate.Store) (token string, stateRoot string, dbPath string, err error) {

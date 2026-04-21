@@ -38,7 +38,7 @@ func registerMaintenanceRoutes(r *clir.Router, globalStore *clistate.Store) {
 			if err := runProjectCommand(req.Context(), projectDir, env, "go", "generate", "./internal/containerassets"); err != nil {
 				return err
 			}
-			return runProjectCommand(req.Context(), projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridgev2")
+			return runProjectCommand(req.Context(), projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge")
 		})
 
 		b.Handle("upgrade", "Update ctgbot from project_dir and rebuild the Docker image", func(req *clir.Request) error {
@@ -59,7 +59,7 @@ func registerMaintenanceRoutes(r *clir.Router, globalStore *clistate.Store) {
 				return err
 			}
 			if err := runUpgradeStep(req.Context(), "go install", func(ctx context.Context) error {
-				return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridgev2")
+				return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge")
 			}); err != nil {
 				return err
 			}
