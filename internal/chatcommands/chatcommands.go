@@ -16,6 +16,12 @@ type ChatCommands struct {
 	runner Runner
 }
 
+type parseState struct {
+	Request Request
+}
+
+type parseStateKey struct{}
+
 func New(runner Runner) *ChatCommands {
 	c := &ChatCommands{runner: runner}
 	c.router = c.newRouter()
@@ -29,11 +35,41 @@ func (c *ChatCommands) Router() *clir.Router {
 	return c.router
 }
 
-func (c *ChatCommands) Run(ctx context.Context, argv []string) error {
+func (c *ChatCommands) Parse(ctx context.Context, base Request, argv []string) (Request, error) {
 	if c == nil || c.router == nil {
-		return fmt.Errorf("chat commands are unavailable")
+		return Request{}, fmt.Errorf("chat commands are unavailable")
 	}
-	return c.router.Run(ctx, argv)
+	state := &parseState{Request: base}
+	runCtx := context.WithValue(ctx, parseStateKey{}, state)
+	if err := c.router.Run(runCtx, argv); err != nil {
+		return Request{}, err
+	}
+	if state.Request.Command == nil {
+		return Request{}, fmt.Errorf("missing command")
+	}
+	return state.Request, nil
+}
+
+func (c *ChatCommands) Execute(ctx context.Context, req Request) (Result, error) {
+	if c == nil || c.runner == nil {
+		return Result{}, fmt.Errorf("chat command runner is unavailable")
+	}
+	if req.Command == nil {
+		return Result{}, fmt.Errorf("missing command")
+	}
+	return c.runner.Execute(ctx, req)
+}
+
+func (c *ChatCommands) Run(ctx context.Context, argv []string) (Result, error) {
+	return c.RunRequest(ctx, Request{}, argv)
+}
+
+func (c *ChatCommands) RunRequest(ctx context.Context, base Request, argv []string) (Result, error) {
+	req, err := c.Parse(ctx, base, argv)
+	if err != nil {
+		return Result{}, err
+	}
+	return c.Execute(ctx, req)
 }
 
 func (c *ChatCommands) newRouter() *clir.Router {
@@ -44,7 +80,7 @@ func (c *ChatCommands) newRouter() *clir.Router {
 			if err != nil {
 				return fmt.Errorf("read stdin: %w", err)
 			}
-			return c.execute(buildRunCommand(req.Params["command"], req.Extra, stdinData))
+			return setParsedCommand(req, buildRunCommand(req.Params["command"], req.Extra, stdinData))
 		})
 
 		b.Handle("sendfile <path>", "Upload a file", func(req *clir.Request) error {
@@ -59,11 +95,11 @@ func (c *ChatCommands) newRouter() *clir.Router {
 			if err != nil {
 				return err
 			}
-			return c.execute(command)
+			return setParsedCommand(req, command)
 		})
 
 		b.Handle("config list", "List config", func(req *clir.Request) error {
-			return c.execute(buildConfigList())
+			return setParsedCommand(req, buildConfigList())
 		})
 
 		b.Handle("config set <name> <value>", "Set config", func(req *clir.Request) error {
@@ -71,7 +107,7 @@ func (c *ChatCommands) newRouter() *clir.Router {
 			if err != nil {
 				return err
 			}
-			return c.execute(command)
+			return setParsedCommand(req, command)
 		})
 
 		b.Handle("sendstdin", "Send stdin as text", func(req *clir.Request) error {
@@ -88,15 +124,21 @@ func (c *ChatCommands) newRouter() *clir.Router {
 			if err != nil {
 				return fmt.Errorf("read stdin: %w", err)
 			}
-			return c.execute(buildSendText(string(stdinData), strings.TrimSpace(*contentType), *fenced, *language, *syntax))
+			command := buildSendText(string(stdinData), strings.TrimSpace(*contentType), *fenced, *language, *syntax)
+			return setParsedCommand(req, command)
 		})
 	})
 	return r
 }
 
-func (c *ChatCommands) execute(command Command) error {
-	if c == nil || c.runner == nil {
-		return fmt.Errorf("chat command runner is unavailable")
+func setParsedCommand(req *clir.Request, command Command) error {
+	if req == nil {
+		return fmt.Errorf("missing request")
 	}
-	return c.runner.Execute(command)
+	state, ok := req.Context().Value(parseStateKey{}).(*parseState)
+	if !ok || state == nil {
+		return fmt.Errorf("missing parse state")
+	}
+	state.Request.Command = command
+	return nil
 }
