@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/messenger"
@@ -33,25 +34,25 @@ func (f *fakeHostCommandRunner) ExecuteRunCommand(_ context.Context, req Request
 }
 
 type fakeProvider struct {
-	sentText             []messenger.OutgoingMessage
-	sentFiles            []messenger.OutgoingFile
-	startedChatID        modeluuid.UUID
-	startedWorkspace     string
-	startedReplace       bool
-	startedSession       SessionInfo
-	stoppedThreadID      modeluuid.UUID
-	refreshedThreadID    modeluuid.UUID
-	purgedThreadID       modeluuid.UUID
-	listedThreadID       modeluuid.UUID
-	listedContext        CommandContext
-	setThreadID          modeluuid.UUID
-	setContext           CommandContext
-	setKey               string
-	setValue             string
-	resolvedFromSandbox  modeluuid.UUID
-	resolvedThreadID     *modeluuid.UUID
-	listResult           string
-	setResult            string
+	sentText            []messenger.OutgoingMessage
+	sentFiles           []messenger.OutgoingFile
+	startedChatID       modeluuid.UUID
+	startedWorkspace    string
+	startedReplace      bool
+	startedSession      SessionInfo
+	stoppedThreadID     modeluuid.UUID
+	refreshedThreadID   modeluuid.UUID
+	purgedThreadID      modeluuid.UUID
+	listedThreadID      modeluuid.UUID
+	listedContext       CommandContext
+	setThreadID         modeluuid.UUID
+	setContext          CommandContext
+	setKey              string
+	setValue            string
+	resolvedFromSandbox modeluuid.UUID
+	resolvedThreadID    *modeluuid.UUID
+	listResult          string
+	setResult           string
 }
 
 func (f *fakeProvider) SendText(_ context.Context, msg messenger.OutgoingMessage) error {
@@ -358,3 +359,47 @@ func TestRunRequestRequiresRunner(t *testing.T) {
 	}
 }
 
+func (f *fakeProvider) RefreshContainer(_ context.Context, _ modeluuid.UUID) (string, error) {
+	return "conversation runtime refreshed", nil
+}
+
+func (f *fakeProvider) PurgeChat(_ context.Context, _ modeluuid.UUID) (string, error) {
+	return "conversation purged", nil
+}
+
+func (f *fakeProvider) InterruptTurn(_ context.Context, _ modeluuid.UUID) (string, error) {
+	return "interrupt requested", nil
+}
+
+func (f *fakeProvider) Upgrade(_ context.Context, _ modeluuid.UUID) (string, error) {
+	return "upgrade completed\ntype /quit to restart", nil
+}
+
+func (f *fakeProvider) Quit(_ context.Context, _ modeluuid.UUID) (string, error) {
+	return "shutting down ctgbot", nil
+}
+
+func TestParseBuildsGroupedChatCommands(t *testing.T) {
+	cmds := New(nil)
+
+	tests := []struct {
+		argv []string
+		want any
+	}{
+		{argv: []string{"container", "refresh"}, want: RefreshContainer{}},
+		{argv: []string{"chat", "purge"}, want: PurgeChat{}},
+		{argv: []string{"interrupt"}, want: InterruptTurn{}},
+		{argv: []string{"upgrade"}, want: Upgrade{}},
+		{argv: []string{"quit"}, want: Quit{}},
+	}
+
+	for _, tc := range tests {
+		req, err := cmds.Parse(context.Background(), Request{}, tc.argv)
+		if err != nil {
+			t.Fatalf("Parse(%v) error = %v", tc.argv, err)
+		}
+		if got, want := req.Command, tc.want; reflect.TypeOf(got) != reflect.TypeOf(want) {
+			t.Fatalf("Parse(%v) command = %T, want %T", tc.argv, got, want)
+		}
+	}
+}

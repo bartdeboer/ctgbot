@@ -60,3 +60,13 @@ func buildConfigSet(setting string, value string) (ConfigSet, error) {
 	}
 	return ConfigSet{Setting: setting, Value: value}, nil
 }
+
+func buildRefreshContainer() RefreshContainer { return RefreshContainer{} }
+
+func buildPurgeChat() PurgeChat { return PurgeChat{} }
+
+func buildInterruptTurn() InterruptTurn { return InterruptTurn{} }
+
+func buildUpgrade() Upgrade { return Upgrade{} }
+
+func buildQuit() Quit { return Quit{} }

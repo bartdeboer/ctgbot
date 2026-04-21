@@ -127,6 +127,30 @@ func (c *ChatCommands) newRouter() *clir.Router {
 			command := buildSendText(string(stdinData), strings.TrimSpace(*contentType), *fenced, *language, *syntax)
 			return setParsedCommand(req, command)
 		})
+
+		b.Handle("refresh", "Refresh the active conversation container", func(req *clir.Request) error {
+			return setParsedCommand(req, buildRefreshContainer())
+		})
+		b.Handle("container refresh", "Refresh the active conversation container", func(req *clir.Request) error {
+			return setParsedCommand(req, buildRefreshContainer())
+		})
+
+		b.Handle("purge", "Purge the active conversation chat state", func(req *clir.Request) error {
+			return setParsedCommand(req, buildPurgeChat())
+		})
+		b.Handle("chat purge", "Purge the active conversation chat state", func(req *clir.Request) error {
+			return setParsedCommand(req, buildPurgeChat())
+		})
+
+		b.Handle("interrupt", "Interrupt the active turn", func(req *clir.Request) error {
+			return setParsedCommand(req, buildInterruptTurn())
+		})
+		b.Handle("upgrade", "Upgrade ctgbot in-place", func(req *clir.Request) error {
+			return setParsedCommand(req, buildUpgrade())
+		})
+		b.Handle("quit", "Quit ctgbot", func(req *clir.Request) error {
+			return setParsedCommand(req, buildQuit())
+		})
 	})
 	return r
 }

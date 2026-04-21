@@ -43,6 +43,11 @@ type Provider interface {
 	ResolveThreadIDBySandboxID(ctx context.Context, sandboxID modeluuid.UUID) (*modeluuid.UUID, error)
 	List(ctx context.Context, threadID modeluuid.UUID, cmdctx CommandContext) (string, error)
 	Set(ctx context.Context, threadID modeluuid.UUID, cmdctx CommandContext, key, value string) (string, error)
+	RefreshContainer(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	PurgeChat(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	InterruptTurn(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	Upgrade(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	Quit(ctx context.Context, threadID modeluuid.UUID) (string, error)
 }
 
 type Runner interface {
@@ -112,3 +117,23 @@ func (RefreshActiveSession) isCommand() {}
 type PurgeActiveSession struct{}
 
 func (PurgeActiveSession) isCommand() {}
+
+type RefreshContainer struct{}
+
+func (RefreshContainer) isCommand() {}
+
+type PurgeChat struct{}
+
+func (PurgeChat) isCommand() {}
+
+type InterruptTurn struct{}
+
+func (InterruptTurn) isCommand() {}
+
+type Upgrade struct{}
+
+func (Upgrade) isCommand() {}
+
+type Quit struct{}
+
+func (Quit) isCommand() {}

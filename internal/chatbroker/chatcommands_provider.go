@@ -105,6 +105,97 @@ func (p *ChatCommandsProvider) Set(ctx context.Context, threadID modeluuid.UUID,
 	return p.Broker.ConfigCommands.Set(policyCtx, key, value)
 }
 
+func (p *ChatCommandsProvider) RefreshContainer(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	thread, active, err := p.activeThreadByID(ctx, threadID)
+	if err != nil {
+		return "", err
+	}
+	if active == nil {
+		return "no active conversation", nil
+	}
+	if err := p.Broker.RefreshSession(ctx, thread); err != nil {
+		return "", err
+	}
+	return "conversation runtime refreshed", nil
+}
+
+func (p *ChatCommandsProvider) PurgeChat(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	thread, active, err := p.activeThreadByID(ctx, threadID)
+	if err != nil {
+		return "", err
+	}
+	if active == nil {
+		return "no active conversation", nil
+	}
+	if err := p.Broker.PurgeSession(ctx, thread); err != nil {
+		return "", err
+	}
+	return "conversation purged", nil
+}
+
+func (p *ChatCommandsProvider) InterruptTurn(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	thread, active, err := p.activeThreadByID(ctx, threadID)
+	if err != nil {
+		return "", err
+	}
+	if active == nil {
+		return "no active conversation", nil
+	}
+	if p.Broker.Config == nil || !p.Broker.Config.ChatInteractiveInterruptEnabledByID(thread.ChatID) {
+		return "interrupt is disabled for this chat", nil
+	}
+	if !p.Broker.interruptThread(thread.ID, p.Broker.sandboxForThread(thread)) {
+		return "no active run to interrupt", nil
+	}
+	return "interrupt requested", nil
+}
+
+func (p *ChatCommandsProvider) Upgrade(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	thread, err := p.threadByID(ctx, threadID)
+	if err != nil {
+		return "", err
+	}
+	if p.Broker.Config == nil || !p.Broker.Config.ChatProcessToolsEnabledByID(thread.ChatID) {
+		return "upgrade is not enabled for this chat", nil
+	}
+	if p.Broker.ProcessActions == nil {
+		return "upgrade is not available in this runtime", nil
+	}
+	if err := p.Broker.ProcessActions.Upgrade(ctx); err != nil {
+		return "", err
+	}
+	return "upgrade completed\ntype /quit to restart", nil
+}
+
+func (p *ChatCommandsProvider) Quit(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	thread, err := p.threadByID(ctx, threadID)
+	if err != nil {
+		return "", err
+	}
+	if p.Broker.Config == nil || !p.Broker.Config.ChatProcessToolsEnabledByID(thread.ChatID) {
+		return "quit is not enabled for this chat", nil
+	}
+	if p.Broker.ProcessActions == nil {
+		return "quit is not available in this runtime", nil
+	}
+	if err := p.Broker.ProcessActions.Quit(ctx); err != nil {
+		return "", err
+	}
+	return "shutting down ctgbot", nil
+}
+
+func (p *ChatCommandsProvider) activeThreadByID(ctx context.Context, threadID modeluuid.UUID) (*Thread, *Thread, error) {
+	thread, err := p.threadByID(ctx, threadID)
+	if err != nil {
+		return nil, nil, err
+	}
+	active, err := p.Broker.GetActiveSession(ctx, thread)
+	if err != nil {
+		return nil, nil, err
+	}
+	return thread, active, nil
+}
+
 func (p *ChatCommandsProvider) threadByID(ctx context.Context, threadID modeluuid.UUID) (*Thread, error) {
 	if p == nil || p.Broker == nil {
 		return nil, fmt.Errorf("missing broker")

@@ -982,3 +982,86 @@ func TestHandleIncomingMessageInterruptDisabledForChat(t *testing.T) {
 		t.Fatalf("interrupt messages = %#v", result.Messages)
 	}
 }
+
+func TestHandleIncomingMessageRoutesGroupedContainerRefreshCommand(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+
+	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Message:          "/container refresh",
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if len(result.Messages) != 1 || result.Messages[0].Text != "no active conversation" {
+		t.Fatalf("messages = %#v", result.Messages)
+	}
+}
+
+func TestHandleIncomingMessageDeprecatesNewCommand(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+
+	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
+	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Message:          "/new",
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	want := "use /container refresh to rebuild the backing container, or /chat purge to drop the active chat state"
+	if len(result.Messages) != 1 || result.Messages[0].Text != want {
+		t.Fatalf("messages = %#v", result.Messages)
+	}
+}

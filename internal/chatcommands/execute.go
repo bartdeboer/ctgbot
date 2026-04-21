@@ -116,6 +116,56 @@ func (r *ProviderRunner) Execute(ctx context.Context, req Request) (Result, erro
 			return Result{}, err
 		}
 		return Result{}, r.Provider.PurgeActiveSession(ctx, threadID)
+	case RefreshContainer:
+		threadID, err := r.resolveThreadID(ctx, req)
+		if err != nil {
+			return Result{}, err
+		}
+		text, err := r.Provider.RefreshContainer(ctx, threadID)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Text: text}, nil
+	case PurgeChat:
+		threadID, err := r.resolveThreadID(ctx, req)
+		if err != nil {
+			return Result{}, err
+		}
+		text, err := r.Provider.PurgeChat(ctx, threadID)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Text: text}, nil
+	case InterruptTurn:
+		threadID, err := r.resolveThreadID(ctx, req)
+		if err != nil {
+			return Result{}, err
+		}
+		text, err := r.Provider.InterruptTurn(ctx, threadID)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Text: text}, nil
+	case Upgrade:
+		threadID, err := r.resolveThreadID(ctx, req)
+		if err != nil {
+			return Result{}, err
+		}
+		text, err := r.Provider.Upgrade(ctx, threadID)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Text: text}, nil
+	case Quit:
+		threadID, err := r.resolveThreadID(ctx, req)
+		if err != nil {
+			return Result{}, err
+		}
+		text, err := r.Provider.Quit(ctx, threadID)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Text: text}, nil
 	case RunCommand:
 		return Result{}, fmt.Errorf("run command is not supported by the provider runner")
 	default:

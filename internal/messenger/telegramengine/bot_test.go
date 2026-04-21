@@ -678,7 +678,7 @@ func TestHandleUpdateCommandFlushesPendingDebounce(t *testing.T) {
 	if len(prompts) != 1 || prompts[0] != "please review" {
 		t.Fatalf("prompts = %#v, want flushed prompt before command", prompts)
 	}
-	if len(api.messages) == 0 || !strings.HasPrefix(api.messages[len(api.messages)-1].text, "Commands:\n/new") {
+	if len(api.messages) == 0 || !strings.HasPrefix(api.messages[len(api.messages)-1].text, "Commands:\n/container refresh") {
 		t.Fatalf("last message = %#v, want help text", api.messages)
 	}
 }
