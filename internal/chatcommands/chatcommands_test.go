@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/messenger"
@@ -401,5 +402,24 @@ func TestParseBuildsGroupedChatCommands(t *testing.T) {
 		if got, want := req.Command, tc.want; reflect.TypeOf(got) != reflect.TypeOf(want) {
 			t.Fatalf("Parse(%v) command = %T, want %T", tc.argv, got, want)
 		}
+	}
+}
+
+func TestUserHelpTextPrefixesSlashAndHidesBridgeOnlyCommands(t *testing.T) {
+	cmds := New(nil)
+	help := cmds.UserHelpText()
+	if !strings.Contains(help, "/container refresh") {
+		t.Fatalf("user help missing /container refresh: %q", help)
+	}
+	if strings.Contains(help, "sendstdin") || strings.Contains(help, "run <command>") {
+		t.Fatalf("user help leaked bridge-only commands: %q", help)
+	}
+}
+
+func TestParseUserRejectsBridgeOnlyCommand(t *testing.T) {
+	cmds := New(nil)
+	_, err := cmds.ParseUser(context.Background(), Request{}, []string{"sendstdin"})
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }

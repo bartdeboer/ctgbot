@@ -21,20 +21,6 @@ type PromptOutcome struct {
 	Reply   string
 }
 
-const helpText = `Commands:
-/container refresh
-/chat purge
-/refresh (alias)
-/purge (alias)
-/status
-/stop
-/interrupt
-/upgrade
-/quit
-/help
-
-Use /container refresh to rebuild the backing container, or /chat purge to drop the active chat state.`
-
 type Broker struct {
 	Config            *appstate.Config
 	Sessions          SessionStore

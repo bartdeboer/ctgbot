@@ -25,7 +25,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	req, err := cmds.Parse(context.Background(), base, args)
+	req, err := cmds.ParseBridge(context.Background(), base, args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		printHelp()
@@ -54,7 +54,7 @@ func normalizedArgs(args []string) []string {
 
 func isManagementCommand(arg string) bool {
 	switch arg {
-	case "", "run", "sendfile", "sendstdin", "config":
+	case "", "run", "sendfile", "sendstdin", "config", "refresh", "purge", "interrupt", "upgrade", "quit", "container", "chat", "help":
 		return true
 	default:
 		return false
@@ -81,7 +81,10 @@ func getenv(key, fallback string) string {
 }
 
 func printHelp() {
+	cmds := chatcommands.New(nil)
 	fmt.Fprintln(os.Stdout, "usage: hostbridge <command> [args...]")
+	fmt.Fprintln(os.Stdout, "")
+	fmt.Fprintln(os.Stdout, cmds.BridgeHelpText())
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "environment:")
 	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_ADDR     TCP address (default host.docker.internal:4567)")

@@ -48,7 +48,7 @@ func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, threa
 		}
 		return msg, nil
 	case "help":
-		return helpText, nil
+		return chatcommands.New(nil).UserHelpText(), nil
 	default:
 		return "", fmt.Errorf("unknown command %q", name)
 	}
@@ -60,7 +60,7 @@ func (b *Broker) handleSharedChatCommand(ctx context.Context, thread *Thread, is
 	}
 	provider := NewChatCommandsProvider(b)
 	cmds := chatcommands.New(chatcommands.NewProviderRunner(provider))
-	result, err := cmds.RunRequest(ctx, chatcommands.Request{
+	result, err := cmds.RunUserRequest(ctx, chatcommands.Request{
 		ThreadID: threadIDOrNil(thread),
 		Context:  chatcommands.CommandContext{IsRoot: isAdmin},
 	}, argv)

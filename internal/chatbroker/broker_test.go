@@ -10,6 +10,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/chatcommands"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
@@ -144,8 +145,8 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	if len(result.Messages) != 1 {
 		t.Fatalf("messages len = %d, want 1", len(result.Messages))
 	}
-	if result.Messages[0].Text != helpText {
-		t.Fatalf("message text = %q, want %q", result.Messages[0].Text, helpText)
+	if result.Messages[0].Text != chatcommands.New(nil).UserHelpText() {
+		t.Fatalf("message text = %q, want %q", result.Messages[0].Text, chatcommands.New(nil).UserHelpText())
 	}
 }
 
