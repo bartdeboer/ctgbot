@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -438,13 +438,13 @@ func (c *ConfigSetters) SetChatSkillRemoved(in SetChatSkillRemovedInput) error {
 	return c.State.RemoveChatSkillByID(chatID, strings.TrimSpace(in.RemoveSkill))
 }
 
-func (c *ConfigSetters) chatHostbridgeAliasCommand(chatID modeluuid.UUID, alias string) (hostbridgev2server.AllowedCommand, error) {
+func (c *ConfigSetters) chatHostbridgeAliasCommand(chatID modeluuid.UUID, alias string) (hostbridgeserver.AllowedCommand, error) {
 	if c == nil || c.State == nil {
-		return hostbridgev2server.AllowedCommand{}, fmt.Errorf("missing app state")
+		return hostbridgeserver.AllowedCommand{}, fmt.Errorf("missing app state")
 	}
 	alias = strings.TrimSpace(alias)
 	if alias == "" {
-		return hostbridgev2server.AllowedCommand{}, fmt.Errorf("alias is empty")
+		return hostbridgeserver.AllowedCommand{}, fmt.Errorf("alias is empty")
 	}
 	command := c.State.ChatHostbridgeAllowedCommandsByID(chatID)[alias]
 	return command, nil
