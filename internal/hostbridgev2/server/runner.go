@@ -9,11 +9,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/chatcommands"
-	legacyserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
-	hbprotocol "github.com/bartdeboer/ctgbot/internal/hostbridge/protocol"
 )
-
-type AllowedCommandResolver = legacyserver.AllowedCommandResolver
 
 type RunCommandRunner struct {
 	ResolveAllowed    AllowedCommandResolver
@@ -33,23 +29,19 @@ func NewRunnerForClient(resolve AllowedCommandResolver, clientIdentity string, d
 }
 
 func (r *RunCommandRunner) ExecuteRunCommand(ctx context.Context, req chatcommands.Request, cmd chatcommands.RunCommand) (chatcommands.Result, error) {
-	allowed := legacyserver.StaticAllowedCommandResolver(nil)("")
+	allowed := StaticAllowedCommandResolver(nil)("")
 	if r != nil && r.ResolveAllowed != nil {
 		allowed = r.ResolveAllowed(r.ClientIdentity)
 	}
 	if allowed == nil {
-		allowed = legacyserver.DefaultAllowedCommands()
+		allowed = DefaultAllowedCommands()
 	}
 	spec, ok := allowed[cmd.Command]
 	if !ok {
 		return chatcommands.Result{}, fmt.Errorf("command not allowed: %s", cmd.Command)
 	}
 
-	plan, err := legacyserver.BuildExecutionPlan(hbprotocol.Request{
-		Command: cmd.Command,
-		Args:    cmd.Args,
-		Timeout: cmd.Timeout,
-	}, spec)
+	plan, err := BuildExecutionPlan(cmd.Command, cmd.Args, spec)
 	if err != nil {
 		return chatcommands.Result{}, err
 	}

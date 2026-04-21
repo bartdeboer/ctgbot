@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	hostbridgev2server "github.com/bartdeboer/ctgbot/internal/hostbridgev2/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -381,7 +381,7 @@ func TestChatHostbridgeAllowedCommandsRoundTrip(t *testing.T) {
 	}
 	entry := ensureTelegramChat(t, cfg, -123, "Test Chat")
 
-	err = cfg.SetChatHostbridgeAllowedCommandByID(entry.ID, "git-push-ctgbot", hostbridge.AllowedCommand{
+	err = cfg.SetChatHostbridgeAllowedCommandByID(entry.ID, "git-push-ctgbot", hostbridgev2server.AllowedCommand{
 		Name: "git",
 		Args: []string{"push"},
 		Dir:  filepath.Join(root, "ctgbot"),
