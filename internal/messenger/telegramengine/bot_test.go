@@ -683,7 +683,7 @@ func TestHandleUpdateCommandFlushesPendingDebounce(t *testing.T) {
 	}
 }
 
-func TestTelegramBotSendTextUsesConfiguredMarkdownRenderMode(t *testing.T) {
+func TestTelegramBotSendAgentResponseUsesConfiguredMarkdownRenderMode(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -710,12 +710,12 @@ func TestTelegramBotSendTextUsesConfiguredMarkdownRenderMode(t *testing.T) {
 
 	api := &fakeTelegramAPI{}
 	tb := &TelegramBot{API: api, Config: cfg}
-	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+	if err := tb.SendAgentResponse(context.Background(), messenger.ResolvedOutgoingMessage{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Text:             "Use **bold** and `code`.",
 	}); err != nil {
-		t.Fatalf("SendText: %v", err)
+		t.Fatalf("SendAgentResponse: %v", err)
 	}
 	if len(api.messages) != 1 {
 		t.Fatalf("messages len = %d, want 1", len(api.messages))
@@ -728,7 +728,7 @@ func TestTelegramBotSendTextUsesConfiguredMarkdownRenderMode(t *testing.T) {
 	}
 }
 
-func TestTelegramBotSendTextFallsBackFromMarkdownToHTML(t *testing.T) {
+func TestTelegramBotSendAgentResponseFallsBackFromMarkdownToHTML(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -755,12 +755,12 @@ func TestTelegramBotSendTextFallsBackFromMarkdownToHTML(t *testing.T) {
 
 	api := &fakeTelegramAPI{failByParseMode: map[string]error{"MarkdownV2": fmt.Errorf("can't parse entities")}}
 	tb := &TelegramBot{API: api, Config: cfg}
-	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+	if err := tb.SendAgentResponse(context.Background(), messenger.ResolvedOutgoingMessage{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Text:             "Use **bold** and `code`.",
 	}); err != nil {
-		t.Fatalf("SendText: %v", err)
+		t.Fatalf("SendAgentResponse: %v", err)
 	}
 	if len(api.messages) != 1 {
 		t.Fatalf("messages len = %d, want 1 successful send", len(api.messages))
@@ -773,7 +773,7 @@ func TestTelegramBotSendTextFallsBackFromMarkdownToHTML(t *testing.T) {
 	}
 }
 
-func TestTelegramBotSendTextFallsBackFromHTMLToPlain(t *testing.T) {
+func TestTelegramBotSendAgentResponseFallsBackFromHTMLToPlain(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -798,12 +798,12 @@ func TestTelegramBotSendTextFallsBackFromHTMLToPlain(t *testing.T) {
 
 	api := &fakeTelegramAPI{failByParseMode: map[string]error{"HTML": fmt.Errorf("unsupported start tag")}}
 	tb := &TelegramBot{API: api, Config: cfg}
-	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+	if err := tb.SendAgentResponse(context.Background(), messenger.ResolvedOutgoingMessage{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Text:             "Use **bold** and `code`.",
 	}); err != nil {
-		t.Fatalf("SendText: %v", err)
+		t.Fatalf("SendAgentResponse: %v", err)
 	}
 	if len(api.messages) != 1 {
 		t.Fatalf("messages len = %d, want 1 successful send", len(api.messages))
@@ -816,7 +816,7 @@ func TestTelegramBotSendTextFallsBackFromHTMLToPlain(t *testing.T) {
 	}
 }
 
-func TestTelegramBotSendTextFallsBackOnlyFailedChunk(t *testing.T) {
+func TestTelegramBotSendAgentResponseFallsBackOnlyFailedChunk(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -847,12 +847,12 @@ func TestTelegramBotSendTextFallsBackOnlyFailedChunk(t *testing.T) {
 	}}
 	tb := &TelegramBot{API: api, Config: cfg}
 	text := strings.Repeat("first chunk line\n", 120) + "\n" + strings.Repeat("second chunk line\n", 120)
-	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+	if err := tb.SendAgentResponse(context.Background(), messenger.ResolvedOutgoingMessage{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Text:             text,
 	}); err != nil {
-		t.Fatalf("SendText: %v", err)
+		t.Fatalf("SendAgentResponse: %v", err)
 	}
 	seenMarkdown := 0
 	seenHTML := 0
@@ -869,7 +869,7 @@ func TestTelegramBotSendTextFallsBackOnlyFailedChunk(t *testing.T) {
 	}
 }
 
-func TestTelegramBotSendTextDoesNotFallbackOnNonFormattingError(t *testing.T) {
+func TestTelegramBotSendAgentResponseDoesNotFallbackOnNonFormattingError(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -894,7 +894,7 @@ func TestTelegramBotSendTextDoesNotFallbackOnNonFormattingError(t *testing.T) {
 
 	api := &fakeTelegramAPI{failByParseMode: map[string]error{"MarkdownV2": fmt.Errorf("network timeout")}}
 	tb := &TelegramBot{API: api, Config: cfg}
-	err = tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+	err = tb.SendAgentResponse(context.Background(), messenger.ResolvedOutgoingMessage{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Text:             "Use **bold**.",
@@ -907,7 +907,7 @@ func TestTelegramBotSendTextDoesNotFallbackOnNonFormattingError(t *testing.T) {
 	}
 }
 
-func TestTelegramBotSendTextAllowsRenderedTextAboveSemanticChunkLimit(t *testing.T) {
+func TestTelegramBotSendAgentResponseAllowsRenderedTextAboveSemanticChunkLimit(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -935,12 +935,12 @@ func TestTelegramBotSendTextAllowsRenderedTextAboveSemanticChunkLimit(t *testing
 	api := &fakeTelegramAPI{}
 	tb := &TelegramBot{API: api, Config: cfg}
 	text := strings.Repeat("a", 3190) + strings.Repeat(".", 300)
-	if err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+	if err := tb.SendAgentResponse(context.Background(), messenger.ResolvedOutgoingMessage{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Text:             text,
 	}); err != nil {
-		t.Fatalf("SendText: %v", err)
+		t.Fatalf("SendAgentResponse: %v", err)
 	}
 	if len(api.messages) != 1 {
 		t.Fatalf("messages len = %d, want 1", len(api.messages))
@@ -978,10 +978,10 @@ func TestDebouncerDoesNotDuplicateSingleUpdateAttachments(t *testing.T) {
 	}
 }
 
-func TestSendFileMarkdownUsesRenderedText(t *testing.T) {
+func TestSendMediaMarkdownUsesRenderedText(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)
-	err := tb.SendFile(context.Background(), messenger.ResolvedOutgoingFile{
+	err := tb.SendMedia(context.Background(), messenger.ResolvedOutgoingFile{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Filename:         "note.md",
@@ -989,7 +989,7 @@ func TestSendFileMarkdownUsesRenderedText(t *testing.T) {
 		Content:          []byte("# Title\n\n- item"),
 	})
 	if err != nil {
-		t.Fatalf("SendFile: %v", err)
+		t.Fatalf("SendMedia: %v", err)
 	}
 	if len(api.messages) == 0 {
 		t.Fatalf("expected markdown file to send message")
@@ -999,10 +999,10 @@ func TestSendFileMarkdownUsesRenderedText(t *testing.T) {
 	}
 }
 
-func TestSendFileImageUsesPhoto(t *testing.T) {
+func TestSendMediaImageUsesPhoto(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)
-	err := tb.SendFile(context.Background(), messenger.ResolvedOutgoingFile{
+	err := tb.SendMedia(context.Background(), messenger.ResolvedOutgoingFile{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Filename:         "pic.jpg",
@@ -1010,7 +1010,7 @@ func TestSendFileImageUsesPhoto(t *testing.T) {
 		Content:          []byte("img"),
 	})
 	if err != nil {
-		t.Fatalf("SendFile: %v", err)
+		t.Fatalf("SendMedia: %v", err)
 	}
 	if len(api.photos) != 1 {
 		t.Fatalf("photos = %d, want 1", len(api.photos))
@@ -1020,17 +1020,42 @@ func TestSendFileImageUsesPhoto(t *testing.T) {
 	}
 }
 
-func TestSendTextPlainUsesPlainParseMode(t *testing.T) {
+func TestSendMediaTextWithSyntaxUsesRenderedFence(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)
-	err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+	err := tb.SendMedia(context.Background(), messenger.ResolvedOutgoingFile{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Filename:         "reply.diff",
+		ContentType:      "text/plain",
+		Syntax:           "diff",
+		Content:          []byte("+hello\n-world\n"),
+	})
+	if err != nil {
+		t.Fatalf("SendMedia: %v", err)
+	}
+	if len(api.messages) == 0 {
+		t.Fatalf("expected inline rendered text")
+	}
+	if len(api.documents) != 0 {
+		t.Fatalf("did not expect document upload")
+	}
+	if !strings.Contains(api.messages[0].text, "hello") {
+		t.Fatalf("message text = %q", api.messages[0].text)
+	}
+}
+
+func TestSendAgentResponsePlainUsesPlainParseMode(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	err := tb.SendAgentResponse(context.Background(), messenger.ResolvedOutgoingMessage{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Text:             "plain * text",
 		ContentType:      "text/plain",
 	})
 	if err != nil {
-		t.Fatalf("SendText: %v", err)
+		t.Fatalf("SendAgentResponse: %v", err)
 	}
 	if len(api.messages) != 1 {
 		t.Fatalf("messages = %d, want 1", len(api.messages))
@@ -1043,17 +1068,17 @@ func TestSendTextPlainUsesPlainParseMode(t *testing.T) {
 	}
 }
 
-func TestSendTextMarkdownUsesRenderedPath(t *testing.T) {
+func TestSendAgentResponseMarkdownUsesRenderedPath(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)
-	err := tb.SendText(context.Background(), messenger.ResolvedOutgoingMessage{
+	err := tb.SendAgentResponse(context.Background(), messenger.ResolvedOutgoingMessage{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Text:             "# Title\n\n- item",
 		ContentType:      "text/markdown",
 	})
 	if err != nil {
-		t.Fatalf("SendText: %v", err)
+		t.Fatalf("SendAgentResponse: %v", err)
 	}
 	if len(api.messages) == 0 {
 		t.Fatalf("expected rendered markdown messages")

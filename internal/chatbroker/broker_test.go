@@ -765,7 +765,7 @@ func TestHandleIncomingMessagePurgeWithoutActiveConversation(t *testing.T) {
 	}
 }
 
-func TestBrokerSendFileRoutesToOutboundProvider(t *testing.T) {
+func TestBrokerSendMediaRoutesToOutboundProvider(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -798,14 +798,15 @@ func TestBrokerSendFileRoutesToOutboundProvider(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterOutboundChatProvider("telegram", provider)
 
-	err = broker.SendFile(context.Background(), messenger.OutgoingFile{
+	err = broker.SendMedia(context.Background(), messenger.OutgoingFile{
 		SandboxID: thread.ID,
 		Filename:  "report.pdf",
 		Caption:   "Weekly report",
+		Syntax:    "pdf",
 		Content:   []byte("hello"),
 	})
 	if err != nil {
-		t.Fatalf("SendFile: %v", err)
+		t.Fatalf("SendMedia: %v", err)
 	}
 	if provider.file == nil {
 		t.Fatalf("expected outbound provider to receive file")
@@ -815,6 +816,9 @@ func TestBrokerSendFileRoutesToOutboundProvider(t *testing.T) {
 	}
 	if provider.file.Filename != "report.pdf" || provider.file.Caption != "Weekly report" {
 		t.Fatalf("unexpected outbound metadata: %+v", *provider.file)
+	}
+	if provider.file.Syntax != "pdf" {
+		t.Fatalf("unexpected syntax: %q", provider.file.Syntax)
 	}
 	if string(provider.file.Content) != "hello" {
 		t.Fatalf("unexpected outbound content: %q", string(provider.file.Content))
@@ -929,11 +933,11 @@ type fakeOutboundBrokerProvider struct {
 
 func (f *fakeOutboundBrokerProvider) ProviderType() string { return "telegram" }
 
-func (f *fakeOutboundBrokerProvider) SendText(ctx context.Context, msg messenger.ResolvedOutgoingMessage) error {
+func (f *fakeOutboundBrokerProvider) SendAgentResponse(ctx context.Context, msg messenger.ResolvedOutgoingMessage) error {
 	return nil
 }
 
-func (f *fakeOutboundBrokerProvider) SendFile(ctx context.Context, file messenger.ResolvedOutgoingFile) error {
+func (f *fakeOutboundBrokerProvider) SendMedia(ctx context.Context, file messenger.ResolvedOutgoingFile) error {
 	copyFile := file
 	copyFile.Content = append([]byte(nil), file.Content...)
 	f.file = &copyFile

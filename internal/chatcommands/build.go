@@ -16,37 +16,49 @@ func buildRunCommand(command string, args []string, stdin []byte) RunCommand {
 	}
 }
 
-func buildSendFile(path string, caption string, contentType string) (SendFile, error) {
+func buildSendMediaFile(path string, caption string, contentType string, legacyLanguage string, syntax string) (SendMedia, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return SendFile{}, fmt.Errorf("missing file path")
+		return SendMedia{}, fmt.Errorf("missing file path")
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return SendFile{}, err
+		return SendMedia{}, err
 	}
-	return SendFile{
+	syntax = resolveSyntax(legacyLanguage, syntax)
+	contentType = strings.TrimSpace(contentType)
+	if contentType == "" && syntax != "" {
+		contentType = "text/plain"
+	}
+	return SendMedia{
 		Filename:    filepath.Base(path),
 		Caption:     strings.TrimSpace(caption),
-		ContentType: strings.TrimSpace(contentType),
+		ContentType: contentType,
+		Syntax:      syntax,
 		Content:     content,
 	}, nil
 }
 
-func buildSendText(text string, contentType string, fenced bool, legacyLanguage string, syntax string) SendText {
-	language := strings.TrimSpace(syntax)
-	if language == "" {
-		language = strings.TrimSpace(legacyLanguage)
+func buildSendMediaStdin(text string, contentType string, legacyLanguage string, syntax string) SendMedia {
+	syntax = resolveSyntax(legacyLanguage, syntax)
+	contentType = strings.TrimSpace(contentType)
+	if contentType == "" {
+		contentType = "text/plain"
 	}
-	if language != "" {
-		fenced = true
+	return SendMedia{
+		Filename:    "stdin.txt",
+		ContentType: contentType,
+		Syntax:      syntax,
+		Content:     []byte(text),
 	}
-	return SendText{
-		Text:        text,
-		ContentType: strings.TrimSpace(contentType),
-		Fenced:      fenced,
-		Language:    language,
+}
+
+func resolveSyntax(legacyLanguage string, syntax string) string {
+	syntax = strings.TrimSpace(syntax)
+	if syntax != "" {
+		return syntax
 	}
+	return strings.TrimSpace(legacyLanguage)
 }
 
 func buildConfigList() ConfigList {

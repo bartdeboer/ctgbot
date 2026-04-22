@@ -35,7 +35,6 @@ func (f *fakeHostCommandRunner) ExecuteRunCommand(_ context.Context, req Request
 }
 
 type fakeProvider struct {
-	sentText            []messenger.OutgoingMessage
 	sentFiles           []messenger.OutgoingFile
 	startedChatID       modeluuid.UUID
 	startedWorkspace    string
@@ -56,12 +55,7 @@ type fakeProvider struct {
 	setResult           string
 }
 
-func (f *fakeProvider) SendText(_ context.Context, msg messenger.OutgoingMessage) error {
-	f.sentText = append(f.sentText, msg)
-	return nil
-}
-
-func (f *fakeProvider) SendFile(_ context.Context, file messenger.OutgoingFile) error {
+func (f *fakeProvider) SendMedia(_ context.Context, file messenger.OutgoingFile) error {
 	f.sentFiles = append(f.sentFiles, file)
 	return nil
 }
@@ -224,22 +218,16 @@ func TestProviderRunnerConfigSetUsesExplicitThreadID(t *testing.T) {
 	}
 }
 
-func TestProviderRunnerSendTextAndFileUseSandboxID(t *testing.T) {
+func TestProviderRunnerSendMediaUsesSandboxID(t *testing.T) {
 	sandboxID := modeluuid.New()
 	provider := &fakeProvider{}
 	runner := NewProviderRunner(provider)
 
-	if _, err := runner.Execute(context.Background(), Request{SandboxID: sandboxID, Command: SendText{Text: "hello", ContentType: "text/plain"}}); err != nil {
-		t.Fatalf("send text error = %v", err)
-	}
-	if _, err := runner.Execute(context.Background(), Request{SandboxID: sandboxID, Command: SendFile{Filename: "a.txt", ContentType: "text/plain", Content: []byte("abc")}}); err != nil {
+	if _, err := runner.Execute(context.Background(), Request{SandboxID: sandboxID, Command: SendMedia{Filename: "a.txt", ContentType: "text/plain", Syntax: "diff", Content: []byte("abc")}}); err != nil {
 		t.Fatalf("send file error = %v", err)
 	}
 
-	if len(provider.sentText) != 1 || provider.sentText[0].SandboxID != sandboxID || provider.sentText[0].Text != "hello" {
-		t.Fatalf("sentText = %#v", provider.sentText)
-	}
-	if len(provider.sentFiles) != 1 || provider.sentFiles[0].SandboxID != sandboxID || string(provider.sentFiles[0].Content) != "abc" {
+	if len(provider.sentFiles) != 1 || provider.sentFiles[0].SandboxID != sandboxID || string(provider.sentFiles[0].Content) != "abc" || provider.sentFiles[0].Syntax != "diff" {
 		t.Fatalf("sentFiles = %#v", provider.sentFiles)
 	}
 }
@@ -314,7 +302,7 @@ func TestDispatchRunnerUsesProviderForNonRunCommands(t *testing.T) {
 	}
 }
 
-func TestParseBuildsSendTextAndSendFile(t *testing.T) {
+func TestParseBuildsSendMediaCommands(t *testing.T) {
 	runner := &fakeRunner{}
 	cmds := New(runner)
 	dir := t.TempDir()
@@ -324,23 +312,23 @@ func TestParseBuildsSendTextAndSendFile(t *testing.T) {
 	}
 
 	withStdin(t, "hello", func() {
-		req, err := cmds.Parse(context.Background(), Request{}, []string{"sendstdin", "--fenced", "--language", "go"})
+		req, err := cmds.Parse(context.Background(), Request{}, []string{"sendstdin", "--language", "go"})
 		if err != nil {
 			t.Fatalf("Parse() error = %v", err)
 		}
-		cmd, ok := req.Command.(SendText)
-		if !ok || cmd.Text != "hello" || !cmd.Fenced || cmd.Language != "go" {
-			t.Fatalf("send text = %#v", req.Command)
+		cmd, ok := req.Command.(SendMedia)
+		if !ok || cmd.Filename != "stdin.txt" || string(cmd.Content) != "hello" || cmd.Syntax != "go" || cmd.ContentType != "text/plain" {
+			t.Fatalf("send media stdin = %#v", req.Command)
 		}
 	})
 
-	req, err := cmds.Parse(context.Background(), Request{}, []string{"sendfile", path, "--caption", "hi", "--type", "text/plain"})
+	req, err := cmds.Parse(context.Background(), Request{}, []string{"sendfile", path, "--caption", "hi", "--syntax", "go"})
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	cmd, ok := req.Command.(SendFile)
-	if !ok || cmd.Filename != "note.txt" || string(cmd.Content) != "abc" {
-		t.Fatalf("send file = %#v", req.Command)
+	cmd, ok := req.Command.(SendMedia)
+	if !ok || cmd.Filename != "note.txt" || string(cmd.Content) != "abc" || cmd.Syntax != "go" || cmd.ContentType != "text/plain" {
+		t.Fatalf("send media file = %#v", req.Command)
 	}
 }
 

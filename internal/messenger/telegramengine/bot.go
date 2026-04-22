@@ -45,7 +45,7 @@ func (tb *TelegramBot) ProviderType() string {
 	return "telegram"
 }
 
-func (tb *TelegramBot) SendText(ctx context.Context, msg messenger.ResolvedOutgoingMessage) error {
+func (tb *TelegramBot) SendAgentResponse(ctx context.Context, msg messenger.ResolvedOutgoingMessage) error {
 	chatID, err := strconv.ParseInt(strings.TrimSpace(msg.ProviderChatID), 10, 64)
 	if err != nil {
 		return fmt.Errorf("parse telegram chat id: %w", err)
@@ -65,7 +65,7 @@ func (tb *TelegramBot) SendText(ctx context.Context, msg messenger.ResolvedOutgo
 	}
 }
 
-func (tb *TelegramBot) SendFile(ctx context.Context, file messenger.ResolvedOutgoingFile) error {
+func (tb *TelegramBot) SendMedia(ctx context.Context, file messenger.ResolvedOutgoingFile) error {
 	chatID, err := strconv.ParseInt(strings.TrimSpace(file.ProviderChatID), 10, 64)
 	if err != nil {
 		return fmt.Errorf("parse telegram chat id: %w", err)
@@ -80,6 +80,12 @@ func (tb *TelegramBot) SendFile(ctx context.Context, file messenger.ResolvedOutg
 		text := string(file.Content)
 		if strings.TrimSpace(file.Caption) != "" {
 			text = strings.TrimSpace(file.Caption) + "\n\n" + text
+		}
+		return tb.sendRenderedText(ctx, chatID, threadID, 0, text)
+	case contentType == "text/plain" && strings.TrimSpace(file.Syntax) != "":
+		text, ok := renderTelegramTextAttachment(file)
+		if !ok {
+			return tb.API.SendDocument(ctx, chatID, threadID, file.Filename, file.Caption, file.Content)
 		}
 		return tb.sendRenderedText(ctx, chatID, threadID, 0, text)
 	case contentType == "text/plain":
@@ -97,6 +103,27 @@ func (tb *TelegramBot) SendFile(ctx context.Context, file messenger.ResolvedOutg
 	default:
 		return tb.API.SendDocument(ctx, chatID, threadID, file.Filename, file.Caption, file.Content)
 	}
+}
+
+func renderTelegramTextAttachment(file messenger.ResolvedOutgoingFile) (string, bool) {
+	body := string(file.Content)
+	if strings.Contains(body, "```") {
+		return "", false
+	}
+	var b strings.Builder
+	if strings.TrimSpace(file.Caption) != "" {
+		b.WriteString(strings.TrimSpace(file.Caption))
+		b.WriteString("\n\n")
+	}
+	b.WriteString("```")
+	b.WriteString(strings.TrimSpace(file.Syntax))
+	b.WriteString("\n")
+	b.WriteString(body)
+	if !strings.HasSuffix(body, "\n") {
+		b.WriteString("\n")
+	}
+	b.WriteString("```")
+	return b.String(), true
 }
 
 func (tb *TelegramBot) StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error) {

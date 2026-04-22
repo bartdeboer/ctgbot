@@ -50,25 +50,16 @@ func (r *ProviderRunner) Execute(ctx context.Context, req Request) (Result, erro
 	}
 
 	switch cmd := req.Command.(type) {
-	case SendText:
+	case SendMedia:
 		if req.SandboxID.IsNull() {
 			return Result{}, fmt.Errorf("missing sandbox id")
 		}
-		err := r.Provider.SendText(ctx, messenger.OutgoingMessage{
-			SandboxID:   req.SandboxID,
-			Text:        cmd.Text,
-			ContentType: cmd.ContentType,
-		})
-		return Result{}, err
-	case SendFile:
-		if req.SandboxID.IsNull() {
-			return Result{}, fmt.Errorf("missing sandbox id")
-		}
-		err := r.Provider.SendFile(ctx, messenger.OutgoingFile{
+		err := r.Provider.SendMedia(ctx, messenger.OutgoingFile{
 			SandboxID:   req.SandboxID,
 			Filename:    cmd.Filename,
 			Caption:     cmd.Caption,
 			ContentType: cmd.ContentType,
+			Syntax:      cmd.Syntax,
 			Content:     append([]byte(nil), cmd.Content...),
 		})
 		return Result{}, err

@@ -8,7 +8,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 
-func (b *Broker) SendText(ctx context.Context, msg messenger.OutgoingMessage) error {
+func (b *Broker) SendAgentResponse(ctx context.Context, msg messenger.OutgoingMessage) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -43,7 +43,7 @@ func (b *Broker) SendText(ctx context.Context, msg messenger.OutgoingMessage) er
 		return fmt.Errorf("outbound provider not registered: %s", chatCfg.ProviderType)
 	}
 
-	return provider.SendText(ctx, messenger.ResolvedOutgoingMessage{
+	return provider.SendAgentResponse(ctx, messenger.ResolvedOutgoingMessage{
 		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
 		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
 		Text:             msg.Text,
@@ -51,7 +51,7 @@ func (b *Broker) SendText(ctx context.Context, msg messenger.OutgoingMessage) er
 	})
 }
 
-func (b *Broker) SendFile(ctx context.Context, file messenger.OutgoingFile) error {
+func (b *Broker) SendMedia(ctx context.Context, file messenger.OutgoingFile) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -99,12 +99,13 @@ func (b *Broker) SendFile(ctx context.Context, file messenger.OutgoingFile) erro
 	}
 	defer stopUpload()
 
-	return provider.SendFile(ctx, messenger.ResolvedOutgoingFile{
+	return provider.SendMedia(ctx, messenger.ResolvedOutgoingFile{
 		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
 		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
 		Filename:         strings.TrimSpace(file.Filename),
 		Caption:          strings.TrimSpace(file.Caption),
 		ContentType:      strings.TrimSpace(file.ContentType),
+		Syntax:           strings.TrimSpace(file.Syntax),
 		Content:          append([]byte(nil), file.Content...),
 	})
 }

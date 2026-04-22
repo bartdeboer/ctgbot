@@ -17,8 +17,7 @@ type Response struct {
 
 func init() {
 	gob.Register(chatcommands.RunCommand{})
-	gob.Register(chatcommands.SendFile{})
-	gob.Register(chatcommands.SendText{})
+	gob.Register(chatcommands.SendMedia{})
 	gob.Register(chatcommands.ConfigList{})
 	gob.Register(chatcommands.ConfigSet{})
 	gob.Register(chatcommands.StartSession{})

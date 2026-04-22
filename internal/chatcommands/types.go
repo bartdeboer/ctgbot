@@ -34,8 +34,7 @@ type SessionInfo struct {
 }
 
 type Provider interface {
-	SendText(ctx context.Context, msg messenger.OutgoingMessage) error
-	SendFile(ctx context.Context, file messenger.OutgoingFile) error
+	SendMedia(ctx context.Context, file messenger.OutgoingFile) error
 	StartSession(ctx context.Context, chatID modeluuid.UUID, workspace string, replace bool) (SessionInfo, error)
 	StopActiveSession(ctx context.Context, threadID modeluuid.UUID) error
 	RefreshActiveSession(ctx context.Context, threadID modeluuid.UUID) error
@@ -69,23 +68,15 @@ type RunCommand struct {
 
 func (RunCommand) isCommand() {}
 
-type SendFile struct {
+type SendMedia struct {
 	Filename    string
 	Caption     string
 	ContentType string
+	Syntax      string
 	Content     []byte
 }
 
-func (SendFile) isCommand() {}
-
-type SendText struct {
-	Text        string
-	ContentType string
-	Fenced      bool
-	Language    string
-}
-
-func (SendText) isCommand() {}
+func (SendMedia) isCommand() {}
 
 type ConfigList struct{}
 

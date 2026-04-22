@@ -18,18 +18,11 @@ func NewChatCommandsProvider(b *Broker) *ChatCommandsProvider {
 	return &ChatCommandsProvider{Broker: b}
 }
 
-func (p *ChatCommandsProvider) SendText(ctx context.Context, msg messenger.OutgoingMessage) error {
+func (p *ChatCommandsProvider) SendMedia(ctx context.Context, file messenger.OutgoingFile) error {
 	if p == nil || p.Broker == nil {
 		return fmt.Errorf("missing broker")
 	}
-	return p.Broker.SendText(ctx, msg)
-}
-
-func (p *ChatCommandsProvider) SendFile(ctx context.Context, file messenger.OutgoingFile) error {
-	if p == nil || p.Broker == nil {
-		return fmt.Errorf("missing broker")
-	}
-	return p.Broker.SendFile(ctx, file)
+	return p.Broker.SendMedia(ctx, file)
 }
 
 func (p *ChatCommandsProvider) StartSession(ctx context.Context, chatID modeluuid.UUID, workspace string, replace bool) (chatcommands.SessionInfo, error) {

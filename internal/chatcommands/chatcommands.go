@@ -196,10 +196,12 @@ func (c *ChatCommands) routeSpecs() map[routeName]routeSpec {
 				fs.SetOutput(io.Discard)
 				caption := fs.String("caption", "", "Optional caption")
 				contentType := fs.String("type", "", "Optional content type")
+				language := fs.String("language", "", "Optional legacy syntax hint")
+				syntax := fs.String("syntax", "", "Optional syntax hint")
 				if err := fs.Parse(req.Extra); err != nil {
 					return err
 				}
-				command, err := buildSendFile(req.Params["path"], *caption, *contentType)
+				command, err := buildSendMediaFile(req.Params["path"], *caption, *contentType, *language, *syntax)
 				if err != nil {
 					return err
 				}
@@ -212,8 +214,7 @@ func (c *ChatCommands) routeSpecs() map[routeName]routeSpec {
 			Handler: func(req *clir.Request) error {
 				fs := flag.NewFlagSet("chatcommands sendstdin", flag.ContinueOnError)
 				fs.SetOutput(io.Discard)
-				fenced := fs.Bool("fenced", false, "Wrap text in a fenced block")
-				language := fs.String("language", "", "Optional legacy fence language")
+				language := fs.String("language", "", "Optional legacy syntax hint")
 				contentType := fs.String("type", "text/plain", "Optional content type")
 				syntax := fs.String("syntax", "", "Optional syntax hint")
 				if err := fs.Parse(req.Extra); err != nil {
@@ -223,7 +224,7 @@ func (c *ChatCommands) routeSpecs() map[routeName]routeSpec {
 				if err != nil {
 					return fmt.Errorf("read stdin: %w", err)
 				}
-				command := buildSendText(string(stdinData), strings.TrimSpace(*contentType), *fenced, *language, *syntax)
+				command := buildSendMediaStdin(string(stdinData), strings.TrimSpace(*contentType), *language, *syntax)
 				return setParsedCommand(req, command)
 			},
 		},

@@ -68,6 +68,7 @@ type OutgoingFile struct {
 	Filename    string
 	Caption     string
 	ContentType string
+	Syntax      string
 	Content     []byte
 }
 
@@ -84,6 +85,7 @@ type ResolvedOutgoingFile struct {
 	Filename         string
 	Caption          string
 	ContentType      string
+	Syntax           string
 	Content          []byte
 }
 
@@ -94,7 +96,7 @@ type InboundChatProvider interface {
 
 type OutboundChatProvider interface {
 	ProviderType() string
-	SendText(ctx context.Context, msg ResolvedOutgoingMessage) error
-	SendFile(ctx context.Context, file ResolvedOutgoingFile) error
+	SendAgentResponse(ctx context.Context, msg ResolvedOutgoingMessage) error
+	SendMedia(ctx context.Context, file ResolvedOutgoingFile) error
 	StartChatAction(ctx context.Context, target ChatTarget, action ChatAction) (func(), error)
 }
