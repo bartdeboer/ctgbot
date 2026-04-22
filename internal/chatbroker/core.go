@@ -16,9 +16,7 @@ import (
 )
 
 type PromptOutcome struct {
-	Thread  *Thread
-	Started bool
-	Reply   string
+	Reply string
 }
 
 type Broker struct {

@@ -200,13 +200,11 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 		return PromptOutcome{}, err
 	}
 
-	started := false
 	if conv == nil {
 		conv, err = b.startSession(ctx, chatID, thread, "", false)
 		if err != nil {
 			return PromptOutcome{}, err
 		}
-		started = true
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
@@ -243,13 +241,11 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 		_ = b.Sessions.SaveThread(ctx, conv)
 	}
 	if interrupted {
-		return PromptOutcome{Thread: conv, Started: started}, nil
+		return PromptOutcome{}, nil
 	}
 
 	return PromptOutcome{
-		Thread:  conv,
-		Started: started,
-		Reply:   result.Reply,
+		Reply: result.Reply,
 	}, runErr
 }
 

@@ -6,10 +6,9 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/chatcommands"
-	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
-func (b *Broker) handleCommand(ctx context.Context, chatID modeluuid.UUID, thread *Thread, userID int64, isAdmin bool, name string, args []string) (string, error) {
+func (b *Broker) handleCommand(ctx context.Context, thread *Thread, isAdmin bool, name string, args []string) (string, error) {
 	if reply, handled, err := b.handleSharedChatCommand(ctx, thread, isAdmin, append([]string{name}, args...)); handled {
 		return reply, err
 	}

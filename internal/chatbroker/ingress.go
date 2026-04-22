@@ -55,7 +55,7 @@ func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.Inbound
 		if len(args) == 0 {
 			return messenger.OutboundPayload{}, nil
 		}
-		reply, err := b.handleCommand(ctx, chatCfg.ID, thread, msg.UserID, msg.IsAdmin, args[0], args[1:])
+		reply, err := b.handleCommand(ctx, thread, msg.IsAdmin, args[0], args[1:])
 
 		if err != nil {
 			return payloadResult(fmt.Sprintf("command error: %v", err)), nil
@@ -95,10 +95,6 @@ func payloadResult(text string) messenger.OutboundPayload {
 	return messenger.OutboundPayload{
 		Text: messenger.TextMessage{Text: strings.TrimSpace(text)},
 	}
-}
-
-func (b *Broker) ResolveIncomingThread(ctx context.Context, msg messenger.InboundPayload, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
-	return b.resolveIncomingThread(ctx, msg, create)
 }
 
 func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.InboundPayload, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
