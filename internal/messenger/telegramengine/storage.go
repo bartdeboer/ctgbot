@@ -3,7 +3,6 @@ package telegramengine
 import (
 	"context"
 
-	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 	"gorm.io/gorm"
 )
 
@@ -16,13 +15,13 @@ func NewUpdateStorage(db *gorm.DB) *UpdateStorage {
 }
 
 func (s *UpdateStorage) AutoMigrate(ctx context.Context) error {
-	return s.DB.WithContext(ctx).AutoMigrate(&chatmodel.TelegramUpdate{})
+	return s.DB.WithContext(ctx).AutoMigrate(&TelegramUpdate{})
 }
 
-func (s *UpdateStorage) Create(ctx context.Context, event *chatmodel.TelegramUpdate) error {
+func (s *UpdateStorage) Create(ctx context.Context, event *TelegramUpdate) error {
 	return s.DB.WithContext(ctx).Create(event).Error
 }
 
-func (s *UpdateStorage) Save(ctx context.Context, event *chatmodel.TelegramUpdate) error {
+func (s *UpdateStorage) Save(ctx context.Context, event *TelegramUpdate) error {
 	return s.DB.WithContext(ctx).Save(event).Error
 }

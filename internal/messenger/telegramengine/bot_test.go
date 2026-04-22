@@ -14,7 +14,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
-	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
@@ -73,7 +72,7 @@ type fakeTelegramAPI struct {
 	sendHook        func(sentMessage) error
 }
 
-func (f *fakeTelegramAPI) Run(ctx context.Context, _ time.Duration, _ func(context.Context, chatmodel.TelegramUpdate)) error {
+func (f *fakeTelegramAPI) Run(ctx context.Context, _ time.Duration, _ func(context.Context, TelegramUpdate)) error {
 	return nil
 }
 
@@ -267,7 +266,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 		Config: cfg,
 	}
 
-	u := chatmodel.TelegramUpdate{
+	u := TelegramUpdate{
 		ChatID:    42,
 		ThreadID:  7,
 		MessageID: 99,
@@ -346,11 +345,11 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 		Config: cfg,
 	}
 
-	u := chatmodel.TelegramUpdate{
+	u := TelegramUpdate{
 		ChatID:    42,
 		ThreadID:  7,
 		MessageID: 99,
-		Attachments: []chatmodel.TelegramAttachment{{
+		Attachments: []TelegramAttachment{{
 			Kind:     "document",
 			FileID:   "doc-1",
 			Filename: "poem.zip",
@@ -410,11 +409,11 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 		Config: cfg,
 	}
 
-	u := chatmodel.TelegramUpdate{
+	u := TelegramUpdate{
 		ChatID:    42,
 		ThreadID:  7,
 		MessageID: 99,
-		Attachments: []chatmodel.TelegramAttachment{{
+		Attachments: []TelegramAttachment{{
 			Kind:     "document",
 			FileID:   "doc-2",
 			Filename: "notes.txt",
@@ -470,11 +469,11 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 		Config: cfg,
 	}
 
-	u := chatmodel.TelegramUpdate{
+	u := TelegramUpdate{
 		ChatID:    42,
 		ThreadID:  7,
 		MessageID: 101,
-		Attachments: []chatmodel.TelegramAttachment{{
+		Attachments: []TelegramAttachment{{
 			Kind:     "photo",
 			FileID:   "photo-1",
 			Filename: "photo-101.jpg",
@@ -547,16 +546,16 @@ func TestHandleUpdateDebouncesSlidingPrompt(t *testing.T) {
 	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
-	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u chatmodel.TelegramUpdate) {
+	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
 		tb.handleUpdate(ctx, u, broker.HandleIncomingUpdate)
 	})
 
-	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 100, UserID: 1, Text: "hello",
 	})
 
 	time.Sleep(25 * time.Millisecond)
-	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 101, UserID: 1, Text: "world",
 	})
 
@@ -604,14 +603,14 @@ func TestHandleUpdateDebounceSeparatesUsers(t *testing.T) {
 	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
-	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u chatmodel.TelegramUpdate) {
+	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
 		tb.handleUpdate(ctx, u, broker.HandleIncomingUpdate)
 	})
 
-	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 100, UserID: 1, Text: "from alice",
 	})
-	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 101, UserID: 2, Text: "from bob",
 	})
 
@@ -658,18 +657,18 @@ func TestHandleUpdateCommandFlushesPendingDebounce(t *testing.T) {
 	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
-	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u chatmodel.TelegramUpdate) {
+	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
 		tb.handleUpdate(ctx, u, broker.HandleIncomingUpdate)
 	})
 
-	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 100, UserID: 1, Text: "please review",
 	})
 	if got := agent.PromptCount(); got != 0 {
 		t.Fatalf("prompt count before command = %d, want 0", got)
 	}
 
-	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 101, UserID: 1, Text: "/help",
 	})
 
@@ -954,14 +953,14 @@ func TestTelegramBotSendAgentResponseAllowsRenderedTextAboveSemanticChunkLimit(t
 }
 
 func TestDebouncerDoesNotDuplicateSingleUpdateAttachments(t *testing.T) {
-	updates := make(chan chatmodel.TelegramUpdate, 1)
-	debouncer := NewDebouncer(10*time.Millisecond, nil, func(ctx context.Context, u chatmodel.TelegramUpdate) {
+	updates := make(chan TelegramUpdate, 1)
+	debouncer := NewDebouncer(10*time.Millisecond, nil, func(ctx context.Context, u TelegramUpdate) {
 		updates <- u
 	})
 
-	debouncer.HandleUpdate(context.Background(), chatmodel.TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 1408, UserID: 1,
-		Attachments: []chatmodel.TelegramAttachment{{
+		Attachments: []TelegramAttachment{{
 			Kind:     "photo",
 			FileID:   "photo-file-id",
 			Filename: "photo-1408.jpg",

@@ -11,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 	markdown "github.com/bartdeboer/ctgbot/internal/markdown"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
@@ -185,7 +184,7 @@ func (tb *TelegramBot) Run(ctx context.Context, onUpdate func(context.Context, m
 	if err := tb.Config.EnsurePaths(); err != nil {
 		return err
 	}
-	handler := func(cbCtx context.Context, u chatmodel.TelegramUpdate) {
+	handler := func(cbCtx context.Context, u TelegramUpdate) {
 		tb.handleUpdate(cbCtx, u, onUpdate)
 	}
 	if window := tb.Config.TelegramDebounceWindow(); window > 0 {
@@ -194,7 +193,7 @@ func (tb *TelegramBot) Run(ctx context.Context, onUpdate func(context.Context, m
 	return tb.API.Run(ctx, tb.Config.TelegramPollTimeout(), handler)
 }
 
-func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpdate, onUpdate func(context.Context, messenger.IncomingUpdate) (messenger.IncomingResult, error)) {
+func (tb *TelegramBot) handleUpdate(ctx context.Context, u TelegramUpdate, onUpdate func(context.Context, messenger.IncomingUpdate) (messenger.IncomingResult, error)) {
 	text := strings.TrimSpace(u.Text)
 	if text == "" && len(u.Attachments) == 0 {
 		return
@@ -215,7 +214,7 @@ func (tb *TelegramBot) handleUpdate(ctx context.Context, u chatmodel.TelegramUpd
 	}
 }
 
-func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.TelegramUpdate, text string, onUpdate func(context.Context, messenger.IncomingUpdate) (messenger.IncomingResult, error)) error {
+func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u TelegramUpdate, text string, onUpdate func(context.Context, messenger.IncomingUpdate) (messenger.IncomingResult, error)) error {
 	if onUpdate == nil {
 		return fmt.Errorf("missing update callback")
 	}
@@ -253,7 +252,7 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u chatmodel.T
 	return nil
 }
 
-func (tb *TelegramBot) loadIncomingAttachments(ctx context.Context, attachments []chatmodel.TelegramAttachment) ([]messenger.IncomingAttachment, error) {
+func (tb *TelegramBot) loadIncomingAttachments(ctx context.Context, attachments []TelegramAttachment) ([]messenger.IncomingAttachment, error) {
 	out := make([]messenger.IncomingAttachment, 0, len(attachments))
 	for _, attachment := range attachments {
 		content, err := tb.API.DownloadFile(ctx, attachment.FileID)
@@ -269,7 +268,7 @@ func (tb *TelegramBot) loadIncomingAttachments(ctx context.Context, attachments 
 	return out, nil
 }
 
-func (tb *TelegramBot) replyText(ctx context.Context, u chatmodel.TelegramUpdate, text string) error {
+func (tb *TelegramBot) replyText(ctx context.Context, u TelegramUpdate, text string) error {
 	text = cleanTextForTelegram(text)
 	if text == "" {
 		text = "(empty response)"
@@ -449,7 +448,7 @@ func (tb *TelegramBot) appendEventResponse(ctx context.Context, text string) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
-	event, ok := ctx.Value(tgEventKey{}).(*chatmodel.TelegramUpdate)
+	event, ok := ctx.Value(tgEventKey{}).(*TelegramUpdate)
 	if !ok || event == nil {
 		return
 	}
@@ -464,7 +463,7 @@ func (tb *TelegramBot) recordEventError(ctx context.Context, err error) {
 	if err == nil {
 		return
 	}
-	event, ok := ctx.Value(tgEventKey{}).(*chatmodel.TelegramUpdate)
+	event, ok := ctx.Value(tgEventKey{}).(*TelegramUpdate)
 	if !ok || event == nil {
 		return
 	}
@@ -475,7 +474,7 @@ func (tb *TelegramBot) persistEvent(ctx context.Context) {
 	if tb.Updates == nil {
 		return
 	}
-	event, ok := ctx.Value(tgEventKey{}).(*chatmodel.TelegramUpdate)
+	event, ok := ctx.Value(tgEventKey{}).(*TelegramUpdate)
 	if !ok || event == nil || event.ID == 0 {
 		return
 	}

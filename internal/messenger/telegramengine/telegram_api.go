@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/chatmodel"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -33,7 +32,7 @@ func NewTelegramAPIV2(token string) (*TelegramAPIV2, error) {
 	return &TelegramAPIV2{token: token}, nil
 }
 
-func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(ctx context.Context, u chatmodel.TelegramUpdate)) error {
+func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(ctx context.Context, u TelegramUpdate)) error {
 	if onUpdate == nil {
 		return fmt.Errorf("onUpdate is nil")
 	}
@@ -44,7 +43,7 @@ func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUp
 				return
 			}
 			msg := upd.Message
-			tupd := chatmodel.TelegramUpdate{
+			tupd := TelegramUpdate{
 				ChatID:      msg.Chat.ID,
 				ChatTitle:   msg.Chat.Title,
 				ThreadID:    msg.MessageThreadID,
@@ -228,14 +227,14 @@ func telegramMessageText(msg *models.Message) string {
 	return strings.TrimSpace(msg.Caption)
 }
 
-func telegramMessageAttachments(msg *models.Message) []chatmodel.TelegramAttachment {
+func telegramMessageAttachments(msg *models.Message) []TelegramAttachment {
 	if msg == nil {
 		return nil
 	}
-	var out []chatmodel.TelegramAttachment
+	var out []TelegramAttachment
 
 	if doc := msg.Document; doc != nil {
-		out = append(out, chatmodel.TelegramAttachment{
+		out = append(out, TelegramAttachment{
 			Kind:     "document",
 			FileID:   doc.FileID,
 			Filename: attachmentFilename("document", msg.ID, doc.FileName, doc.MimeType, ".bin"),
@@ -243,35 +242,35 @@ func telegramMessageAttachments(msg *models.Message) []chatmodel.TelegramAttachm
 	}
 	if len(msg.Photo) > 0 {
 		photo := msg.Photo[len(msg.Photo)-1]
-		out = append(out, chatmodel.TelegramAttachment{
+		out = append(out, TelegramAttachment{
 			Kind:     "photo",
 			FileID:   photo.FileID,
 			Filename: attachmentFilename("photo", msg.ID, "", "image/jpeg", ".jpg"),
 		})
 	}
 	if video := msg.Video; video != nil {
-		out = append(out, chatmodel.TelegramAttachment{
+		out = append(out, TelegramAttachment{
 			Kind:     "video",
 			FileID:   video.FileID,
 			Filename: attachmentFilename("video", msg.ID, video.FileName, video.MimeType, ".mp4"),
 		})
 	}
 	if audio := msg.Audio; audio != nil {
-		out = append(out, chatmodel.TelegramAttachment{
+		out = append(out, TelegramAttachment{
 			Kind:     "audio",
 			FileID:   audio.FileID,
 			Filename: attachmentFilename("audio", msg.ID, audio.FileName, audio.MimeType, ".bin"),
 		})
 	}
 	if voice := msg.Voice; voice != nil {
-		out = append(out, chatmodel.TelegramAttachment{
+		out = append(out, TelegramAttachment{
 			Kind:     "voice",
 			FileID:   voice.FileID,
 			Filename: attachmentFilename("voice", msg.ID, "", voice.MimeType, ".ogg"),
 		})
 	}
 	if animation := msg.Animation; animation != nil {
-		out = append(out, chatmodel.TelegramAttachment{
+		out = append(out, TelegramAttachment{
 			Kind:     "animation",
 			FileID:   animation.FileID,
 			Filename: attachmentFilename("animation", msg.ID, animation.FileName, animation.MimeType, ".bin"),
