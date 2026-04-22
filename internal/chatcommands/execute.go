@@ -54,13 +54,16 @@ func (r *ProviderRunner) Execute(ctx context.Context, req Request) (Result, erro
 		if req.SandboxID.IsNull() {
 			return Result{}, fmt.Errorf("missing sandbox id")
 		}
-		err := r.Provider.SendMedia(ctx, messenger.OutgoingMedia{
-			SandboxID:   req.SandboxID,
-			Filename:    cmd.Filename,
-			Caption:     cmd.Caption,
-			ContentType: cmd.ContentType,
-			Syntax:      cmd.Syntax,
-			Content:     append([]byte(nil), cmd.Content...),
+		err := r.Provider.SendPayload(ctx, req.SandboxID, messenger.OutboundPayload{
+			Text: messenger.TextMessage{
+				Text: cmd.Caption,
+			},
+			Attachments: []messenger.Media{{
+				Filename:    cmd.Filename,
+				ContentType: cmd.ContentType,
+				Syntax:      cmd.Syntax,
+				Content:     append([]byte(nil), cmd.Content...),
+			}},
 		})
 		return Result{}, err
 	case ConfigList:

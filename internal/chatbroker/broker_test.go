@@ -104,7 +104,7 @@ func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
+func TestHandleInboundPayloadRoutesTelegramCommand(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -132,11 +132,11 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	sessions := &fakeBrokerSessionStore{}
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/help@ctgbot",
+		Text:             messenger.TextMessage{Text: "/help@ctgbot"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -147,7 +147,7 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageRunsUpgradeCommand(t *testing.T) {
+func TestHandleInboundPayloadRunsUpgradeCommand(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -177,11 +177,11 @@ func TestHandleIncomingMessageRunsUpgradeCommand(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/upgrade",
+		Text:             messenger.TextMessage{Text: "/upgrade"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -195,7 +195,7 @@ func TestHandleIncomingMessageRunsUpgradeCommand(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageRunsQuitCommand(t *testing.T) {
+func TestHandleInboundPayloadRunsQuitCommand(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -225,11 +225,11 @@ func TestHandleIncomingMessageRunsQuitCommand(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/quit",
+		Text:             messenger.TextMessage{Text: "/quit"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -243,7 +243,7 @@ func TestHandleIncomingMessageRunsQuitCommand(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageStartsTypingChatAction(t *testing.T) {
+func TestHandleInboundPayloadStartsTypingChatAction(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -274,11 +274,11 @@ func TestHandleIncomingMessageStartsTypingChatAction(t *testing.T) {
 	broker.RegisterAgent("codex", fakeBrokerAgent{})
 	broker.RegisterOutboundChatProvider("telegram", provider)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "hello",
+		Text:             messenger.TextMessage{Text: "hello"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -301,7 +301,7 @@ func TestHandleIncomingMessageStartsTypingChatAction(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageBlocksUpgradeWithoutProcessTools(t *testing.T) {
+func TestHandleInboundPayloadBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -331,11 +331,11 @@ func TestHandleIncomingMessageBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/upgrade",
+		Text:             messenger.TextMessage{Text: "/upgrade"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -349,7 +349,7 @@ func TestHandleIncomingMessageBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageBlocksQuitWithoutProcessTools(t *testing.T) {
+func TestHandleInboundPayloadBlocksQuitWithoutProcessTools(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -379,11 +379,11 @@ func TestHandleIncomingMessageBlocksQuitWithoutProcessTools(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/quit",
+		Text:             messenger.TextMessage{Text: "/quit"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -397,7 +397,7 @@ func TestHandleIncomingMessageBlocksQuitWithoutProcessTools(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageRefreshesActiveConversation(t *testing.T) {
+func TestHandleInboundPayloadRefreshesActiveConversation(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -448,11 +448,11 @@ func TestHandleIncomingMessageRefreshesActiveConversation(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", fakeBrokerAgent{})
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/refresh",
+		Text:             messenger.TextMessage{Text: "/refresh"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -475,7 +475,7 @@ func TestHandleIncomingMessageRefreshesActiveConversation(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageRefreshInstallsConfiguredSkills(t *testing.T) {
+func TestHandleInboundPayloadRefreshInstallsConfiguredSkills(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -532,11 +532,11 @@ func TestHandleIncomingMessageRefreshInstallsConfiguredSkills(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/refresh",
+		Text:             messenger.TextMessage{Text: "/refresh"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -550,7 +550,7 @@ func TestHandleIncomingMessageRefreshInstallsConfiguredSkills(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageRefreshWithoutActiveConversation(t *testing.T) {
+func TestHandleInboundPayloadRefreshWithoutActiveConversation(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -585,11 +585,11 @@ func TestHandleIncomingMessageRefreshWithoutActiveConversation(t *testing.T) {
 	}
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/refresh",
+		Text:             messenger.TextMessage{Text: "/refresh"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -600,7 +600,7 @@ func TestHandleIncomingMessageRefreshWithoutActiveConversation(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessagePurgesActiveConversation(t *testing.T) {
+func TestHandleInboundPayloadPurgesActiveConversation(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -652,11 +652,11 @@ func TestHandleIncomingMessagePurgesActiveConversation(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/purge",
+		Text:             messenger.TextMessage{Text: "/purge"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -688,7 +688,7 @@ func TestHandleIncomingMessagePurgesActiveConversation(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessagePurgeWithoutActiveConversation(t *testing.T) {
+func TestHandleInboundPayloadPurgeWithoutActiveConversation(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -723,11 +723,11 @@ func TestHandleIncomingMessagePurgeWithoutActiveConversation(t *testing.T) {
 	}
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/purge",
+		Text:             messenger.TextMessage{Text: "/purge"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -771,30 +771,38 @@ func TestBrokerSendMediaRoutesToOutboundProvider(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterOutboundChatProvider("telegram", provider)
 
-	err = broker.SendMedia(context.Background(), messenger.OutgoingMedia{
-		SandboxID: thread.ID,
-		Filename:  "report.pdf",
-		Caption:   "Weekly report",
-		Syntax:    "pdf",
-		Content:   []byte("hello"),
+	err = broker.SendPayload(context.Background(), thread.ID, messenger.OutboundPayload{
+		Text: messenger.TextMessage{Text: "Weekly report"},
+		Attachments: []messenger.Media{{
+			Filename: "report.pdf",
+			Syntax:   "pdf",
+			Content:  []byte("hello"),
+		}},
 	})
 	if err != nil {
-		t.Fatalf("SendMedia: %v", err)
+		t.Fatalf("SendPayload: %v", err)
 	}
-	if provider.media == nil {
+	if provider.payload == nil {
 		t.Fatalf("expected outbound provider to receive media")
 	}
-	if provider.media.ProviderChatID != "42" || provider.media.ProviderThreadID != "7" {
-		t.Fatalf("unexpected provider target: %+v", *provider.media)
+	if provider.payload.ProviderChatID != "42" || provider.payload.ProviderThreadID != "7" {
+		t.Fatalf("unexpected provider target: %+v", *provider.payload)
 	}
-	if provider.media.Filename != "report.pdf" || provider.media.Caption != "Weekly report" {
-		t.Fatalf("unexpected outbound metadata: %+v", *provider.media)
+	if provider.payload.Text.Text != "Weekly report" {
+		t.Fatalf("unexpected caption text: %+v", *provider.payload)
 	}
-	if provider.media.Syntax != "pdf" {
-		t.Fatalf("unexpected syntax: %q", provider.media.Syntax)
+	if len(provider.payload.Attachments) != 1 {
+		t.Fatalf("attachments len = %d, want 1", len(provider.payload.Attachments))
 	}
-	if string(provider.media.Content) != "hello" {
-		t.Fatalf("unexpected outbound content: %q", string(provider.media.Content))
+	attachment := provider.payload.Attachments[0]
+	if attachment.Filename != "report.pdf" {
+		t.Fatalf("unexpected attachment metadata: %+v", attachment)
+	}
+	if attachment.Syntax != "pdf" {
+		t.Fatalf("unexpected syntax: %q", attachment.Syntax)
+	}
+	if string(attachment.Content) != "hello" {
+		t.Fatalf("unexpected outbound content: %q", string(attachment.Content))
 	}
 	if !reflect.DeepEqual(provider.actions, []messenger.ChatAction{messenger.ChatActionUploadDocument}) {
 		t.Fatalf("actions = %#v", provider.actions)
@@ -898,7 +906,7 @@ func (f *fakeSkillInstallingBrokerAgent) InstallSkill(ctx context.Context, sbx *
 }
 
 type fakeOutboundBrokerProvider struct {
-	media          *messenger.ResolvedOutgoingMedia
+	payload        *messenger.OutboundPayload
 	actions        []messenger.ChatAction
 	actionTargets  []messenger.ChatTarget
 	stoppedActions []messenger.ChatAction
@@ -906,14 +914,13 @@ type fakeOutboundBrokerProvider struct {
 
 func (f *fakeOutboundBrokerProvider) ProviderType() string { return "telegram" }
 
-func (f *fakeOutboundBrokerProvider) SendAgentResponse(ctx context.Context, msg messenger.ResolvedOutgoingMessage) error {
-	return nil
-}
-
-func (f *fakeOutboundBrokerProvider) SendMedia(ctx context.Context, media messenger.ResolvedOutgoingMedia) error {
-	copyMedia := media
-	copyMedia.Content = append([]byte(nil), media.Content...)
-	f.media = &copyMedia
+func (f *fakeOutboundBrokerProvider) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+	copyPayload := payload
+	copyPayload.Attachments = append([]messenger.Media(nil), payload.Attachments...)
+	for i := range copyPayload.Attachments {
+		copyPayload.Attachments[i].Content = append([]byte(nil), copyPayload.Attachments[i].Content...)
+	}
+	f.payload = &copyPayload
 	return nil
 }
 
@@ -925,7 +932,7 @@ func (f *fakeOutboundBrokerProvider) StartChatAction(ctx context.Context, target
 	}, nil
 }
 
-func TestHandleIncomingMessageInterruptDisabledForChat(t *testing.T) {
+func TestHandleInboundPayloadInterruptDisabledForChat(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -952,7 +959,12 @@ func TestHandleIncomingMessageInterruptDisabledForChat(t *testing.T) {
 	sessions := &fakeBrokerSessionStore{thread: thread}
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{ProviderType: "telegram", ProviderChatID: "42", ProviderThreadID: "7", Message: "/interrupt"})
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/interrupt"},
+	})
 	if err != nil {
 		t.Fatalf("interrupt err: %v", err)
 	}
@@ -961,7 +973,7 @@ func TestHandleIncomingMessageInterruptDisabledForChat(t *testing.T) {
 	}
 }
 
-func TestHandleIncomingMessageRoutesGroupedContainerRefreshCommand(t *testing.T) {
+func TestHandleInboundPayloadRoutesGroupedContainerRefreshCommand(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -987,11 +999,11 @@ func TestHandleIncomingMessageRoutesGroupedContainerRefreshCommand(t *testing.T)
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/container refresh",
+		Text:             messenger.TextMessage{Text: "/container refresh"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {
@@ -1002,7 +1014,7 @@ func TestHandleIncomingMessageRoutesGroupedContainerRefreshCommand(t *testing.T)
 	}
 }
 
-func TestHandleIncomingMessageDeprecatesNewCommand(t *testing.T) {
+func TestHandleInboundPayloadDeprecatesNewCommand(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -1028,11 +1040,11 @@ func TestHandleIncomingMessageDeprecatesNewCommand(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
-	result, err := broker.HandleIncomingMessage(context.Background(), messenger.IncomingMessage{
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
-		Message:          "/new",
+		Text:             messenger.TextMessage{Text: "/new"},
 		ChatLabel:        "Test Chat",
 	})
 	if err != nil {

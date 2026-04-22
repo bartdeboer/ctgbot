@@ -35,7 +35,7 @@ func (f *fakeHostCommandRunner) ExecuteRunCommand(_ context.Context, req Request
 }
 
 type fakeProvider struct {
-	sentMedia           []messenger.OutgoingMedia
+	sentPayloads        []messenger.OutboundPayload
 	startedChatID       modeluuid.UUID
 	startedWorkspace    string
 	startedReplace      bool
@@ -55,8 +55,9 @@ type fakeProvider struct {
 	setResult           string
 }
 
-func (f *fakeProvider) SendMedia(_ context.Context, media messenger.OutgoingMedia) error {
-	f.sentMedia = append(f.sentMedia, media)
+func (f *fakeProvider) SendPayload(_ context.Context, sandboxID modeluuid.UUID, payload messenger.OutboundPayload) error {
+	payload.ProviderChatID = sandboxID.String()
+	f.sentPayloads = append(f.sentPayloads, payload)
 	return nil
 }
 
@@ -227,8 +228,19 @@ func TestProviderRunnerSendMediaUsesSandboxID(t *testing.T) {
 		t.Fatalf("send file error = %v", err)
 	}
 
-	if len(provider.sentMedia) != 1 || provider.sentMedia[0].SandboxID != sandboxID || string(provider.sentMedia[0].Content) != "abc" || provider.sentMedia[0].Syntax != "diff" {
-		t.Fatalf("sentMedia = %#v", provider.sentMedia)
+	if len(provider.sentPayloads) != 1 {
+		t.Fatalf("sentPayloads = %#v", provider.sentPayloads)
+	}
+	payload := provider.sentPayloads[0]
+	if payload.ProviderChatID != sandboxID.String() {
+		t.Fatalf("providerChatID = %q, want %q", payload.ProviderChatID, sandboxID)
+	}
+	if len(payload.Attachments) != 1 {
+		t.Fatalf("attachments = %#v", payload.Attachments)
+	}
+	attachment := payload.Attachments[0]
+	if string(attachment.Content) != "abc" || attachment.Syntax != "diff" {
+		t.Fatalf("attachment = %#v", attachment)
 	}
 }
 

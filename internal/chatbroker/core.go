@@ -147,10 +147,10 @@ func (b *Broker) sendThreadText(ctx context.Context, thread *Thread, text string
 	if !ok || provider == nil {
 		return fmt.Errorf("outbound provider not registered: %s", chatCfg.ProviderType)
 	}
-	return provider.SendAgentResponse(ctx, messenger.ResolvedOutgoingMessage{
+	return provider.Send(ctx, messenger.OutboundPayload{
 		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
 		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
-		Text:             text,
+		Text:             messenger.TextMessage{Text: text},
 	})
 }
 

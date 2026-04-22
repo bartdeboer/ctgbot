@@ -17,31 +17,10 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.InboundPa
 		return messenger.OutboundPayload{}, nil
 	}
 
-	msg := messenger.IncomingMessage{
-		ProviderType:      strings.TrimSpace(u.ProviderType),
-		ProviderChatID:    strings.TrimSpace(u.ProviderChatID),
-		ProviderThreadID:  strings.TrimSpace(u.ProviderThreadID),
-		Message:           text,
-		ChatLabel:         strings.TrimSpace(u.ChatLabel),
-		UserLabel:         strings.TrimSpace(u.UserLabel),
-		UserID:            u.UserID,
-		IsAdmin:           u.IsAdmin,
-		ProviderMessageID: strings.TrimSpace(u.ProviderMessageID),
-	}
-
 	var savedPaths []string
 	if len(u.Attachments) > 0 {
-		attachments := make([]messenger.IncomingAttachment, 0, len(u.Attachments))
-		for _, attachment := range u.Attachments {
-			attachments = append(attachments, messenger.IncomingAttachment{
-				Kind:     strings.TrimSpace(attachment.Kind),
-				Filename: strings.TrimSpace(attachment.Filename),
-				Content:  append([]byte(nil), attachment.Content...),
-			})
-		}
 		var err error
-		savedPaths, err = b.handleIncomingAttachments(ctx, msg, attachments)
-
+		savedPaths, err = b.handleIncomingAttachments(ctx, u, u.Attachments)
 		if err != nil {
 			return messenger.OutboundPayload{}, err
 		}
@@ -56,10 +35,10 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.InboundPa
 
 	if len(savedPaths) > 0 {
 		text = injectFilesIntoPrompt(savedPaths, text)
-		msg.Message = text
+		u.Text = messenger.TextMessage{Text: text}
 	}
 
-	result, err := b.HandleIncomingMessage(ctx, msg)
+	result, err := b.HandleInboundPayload(ctx, u)
 
 	if err != nil {
 		return messenger.OutboundPayload{}, err
@@ -67,8 +46,8 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.InboundPa
 	return result, nil
 }
 
-func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.IncomingMessage) (messenger.OutboundPayload, error) {
-	text := strings.TrimSpace(msg.Message)
+func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.InboundPayload) (messenger.OutboundPayload, error) {
+	text := strings.TrimSpace(msg.Text.Text)
 	if text == "" {
 		return messenger.OutboundPayload{}, nil
 	}
@@ -142,11 +121,11 @@ func payloadResult(text string) messenger.OutboundPayload {
 	}
 }
 
-func (b *Broker) ResolveIncomingThread(ctx context.Context, msg messenger.IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
+func (b *Broker) ResolveIncomingThread(ctx context.Context, msg messenger.InboundPayload, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
 	return b.resolveIncomingThread(ctx, msg, create)
 }
 
-func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
+func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.InboundPayload, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
 	if b.Config == nil {
 		return nil, nil, fmt.Errorf("missing config")
 	}
@@ -199,7 +178,7 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.Incomi
 	return chatCfg, thread, nil
 }
 
-func (b *Broker) handleIncomingAttachments(ctx context.Context, msg messenger.IncomingMessage, attachments []messenger.IncomingAttachment) ([]string, error) {
+func (b *Broker) handleIncomingAttachments(ctx context.Context, msg messenger.InboundPayload, attachments []messenger.Media) ([]string, error) {
 	if len(attachments) == 0 {
 		return nil, nil
 	}

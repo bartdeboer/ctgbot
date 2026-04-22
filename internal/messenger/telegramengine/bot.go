@@ -44,74 +44,70 @@ func (tb *TelegramBot) ProviderType() string {
 	return "telegram"
 }
 
-func (tb *TelegramBot) SendAgentResponse(ctx context.Context, msg messenger.ResolvedOutgoingMessage) error {
-	chatID, err := strconv.ParseInt(strings.TrimSpace(msg.ProviderChatID), 10, 64)
+func (tb *TelegramBot) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+	chatID, err := strconv.ParseInt(strings.TrimSpace(payload.ProviderChatID), 10, 64)
 	if err != nil {
 		return fmt.Errorf("parse telegram chat id: %w", err)
 	}
-	threadID, err := parseTelegramProviderThreadID(msg.ProviderThreadID)
+	threadID, err := parseTelegramProviderThreadID(payload.ProviderThreadID)
 	if err != nil {
 		return err
 	}
-	contentType := strings.TrimSpace(strings.ToLower(msg.ContentType))
-	switch contentType {
-	case "", "text/markdown":
-		return tb.sendRenderedText(ctx, chatID, threadID, 0, msg.Text)
-	case "text/plain":
-		return tb.API.SendMessage(ctx, chatID, threadID, 0, msg.Text, "")
-	default:
-		return tb.sendRenderedText(ctx, chatID, threadID, 0, msg.Text)
+	if len(payload.Attachments) == 0 {
+		return tb.sendRenderedText(ctx, chatID, threadID, 0, payload.Text.Text)
 	}
+	for i, attachment := range payload.Attachments {
+		caption := ""
+		if i == 0 {
+			caption = payload.Text.Text
+		}
+		if err := tb.sendAttachment(ctx, chatID, threadID, caption, attachment); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (tb *TelegramBot) SendMedia(ctx context.Context, media messenger.ResolvedOutgoingMedia) error {
-	chatID, err := strconv.ParseInt(strings.TrimSpace(media.ProviderChatID), 10, 64)
-	if err != nil {
-		return fmt.Errorf("parse telegram chat id: %w", err)
-	}
-	threadID, err := parseTelegramProviderThreadID(media.ProviderThreadID)
-	if err != nil {
-		return err
-	}
+func (tb *TelegramBot) sendAttachment(ctx context.Context, chatID int64, threadID int, caption string, media messenger.Media) error {
 	contentType := strings.TrimSpace(strings.ToLower(media.ContentType))
 	switch {
 	case contentType == "text/markdown":
 		text := string(media.Content)
-		if strings.TrimSpace(media.Caption) != "" {
-			text = strings.TrimSpace(media.Caption) + "\n\n" + text
+		if strings.TrimSpace(caption) != "" {
+			text = strings.TrimSpace(caption) + "\n\n" + text
 		}
 		return tb.sendRenderedText(ctx, chatID, threadID, 0, text)
 	case contentType == "text/plain" && strings.TrimSpace(media.Syntax) != "":
-		text, ok := renderTelegramTextAttachment(media)
+		text, ok := renderTelegramTextAttachment(caption, media)
 		if !ok {
-			return tb.API.SendDocument(ctx, chatID, threadID, media.Filename, media.Caption, media.Content)
+			return tb.API.SendDocument(ctx, chatID, threadID, media.Filename, caption, media.Content)
 		}
 		return tb.sendRenderedText(ctx, chatID, threadID, 0, text)
 	case contentType == "text/plain":
 		text := string(media.Content)
-		if strings.TrimSpace(media.Caption) != "" {
-			text = strings.TrimSpace(media.Caption) + "\n\n" + text
+		if strings.TrimSpace(caption) != "" {
+			text = strings.TrimSpace(caption) + "\n\n" + text
 		}
 		return tb.API.SendMessage(ctx, chatID, threadID, 0, text, "")
 	case strings.HasPrefix(contentType, "image/"):
-		return tb.API.SendPhoto(ctx, chatID, threadID, media.Filename, media.Caption, media.Content)
+		return tb.API.SendPhoto(ctx, chatID, threadID, media.Filename, caption, media.Content)
 	case strings.HasPrefix(contentType, "video/"):
-		return tb.API.SendVideo(ctx, chatID, threadID, media.Filename, media.Caption, media.Content)
+		return tb.API.SendVideo(ctx, chatID, threadID, media.Filename, caption, media.Content)
 	case strings.HasPrefix(contentType, "audio/"):
-		return tb.API.SendAudio(ctx, chatID, threadID, media.Filename, media.Caption, media.Content)
+		return tb.API.SendAudio(ctx, chatID, threadID, media.Filename, caption, media.Content)
 	default:
-		return tb.API.SendDocument(ctx, chatID, threadID, media.Filename, media.Caption, media.Content)
+		return tb.API.SendDocument(ctx, chatID, threadID, media.Filename, caption, media.Content)
 	}
 }
 
-func renderTelegramTextAttachment(media messenger.ResolvedOutgoingMedia) (string, bool) {
+func renderTelegramTextAttachment(caption string, media messenger.Media) (string, bool) {
 	body := string(media.Content)
 	if strings.Contains(body, "```") {
 		return "", false
 	}
 	var b strings.Builder
-	if strings.TrimSpace(media.Caption) != "" {
-		b.WriteString(strings.TrimSpace(media.Caption))
+	if strings.TrimSpace(caption) != "" {
+		b.WriteString(strings.TrimSpace(caption))
 		b.WriteString("\n\n")
 	}
 	b.WriteString("```")
@@ -251,27 +247,16 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u TelegramUpd
 }
 
 func (tb *TelegramBot) replyPayload(ctx context.Context, u TelegramUpdate, payload messenger.OutboundPayload) error {
+	payload.ProviderChatID = fmt.Sprintf("%d", u.ChatID)
+	payload.ProviderThreadID = fmt.Sprintf("%d", u.ThreadID)
 	if len(payload.Attachments) == 0 {
-		return tb.replyText(ctx, u, payload.Text.Text)
-	}
-	for i, attachment := range payload.Attachments {
-		caption := ""
-		if i == 0 {
-			caption = payload.Text.Text
+		text := cleanTextForTelegram(payload.Text.Text)
+		if text == "" {
+			text = "(empty response)"
 		}
-		if err := tb.SendMedia(ctx, messenger.ResolvedOutgoingMedia{
-			ProviderChatID:   fmt.Sprintf("%d", u.ChatID),
-			ProviderThreadID: fmt.Sprintf("%d", u.ThreadID),
-			Filename:         strings.TrimSpace(attachment.Filename),
-			Caption:          strings.TrimSpace(caption),
-			ContentType:      strings.TrimSpace(attachment.ContentType),
-			Syntax:           strings.TrimSpace(attachment.Syntax),
-			Content:          append([]byte(nil), attachment.Content...),
-		}); err != nil {
-			return err
-		}
+		tb.appendEventResponse(ctx, text)
 	}
-	return nil
+	return tb.Send(ctx, payload)
 }
 
 func (tb *TelegramBot) loadIncomingAttachments(ctx context.Context, attachments []TelegramAttachment) ([]messenger.Media, error) {

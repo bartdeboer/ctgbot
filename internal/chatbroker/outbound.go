@@ -6,71 +6,26 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
-func (b *Broker) SendAgentResponse(ctx context.Context, msg messenger.OutgoingMessage) error {
+func (b *Broker) SendPayload(ctx context.Context, sandboxID modeluuid.UUID, payload messenger.OutboundPayload) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
 	if b.Sessions == nil {
 		return fmt.Errorf("missing session store")
 	}
-	if msg.SandboxID.IsNull() {
+	if sandboxID.IsNull() {
 		return fmt.Errorf("sandbox id is null")
 	}
-	if strings.TrimSpace(msg.Text) == "" {
-		return fmt.Errorf("missing text")
-	}
 
-	thread, err := b.Sessions.FindThreadByID(ctx, msg.SandboxID)
+	thread, err := b.Sessions.FindThreadByID(ctx, sandboxID)
 	if err != nil {
 		return fmt.Errorf("find thread: %w", err)
 	}
 	if thread == nil {
-		return fmt.Errorf("thread not found: %s", msg.SandboxID)
-	}
-
-	chatCfg, err := b.Config.FindChatByID(thread.ChatID)
-	if err != nil {
-		return fmt.Errorf("find chat: %w", err)
-	}
-	if chatCfg == nil {
-		return fmt.Errorf("chat not found: %s", thread.ChatID)
-	}
-
-	provider, ok := b.OutboundProviders[chatCfg.ProviderType]
-	if !ok || provider == nil {
-		return fmt.Errorf("outbound provider not registered: %s", chatCfg.ProviderType)
-	}
-
-	return provider.SendAgentResponse(ctx, messenger.ResolvedOutgoingMessage{
-		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
-		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
-		Text:             msg.Text,
-		ContentType:      strings.TrimSpace(msg.ContentType),
-	})
-}
-
-func (b *Broker) SendMedia(ctx context.Context, media messenger.OutgoingMedia) error {
-	if b == nil || b.Config == nil {
-		return fmt.Errorf("missing config")
-	}
-	if b.Sessions == nil {
-		return fmt.Errorf("missing session store")
-	}
-	if media.SandboxID.IsNull() {
-		return fmt.Errorf("sandbox id is null")
-	}
-	if strings.TrimSpace(media.Filename) == "" {
-		return fmt.Errorf("missing filename")
-	}
-
-	thread, err := b.Sessions.FindThreadByID(ctx, media.SandboxID)
-	if err != nil {
-		return fmt.Errorf("find thread: %w", err)
-	}
-	if thread == nil {
-		return fmt.Errorf("thread not found: %s", media.SandboxID)
+		return fmt.Errorf("thread not found: %s", sandboxID)
 	}
 
 	chatCfg, err := b.Config.FindChatByID(thread.ChatID)
@@ -99,13 +54,16 @@ func (b *Broker) SendMedia(ctx context.Context, media messenger.OutgoingMedia) e
 	}
 	defer stopUpload()
 
-	return provider.SendMedia(ctx, messenger.ResolvedOutgoingMedia{
-		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
-		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
-		Filename:         strings.TrimSpace(media.Filename),
-		Caption:          strings.TrimSpace(media.Caption),
-		ContentType:      strings.TrimSpace(media.ContentType),
-		Syntax:           strings.TrimSpace(media.Syntax),
-		Content:          append([]byte(nil), media.Content...),
-	})
+	resolved := payload
+	resolved.ProviderChatID = strings.TrimSpace(chatCfg.ProviderChatID)
+	resolved.ProviderThreadID = strings.TrimSpace(thread.ProviderThreadID)
+	resolved.Text.Text = strings.TrimSpace(resolved.Text.Text)
+	resolved.Attachments = append([]messenger.Media(nil), resolved.Attachments...)
+	for i := range resolved.Attachments {
+		resolved.Attachments[i].Filename = strings.TrimSpace(resolved.Attachments[i].Filename)
+		resolved.Attachments[i].ContentType = strings.TrimSpace(resolved.Attachments[i].ContentType)
+		resolved.Attachments[i].Syntax = strings.TrimSpace(resolved.Attachments[i].Syntax)
+		resolved.Attachments[i].Content = append([]byte(nil), resolved.Attachments[i].Content...)
+	}
+	return provider.Send(ctx, resolved)
 }
