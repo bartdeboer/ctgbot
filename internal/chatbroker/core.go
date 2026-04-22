@@ -135,7 +135,7 @@ func (b *Broker) logf(format string, args ...any) {
 	}
 }
 
-func (b *Broker) sendThreadText(ctx context.Context, thread *Thread, text string) error {
+func (b *Broker) SendSystemMessage(ctx context.Context, thread *Thread, text string) error {
 	if b == nil || b.Config == nil || thread == nil || thread.ChatID.IsNull() || strings.TrimSpace(text) == "" {
 		return nil
 	}

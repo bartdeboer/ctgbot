@@ -11,16 +11,16 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 
-func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.InboundPayload) (messenger.OutboundPayload, error) {
-	text := strings.TrimSpace(u.Text.Text)
-	if text == "" && len(u.Attachments) == 0 {
+func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.InboundPayload) (messenger.OutboundPayload, error) {
+	text := strings.TrimSpace(msg.Text.Text)
+	if text == "" && len(msg.Attachments) == 0 {
 		return messenger.OutboundPayload{}, nil
 	}
 
 	var savedPaths []string
-	if len(u.Attachments) > 0 {
+	if len(msg.Attachments) > 0 {
 		var err error
-		savedPaths, err = b.handleIncomingAttachments(ctx, u, u.Attachments)
+		savedPaths, err = b.handleIncomingAttachments(ctx, msg, msg.Attachments)
 		if err != nil {
 			return messenger.OutboundPayload{}, err
 		}
@@ -32,24 +32,9 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.InboundPa
 		}
 		return payloadResult(uploadSavedMessage(savedPaths)), nil
 	}
-
 	if len(savedPaths) > 0 {
 		text = injectFilesIntoPrompt(savedPaths, text)
-		u.Text = messenger.TextMessage{Text: text}
-	}
-
-	result, err := b.HandleInboundPayload(ctx, u)
-
-	if err != nil {
-		return messenger.OutboundPayload{}, err
-	}
-	return result, nil
-}
-
-func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.InboundPayload) (messenger.OutboundPayload, error) {
-	text := strings.TrimSpace(msg.Text.Text)
-	if text == "" {
-		return messenger.OutboundPayload{}, nil
+		msg.Text = messenger.TextMessage{Text: text}
 	}
 
 	chatCfg, thread, err := b.resolveIncomingThread(ctx, msg, true)
@@ -81,24 +66,18 @@ func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.Inbound
 		return payloadResult(reply), nil
 	}
 
-	started := false
-	startSent := false
 	conv, err := b.GetActiveSession(ctx, thread)
 
 	if err != nil {
 		return payloadResult(fmt.Sprintf("conversation error: %v", err)), nil
 	}
 	if conv == nil {
-		started = true
 		conv, err = b.StartSession(ctx, chatCfg.ID, thread, "", false)
 
 		if err != nil {
 			return payloadResult(fmt.Sprintf("conversation error: %v", err)), nil
 		}
 		if conv != nil {
-			if sendErr := b.sendThreadText(ctx, conv, fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName(b.Config), conv.WorkspaceHost)); sendErr == nil {
-				startSent = true
-			}
 			thread = conv
 		}
 	}
@@ -109,9 +88,6 @@ func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.Inbound
 		return payloadResult(fmt.Sprintf("conversation error: %v", err)), nil
 	}
 
-	if started && !startSent && thread != nil {
-		// TODO: Send "conversation started" notification message.
-	}
 	return payloadResult(outcome.Reply), nil
 }
 

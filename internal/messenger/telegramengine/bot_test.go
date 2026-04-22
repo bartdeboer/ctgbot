@@ -272,7 +272,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 		MessageID: 99,
 	}
 
-	if err := tb.handleUpdateSerialized(context.Background(), u, "hello there", broker.HandleIncomingUpdate); err != nil {
+	if err := tb.handleUpdateSerialized(context.Background(), u, "hello there", broker.HandleInboundPayload); err != nil {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
@@ -351,7 +351,7 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 		}},
 	}
 
-	if err := tb.handleUpdateSerialized(context.Background(), u, "", broker.HandleIncomingUpdate); err != nil {
+	if err := tb.handleUpdateSerialized(context.Background(), u, "", broker.HandleInboundPayload); err != nil {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
@@ -415,7 +415,7 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 		}},
 	}
 
-	if err := tb.handleUpdateSerialized(context.Background(), u, "please review it", broker.HandleIncomingUpdate); err != nil {
+	if err := tb.handleUpdateSerialized(context.Background(), u, "please review it", broker.HandleInboundPayload); err != nil {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
@@ -475,7 +475,7 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 		}},
 	}
 
-	if err := tb.handleUpdateSerialized(context.Background(), u, "please inspect", broker.HandleIncomingUpdate); err != nil {
+	if err := tb.handleUpdateSerialized(context.Background(), u, "please inspect", broker.HandleInboundPayload); err != nil {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
@@ -542,7 +542,7 @@ func TestHandleUpdateDebouncesSlidingPrompt(t *testing.T) {
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
 	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
-		tb.handleUpdate(ctx, u, broker.HandleIncomingUpdate)
+		tb.handleUpdate(ctx, u, broker.HandleInboundPayload)
 	})
 
 	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
@@ -599,7 +599,7 @@ func TestHandleUpdateDebounceSeparatesUsers(t *testing.T) {
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
 	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
-		tb.handleUpdate(ctx, u, broker.HandleIncomingUpdate)
+		tb.handleUpdate(ctx, u, broker.HandleInboundPayload)
 	})
 
 	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
@@ -653,7 +653,7 @@ func TestHandleUpdateCommandFlushesPendingDebounce(t *testing.T) {
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
 	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
-		tb.handleUpdate(ctx, u, broker.HandleIncomingUpdate)
+		tb.handleUpdate(ctx, u, broker.HandleInboundPayload)
 	})
 
 	debouncer.HandleUpdate(context.Background(), TelegramUpdate{

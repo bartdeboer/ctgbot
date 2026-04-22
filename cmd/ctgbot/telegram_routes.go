@@ -87,7 +87,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			go func() { hostbridgeErrCh <- runHostbridgeV2(runCtx, cfg, broker) }()
 
 			botErrCh := make(chan error, 1)
-			go func() { botErrCh <- bot.Run(runCtx, broker.HandleIncomingUpdate) }()
+			go func() { botErrCh <- bot.Run(runCtx, broker.HandleInboundPayload) }()
 
 			select {
 			case err := <-hostbridgeErrCh:

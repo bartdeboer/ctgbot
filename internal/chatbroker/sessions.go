@@ -204,6 +204,9 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 			return PromptOutcome{}, err
 		}
 		started = true
+		if err := b.SendSystemMessage(ctx, conv, fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName(b.Config), conv.WorkspaceHost)); err != nil {
+			b.logf("send conversation started message failed thread=%s err=%v", conv.ID, err)
+		}
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
