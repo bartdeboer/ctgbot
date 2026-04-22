@@ -51,26 +51,26 @@ func (b *Broker) SendAgentResponse(ctx context.Context, msg messenger.OutgoingMe
 	})
 }
 
-func (b *Broker) SendMedia(ctx context.Context, file messenger.OutgoingFile) error {
+func (b *Broker) SendMedia(ctx context.Context, media messenger.OutgoingMedia) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
 	if b.Sessions == nil {
 		return fmt.Errorf("missing session store")
 	}
-	if file.SandboxID.IsNull() {
+	if media.SandboxID.IsNull() {
 		return fmt.Errorf("sandbox id is null")
 	}
-	if strings.TrimSpace(file.Filename) == "" {
+	if strings.TrimSpace(media.Filename) == "" {
 		return fmt.Errorf("missing filename")
 	}
 
-	thread, err := b.Sessions.FindThreadByID(ctx, file.SandboxID)
+	thread, err := b.Sessions.FindThreadByID(ctx, media.SandboxID)
 	if err != nil {
 		return fmt.Errorf("find thread: %w", err)
 	}
 	if thread == nil {
-		return fmt.Errorf("thread not found: %s", file.SandboxID)
+		return fmt.Errorf("thread not found: %s", media.SandboxID)
 	}
 
 	chatCfg, err := b.Config.FindChatByID(thread.ChatID)
@@ -99,13 +99,13 @@ func (b *Broker) SendMedia(ctx context.Context, file messenger.OutgoingFile) err
 	}
 	defer stopUpload()
 
-	return provider.SendMedia(ctx, messenger.ResolvedOutgoingFile{
+	return provider.SendMedia(ctx, messenger.ResolvedOutgoingMedia{
 		ProviderChatID:   strings.TrimSpace(chatCfg.ProviderChatID),
 		ProviderThreadID: strings.TrimSpace(thread.ProviderThreadID),
-		Filename:         strings.TrimSpace(file.Filename),
-		Caption:          strings.TrimSpace(file.Caption),
-		ContentType:      strings.TrimSpace(file.ContentType),
-		Syntax:           strings.TrimSpace(file.Syntax),
-		Content:          append([]byte(nil), file.Content...),
+		Filename:         strings.TrimSpace(media.Filename),
+		Caption:          strings.TrimSpace(media.Caption),
+		ContentType:      strings.TrimSpace(media.ContentType),
+		Syntax:           strings.TrimSpace(media.Syntax),
+		Content:          append([]byte(nil), media.Content...),
 	})
 }

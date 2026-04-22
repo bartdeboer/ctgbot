@@ -981,7 +981,7 @@ func TestDebouncerDoesNotDuplicateSingleUpdateAttachments(t *testing.T) {
 func TestSendMediaMarkdownUsesRenderedText(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)
-	err := tb.SendMedia(context.Background(), messenger.ResolvedOutgoingFile{
+	err := tb.SendMedia(context.Background(), messenger.ResolvedOutgoingMedia{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Filename:         "note.md",
@@ -1002,7 +1002,7 @@ func TestSendMediaMarkdownUsesRenderedText(t *testing.T) {
 func TestSendMediaImageUsesPhoto(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)
-	err := tb.SendMedia(context.Background(), messenger.ResolvedOutgoingFile{
+	err := tb.SendMedia(context.Background(), messenger.ResolvedOutgoingMedia{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Filename:         "pic.jpg",
@@ -1023,7 +1023,7 @@ func TestSendMediaImageUsesPhoto(t *testing.T) {
 func TestSendMediaTextWithSyntaxUsesRenderedFence(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)
-	err := tb.SendMedia(context.Background(), messenger.ResolvedOutgoingFile{
+	err := tb.SendMedia(context.Background(), messenger.ResolvedOutgoingMedia{
 		ProviderChatID:   "42",
 		ProviderThreadID: "7",
 		Filename:         "reply.diff",

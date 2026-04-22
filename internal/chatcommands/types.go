@@ -34,7 +34,7 @@ type SessionInfo struct {
 }
 
 type Provider interface {
-	SendMedia(ctx context.Context, file messenger.OutgoingFile) error
+	SendMedia(ctx context.Context, media messenger.OutgoingMedia) error
 	StartSession(ctx context.Context, chatID modeluuid.UUID, workspace string, replace bool) (SessionInfo, error)
 	StopActiveSession(ctx context.Context, threadID modeluuid.UUID) error
 	RefreshActiveSession(ctx context.Context, threadID modeluuid.UUID) error

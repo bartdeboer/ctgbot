@@ -35,7 +35,7 @@ func (f *fakeHostCommandRunner) ExecuteRunCommand(_ context.Context, req Request
 }
 
 type fakeProvider struct {
-	sentFiles           []messenger.OutgoingFile
+	sentMedia           []messenger.OutgoingMedia
 	startedChatID       modeluuid.UUID
 	startedWorkspace    string
 	startedReplace      bool
@@ -55,8 +55,8 @@ type fakeProvider struct {
 	setResult           string
 }
 
-func (f *fakeProvider) SendMedia(_ context.Context, file messenger.OutgoingFile) error {
-	f.sentFiles = append(f.sentFiles, file)
+func (f *fakeProvider) SendMedia(_ context.Context, media messenger.OutgoingMedia) error {
+	f.sentMedia = append(f.sentMedia, media)
 	return nil
 }
 
@@ -227,8 +227,8 @@ func TestProviderRunnerSendMediaUsesSandboxID(t *testing.T) {
 		t.Fatalf("send file error = %v", err)
 	}
 
-	if len(provider.sentFiles) != 1 || provider.sentFiles[0].SandboxID != sandboxID || string(provider.sentFiles[0].Content) != "abc" || provider.sentFiles[0].Syntax != "diff" {
-		t.Fatalf("sentFiles = %#v", provider.sentFiles)
+	if len(provider.sentMedia) != 1 || provider.sentMedia[0].SandboxID != sandboxID || string(provider.sentMedia[0].Content) != "abc" || provider.sentMedia[0].Syntax != "diff" {
+		t.Fatalf("sentMedia = %#v", provider.sentMedia)
 	}
 }
 

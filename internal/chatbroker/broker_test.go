@@ -798,7 +798,7 @@ func TestBrokerSendMediaRoutesToOutboundProvider(t *testing.T) {
 	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterOutboundChatProvider("telegram", provider)
 
-	err = broker.SendMedia(context.Background(), messenger.OutgoingFile{
+	err = broker.SendMedia(context.Background(), messenger.OutgoingMedia{
 		SandboxID: thread.ID,
 		Filename:  "report.pdf",
 		Caption:   "Weekly report",
@@ -808,20 +808,20 @@ func TestBrokerSendMediaRoutesToOutboundProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SendMedia: %v", err)
 	}
-	if provider.file == nil {
-		t.Fatalf("expected outbound provider to receive file")
+	if provider.media == nil {
+		t.Fatalf("expected outbound provider to receive media")
 	}
-	if provider.file.ProviderChatID != "42" || provider.file.ProviderThreadID != "7" {
-		t.Fatalf("unexpected provider target: %+v", *provider.file)
+	if provider.media.ProviderChatID != "42" || provider.media.ProviderThreadID != "7" {
+		t.Fatalf("unexpected provider target: %+v", *provider.media)
 	}
-	if provider.file.Filename != "report.pdf" || provider.file.Caption != "Weekly report" {
-		t.Fatalf("unexpected outbound metadata: %+v", *provider.file)
+	if provider.media.Filename != "report.pdf" || provider.media.Caption != "Weekly report" {
+		t.Fatalf("unexpected outbound metadata: %+v", *provider.media)
 	}
-	if provider.file.Syntax != "pdf" {
-		t.Fatalf("unexpected syntax: %q", provider.file.Syntax)
+	if provider.media.Syntax != "pdf" {
+		t.Fatalf("unexpected syntax: %q", provider.media.Syntax)
 	}
-	if string(provider.file.Content) != "hello" {
-		t.Fatalf("unexpected outbound content: %q", string(provider.file.Content))
+	if string(provider.media.Content) != "hello" {
+		t.Fatalf("unexpected outbound content: %q", string(provider.media.Content))
 	}
 	if !reflect.DeepEqual(provider.actions, []messenger.ChatAction{messenger.ChatActionUploadDocument}) {
 		t.Fatalf("actions = %#v", provider.actions)
@@ -925,7 +925,7 @@ func (f *fakeSkillInstallingBrokerAgent) InstallSkill(ctx context.Context, sbx *
 }
 
 type fakeOutboundBrokerProvider struct {
-	file           *messenger.ResolvedOutgoingFile
+	media          *messenger.ResolvedOutgoingMedia
 	actions        []messenger.ChatAction
 	actionTargets  []messenger.ChatTarget
 	stoppedActions []messenger.ChatAction
@@ -937,10 +937,10 @@ func (f *fakeOutboundBrokerProvider) SendAgentResponse(ctx context.Context, msg 
 	return nil
 }
 
-func (f *fakeOutboundBrokerProvider) SendMedia(ctx context.Context, file messenger.ResolvedOutgoingFile) error {
-	copyFile := file
-	copyFile.Content = append([]byte(nil), file.Content...)
-	f.file = &copyFile
+func (f *fakeOutboundBrokerProvider) SendMedia(ctx context.Context, media messenger.ResolvedOutgoingMedia) error {
+	copyMedia := media
+	copyMedia.Content = append([]byte(nil), media.Content...)
+	f.media = &copyMedia
 	return nil
 }
 

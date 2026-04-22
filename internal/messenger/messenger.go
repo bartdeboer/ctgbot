@@ -63,7 +63,7 @@ type OutgoingMessage struct {
 	ContentType string
 }
 
-type OutgoingFile struct {
+type OutgoingMedia struct {
 	SandboxID   modeluuid.UUID
 	Filename    string
 	Caption     string
@@ -79,7 +79,7 @@ type ResolvedOutgoingMessage struct {
 	ContentType      string
 }
 
-type ResolvedOutgoingFile struct {
+type ResolvedOutgoingMedia struct {
 	ProviderChatID   string
 	ProviderThreadID string
 	Filename         string
@@ -97,6 +97,6 @@ type InboundChatProvider interface {
 type OutboundChatProvider interface {
 	ProviderType() string
 	SendAgentResponse(ctx context.Context, msg ResolvedOutgoingMessage) error
-	SendMedia(ctx context.Context, file ResolvedOutgoingFile) error
+	SendMedia(ctx context.Context, media ResolvedOutgoingMedia) error
 	StartChatAction(ctx context.Context, target ChatTarget, action ChatAction) (func(), error)
 }
