@@ -142,11 +142,8 @@ func TestHandleIncomingMessageRoutesTelegramCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
-	}
-	if result.Messages[0].Text != chatcommands.New(nil).UserHelpText() {
-		t.Fatalf("message text = %q, want %q", result.Messages[0].Text, chatcommands.New(nil).UserHelpText())
+	if result.Text.Text != chatcommands.New(nil).UserHelpText() {
+		t.Fatalf("message text = %q, want %q", result.Text.Text, chatcommands.New(nil).UserHelpText())
 	}
 }
 
@@ -193,11 +190,8 @@ func TestHandleIncomingMessageRunsUpgradeCommand(t *testing.T) {
 	if !process.upgradeCalled {
 		t.Fatalf("expected upgrade to be called")
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
-	}
-	if result.Messages[0].Text != "upgrade completed\ntype /quit to restart" {
-		t.Fatalf("message text = %q", result.Messages[0].Text)
+	if result.Text.Text != "upgrade completed\ntype /quit to restart" {
+		t.Fatalf("message text = %q", result.Text.Text)
 	}
 }
 
@@ -244,11 +238,8 @@ func TestHandleIncomingMessageRunsQuitCommand(t *testing.T) {
 	if !process.quitCalled {
 		t.Fatalf("expected quit to be called")
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
-	}
-	if result.Messages[0].Text != "shutting down ctgbot" {
-		t.Fatalf("message text = %q", result.Messages[0].Text)
+	if result.Text.Text != "shutting down ctgbot" {
+		t.Fatalf("message text = %q", result.Text.Text)
 	}
 }
 
@@ -293,8 +284,8 @@ func TestHandleIncomingMessageStartsTypingChatAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
+	if result.Text.Text == "" {
+		t.Fatalf("expected response text")
 	}
 	if !reflect.DeepEqual(provider.actions, []messenger.ChatAction{messenger.ChatActionTyping}) {
 		t.Fatalf("actions = %#v", provider.actions)
@@ -353,11 +344,8 @@ func TestHandleIncomingMessageBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	if process.upgradeCalled {
 		t.Fatalf("did not expect upgrade to be called")
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
-	}
-	if result.Messages[0].Text != "upgrade is not enabled for this chat" {
-		t.Fatalf("message text = %q", result.Messages[0].Text)
+	if result.Text.Text != "upgrade is not enabled for this chat" {
+		t.Fatalf("message text = %q", result.Text.Text)
 	}
 }
 
@@ -404,11 +392,8 @@ func TestHandleIncomingMessageBlocksQuitWithoutProcessTools(t *testing.T) {
 	if process.quitCalled {
 		t.Fatalf("did not expect quit to be called")
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
-	}
-	if result.Messages[0].Text != "quit is not enabled for this chat" {
-		t.Fatalf("message text = %q", result.Messages[0].Text)
+	if result.Text.Text != "quit is not enabled for this chat" {
+		t.Fatalf("message text = %q", result.Text.Text)
 	}
 }
 
@@ -473,11 +458,8 @@ func TestHandleIncomingMessageRefreshesActiveConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
-	}
-	if result.Messages[0].Text != "conversation runtime refreshed" {
-		t.Fatalf("message text = %q", result.Messages[0].Text)
+	if result.Text.Text != "conversation runtime refreshed" {
+		t.Fatalf("message text = %q", result.Text.Text)
 	}
 	if sessions.thread == nil {
 		t.Fatalf("expected saved thread")
@@ -560,8 +542,8 @@ func TestHandleIncomingMessageRefreshInstallsConfiguredSkills(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if len(result.Messages) != 1 || result.Messages[0].Text != "conversation runtime refreshed" {
-		t.Fatalf("unexpected refresh response: %#v", result.Messages)
+	if result.Text.Text != "conversation runtime refreshed" {
+		t.Fatalf("unexpected refresh response: %#v", result)
 	}
 	if !reflect.DeepEqual(agent.installedSkills, []string{skillOne, skillTwo}) {
 		t.Fatalf("installedSkills = %#v, want %#v", agent.installedSkills, []string{skillOne, skillTwo})
@@ -613,11 +595,8 @@ func TestHandleIncomingMessageRefreshWithoutActiveConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
-	}
-	if result.Messages[0].Text != "no active conversation" {
-		t.Fatalf("message text = %q", result.Messages[0].Text)
+	if result.Text.Text != "no active conversation" {
+		t.Fatalf("message text = %q", result.Text.Text)
 	}
 }
 
@@ -683,11 +662,8 @@ func TestHandleIncomingMessagePurgesActiveConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
-	}
-	if result.Messages[0].Text != "conversation purged" {
-		t.Fatalf("message text = %q", result.Messages[0].Text)
+	if result.Text.Text != "conversation purged" {
+		t.Fatalf("message text = %q", result.Text.Text)
 	}
 	if !agent.purgeCalled {
 		t.Fatalf("expected purge hook to be called")
@@ -757,11 +733,8 @@ func TestHandleIncomingMessagePurgeWithoutActiveConversation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if len(result.Messages) != 1 {
-		t.Fatalf("messages len = %d, want 1", len(result.Messages))
-	}
-	if result.Messages[0].Text != "no active conversation" {
-		t.Fatalf("message text = %q", result.Messages[0].Text)
+	if result.Text.Text != "no active conversation" {
+		t.Fatalf("message text = %q", result.Text.Text)
 	}
 }
 
@@ -983,8 +956,8 @@ func TestHandleIncomingMessageInterruptDisabledForChat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("interrupt err: %v", err)
 	}
-	if len(result.Messages) != 1 || result.Messages[0].Text != "interrupt is disabled for this chat" {
-		t.Fatalf("interrupt messages = %#v", result.Messages)
+	if result.Text.Text != "interrupt is disabled for this chat" {
+		t.Fatalf("interrupt payload = %#v", result)
 	}
 }
 
@@ -1024,8 +997,8 @@ func TestHandleIncomingMessageRoutesGroupedContainerRefreshCommand(t *testing.T)
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if len(result.Messages) != 1 || result.Messages[0].Text != "no active conversation" {
-		t.Fatalf("messages = %#v", result.Messages)
+	if result.Text.Text != "no active conversation" {
+		t.Fatalf("payload = %#v", result)
 	}
 }
 
@@ -1066,7 +1039,7 @@ func TestHandleIncomingMessageDeprecatesNewCommand(t *testing.T) {
 		t.Fatalf("handle incoming message: %v", err)
 	}
 	want := "use /container refresh to rebuild the backing container, or /chat purge to drop the active chat state"
-	if len(result.Messages) != 1 || result.Messages[0].Text != want {
-		t.Fatalf("messages = %#v", result.Messages)
+	if result.Text.Text != want {
+		t.Fatalf("payload = %#v", result)
 	}
 }

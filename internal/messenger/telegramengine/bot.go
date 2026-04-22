@@ -177,7 +177,7 @@ func (tb *TelegramBot) AutoMigrate(ctx context.Context) error {
 	return nil
 }
 
-func (tb *TelegramBot) Run(ctx context.Context, onUpdate func(context.Context, messenger.IncomingUpdate) (messenger.IncomingResult, error)) error {
+func (tb *TelegramBot) Run(ctx context.Context, onUpdate func(context.Context, messenger.InboundPayload) (messenger.OutboundPayload, error)) error {
 	if tb.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -193,7 +193,7 @@ func (tb *TelegramBot) Run(ctx context.Context, onUpdate func(context.Context, m
 	return tb.API.Run(ctx, tb.Config.TelegramPollTimeout(), handler)
 }
 
-func (tb *TelegramBot) handleUpdate(ctx context.Context, u TelegramUpdate, onUpdate func(context.Context, messenger.IncomingUpdate) (messenger.IncomingResult, error)) {
+func (tb *TelegramBot) handleUpdate(ctx context.Context, u TelegramUpdate, onUpdate func(context.Context, messenger.InboundPayload) (messenger.OutboundPayload, error)) {
 	text := strings.TrimSpace(u.Text)
 	if text == "" && len(u.Attachments) == 0 {
 		return
@@ -214,20 +214,20 @@ func (tb *TelegramBot) handleUpdate(ctx context.Context, u TelegramUpdate, onUpd
 	}
 }
 
-func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u TelegramUpdate, text string, onUpdate func(context.Context, messenger.IncomingUpdate) (messenger.IncomingResult, error)) error {
+func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u TelegramUpdate, text string, onUpdate func(context.Context, messenger.InboundPayload) (messenger.OutboundPayload, error)) error {
 	if onUpdate == nil {
 		return fmt.Errorf("missing update callback")
 	}
-	update := messenger.IncomingUpdate{
+	update := messenger.InboundPayload{
 		ProviderType:      "telegram",
 		ProviderChatID:    fmt.Sprintf("%d", u.ChatID),
 		ProviderThreadID:  fmt.Sprintf("%d", u.ThreadID),
-		Text:              text,
 		ChatLabel:         strings.TrimSpace(u.ChatTitle),
 		UserLabel:         u.UserLabel(),
 		UserID:            u.UserID,
 		IsAdmin:           tb.Config != nil && u.UserID != 0 && u.UserID == tb.Config.TelegramAdminUserID(),
 		ProviderMessageID: fmt.Sprintf("%d", u.MessageID),
+		Text:              messenger.TextMessage{Text: text},
 	}
 
 	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q text=%q attachments=%d", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), text, len(u.Attachments))
@@ -240,26 +240,48 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u TelegramUpd
 		update.Attachments = attachments
 	}
 
-	result, err := onUpdate(ctx, update)
+	payload, err := onUpdate(ctx, update)
 	if err != nil {
 		return err
 	}
-	for _, message := range result.Messages {
-		if err := tb.replyText(ctx, u, message.Text); err != nil {
+	if err := tb.replyPayload(ctx, u, payload); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (tb *TelegramBot) replyPayload(ctx context.Context, u TelegramUpdate, payload messenger.OutboundPayload) error {
+	if len(payload.Attachments) == 0 {
+		return tb.replyText(ctx, u, payload.Text.Text)
+	}
+	for i, attachment := range payload.Attachments {
+		caption := ""
+		if i == 0 {
+			caption = payload.Text.Text
+		}
+		if err := tb.SendMedia(ctx, messenger.ResolvedOutgoingMedia{
+			ProviderChatID:   fmt.Sprintf("%d", u.ChatID),
+			ProviderThreadID: fmt.Sprintf("%d", u.ThreadID),
+			Filename:         strings.TrimSpace(attachment.Filename),
+			Caption:          strings.TrimSpace(caption),
+			ContentType:      strings.TrimSpace(attachment.ContentType),
+			Syntax:           strings.TrimSpace(attachment.Syntax),
+			Content:          append([]byte(nil), attachment.Content...),
+		}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (tb *TelegramBot) loadIncomingAttachments(ctx context.Context, attachments []TelegramAttachment) ([]messenger.IncomingAttachment, error) {
-	out := make([]messenger.IncomingAttachment, 0, len(attachments))
+func (tb *TelegramBot) loadIncomingAttachments(ctx context.Context, attachments []TelegramAttachment) ([]messenger.Media, error) {
+	out := make([]messenger.Media, 0, len(attachments))
 	for _, attachment := range attachments {
 		content, err := tb.API.DownloadFile(ctx, attachment.FileID)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, messenger.IncomingAttachment{
+		out = append(out, messenger.Media{
 			Kind:     strings.TrimSpace(attachment.Kind),
 			Filename: strings.TrimSpace(attachment.Filename),
 			Content:  content,

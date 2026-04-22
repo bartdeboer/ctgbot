@@ -301,16 +301,11 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	if !agent.setupCalled {
 		t.Fatalf("expected environment setup to be called")
 	}
-	if len(api.messages) != 2 {
-		t.Fatalf("expected 2 messages, got %d", len(api.messages))
+	if len(api.messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(api.messages))
 	}
-
-	wantStart := "conversation started\ncontainer: " + sessions.thread.ContainerName(cfg) + "\nworkspace: " + filepath.Join(root, "chats", chatCfg.ID.String(), "workspace")
-	if api.messages[0].text != wantStart {
-		t.Fatalf("unexpected first message: %q", api.messages[0].text)
-	}
-	if api.messages[1].text != "reply text" {
-		t.Fatalf("unexpected second message: %q", api.messages[1].text)
+	if api.messages[0].text != "reply text" {
+		t.Fatalf("unexpected message: %q", api.messages[0].text)
 	}
 }
 
@@ -431,8 +426,8 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 	if _, err := os.Stat(inboxPath); err != nil {
 		t.Fatalf("stat saved upload: %v", err)
 	}
-	if len(api.messages) != 2 {
-		t.Fatalf("expected 2 messages, got %d", len(api.messages))
+	if len(api.messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(api.messages))
 	}
 }
 
@@ -495,8 +490,8 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 	if string(data) != "jpeg-bytes" {
 		t.Fatalf("saved upload contents = %q", string(data))
 	}
-	if len(api.messages) != 2 {
-		t.Fatalf("expected 2 messages, got %d", len(api.messages))
+	if len(api.messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(api.messages))
 	}
 }
 

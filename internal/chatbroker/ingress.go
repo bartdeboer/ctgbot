@@ -11,10 +11,10 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 
-func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.IncomingUpdate) (messenger.IncomingResult, error) {
-	text := strings.TrimSpace(u.Text)
+func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.InboundPayload) (messenger.OutboundPayload, error) {
+	text := strings.TrimSpace(u.Text.Text)
 	if text == "" && len(u.Attachments) == 0 {
-		return messenger.IncomingResult{}, nil
+		return messenger.OutboundPayload{}, nil
 	}
 
 	msg := messenger.IncomingMessage{
@@ -31,19 +31,27 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.IncomingU
 
 	var savedPaths []string
 	if len(u.Attachments) > 0 {
+		attachments := make([]messenger.IncomingAttachment, 0, len(u.Attachments))
+		for _, attachment := range u.Attachments {
+			attachments = append(attachments, messenger.IncomingAttachment{
+				Kind:     strings.TrimSpace(attachment.Kind),
+				Filename: strings.TrimSpace(attachment.Filename),
+				Content:  append([]byte(nil), attachment.Content...),
+			})
+		}
 		var err error
-		savedPaths, err = b.handleIncomingAttachments(ctx, msg, u.Attachments)
+		savedPaths, err = b.handleIncomingAttachments(ctx, msg, attachments)
 
 		if err != nil {
-			return messenger.IncomingResult{}, err
+			return messenger.OutboundPayload{}, err
 		}
 	}
 
 	if text == "" {
 		if len(savedPaths) == 0 {
-			return messenger.IncomingResult{}, nil
+			return messenger.OutboundPayload{}, nil
 		}
-		return messenger.IncomingResult{Messages: []messenger.OutboundMessage{{Text: uploadSavedMessage(savedPaths)}}}, nil
+		return payloadResult(uploadSavedMessage(savedPaths)), nil
 	}
 
 	if len(savedPaths) > 0 {
@@ -54,48 +62,44 @@ func (b *Broker) HandleIncomingUpdate(ctx context.Context, u messenger.IncomingU
 	result, err := b.HandleIncomingMessage(ctx, msg)
 
 	if err != nil {
-		return messenger.IncomingResult{}, err
+		return messenger.OutboundPayload{}, err
 	}
 	return result, nil
 }
 
-func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.IncomingMessage) (messenger.IncomingResult, error) {
+func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.IncomingMessage) (messenger.OutboundPayload, error) {
 	text := strings.TrimSpace(msg.Message)
 	if text == "" {
-		return messenger.IncomingResult{}, nil
+		return messenger.OutboundPayload{}, nil
 	}
 
 	chatCfg, thread, err := b.resolveIncomingThread(ctx, msg, true)
 
 	if err != nil {
-		return messenger.IncomingResult{}, err
+		return messenger.OutboundPayload{}, err
 	}
 	if chatCfg == nil {
-		return messenger.IncomingResult{}, fmt.Errorf("missing chat mapping")
+		return messenger.OutboundPayload{}, fmt.Errorf("missing chat mapping")
 	}
 	if !chatCfg.Enabled {
 		b.logf("ignoring update from disabled chat provider=%q chat=%q title=%q", msg.ProviderType, msg.ProviderChatID, chatCfg.ProviderChatTitle)
-		return messenger.IncomingResult{}, nil
+		return messenger.OutboundPayload{}, nil
 	}
 
 	if strings.HasPrefix(text, "/") {
 		args := normalizeIncomingCommand(msg.ProviderType, text)
 		if len(args) == 0 {
-			return messenger.IncomingResult{}, nil
+			return messenger.OutboundPayload{}, nil
 		}
 		reply, err := b.handleCommand(ctx, chatCfg.ID, thread, msg.UserID, msg.IsAdmin, args[0], args[1:])
 
 		if err != nil {
-			return messenger.IncomingResult{
-				Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("command error: %v", err)}},
-			}, nil
+			return payloadResult(fmt.Sprintf("command error: %v", err)), nil
 		}
 		if strings.TrimSpace(reply) == "" {
-			return messenger.IncomingResult{}, nil
+			return messenger.OutboundPayload{}, nil
 		}
-		return messenger.IncomingResult{
-			Messages: []messenger.OutboundMessage{{Text: reply}},
-		}, nil
+		return payloadResult(reply), nil
 	}
 
 	started := false
@@ -103,18 +107,14 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 	conv, err := b.GetActiveSession(ctx, thread)
 
 	if err != nil {
-		return messenger.IncomingResult{
-			Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
-		}, nil
+		return payloadResult(fmt.Sprintf("conversation error: %v", err)), nil
 	}
 	if conv == nil {
 		started = true
 		conv, err = b.StartSession(ctx, chatCfg.ID, thread, "", false)
 
 		if err != nil {
-			return messenger.IncomingResult{
-				Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
-			}, nil
+			return payloadResult(fmt.Sprintf("conversation error: %v", err)), nil
 		}
 		if conv != nil {
 			if sendErr := b.sendThreadText(ctx, conv, fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName(b.Config), conv.WorkspaceHost)); sendErr == nil {
@@ -127,21 +127,19 @@ func (b *Broker) HandleIncomingMessage(ctx context.Context, msg messenger.Incomi
 	outcome, err := b.HandlePrompt(ctx, chatCfg.ID, thread, text)
 
 	if err != nil {
-		return messenger.IncomingResult{
-			Messages: []messenger.OutboundMessage{{Text: fmt.Sprintf("conversation error: %v", err)}},
-		}, nil
+		return payloadResult(fmt.Sprintf("conversation error: %v", err)), nil
 	}
 
-	var messages []messenger.OutboundMessage
 	if started && !startSent && thread != nil {
-		messages = append(messages, messenger.OutboundMessage{
-			Text: fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", thread.ContainerName(b.Config), thread.WorkspaceHost),
-		})
+		// TODO: Send "conversation started" notification message.
 	}
-	if strings.TrimSpace(outcome.Reply) != "" {
-		messages = append(messages, messenger.OutboundMessage{Text: outcome.Reply})
+	return payloadResult(outcome.Reply), nil
+}
+
+func payloadResult(text string) messenger.OutboundPayload {
+	return messenger.OutboundPayload{
+		Text: messenger.TextMessage{Text: strings.TrimSpace(text)},
 	}
-	return messenger.IncomingResult{Messages: messages}, nil
 }
 
 func (b *Broker) ResolveIncomingThread(ctx context.Context, msg messenger.IncomingMessage, create bool) (*appstate.ChatConfigEntry, *Thread, error) {
