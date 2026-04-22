@@ -77,13 +77,13 @@ func (tb *TelegramBot) sendAttachment(ctx context.Context, chatID int64, threadI
 			text = strings.TrimSpace(caption) + "\n\n" + text
 		}
 		return tb.sendRenderedText(ctx, chatID, threadID, 0, text)
-	case contentType == "text/plain" && strings.TrimSpace(media.Syntax) != "":
+	case isTelegramTextualAttachment(contentType) && strings.TrimSpace(media.Syntax) != "":
 		text, ok := renderTelegramTextAttachment(caption, media)
 		if !ok {
 			return tb.API.SendDocument(ctx, chatID, threadID, media.Filename, caption, media.Content)
 		}
 		return tb.sendRenderedText(ctx, chatID, threadID, 0, text)
-	case contentType == "text/plain":
+	case isTelegramTextualAttachment(contentType):
 		text := string(media.Content)
 		if strings.TrimSpace(caption) != "" {
 			text = strings.TrimSpace(caption) + "\n\n" + text
@@ -97,6 +97,19 @@ func (tb *TelegramBot) sendAttachment(ctx context.Context, chatID int64, threadI
 		return tb.API.SendAudio(ctx, chatID, threadID, media.Filename, caption, media.Content)
 	default:
 		return tb.API.SendDocument(ctx, chatID, threadID, media.Filename, caption, media.Content)
+	}
+}
+
+func isTelegramTextualAttachment(contentType string) bool {
+	contentType = strings.TrimSpace(strings.ToLower(contentType))
+	if strings.HasPrefix(contentType, "text/") {
+		return true
+	}
+	switch contentType {
+	case "application/json", "application/xml", "application/yaml", "application/x-yaml":
+		return true
+	default:
+		return false
 	}
 }
 

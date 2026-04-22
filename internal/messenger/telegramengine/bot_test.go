@@ -1045,6 +1045,60 @@ func TestSendMediaTextWithSyntaxUsesRenderedFence(t *testing.T) {
 	}
 }
 
+func TestSendTextualSourceWithSyntaxUsesRenderedFence(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	err := tb.Send(context.Background(), messenger.OutboundPayload{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Attachments: []messenger.Media{{
+			Filename:    "test.go",
+			ContentType: "text/x-go",
+			Syntax:      "go",
+			Content:     []byte("package main\n"),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(api.messages) == 0 {
+		t.Fatalf("expected inline rendered text")
+	}
+	if len(api.documents) != 0 {
+		t.Fatalf("did not expect document upload")
+	}
+	if !strings.Contains(api.messages[0].text, "package main") {
+		t.Fatalf("message text = %q", api.messages[0].text)
+	}
+}
+
+func TestSendJSONWithSyntaxUsesRenderedFence(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	err := tb.Send(context.Background(), messenger.OutboundPayload{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Attachments: []messenger.Media{{
+			Filename:    "data.json",
+			ContentType: "application/json",
+			Syntax:      "json",
+			Content:     []byte("{\"ok\":true}\n"),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(api.messages) == 0 {
+		t.Fatalf("expected inline rendered text")
+	}
+	if len(api.documents) != 0 {
+		t.Fatalf("did not expect document upload")
+	}
+	if !strings.Contains(api.messages[0].text, "\"ok\":true") {
+		t.Fatalf("message text = %q", api.messages[0].text)
+	}
+}
+
 func TestSendPlainUsesRenderedPath(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)
