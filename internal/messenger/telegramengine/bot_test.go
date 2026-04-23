@@ -1099,6 +1099,37 @@ func TestSendJSONWithSyntaxUsesRenderedFence(t *testing.T) {
 	}
 }
 
+func TestSendLargeTextualSourceWithSyntaxChunksInline(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	body := strings.Repeat("package main\n", 500)
+
+	err := tb.Send(context.Background(), messenger.OutboundPayload{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Attachments: []messenger.Media{{
+			Filename:    "big.go",
+			ContentType: "text/x-go",
+			Syntax:      "go",
+			Content:     []byte(body),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(api.messages) < 2 {
+		t.Fatalf("messages = %d, want multiple chunks", len(api.messages))
+	}
+	if len(api.documents) != 0 {
+		t.Fatalf("did not expect document upload")
+	}
+	for i, msg := range api.messages {
+		if !strings.Contains(msg.text, "package main") {
+			t.Fatalf("message[%d] text = %q", i, msg.text)
+		}
+	}
+}
+
 func TestSendPlainUsesRenderedPath(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)
