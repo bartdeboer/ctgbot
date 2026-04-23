@@ -160,6 +160,32 @@ func (r *ProviderRunner) Execute(ctx context.Context, req Request) (Result, erro
 			return Result{}, err
 		}
 		return Result{Text: text}, nil
+	case Stop:
+		threadID, err := r.resolveThreadID(ctx, req)
+		if err != nil {
+			return Result{}, err
+		}
+		status, err := r.Provider.Status(ctx, threadID)
+		if err != nil {
+			return Result{}, err
+		}
+		if status == "no active conversation" {
+			return Result{Text: status}, nil
+		}
+		if err := r.Provider.StopActiveSession(ctx, threadID); err != nil {
+			return Result{}, err
+		}
+		return Result{Text: "conversation stopped"}, nil
+	case Status:
+		threadID, err := r.resolveThreadID(ctx, req)
+		if err != nil {
+			return Result{}, err
+		}
+		text, err := r.Provider.Status(ctx, threadID)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Text: text}, nil
 	case RunCommand:
 		return Result{}, fmt.Errorf("run command is not supported by the provider runner")
 	default:

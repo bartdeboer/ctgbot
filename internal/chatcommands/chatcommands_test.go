@@ -53,6 +53,7 @@ type fakeProvider struct {
 	resolvedThreadID    *modeluuid.UUID
 	listResult          string
 	setResult           string
+	statusResult        string
 }
 
 func (f *fakeProvider) SendPayload(_ context.Context, sandboxID modeluuid.UUID, payload messenger.OutboundPayload) error {
@@ -100,6 +101,10 @@ func (f *fakeProvider) Set(_ context.Context, threadID modeluuid.UUID, cmdctx Co
 	f.setKey = key
 	f.setValue = value
 	return f.setResult, nil
+}
+
+func (f *fakeProvider) Status(_ context.Context, _ modeluuid.UUID) (string, error) {
+	return f.statusResult, nil
 }
 
 func withStdin(t *testing.T, data string, fn func()) {

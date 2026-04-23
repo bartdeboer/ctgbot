@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/chatcommands"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 
@@ -55,10 +56,18 @@ func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.Inbound
 		if len(args) == 0 {
 			return messenger.OutboundPayload{}, nil
 		}
-		reply, err := b.handleCommand(ctx, thread, msg.IsAdmin, args[0], args[1:])
-
+		provider := NewChatCommandsProvider(b)
+		cmds := chatcommands.New(chatcommands.NewProviderRunner(provider))
+		result, err := cmds.RunUserRequest(ctx, chatcommands.Request{
+			ThreadID: threadIDOrNil(thread),
+			Context:  chatcommands.CommandContext{IsRoot: msg.IsAdmin},
+		}, args)
 		if err != nil {
 			return payloadResult(fmt.Sprintf("command error: %v", err)), nil
+		}
+		reply := strings.TrimSpace(result.Text)
+		if result.Session != nil {
+			reply = fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", result.Session.Container, result.Session.Workspace)
 		}
 		if strings.TrimSpace(reply) == "" {
 			return messenger.OutboundPayload{}, nil

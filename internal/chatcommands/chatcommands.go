@@ -45,6 +45,10 @@ const (
 	routeInterrupt        routeName = "interrupt"
 	routeUpgrade          routeName = "upgrade"
 	routeQuit             routeName = "quit"
+	routeStop             routeName = "stop"
+	routeStatus           routeName = "status"
+	routeHelp             routeName = "help"
+	routeNew              routeName = "new"
 )
 
 var userRoutes = []routeName{
@@ -57,6 +61,10 @@ var userRoutes = []routeName{
 	routeInterrupt,
 	routeUpgrade,
 	routeQuit,
+	routeStop,
+	routeStatus,
+	routeHelp,
+	routeNew,
 }
 
 var bridgeRoutes = []routeName{
@@ -72,6 +80,10 @@ var bridgeRoutes = []routeName{
 	routeInterrupt,
 	routeUpgrade,
 	routeQuit,
+	routeStop,
+	routeStatus,
+	routeHelp,
+	routeNew,
 }
 
 func New(runner Runner) *ChatCommands {
@@ -108,11 +120,20 @@ func (c *ChatCommands) Parse(ctx context.Context, base Request, argv []string) (
 }
 
 func (c *ChatCommands) Execute(ctx context.Context, req Request) (Result, error) {
-	if c == nil || c.runner == nil {
+	if c == nil {
 		return Result{}, fmt.Errorf("chat command runner is unavailable")
 	}
 	if req.Command == nil {
 		return Result{}, fmt.Errorf("missing command")
+	}
+	switch req.Command.(type) {
+	case Help:
+		return Result{Text: c.UserHelpText()}, nil
+	case DeprecatedNew:
+		return Result{Text: "use /container refresh to rebuild the backing container, or /chat purge to drop the active chat state"}, nil
+	}
+	if c.runner == nil {
+		return Result{}, fmt.Errorf("chat command runner is unavailable")
 	}
 	return c.runner.Execute(ctx, req)
 }
@@ -278,6 +299,26 @@ func (c *ChatCommands) routeSpecs() map[routeName]routeSpec {
 			Pattern: "quit",
 			Desc:    "Quit ctgbot",
 			Handler: func(req *clir.Request) error { return setParsedCommand(req, buildQuit()) },
+		},
+		routeStop: {
+			Pattern: "stop",
+			Desc:    "Stop the active conversation",
+			Handler: func(req *clir.Request) error { return setParsedCommand(req, buildStop()) },
+		},
+		routeStatus: {
+			Pattern: "status",
+			Desc:    "Show active conversation status",
+			Handler: func(req *clir.Request) error { return setParsedCommand(req, buildStatus()) },
+		},
+		routeHelp: {
+			Pattern: "help",
+			Desc:    "Show help",
+			Handler: func(req *clir.Request) error { return setParsedCommand(req, buildHelp()) },
+		},
+		routeNew: {
+			Pattern: "new",
+			Desc:    "Show guidance for the deprecated /new command",
+			Handler: func(req *clir.Request) error { return setParsedCommand(req, buildDeprecatedNew()) },
 		},
 	}
 }

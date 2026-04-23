@@ -82,3 +82,11 @@ func buildInterruptTurn() InterruptTurn { return InterruptTurn{} }
 func buildUpgrade() Upgrade { return Upgrade{} }
 
 func buildQuit() Quit { return Quit{} }
+
+func buildStop() Stop { return Stop{} }
+
+func buildStatus() Status { return Status{} }
+
+func buildHelp() Help { return Help{} }
+
+func buildDeprecatedNew() DeprecatedNew { return DeprecatedNew{} }

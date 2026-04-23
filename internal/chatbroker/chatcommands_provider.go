@@ -177,6 +177,26 @@ func (p *ChatCommandsProvider) Quit(ctx context.Context, threadID modeluuid.UUID
 	return "shutting down ctgbot", nil
 }
 
+func (p *ChatCommandsProvider) Status(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	thread, active, err := p.activeThreadByID(ctx, threadID)
+	if err != nil {
+		return "", err
+	}
+	if active == nil {
+		return "no active conversation", nil
+	}
+	msg := fmt.Sprintf(
+		"active conversation\ncontainer: %s\nworkspace: %s\ninitialized: %t",
+		thread.ContainerName(p.Broker.Config),
+		thread.WorkspaceHost,
+		thread.Initialized,
+	)
+	if thread.LastError != "" {
+		msg += "\nlast_error: " + thread.LastError
+	}
+	return msg, nil
+}
+
 func (p *ChatCommandsProvider) activeThreadByID(ctx context.Context, threadID modeluuid.UUID) (*Thread, *Thread, error) {
 	thread, err := p.threadByID(ctx, threadID)
 	if err != nil {

@@ -37,6 +37,7 @@ type Provider interface {
 	SendPayload(ctx context.Context, sandboxID modeluuid.UUID, payload messenger.OutboundPayload) error
 	StartSession(ctx context.Context, chatID modeluuid.UUID, workspace string, replace bool) (SessionInfo, error)
 	StopActiveSession(ctx context.Context, threadID modeluuid.UUID) error
+	Status(ctx context.Context, threadID modeluuid.UUID) (string, error)
 	RefreshActiveSession(ctx context.Context, threadID modeluuid.UUID) error
 	PurgeActiveSession(ctx context.Context, threadID modeluuid.UUID) error
 	ResolveThreadIDBySandboxID(ctx context.Context, sandboxID modeluuid.UUID) (*modeluuid.UUID, error)
@@ -128,3 +129,19 @@ func (Upgrade) isCommand() {}
 type Quit struct{}
 
 func (Quit) isCommand() {}
+
+type Stop struct{}
+
+func (Stop) isCommand() {}
+
+type Status struct{}
+
+func (Status) isCommand() {}
+
+type Help struct{}
+
+func (Help) isCommand() {}
+
+type DeprecatedNew struct{}
+
+func (DeprecatedNew) isCommand() {}
