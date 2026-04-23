@@ -1,6 +1,9 @@
 package markdown
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 type Parser struct {
 	lx  *Lexer
@@ -159,18 +162,20 @@ func isOrderedListMarker(marker string) bool {
 
 func (p *Parser) parseCodeBlock() *BlockNode {
 	startTok := p.cur
+	fenceWidth := fenceTokenWidth(startTok)
 	meta := map[string]string{}
-	if len(startTok.Text) > 3 {
-		meta["info"] = startTok.Text[3:]
+	if info := fenceTokenInfo(startTok, fenceWidth); info != "" {
+		meta["info"] = info
 	}
+	meta["fence"] = strconv.Itoa(fenceWidth)
 	p.advance()
 	block := &BlockNode{Kind: CodeBlock, Meta: meta}
 	contentStart := startTok.Span.End
-	for p.cur.Kind != TokenEOF && p.cur.Kind != TokenFence {
+	for p.cur.Kind != TokenEOF && !isMatchingFenceToken(p.cur, fenceWidth) {
 		lineStart := p.cur.Span.Start
 		lineEnd := lineStart
 		text := ""
-		for p.cur.Kind != TokenEOF && p.cur.Kind != TokenFence && p.cur.Kind != TokenNewline {
+		for p.cur.Kind != TokenEOF && !isMatchingFenceToken(p.cur, fenceWidth) && p.cur.Kind != TokenNewline {
 			text += p.cur.Text
 			lineEnd = p.cur.Span.End
 			p.advance()
@@ -190,7 +195,7 @@ func (p *Parser) parseCodeBlock() *BlockNode {
 	if len(block.Lines) > 0 {
 		blockEnd = block.Lines[len(block.Lines)-1].EndPos
 	}
-	if p.cur.Kind == TokenFence {
+	if isMatchingFenceToken(p.cur, fenceWidth) {
 		blockEnd = p.cur.Span.End
 		p.advance()
 	}
@@ -199,15 +204,15 @@ func (p *Parser) parseCodeBlock() *BlockNode {
 }
 
 func parseInlineTokens(tokens []Token) []*SpanNode {
-	nodes, _, _ := parseInlineSeq(tokens, 0, "")
+	nodes, _, _ := parseInlineSeq(tokens, 0, "", "")
 	return mergeTextSpans(nodes)
 }
 
-func parseInlineSeq(tokens []Token, idx int, stop TokenKind) ([]*SpanNode, int, bool) {
+func parseInlineSeq(tokens []Token, idx int, stopKind TokenKind, stopText string) ([]*SpanNode, int, bool) {
 	var nodes []*SpanNode
 	for idx < len(tokens) {
 		tok := tokens[idx]
-		if stop != "" && tok.Kind == stop {
+		if stopKind != "" && tok.Kind == stopKind && (stopText == "" || tok.Text == stopText) {
 			return nodes, idx + 1, true
 		}
 		switch tok.Kind {
@@ -215,7 +220,7 @@ func parseInlineSeq(tokens []Token, idx int, stop TokenKind) ([]*SpanNode, int, 
 			nodes = append(nodes, &SpanNode{Kind: TextSpan, Text: tok.Text, Span: tok.Span})
 			idx++
 		case TokenStrong:
-			children, next, closed := parseInlineSeq(tokens, idx+1, TokenStrong)
+			children, next, closed := parseInlineSeq(tokens, idx+1, TokenStrong, "")
 			if closed {
 				nodes = append(nodes, &SpanNode{Kind: BoldSpan, Children: mergeTextSpans(children), Span: Span{Start: tok.Span.Start, End: tokens[next-1].Span.End}})
 			} else {
@@ -223,7 +228,7 @@ func parseInlineSeq(tokens []Token, idx int, stop TokenKind) ([]*SpanNode, int, 
 			}
 			idx = next
 		case TokenEmphasis:
-			children, next, closed := parseInlineSeq(tokens, idx+1, TokenEmphasis)
+			children, next, closed := parseInlineSeq(tokens, idx+1, TokenEmphasis, "")
 			if closed {
 				nodes = append(nodes, &SpanNode{Kind: ItalicSpan, Children: mergeTextSpans(children), Span: Span{Start: tok.Span.Start, End: tokens[next-1].Span.End}})
 			} else {
@@ -231,7 +236,7 @@ func parseInlineSeq(tokens []Token, idx int, stop TokenKind) ([]*SpanNode, int, 
 			}
 			idx = next
 		case TokenBacktick:
-			inner, next, closed, spanEnd := collectRawUntil(tokens, idx+1, TokenBacktick, tok.Span.End)
+			inner, next, closed, spanEnd := collectRawUntil(tokens, idx+1, TokenBacktick, tok.Text, tok.Span.End)
 			if closed {
 				nodes = append(nodes, &SpanNode{Kind: InlineCodeSpan, Text: inner, Span: Span{Start: tok.Span.Start, End: spanEnd}})
 			} else {
@@ -246,11 +251,11 @@ func parseInlineSeq(tokens []Token, idx int, stop TokenKind) ([]*SpanNode, int, 
 	return nodes, idx, false
 }
 
-func collectRawUntil(tokens []Token, idx int, stop TokenKind, fallbackEnd Position) (string, int, bool, Position) {
+func collectRawUntil(tokens []Token, idx int, stopKind TokenKind, stopText string, fallbackEnd Position) (string, int, bool, Position) {
 	text := ""
 	end := fallbackEnd
 	for idx < len(tokens) {
-		if tokens[idx].Kind == stop {
+		if tokens[idx].Kind == stopKind && (stopText == "" || tokens[idx].Text == stopText) {
 			return text, idx + 1, true, tokens[idx].Span.End
 		}
 		text += tokens[idx].Text
@@ -258,6 +263,32 @@ func collectRawUntil(tokens []Token, idx int, stop TokenKind, fallbackEnd Positi
 		idx++
 	}
 	return text, idx, false, end
+}
+
+func fenceTokenWidth(tok Token) int {
+	count := 0
+	for _, r := range tok.Text {
+		if r != '`' {
+			break
+		}
+		count++
+	}
+	return count
+}
+
+func fenceTokenInfo(tok Token, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	runes := []rune(tok.Text)
+	if len(runes) <= width {
+		return ""
+	}
+	return strings.TrimSpace(string(runes[width:]))
+}
+
+func isMatchingFenceToken(tok Token, width int) bool {
+	return tok.Kind == TokenFence && fenceTokenWidth(tok) == width
 }
 
 func mergeTextSpans(in []*SpanNode) []*SpanNode {

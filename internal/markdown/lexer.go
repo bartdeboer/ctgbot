@@ -41,8 +41,7 @@ func (l *Lexer) Next() Token {
 		l.advanceN(2)
 		return Token{Kind: TokenStrong, Text: "**", Span: Span{Start: start, End: l.position()}}
 	case l.match("`"):
-		l.advanceN(1)
-		return Token{Kind: TokenBacktick, Text: "`", Span: Span{Start: start, End: l.position()}}
+		return l.scanBackticks()
 	case l.match("*"):
 		l.advanceN(1)
 		return Token{Kind: TokenEmphasis, Text: "*", Span: Span{Start: start, End: l.position()}}
@@ -62,7 +61,7 @@ func (l *Lexer) scanText() Token {
 			if _, ok := l.scanBlankLinePreview(); ok {
 				break
 			}
-			if l.match("```") || l.matchHeadingMarkerLength() > 0 || l.matchListMarkerLength() > 0 {
+			if l.matchFenceMarkerLength() > 0 || l.matchHeadingMarkerLength() > 0 || l.matchListMarkerLength() > 0 {
 				break
 			}
 		}
@@ -73,6 +72,16 @@ func (l *Lexer) scanText() Token {
 		l.advanceRune()
 	}
 	return Token{Kind: TokenText, Text: b.String(), Span: Span{Start: start, End: l.position()}}
+}
+
+func (l *Lexer) scanBackticks() Token {
+	start := l.position()
+	var b strings.Builder
+	for !l.eof() && l.peek() == '`' {
+		b.WriteRune(l.peek())
+		l.advanceRune()
+	}
+	return Token{Kind: TokenBacktick, Text: b.String(), Span: Span{Start: start, End: l.position()}}
 }
 
 func (l *Lexer) scanBlankLine() (Token, bool) {
@@ -97,7 +106,7 @@ func (l *Lexer) scanBlankLinePreview() (Span, bool) {
 }
 
 func (l *Lexer) scanFence() (Token, bool) {
-	if !l.match("```") {
+	if l.matchFenceMarkerLength() == 0 {
 		return Token{}, false
 	}
 	start := l.position()
@@ -192,6 +201,17 @@ func (l *Lexer) matchListMarkerLength() int {
 		return 0
 	}
 	return j + 2 - l.idx
+}
+
+func (l *Lexer) matchFenceMarkerLength() int {
+	count := 0
+	for i := l.idx; i < len(l.src) && l.src[i] == '`'; i++ {
+		count++
+	}
+	if count < 3 {
+		return 0
+	}
+	return count
 }
 
 func (l *Lexer) eof() bool { return l.idx >= len(l.src) }

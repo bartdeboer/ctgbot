@@ -13,6 +13,13 @@ type Span struct {
 	End   Position `json:"end"`
 }
 
+func (s Span) Length() int {
+	if s.End.Offset < s.Start.Offset {
+		return 0
+	}
+	return s.End.Offset - s.Start.Offset
+}
+
 type BlockKind string
 
 const (

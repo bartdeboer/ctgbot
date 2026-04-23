@@ -71,3 +71,28 @@ func TestLexerDoesNotTokenizeDecimalAsOrderedListMarker(t *testing.T) {
 		t.Fatalf("tok = %#v, want plain text token", tok)
 	}
 }
+
+func TestLexerScansVariableBacktickRun(t *testing.T) {
+	lx := NewLexer("``code")
+	tok := lx.Next()
+	if tok.Kind != TokenBacktick {
+		t.Fatalf("kind = %q, want backtick", tok.Kind)
+	}
+	if tok.Text != "``" {
+		t.Fatalf("text = %q, want %q", tok.Text, "``")
+	}
+	if tok.Span.Length() != 2 {
+		t.Fatalf("span length = %d, want 2", tok.Span.Length())
+	}
+}
+
+func TestLexerScansVariableFenceToken(t *testing.T) {
+	lx := NewLexer("````go\nbody\n````\n")
+	tok := lx.Next()
+	if tok.Kind != TokenFence {
+		t.Fatalf("kind = %q, want fence", tok.Kind)
+	}
+	if tok.Text != "````go" {
+		t.Fatalf("text = %q, want %q", tok.Text, "````go")
+	}
+}
