@@ -28,5 +28,4 @@ func init() {
 	gob.Register(chatcommands.Stop{})
 	gob.Register(chatcommands.Status{})
 	gob.Register(chatcommands.Help{})
-	gob.Register(chatcommands.DeprecatedNew{})
 }

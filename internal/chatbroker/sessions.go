@@ -59,7 +59,7 @@ func (b *Broker) startSession(ctx context.Context, chatID modeluuid.UUID, thread
 		_ = b.sandboxForThread(current).Remove(ctx)
 		if b.Sessions != nil {
 			current.Active = false
-			current.LastError = "replaced by /new"
+			current.LastError = "replaced by session reset"
 			_ = b.Sessions.SaveThread(ctx, current)
 		}
 	}

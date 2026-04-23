@@ -48,7 +48,6 @@ const (
 	routeStop             routeName = "stop"
 	routeStatus           routeName = "status"
 	routeHelp             routeName = "help"
-	routeNew              routeName = "new"
 )
 
 var userRoutes = []routeName{
@@ -64,7 +63,6 @@ var userRoutes = []routeName{
 	routeStop,
 	routeStatus,
 	routeHelp,
-	routeNew,
 }
 
 var bridgeRoutes = []routeName{
@@ -83,7 +81,6 @@ var bridgeRoutes = []routeName{
 	routeStop,
 	routeStatus,
 	routeHelp,
-	routeNew,
 }
 
 func New(runner Runner) *ChatCommands {
@@ -129,8 +126,6 @@ func (c *ChatCommands) Execute(ctx context.Context, req Request) (Result, error)
 	switch req.Command.(type) {
 	case Help:
 		return Result{Text: c.UserHelpText()}, nil
-	case DeprecatedNew:
-		return Result{Text: "use /container refresh to rebuild the backing container, or /chat purge to drop the active chat state"}, nil
 	}
 	if c.runner == nil {
 		return Result{}, fmt.Errorf("chat command runner is unavailable")
@@ -314,11 +309,6 @@ func (c *ChatCommands) routeSpecs() map[routeName]routeSpec {
 			Pattern: "help",
 			Desc:    "Show help",
 			Handler: func(req *clir.Request) error { return setParsedCommand(req, buildHelp()) },
-		},
-		routeNew: {
-			Pattern: "new",
-			Desc:    "Show guidance for the deprecated /new command",
-			Handler: func(req *clir.Request) error { return setParsedCommand(req, buildDeprecatedNew()) },
 		},
 	}
 }

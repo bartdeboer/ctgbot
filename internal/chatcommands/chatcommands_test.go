@@ -421,7 +421,7 @@ func TestParseBuildsGroupedChatCommands(t *testing.T) {
 	}
 }
 
-func TestParseBuildsHelpStatusStopAndNewCommands(t *testing.T) {
+func TestParseBuildsHelpStatusAndStopCommands(t *testing.T) {
 	cmds := New(nil)
 
 	tests := []struct {
@@ -431,7 +431,6 @@ func TestParseBuildsHelpStatusStopAndNewCommands(t *testing.T) {
 		{argv: []string{"help"}, want: Help{}},
 		{argv: []string{"status"}, want: Status{}},
 		{argv: []string{"stop"}, want: Stop{}},
-		{argv: []string{"new"}, want: DeprecatedNew{}},
 	}
 
 	for _, tc := range tests {
@@ -465,18 +464,6 @@ func TestRunUserRequestHelpReturnsUserHelp(t *testing.T) {
 	}
 	if result.Text != cmds.UserHelpText() {
 		t.Fatalf("result.Text = %q, want user help", result.Text)
-	}
-}
-
-func TestRunUserRequestNewReturnsGuidance(t *testing.T) {
-	cmds := New(nil)
-
-	result, err := cmds.RunUserRequest(context.Background(), Request{}, []string{"new"})
-	if err != nil {
-		t.Fatalf("RunUserRequest() error = %v", err)
-	}
-	if !strings.Contains(result.Text, "/container refresh") || !strings.Contains(result.Text, "/chat purge") {
-		t.Fatalf("result.Text = %q, want /new guidance", result.Text)
 	}
 }
 

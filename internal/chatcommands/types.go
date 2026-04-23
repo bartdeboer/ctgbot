@@ -111,7 +111,3 @@ func (Status) isCommand() {}
 type Help struct{}
 
 func (Help) isCommand() {}
-
-type DeprecatedNew struct{}
-
-func (DeprecatedNew) isCommand() {}

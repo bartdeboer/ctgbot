@@ -88,5 +88,3 @@ func buildStop() Stop { return Stop{} }
 func buildStatus() Status { return Status{} }
 
 func buildHelp() Help { return Help{} }
-
-func buildDeprecatedNew() DeprecatedNew { return DeprecatedNew{} }
