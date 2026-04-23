@@ -1130,6 +1130,61 @@ func TestSendLargeTextualSourceWithSyntaxChunksInline(t *testing.T) {
 	}
 }
 
+func TestSendTextualSourceWithBackticksStaysInline(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	body := "package main\n\nfunc main() {\n    println(\"```\")\n}\n"
+
+	err := tb.Send(context.Background(), messenger.OutboundPayload{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Attachments: []messenger.Media{{
+			Filename:    "backticks.go",
+			ContentType: "text/x-go",
+			Syntax:      "go",
+			Content:     []byte(body),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(api.messages) == 0 {
+		t.Fatalf("expected inline rendered text")
+	}
+	if len(api.documents) != 0 {
+		t.Fatalf("did not expect document upload")
+	}
+	if !strings.Contains(api.messages[0].text, "println") {
+		t.Fatalf("message text = %q", api.messages[0].text)
+	}
+}
+
+func TestSendLargeTextualSourceWithBackticksChunksInline(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := NewTelegramBot(api, nil, nil, nil)
+	body := strings.Repeat("println(\"```\")\n", 400)
+
+	err := tb.Send(context.Background(), messenger.OutboundPayload{
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Attachments: []messenger.Media{{
+			Filename:    "big_backticks.go",
+			ContentType: "text/x-go",
+			Syntax:      "go",
+			Content:     []byte(body),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(api.messages) < 2 {
+		t.Fatalf("messages = %d, want multiple chunks", len(api.messages))
+	}
+	if len(api.documents) != 0 {
+		t.Fatalf("did not expect document upload")
+	}
+}
+
 func TestSendPlainUsesRenderedPath(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := NewTelegramBot(api, nil, nil, nil)

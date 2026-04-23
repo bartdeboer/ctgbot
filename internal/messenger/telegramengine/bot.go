@@ -115,9 +115,6 @@ func isTelegramTextualAttachment(contentType string) bool {
 
 func renderTelegramTextAttachment(caption string, media messenger.Media) (string, bool) {
 	body := string(media.Content)
-	if strings.Contains(body, "```") {
-		return "", false
-	}
 	var b strings.Builder
 	if strings.TrimSpace(caption) != "" {
 		b.WriteString(strings.TrimSpace(caption))
