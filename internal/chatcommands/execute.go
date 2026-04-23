@@ -86,30 +86,6 @@ func (r *ProviderRunner) Execute(ctx context.Context, req Request) (Result, erro
 			return Result{}, err
 		}
 		return Result{Text: text}, nil
-	case StartSession:
-		session, err := r.Provider.StartSession(ctx, cmd.ChatID, cmd.Workspace, cmd.Replace)
-		if err != nil {
-			return Result{}, err
-		}
-		return Result{Session: &session}, nil
-	case StopActiveSession:
-		threadID, err := r.resolveThreadID(ctx, req)
-		if err != nil {
-			return Result{}, err
-		}
-		return Result{}, r.Provider.StopActiveSession(ctx, threadID)
-	case RefreshActiveSession:
-		threadID, err := r.resolveThreadID(ctx, req)
-		if err != nil {
-			return Result{}, err
-		}
-		return Result{}, r.Provider.RefreshActiveSession(ctx, threadID)
-	case PurgeActiveSession:
-		threadID, err := r.resolveThreadID(ctx, req)
-		if err != nil {
-			return Result{}, err
-		}
-		return Result{}, r.Provider.PurgeActiveSession(ctx, threadID)
 	case RefreshContainer:
 		threadID, err := r.resolveThreadID(ctx, req)
 		if err != nil {
@@ -165,17 +141,11 @@ func (r *ProviderRunner) Execute(ctx context.Context, req Request) (Result, erro
 		if err != nil {
 			return Result{}, err
 		}
-		status, err := r.Provider.Status(ctx, threadID)
+		text, err := r.Provider.Stop(ctx, threadID)
 		if err != nil {
 			return Result{}, err
 		}
-		if status == "no active conversation" {
-			return Result{Text: status}, nil
-		}
-		if err := r.Provider.StopActiveSession(ctx, threadID); err != nil {
-			return Result{}, err
-		}
-		return Result{Text: "conversation stopped"}, nil
+		return Result{Text: text}, nil
 	case Status:
 		threadID, err := r.resolveThreadID(ctx, req)
 		if err != nil {

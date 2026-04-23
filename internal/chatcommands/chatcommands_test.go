@@ -36,13 +36,8 @@ func (f *fakeHostCommandRunner) ExecuteRunCommand(_ context.Context, req Request
 
 type fakeProvider struct {
 	sentPayloads        []messenger.OutboundPayload
-	startedChatID       modeluuid.UUID
-	startedWorkspace    string
-	startedReplace      bool
-	startedSession      SessionInfo
 	stoppedThreadID     modeluuid.UUID
-	refreshedThreadID   modeluuid.UUID
-	purgedThreadID      modeluuid.UUID
+	statusThreadID      modeluuid.UUID
 	listedThreadID      modeluuid.UUID
 	listedContext       CommandContext
 	setThreadID         modeluuid.UUID
@@ -54,6 +49,7 @@ type fakeProvider struct {
 	listResult          string
 	setResult           string
 	statusResult        string
+	stopResult          string
 }
 
 func (f *fakeProvider) SendPayload(_ context.Context, sandboxID modeluuid.UUID, payload messenger.OutboundPayload) error {
@@ -62,26 +58,12 @@ func (f *fakeProvider) SendPayload(_ context.Context, sandboxID modeluuid.UUID, 
 	return nil
 }
 
-func (f *fakeProvider) StartSession(_ context.Context, chatID modeluuid.UUID, workspace string, replace bool) (SessionInfo, error) {
-	f.startedChatID = chatID
-	f.startedWorkspace = workspace
-	f.startedReplace = replace
-	return f.startedSession, nil
-}
-
-func (f *fakeProvider) StopActiveSession(_ context.Context, threadID modeluuid.UUID) error {
+func (f *fakeProvider) Stop(_ context.Context, threadID modeluuid.UUID) (string, error) {
 	f.stoppedThreadID = threadID
-	return nil
-}
-
-func (f *fakeProvider) RefreshActiveSession(_ context.Context, threadID modeluuid.UUID) error {
-	f.refreshedThreadID = threadID
-	return nil
-}
-
-func (f *fakeProvider) PurgeActiveSession(_ context.Context, threadID modeluuid.UUID) error {
-	f.purgedThreadID = threadID
-	return nil
+	if strings.TrimSpace(f.stopResult) != "" {
+		return f.stopResult, nil
+	}
+	return "conversation stopped", nil
 }
 
 func (f *fakeProvider) ResolveThreadIDBySandboxID(_ context.Context, sandboxID modeluuid.UUID) (*modeluuid.UUID, error) {
@@ -103,7 +85,8 @@ func (f *fakeProvider) Set(_ context.Context, threadID modeluuid.UUID, cmdctx Co
 	return f.setResult, nil
 }
 
-func (f *fakeProvider) Status(_ context.Context, _ modeluuid.UUID) (string, error) {
+func (f *fakeProvider) Status(_ context.Context, threadID modeluuid.UUID) (string, error) {
+	f.statusThreadID = threadID
 	return f.statusResult, nil
 }
 
@@ -249,35 +232,63 @@ func TestProviderRunnerSendMediaUsesSandboxID(t *testing.T) {
 	}
 }
 
-func TestProviderRunnerSessionCommands(t *testing.T) {
-	chatID := modeluuid.New()
+func TestProviderRunnerStatusCommand(t *testing.T) {
 	threadID := modeluuid.New()
-	provider := &fakeProvider{startedSession: SessionInfo{ThreadID: threadID, Container: "ctgbot-1", Workspace: "/workspace"}}
+	provider := &fakeProvider{statusResult: "conversation active"}
 	runner := NewProviderRunner(provider)
 
-	started, err := runner.Execute(context.Background(), Request{Command: StartSession{ChatID: chatID, Workspace: "/tmp/work", Replace: true}})
+	result, err := runner.Execute(context.Background(), Request{
+		ThreadID: threadID,
+		Command:  Status{},
+	})
 	if err != nil {
-		t.Fatalf("start session error = %v", err)
+		t.Fatalf("Execute() error = %v", err)
 	}
-	if started.Session == nil || started.Session.ThreadID != threadID {
-		t.Fatalf("session result = %#v", started)
+	if result.Text != "conversation active" {
+		t.Fatalf("result.Text = %q, want conversation active", result.Text)
 	}
-	if provider.startedChatID != chatID || provider.startedWorkspace != "/tmp/work" || !provider.startedReplace {
-		t.Fatalf("start call = %#v %#v %#v", provider.startedChatID, provider.startedWorkspace, provider.startedReplace)
+	if provider.statusThreadID != threadID {
+		t.Fatalf("status thread id = %v, want %v", provider.statusThreadID, threadID)
 	}
+}
 
-	if _, err := runner.Execute(context.Background(), Request{ThreadID: threadID, Command: StopActiveSession{}}); err != nil {
-		t.Fatalf("stop session error = %v", err)
-	}
-	if _, err := runner.Execute(context.Background(), Request{ThreadID: threadID, Command: RefreshActiveSession{}}); err != nil {
-		t.Fatalf("refresh session error = %v", err)
-	}
-	if _, err := runner.Execute(context.Background(), Request{ThreadID: threadID, Command: PurgeActiveSession{}}); err != nil {
-		t.Fatalf("purge session error = %v", err)
-	}
+func TestProviderRunnerStopCommandUsesProviderStopResult(t *testing.T) {
+	threadID := modeluuid.New()
+	provider := &fakeProvider{}
+	runner := NewProviderRunner(provider)
 
-	if provider.stoppedThreadID != threadID || provider.refreshedThreadID != threadID || provider.purgedThreadID != threadID {
-		t.Fatalf("session calls = %#v %#v %#v", provider.stoppedThreadID, provider.refreshedThreadID, provider.purgedThreadID)
+	result, err := runner.Execute(context.Background(), Request{
+		ThreadID: threadID,
+		Command:  Stop{},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Text != "conversation stopped" {
+		t.Fatalf("result.Text = %q, want conversation stopped", result.Text)
+	}
+	if provider.stoppedThreadID != threadID {
+		t.Fatalf("stopped thread id = %v, want %v", provider.stoppedThreadID, threadID)
+	}
+}
+
+func TestProviderRunnerStopCommandReportsNoActiveConversation(t *testing.T) {
+	threadID := modeluuid.New()
+	provider := &fakeProvider{stopResult: "no active conversation"}
+	runner := NewProviderRunner(provider)
+
+	result, err := runner.Execute(context.Background(), Request{
+		ThreadID: threadID,
+		Command:  Stop{},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.Text != "no active conversation" {
+		t.Fatalf("result.Text = %q, want no active conversation", result.Text)
+	}
+	if provider.stoppedThreadID != threadID {
+		t.Fatalf("stopped thread id = %v, want %v", provider.stoppedThreadID, threadID)
 	}
 }
 
@@ -410,6 +421,30 @@ func TestParseBuildsGroupedChatCommands(t *testing.T) {
 	}
 }
 
+func TestParseBuildsHelpStatusStopAndNewCommands(t *testing.T) {
+	cmds := New(nil)
+
+	tests := []struct {
+		argv []string
+		want any
+	}{
+		{argv: []string{"help"}, want: Help{}},
+		{argv: []string{"status"}, want: Status{}},
+		{argv: []string{"stop"}, want: Stop{}},
+		{argv: []string{"new"}, want: DeprecatedNew{}},
+	}
+
+	for _, tc := range tests {
+		req, err := cmds.ParseUser(context.Background(), Request{}, tc.argv)
+		if err != nil {
+			t.Fatalf("ParseUser(%v) error = %v", tc.argv, err)
+		}
+		if got, want := req.Command, tc.want; reflect.TypeOf(got) != reflect.TypeOf(want) {
+			t.Fatalf("ParseUser(%v) command = %T, want %T", tc.argv, got, want)
+		}
+	}
+}
+
 func TestUserHelpTextPrefixesSlashAndHidesBridgeOnlyCommands(t *testing.T) {
 	cmds := New(nil)
 	help := cmds.UserHelpText()
@@ -418,6 +453,30 @@ func TestUserHelpTextPrefixesSlashAndHidesBridgeOnlyCommands(t *testing.T) {
 	}
 	if strings.Contains(help, "sendstdin") || strings.Contains(help, "run <command>") {
 		t.Fatalf("user help leaked bridge-only commands: %q", help)
+	}
+}
+
+func TestRunUserRequestHelpReturnsUserHelp(t *testing.T) {
+	cmds := New(nil)
+
+	result, err := cmds.RunUserRequest(context.Background(), Request{}, []string{"help"})
+	if err != nil {
+		t.Fatalf("RunUserRequest() error = %v", err)
+	}
+	if result.Text != cmds.UserHelpText() {
+		t.Fatalf("result.Text = %q, want user help", result.Text)
+	}
+}
+
+func TestRunUserRequestNewReturnsGuidance(t *testing.T) {
+	cmds := New(nil)
+
+	result, err := cmds.RunUserRequest(context.Background(), Request{}, []string{"new"})
+	if err != nil {
+		t.Fatalf("RunUserRequest() error = %v", err)
+	}
+	if !strings.Contains(result.Text, "/container refresh") || !strings.Contains(result.Text, "/chat purge") {
+		t.Fatalf("result.Text = %q, want /new guidance", result.Text)
 	}
 }
 

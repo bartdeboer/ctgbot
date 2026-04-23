@@ -23,23 +23,13 @@ type CommandContext struct {
 }
 
 type Result struct {
-	Text    string
-	Session *SessionInfo
-}
-
-type SessionInfo struct {
-	ThreadID  modeluuid.UUID
-	Container string
-	Workspace string
+	Text string
 }
 
 type Provider interface {
 	SendPayload(ctx context.Context, sandboxID modeluuid.UUID, payload messenger.OutboundPayload) error
-	StartSession(ctx context.Context, chatID modeluuid.UUID, workspace string, replace bool) (SessionInfo, error)
-	StopActiveSession(ctx context.Context, threadID modeluuid.UUID) error
+	Stop(ctx context.Context, threadID modeluuid.UUID) (string, error)
 	Status(ctx context.Context, threadID modeluuid.UUID) (string, error)
-	RefreshActiveSession(ctx context.Context, threadID modeluuid.UUID) error
-	PurgeActiveSession(ctx context.Context, threadID modeluuid.UUID) error
 	ResolveThreadIDBySandboxID(ctx context.Context, sandboxID modeluuid.UUID) (*modeluuid.UUID, error)
 	List(ctx context.Context, threadID modeluuid.UUID, cmdctx CommandContext) (string, error)
 	Set(ctx context.Context, threadID modeluuid.UUID, cmdctx CommandContext, key, value string) (string, error)
@@ -89,26 +79,6 @@ type ConfigSet struct {
 }
 
 func (ConfigSet) isCommand() {}
-
-type StartSession struct {
-	ChatID    modeluuid.UUID
-	Workspace string
-	Replace   bool
-}
-
-func (StartSession) isCommand() {}
-
-type StopActiveSession struct{}
-
-func (StopActiveSession) isCommand() {}
-
-type RefreshActiveSession struct{}
-
-func (RefreshActiveSession) isCommand() {}
-
-type PurgeActiveSession struct{}
-
-func (PurgeActiveSession) isCommand() {}
 
 type RefreshContainer struct{}
 

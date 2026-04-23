@@ -54,7 +54,7 @@ func normalizedArgs(args []string) []string {
 
 func isManagementCommand(arg string) bool {
 	switch arg {
-	case "", "run", "sendfile", "sendstdin", "config", "refresh", "purge", "interrupt", "upgrade", "quit", "container", "chat", "help":
+	case "", "run", "sendfile", "sendstdin", "config", "refresh", "purge", "interrupt", "upgrade", "quit", "stop", "status", "new", "container", "chat", "help":
 		return true
 	default:
 		return false

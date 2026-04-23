@@ -66,9 +66,6 @@ func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.Inbound
 			return payloadResult(fmt.Sprintf("command error: %v", err)), nil
 		}
 		reply := strings.TrimSpace(result.Text)
-		if result.Session != nil {
-			reply = fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", result.Session.Container, result.Session.Workspace)
-		}
 		if strings.TrimSpace(reply) == "" {
 			return messenger.OutboundPayload{}, nil
 		}

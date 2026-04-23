@@ -25,46 +25,18 @@ func (p *ChatCommandsProvider) SendPayload(ctx context.Context, sandboxID modelu
 	return p.Broker.SendPayload(ctx, sandboxID, payload)
 }
 
-func (p *ChatCommandsProvider) StartSession(ctx context.Context, chatID modeluuid.UUID, workspace string, replace bool) (chatcommands.SessionInfo, error) {
-	if p == nil || p.Broker == nil {
-		return chatcommands.SessionInfo{}, fmt.Errorf("missing broker")
-	}
-	thread, err := p.Broker.StartSession(ctx, chatID, nil, workspace, replace)
+func (p *ChatCommandsProvider) Stop(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	thread, active, err := p.activeThreadByID(ctx, threadID)
 	if err != nil {
-		return chatcommands.SessionInfo{}, err
+		return "", err
 	}
-	if thread == nil {
-		return chatcommands.SessionInfo{}, fmt.Errorf("session was not created")
+	if active == nil {
+		return "no active conversation", nil
 	}
-	return chatcommands.SessionInfo{
-		ThreadID:  thread.ID,
-		Container: thread.ContainerName(p.Broker.Config),
-		Workspace: thread.WorkspaceHost,
-	}, nil
-}
-
-func (p *ChatCommandsProvider) StopActiveSession(ctx context.Context, threadID modeluuid.UUID) error {
-	thread, err := p.threadByID(ctx, threadID)
-	if err != nil {
-		return err
+	if err := p.Broker.StopSession(ctx, thread); err != nil {
+		return "", err
 	}
-	return p.Broker.StopSession(ctx, thread)
-}
-
-func (p *ChatCommandsProvider) RefreshActiveSession(ctx context.Context, threadID modeluuid.UUID) error {
-	thread, err := p.threadByID(ctx, threadID)
-	if err != nil {
-		return err
-	}
-	return p.Broker.RefreshSession(ctx, thread)
-}
-
-func (p *ChatCommandsProvider) PurgeActiveSession(ctx context.Context, threadID modeluuid.UUID) error {
-	thread, err := p.threadByID(ctx, threadID)
-	if err != nil {
-		return err
-	}
-	return p.Broker.PurgeSession(ctx, thread)
+	return "conversation stopped", nil
 }
 
 func (p *ChatCommandsProvider) ResolveThreadIDBySandboxID(ctx context.Context, sandboxID modeluuid.UUID) (*modeluuid.UUID, error) {
