@@ -225,6 +225,7 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 	stopTyping := b.startThreadChatAction(runCtx, conv, messenger.ChatActionTyping)
 	defer stopTyping()
 
+	b.logf("agent turn starting chat=%s thread=%s agent=%s", conv.ChatID, conv.ID, agent.Name())
 	result, runErr := agent.HandleTurn(runCtx, sbx, conv.AgentThreadID, prompt)
 	if result.ProviderThreadID != "" {
 		conv.AgentThreadID = result.ProviderThreadID
