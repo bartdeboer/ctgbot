@@ -654,11 +654,13 @@ func TestHandleInboundPayloadStatusIncludesInternalIDs(t *testing.T) {
 		"active conversation",
 		"chat_id: " + chatCfg.ID.String(),
 		"thread_id: " + threadID.String(),
-		"last_error: previous error",
 	} {
 		if !strings.Contains(result.Text.Text, want) {
 			t.Fatalf("status missing %q:\n%s", want, result.Text.Text)
 		}
+	}
+	if strings.Contains(result.Text.Text, "last_error") || strings.Contains(result.Text.Text, "previous error") {
+		t.Fatalf("status should not expose last error:\n%s", result.Text.Text)
 	}
 }
 

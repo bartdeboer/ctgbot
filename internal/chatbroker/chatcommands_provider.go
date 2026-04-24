@@ -171,9 +171,6 @@ func (p *ChatCommandsProvider) Status(ctx context.Context, threadID modeluuid.UU
 		thread.WorkspaceHost,
 		thread.Initialized,
 	)
-	if thread.LastError != "" {
-		msg += "\nlast_error: " + thread.LastError
-	}
 	return msg, nil
 }
 
