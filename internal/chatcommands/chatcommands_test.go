@@ -444,14 +444,28 @@ func TestParseBuildsHelpStatusAndStopCommands(t *testing.T) {
 	}
 }
 
-func TestUserHelpTextPrefixesSlashAndHidesBridgeOnlyCommands(t *testing.T) {
+func TestUserHelpTextUsesInlineTelegramFriendlyFormat(t *testing.T) {
 	cmds := New(nil)
 	help := cmds.UserHelpText()
-	if !strings.Contains(help, "/container refresh") {
+	if !strings.Contains(help, "/container refresh - Refresh the active container") {
 		t.Fatalf("user help missing /container refresh: %q", help)
+	}
+	if strings.Contains(help, "  /container refresh") {
+		t.Fatalf("user help should not use column padding: %q", help)
 	}
 	if strings.Contains(help, "sendstdin") || strings.Contains(help, "run <command>") {
 		t.Fatalf("user help leaked bridge-only commands: %q", help)
+	}
+}
+
+func TestBridgeHelpTextKeepsCLIFormat(t *testing.T) {
+	cmds := New(nil)
+	help := cmds.BridgeHelpText()
+	if !strings.Contains(help, "sendstdin") || !strings.Contains(help, "run <command>") {
+		t.Fatalf("bridge help missing bridge commands: %q", help)
+	}
+	if strings.Contains(help, "/sendstdin") {
+		t.Fatalf("bridge help should not use slash-prefixed chat format: %q", help)
 	}
 }
 

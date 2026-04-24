@@ -86,6 +86,7 @@ var bridgeRoutes = []routeName{
 func New(runner Runner) *ChatCommands {
 	c := &ChatCommands{runner: runner}
 	c.user = c.newRouter(userRoutes)
+	c.user.SetHelpEntryFormatter(writeSlashHelpInline)
 	c.bridge = c.newRouter(bridgeRoutes)
 	return c
 }
@@ -158,11 +159,11 @@ func (c *ChatCommands) RunRequest(ctx context.Context, base Request, argv []stri
 }
 
 func (c *ChatCommands) UserHelpText() string {
-	return formatHelp(c.UserRouter(), true)
+	return formatHelp(c.UserRouter())
 }
 
 func (c *ChatCommands) BridgeHelpText() string {
-	return formatHelp(c.BridgeRouter(), false)
+	return formatHelp(c.BridgeRouter())
 }
 
 func (c *ChatCommands) parseWithRouter(ctx context.Context, router *clir.Router, base Request, argv []string) (Request, error) {
@@ -313,19 +314,24 @@ func (c *ChatCommands) routeSpecs() map[routeName]routeSpec {
 	}
 }
 
-func formatHelp(router *clir.Router, slash bool) string {
+func formatHelp(router *clir.Router) string {
 	if router == nil {
 		return ""
 	}
 	var buf bytes.Buffer
 	router.PrintHelp(&buf)
-	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
-	for i, line := range lines {
-		if slash && strings.HasPrefix(line, "  ") {
-			lines[i] = "  /" + strings.TrimPrefix(line, "  ")
+	return "Commands:\n" + strings.TrimRight(buf.String(), "\n")
+}
+
+func writeSlashHelpInline(w io.Writer, routes []clir.RouteInfo) {
+	for _, route := range routes {
+		pattern := "/" + route.Pattern
+		if route.Description == "" {
+			fmt.Fprintln(w, pattern)
+			continue
 		}
+		fmt.Fprintf(w, "%s - %s\n", pattern, route.Description)
 	}
-	return "Commands:\n" + strings.Join(lines, "\n")
 }
 
 func setParsedCommand(req *clir.Request, command Command) error {
