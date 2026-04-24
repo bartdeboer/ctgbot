@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
@@ -597,6 +598,67 @@ func TestHandleInboundPayloadRefreshWithoutActiveConversation(t *testing.T) {
 	}
 	if result.Text.Text != "no active conversation" {
 		t.Fatalf("message text = %q", result.Text.Text)
+	}
+}
+
+func TestHandleInboundPayloadStatusIncludesInternalIDs(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	chatCfg := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+	threadID := modeluuid.New()
+
+	sessions := &fakeBrokerSessionStore{
+		thread: &Thread{
+			ID:               threadID,
+			ChatID:           chatCfg.ID,
+			ProviderThreadID: "7",
+			Active:           true,
+			Initialized:      true,
+			WorkspaceHost:    "/tmp/workspace",
+			LastError:        "previous error",
+		},
+	}
+	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/status"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	for _, want := range []string{
+		"active conversation",
+		"chat_id: " + chatCfg.ID.String(),
+		"thread_id: " + threadID.String(),
+		"last_error: previous error",
+	} {
+		if !strings.Contains(result.Text.Text, want) {
+			t.Fatalf("status missing %q:\n%s", want, result.Text.Text)
+		}
 	}
 }
 

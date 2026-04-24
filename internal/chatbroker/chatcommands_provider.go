@@ -154,11 +154,19 @@ func (p *ChatCommandsProvider) Status(ctx context.Context, threadID modeluuid.UU
 	if err != nil {
 		return "", err
 	}
+	// TODO: This exposes internal chat/thread/runtime details. Consider restricting
+	// this command to authorized users before adding more sensitive status fields.
 	if active == nil {
-		return "no active conversation", nil
+		return fmt.Sprintf(
+			"no active conversation\nchat_id: %s\nthread_id: %s",
+			thread.ChatID,
+			thread.ID,
+		), nil
 	}
 	msg := fmt.Sprintf(
-		"active conversation\ncontainer: %s\nworkspace: %s\ninitialized: %t",
+		"active conversation\nchat_id: %s\nthread_id: %s\ncontainer: %s\nworkspace: %s\ninitialized: %t",
+		thread.ChatID,
+		thread.ID,
 		thread.ContainerName(p.Broker.Config),
 		thread.WorkspaceHost,
 		thread.Initialized,
