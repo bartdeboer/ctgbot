@@ -108,14 +108,22 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
-	err := sbx.Exec(ctx, &stdoutBuf, io.MultiWriter(os.Stderr, &stderrBuf), args[0], args[1:]...)
+	stdout := newCodexJSONWriter(&stdoutBuf, e.logf)
+	err := sbx.Exec(ctx, stdout, io.MultiWriter(os.Stderr, &stderrBuf), args[0], args[1:]...)
+	stdout.Flush()
 
 	nextProviderThreadID := strings.TrimSpace(providerThreadID)
+	if nextProviderThreadID == "" {
+		nextProviderThreadID = stdout.ThreadID()
+	}
 	if nextProviderThreadID == "" {
 		nextProviderThreadID = extractCodexThreadID(stdoutBuf.String())
 	}
 	if nextProviderThreadID != "" {
 		e.logf("codex thread started provider_thread_id=%s", nextProviderThreadID)
+	}
+	if stdout.InputTokens() > 0 || stdout.OutputTokens() > 0 || stdout.CachedInputTokens() > 0 {
+		e.logf("codex turn usage provider_thread_id=%s input_tokens=%d cached_input_tokens=%d output_tokens=%d", nextProviderThreadID, stdout.InputTokens(), stdout.CachedInputTokens(), stdout.OutputTokens())
 	}
 	if err != nil && sbx.Interrupted() {
 		return agent.TurnResult{ProviderThreadID: nextProviderThreadID}, context.Canceled
