@@ -2,6 +2,7 @@ package messenger
 
 import (
 	"context"
+	"strings"
 )
 
 type TextMessage struct {
@@ -46,6 +47,10 @@ type OutboundPayload struct {
 	ProviderThreadID string
 	Text             TextMessage
 	Attachments      []Media
+}
+
+func (p OutboundPayload) IsZero() bool {
+	return strings.TrimSpace(p.Text.Text) == "" && len(p.Attachments) == 0
 }
 
 type InboundChatProvider interface {

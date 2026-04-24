@@ -45,6 +45,9 @@ func (tb *TelegramBot) ProviderType() string {
 }
 
 func (tb *TelegramBot) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+	if payload.IsZero() {
+		return nil
+	}
 	chatID, err := strconv.ParseInt(strings.TrimSpace(payload.ProviderChatID), 10, 64)
 	if err != nil {
 		return fmt.Errorf("parse telegram chat id: %w", err)
@@ -257,13 +260,13 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u TelegramUpd
 }
 
 func (tb *TelegramBot) replyPayload(ctx context.Context, u TelegramUpdate, payload messenger.OutboundPayload) error {
+	if payload.IsZero() {
+		return nil
+	}
 	payload.ProviderChatID = fmt.Sprintf("%d", u.ChatID)
 	payload.ProviderThreadID = fmt.Sprintf("%d", u.ThreadID)
 	if len(payload.Attachments) == 0 {
 		text := cleanTextForTelegram(payload.Text.Text)
-		if text == "" {
-			text = "(empty response)"
-		}
 		tb.appendEventResponse(ctx, text)
 	}
 	return tb.Send(ctx, payload)

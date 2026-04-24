@@ -157,6 +157,34 @@ func TestStartChatActionSendsAndStopsHeartbeat(t *testing.T) {
 	}
 }
 
+func TestTelegramBotSendIgnoresZeroPayload(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := &TelegramBot{API: api}
+
+	if err := tb.Send(context.Background(), messenger.OutboundPayload{}); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(api.messages) != 0 || len(api.documents) != 0 || len(api.photos) != 0 || len(api.videos) != 0 || len(api.audios) != 0 {
+		t.Fatalf("expected no sends, got messages=%d documents=%d photos=%d videos=%d audios=%d", len(api.messages), len(api.documents), len(api.photos), len(api.videos), len(api.audios))
+	}
+}
+
+func TestTelegramBotReplyPayloadIgnoresZeroPayload(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	tb := &TelegramBot{API: api}
+
+	err := tb.replyPayload(context.Background(), TelegramUpdate{
+		ChatID:   42,
+		ThreadID: 7,
+	}, messenger.OutboundPayload{})
+	if err != nil {
+		t.Fatalf("replyPayload: %v", err)
+	}
+	if len(api.messages) != 0 || len(api.documents) != 0 {
+		t.Fatalf("expected no reply, got messages=%d documents=%d", len(api.messages), len(api.documents))
+	}
+}
+
 type fakeSessionStore struct {
 	thread *chatbroker.Thread
 }
@@ -368,6 +396,49 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 	}
 	if api.messages[0].text != "upload saved: /workspace/inbox/poem.zip" {
 		t.Fatalf("unexpected upload confirmation: %q", api.messages[0].text)
+	}
+}
+
+func TestHandleUpdateSerializedDisabledChatSendsNoReply(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Disabled Chat", false)
+
+	api := &fakeTelegramAPI{}
+	broker := chatbroker.New(cfg, &fakeSessionStore{}, fakeSandboxManager{}, nil)
+	tb := &TelegramBot{
+		API:    api,
+		Config: cfg,
+	}
+
+	err = tb.handleUpdateSerialized(context.Background(), TelegramUpdate{
+		ChatID:    42,
+		ThreadID:  7,
+		MessageID: 99,
+	}, "hello ignored", broker.HandleInboundPayload)
+	if err != nil {
+		t.Fatalf("handleUpdateSerialized returned error: %v", err)
+	}
+	if len(api.messages) != 0 || len(api.documents) != 0 {
+		t.Fatalf("expected no reply, got messages=%d documents=%d", len(api.messages), len(api.documents))
 	}
 }
 
