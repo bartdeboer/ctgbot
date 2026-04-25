@@ -132,11 +132,10 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 		if readErr == nil && lastMessage != "" {
 			return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
 		}
-		detail := strings.TrimSpace(stderrBuf.String())
-		if detail == "" {
-			detail = strings.TrimSpace(stdoutBuf.String())
+		if detail := trimCodexErrorDetail(stderrBuf.String()); detail != "" {
+			return agent.TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
 		}
-		return agent.TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
+		return agent.TurnResult{}, fmt.Errorf("codex exec: %w", err)
 	}
 	if readErr != nil {
 		return agent.TurnResult{}, fmt.Errorf("read last message: %w", readErr)

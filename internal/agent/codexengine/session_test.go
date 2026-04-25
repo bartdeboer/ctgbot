@@ -216,3 +216,17 @@ func TestWrapWithPIDFile(t *testing.T) {
 		}
 	}
 }
+
+func TestTrimCodexErrorDetail(t *testing.T) {
+	if got := trimCodexErrorDetail("  problem  "); got != "problem" {
+		t.Fatalf("trimCodexErrorDetail() = %q", got)
+	}
+	long := strings.Repeat("x", codexErrorDetailMax+10)
+	got := trimCodexErrorDetail(long)
+	if len(got) > codexErrorDetailMax+3 {
+		t.Fatalf("trimmed detail too long: %d", len(got))
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Fatalf("trimmed detail should have ellipsis: %q", got[len(got)-10:])
+	}
+}

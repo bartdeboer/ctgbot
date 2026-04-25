@@ -22,3 +22,13 @@ func extractCodexThreadID(jsonl string) string {
 	}
 	return ""
 }
+
+const codexErrorDetailMax = 4000
+
+func trimCodexErrorDetail(detail string) string {
+	detail = strings.TrimSpace(detail)
+	if len(detail) <= codexErrorDetailMax {
+		return detail
+	}
+	return strings.TrimSpace(detail[:codexErrorDetailMax]) + "..."
+}
