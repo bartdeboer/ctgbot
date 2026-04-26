@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -10,8 +11,11 @@ import (
 	"syscall"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	"github.com/bartdeboer/ctgbot/internal/schema/routers"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -44,18 +48,33 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 				if err := cfg.EnsurePaths(); err != nil {
 					return err
 				}
-				resolvedTLSDir = cfg.HostbridgeTLSRoot()
+				resolvedTLSDir = cfg.Hostbridge().TLSRoot()
 			}
 
-			runner := hostbridgeserver.NewRunner(hostbridgeserver.StaticAllowedCommandResolver(allow.Commands()), *timeoutSec, nil)
-			srv := hostbridgeserver.New(runner)
+			router, err := routers.NewHostbridgeRunRouter()
+			if err != nil {
+				return err
+			}
+			registry := commandengine.NewRegistry()
+			if err := hostbridgeserver.RegisterRunCommandHandler(registry, &hostbridgeserver.RunCommandRunner{
+				ResolveAllowed:    hostbridgeserver.StaticAllowedCommandResolver(allow.Commands()),
+				DefaultTimeoutSec: *timeoutSec,
+			}); err != nil {
+				return err
+			}
+			srv := hostbridgeserver.NewCommandServer(commandengine.NewEngine(router, registry))
+			srv.Prepare = func(ctx context.Context, clientIdentity string, cmdReq commandengine.Request) (commandengine.Request, error) {
+				cmdReq.Context.Source = commandengine.SourceHostbridge
+				cmdReq.Context.Actor = commandengine.Actor{ID: strings.TrimSpace(clientIdentity), Roles: []simplerbac.Role{simplerbac.RoleAgent}}
+				return cmdReq, nil
+			}
 
 			if strings.TrimSpace(resolvedTLSDir) == "" {
 				ln, err := hostbridgeserver.Listen(*addr)
 				if err != nil {
 					return err
 				}
-				return hostbridgeserver.ServeListener(ctx, ln, srv)
+				return hostbridgeserver.ServeCommandListener(ctx, ln, srv)
 			}
 
 			if err := hostbridgetls.EnsureServerMaterials(resolvedTLSDir); err != nil {
@@ -69,7 +88,7 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			return hostbridgeserver.ServeListener(ctx, ln, srv)
+			return hostbridgeserver.ServeCommandListener(ctx, ln, srv)
 		})
 	})
 }

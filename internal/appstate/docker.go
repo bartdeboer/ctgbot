@@ -5,60 +5,78 @@ import (
 	"strings"
 )
 
-func (c *Config) DockerImage() string {
-	if c == nil || c.Store == nil {
-		return "ctgbot-codex:latest"
-	}
-	return strings.TrimSpace(c.Store.GetString("docker.image", "ctgbot-codex:latest"))
+func (c *Config) Docker() DockerConfig {
+	return DockerConfig{cfg: c}
 }
 
-func (c *Config) DockerCLIContainerName() string {
-	if c == nil || c.Store == nil {
-		return "ctgbot"
-	}
-	name := strings.TrimSpace(c.Store.GetString("docker.cli_container_name", "ctgbot"))
+type DockerConfig struct {
+	cfg *Config
+}
+
+func (d DockerConfig) Image() string {
+	return d.cfg.string("docker.image", "ctgbot-codex:latest")
+}
+
+func (d DockerConfig) SetImage(image string) error {
+	return d.cfg.persistString("docker.image", strings.TrimSpace(image))
+}
+
+func (d DockerConfig) CLIContainerName() string {
+	name := d.cfg.string("docker.cli_container_name", "ctgbot")
 	if name == "" {
 		return "ctgbot"
 	}
 	return name
 }
 
-func (c *Config) DockerDefaultWorkspaceHostPath() string {
-	if c == nil || c.Store == nil {
-		return ""
-	}
-	return absOrEmpty(c.Store.GetString("docker.workspace_host_path", ""))
+func (d DockerConfig) SetCLIContainerName(name string) error {
+	return d.cfg.persistString("docker.cli_container_name", strings.TrimSpace(name))
 }
 
-func (c *Config) DockerContainerWorkspacePath() string {
-	if c == nil || c.Store == nil {
-		return normalizeContainerPath("", "/workspace")
-	}
-	return normalizeContainerPath(c.Store.GetString("docker.container_workspace_path", "/workspace"), "/workspace")
+func (d DockerConfig) DefaultWorkspaceHostPath() string {
+	return absOrEmpty(d.cfg.string("docker.workspace_host_path", ""))
 }
 
-func (c *Config) DockerContainerHomePath() string {
-	if c == nil || c.Store == nil {
-		return normalizeContainerPath("", "/codex-home")
+func (d DockerConfig) SetDefaultWorkspaceHostPath(raw string) error {
+	resolved, err := d.cfg.ResolveWorkspaceHostPath(raw)
+	if err != nil {
+		return err
 	}
-	return normalizeContainerPath(c.Store.GetString("docker.container_home_path", "/codex-home"), "/codex-home")
+	return d.cfg.persistString("docker.workspace_host_path", resolved)
 }
 
-func (c *Config) DockerContainerHostbridgeTLSDir() string {
-	if c == nil || c.Store == nil {
-		return normalizeContainerPath("", "/etc/ctgbot/hostbridge-tls")
+func (d DockerConfig) ContainerWorkspacePath() string {
+	return normalizeContainerPath(d.cfg.string("docker.container_workspace_path", "/workspace"), "/workspace")
+}
+
+func (d DockerConfig) ContainerHomePath() string {
+	return normalizeContainerPath(d.cfg.string("docker.container_home_path", "/codex-home"), "/codex-home")
+}
+
+func (d DockerConfig) ContainerHostbridgeTLSDir() string {
+	return normalizeContainerPath(d.cfg.string("docker.container_hostbridge_tls_dir", "/etc/ctgbot/hostbridge-tls"), "/etc/ctgbot/hostbridge-tls")
+}
+
+func (d DockerConfig) ContainerHostbridgeTCPAddr() string {
+	addr := d.cfg.string("docker.container_hostbridge_tcp_addr", "host.docker.internal:4567")
+	if addr == "" {
+		return "host.docker.internal:4567"
 	}
-	return normalizeContainerPath(c.Store.GetString("docker.container_hostbridge_tls_dir", "/etc/ctgbot/hostbridge-tls"), "/etc/ctgbot/hostbridge-tls")
+	return addr
+}
+
+func (d DockerConfig) SetContainerHostbridgeTCPAddr(addr string) error {
+	return d.cfg.persistString("docker.container_hostbridge_tcp_addr", strings.TrimSpace(addr))
 }
 
 func normalizeContainerPath(raw string, fallback string) string {
-	v := strings.TrimSpace(raw)
-	if v == "" {
-		v = fallback
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		value = fallback
 	}
-	v = strings.ReplaceAll(v, "\\", "/")
-	if !strings.HasPrefix(v, "/") {
-		v = "/" + v
+	value = strings.ReplaceAll(value, "\\", "/")
+	if !strings.HasPrefix(value, "/") {
+		value = "/" + value
 	}
-	return path.Clean(v)
+	return path.Clean(value)
 }

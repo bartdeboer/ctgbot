@@ -3,29 +3,19 @@ package hostbridge
 import (
 	"encoding/gob"
 
-	"github.com/bartdeboer/ctgbot/internal/chatcommands"
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
 
-type Request struct {
-	Request chatcommands.Request
+type CommandRequest struct {
+	Request commandengine.Request
 }
 
-type Response struct {
-	Result chatcommands.Result
+type CommandResponse struct {
+	Result commandengine.Result
 	Error  string
 }
 
 func init() {
-	gob.Register(chatcommands.RunCommand{})
-	gob.Register(chatcommands.SendMedia{})
-	gob.Register(chatcommands.ConfigList{})
-	gob.Register(chatcommands.ConfigSet{})
-	gob.Register(chatcommands.RefreshContainer{})
-	gob.Register(chatcommands.PurgeChat{})
-	gob.Register(chatcommands.InterruptTurn{})
-	gob.Register(chatcommands.Upgrade{})
-	gob.Register(chatcommands.Quit{})
-	gob.Register(chatcommands.Stop{})
-	gob.Register(chatcommands.Status{})
-	gob.Register(chatcommands.Help{})
+	schemacommands.RegisterGobTypes(gob.Register)
 }

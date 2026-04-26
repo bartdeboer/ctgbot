@@ -21,7 +21,9 @@ The project has three major responsibilities:
 - `internal/messenger/telegramengine`: Telegram messenger implementation, API integration, and event logging
 - `internal/agent`: agent plugin contracts
 - `internal/agent/codexengine`: Codex runtime, Docker session execution, image builder, and Codex chat-session state
-- `internal/chatcommands`: shared typed chat/bridge command model and routing
+- `internal/commandengine`: shared typed command registry, router, authorization, and execution
+- `internal/configengine`: shared config registry/get/set enforcement
+- `internal/schema`: shared command, config, and router definitions
 - `internal/hostbridge`: hostbridge request/response transport, client, and server
 - `internal/containerassets`: embeds an optional `assets/src.tar.gz` for Docker image builds
 - `docker/Dockerfile`: source Dockerfile for the embedded image build context

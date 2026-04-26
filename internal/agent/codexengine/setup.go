@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -23,26 +24,27 @@ func (e *SessionExecutor) SetupEnvironment(ctx context.Context, sbx *sandboxengi
 	if err := e.Config.EnsurePaths(); err != nil {
 		return err
 	}
-	if err := e.Config.EnsureCodexCLIHome(); err != nil {
+	if err := e.Config.Codex().EnsureCLIHome(); err != nil {
 		return err
 	}
 	sbx.ImageBuilder = &ImageBuilder{Config: e.Config, Logger: e.Logger}
 	return ensureConversationCodexHome(e.Config, sbx.ProfileDir, sbx.ContainerHome, sbx.ContainerWorkspace, sbx.DeveloperInstructions)
 }
 
-func ensureConversationCodexHome(cfg configPaths, homeDir string, containerHome string, containerWorkspace string, bootstrapText string) error {
+func ensureConversationCodexHome(cfg *appstate.Config, homeDir string, containerHome string, containerWorkspace string, bootstrapText string) error {
 	if cfg == nil {
 		return fmt.Errorf("missing config")
 	}
-	if err := cfg.EnsureCodexCLIHome(); err != nil {
+	if err := cfg.Codex().EnsureCLIHome(); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(homeDir, 0o755); err != nil {
 		return err
 	}
 	target := filepath.Join(homeDir, "auth.json")
-	if !fileExistsAndNonEmpty(target) && fileExistsAndNonEmpty(cfg.CodexCLIHomeAuthPath()) {
-		if err := copyFile(cfg.CodexCLIHomeAuthPath(), target); err != nil {
+	authPath := cfg.Codex().AuthPath()
+	if !fileExistsAndNonEmpty(target) && fileExistsAndNonEmpty(authPath) {
+		if err := copyFile(authPath, target); err != nil {
 			return err
 		}
 	}
@@ -70,11 +72,6 @@ network_access = true
 		return err
 	}
 	return nil
-}
-
-type configPaths interface {
-	EnsureCodexCLIHome() error
-	CodexCLIHomeAuthPath() string
 }
 
 func fileExistsAndNonEmpty(path string) bool {

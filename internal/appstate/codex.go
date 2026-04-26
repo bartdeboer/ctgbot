@@ -2,61 +2,78 @@ package appstate
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
-func (c *Config) CodexSessionTimeout() time.Duration {
-	return c.durationFromConfig("session.timeout_min", 10, time.Minute)
+func (c *Config) Codex() CodexConfig {
+	return CodexConfig{cfg: c}
 }
 
-func (c *Config) CodexModel() string {
-	if c == nil || c.Store == nil {
-		return ""
-	}
-	return strings.TrimSpace(c.Store.GetString("codex.model", ""))
+type CodexConfig struct {
+	cfg *Config
 }
 
-func (c *Config) CodexProfileHostPath() string {
-	if c == nil {
-		return ""
-	}
-	if raw := c.codexProfileHostPathOverride(); raw != "" {
+func (c CodexConfig) Model() string {
+	return c.cfg.string("codex.model", "")
+}
+
+func (c CodexConfig) SetModel(model string) error {
+	return c.cfg.persistString("codex.model", strings.TrimSpace(model))
+}
+
+func (c CodexConfig) SessionTimeout() time.Duration {
+	return c.cfg.duration("session.timeout_min", 10, time.Minute)
+}
+
+func (c CodexConfig) SetSessionTimeout(raw string) error {
+	return c.cfg.persistString("session.timeout_min", strings.TrimSpace(raw))
+}
+
+func (c CodexConfig) ProfileHostPath() string {
+	if raw := c.profileHostPathOverride(); raw != "" {
 		return raw
 	}
-	for _, root := range c.codexCLIHomeCandidates() {
+	for _, root := range c.HomeCandidates() {
 		if fileExistsAndNonEmpty(filepath.Join(root, "auth.json")) {
 			return root
 		}
 	}
-	return c.LocalCodexCLIHomeRoot()
+	return c.LocalHomeRoot()
 }
 
-// CodexCLIHomeRoot is a legacy compatibility alias for the canonical
-// codex profile host path used by Codex on the host.
-func (c *Config) CodexCLIHomeRoot() string {
-	return c.CodexProfileHostPath()
+func (c CodexConfig) SetProfileHostPath(raw string) error {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return c.cfg.persistString("codex.profile_host_path", "")
+	}
+	abs, err := filepath.Abs(value)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(abs, 0o755); err != nil {
+		return err
+	}
+	return c.cfg.persistString("codex.profile_host_path", abs)
 }
 
-func (c *Config) LocalCodexCLIHomeRoot() string {
-	if c == nil {
+func (c CodexConfig) CLIHomeRoot() string { return c.ProfileHostPath() }
+func (c CodexConfig) LocalHomeRoot() string {
+	if c.cfg == nil {
 		return ""
 	}
-	return filepath.Join(c.Root(), ".codex")
+	return filepath.Join(c.cfg.RootDir(), ".codex")
 }
-
-func (c *Config) ManagedHomeCodexCLIHomeRoot() string {
+func (c CodexConfig) ManagedHomeRoot() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, stateDirName, ".codex")
+	return filepath.Join(home, ".ctgbot", ".codex")
 }
-
-func (c *Config) HostCodexRoot() string {
+func (c CodexConfig) HostRoot() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
@@ -64,9 +81,9 @@ func (c *Config) HostCodexRoot() string {
 	return filepath.Join(home, ".codex")
 }
 
-func (c *Config) EnsureCodexCLIHome() error {
-	root := c.CodexCLIHomeRoot()
-	if strings.TrimSpace(root) == "" {
+func (c CodexConfig) EnsureCLIHome() error {
+	root := c.CLIHomeRoot()
+	if root == "" {
 		return fmt.Errorf("codex cli home root is empty")
 	}
 	if err := os.MkdirAll(filepath.Dir(root), 0o755); err != nil {
@@ -77,72 +94,42 @@ func (c *Config) EnsureCodexCLIHome() error {
 	}
 	return c.importAuthIfNeeded()
 }
-
-func (c *Config) CodexCLIHomeAuthPath() string {
-	return filepath.Join(c.CodexCLIHomeRoot(), "auth.json")
-}
-
-func (c *Config) CodexAuthSearchPaths() []string {
+func (c CodexConfig) AuthPath() string { return filepath.Join(c.CLIHomeRoot(), "auth.json") }
+func (c CodexConfig) AuthSearchPaths() []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, 4)
-	for _, root := range c.codexCLIHomeCandidates() {
+	for _, root := range c.HomeCandidates() {
 		if root == "" {
 			continue
 		}
-		authPath := filepath.Join(root, "auth.json")
-		if _, ok := seen[authPath]; ok {
+		path := filepath.Join(root, "auth.json")
+		if _, ok := seen[path]; ok {
 			continue
 		}
-		seen[authPath] = struct{}{}
-		out = append(out, authPath)
+		seen[path] = struct{}{}
+		out = append(out, path)
 	}
 	return out
 }
-
-func (c *Config) importAuthIfNeeded() error {
-	dst := c.CodexCLIHomeAuthPath()
+func (c CodexConfig) HomeCandidates() []string {
+	return []string{c.LocalHomeRoot(), c.ManagedHomeRoot(), c.HostRoot()}
+}
+func (c CodexConfig) importAuthIfNeeded() error {
+	dst := c.AuthPath()
 	if fileExistsAndNonEmpty(dst) {
 		return nil
 	}
-	for _, src := range c.CodexAuthSearchPaths() {
+	for _, src := range c.AuthSearchPaths() {
 		if !fileExistsAndNonEmpty(src) {
 			continue
 		}
-		in, err := os.Open(src)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		out, err := os.Create(dst)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(out, in); err != nil {
-			out.Close()
-			return err
-		}
-		return out.Close()
+		return copyFile(src, dst)
 	}
 	return nil
 }
-
-func (c *Config) codexCLIHomeCandidates() []string {
-	return []string{
-		c.LocalCodexCLIHomeRoot(),
-		c.ManagedHomeCodexCLIHomeRoot(),
-		c.HostCodexRoot(),
-	}
-}
-
-func (c *Config) codexProfileHostPathOverride() string {
-	if c == nil || c.Store == nil {
-		return ""
-	}
+func (c CodexConfig) profileHostPathOverride() string {
 	for _, key := range []string{"codex.profile_host_path", "codex.cli_home_host_path", "codex.shared_home_host_path"} {
-		if raw := absOrEmpty(c.Store.GetString(key, "")); raw != "" {
+		if raw := absOrEmpty(c.cfg.string(key, "")); raw != "" {
 			return raw
 		}
 	}

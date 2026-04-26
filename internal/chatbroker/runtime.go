@@ -47,7 +47,7 @@ func (b *Broker) installConfiguredSkills(ctx context.Context, chatID modeluuid.U
 	if !ok {
 		return nil
 	}
-	for _, skillDir := range b.Config.ChatSkillsByID(chatID) {
+	for _, skillDir := range b.Config.Chat(chatID).Skills() {
 		if err := installer.InstallSkill(ctx, sbx, skillDir); err != nil {
 			return err
 		}
@@ -63,9 +63,9 @@ func (b *Broker) ensureSandboxRuntime(ctx context.Context, conv *Thread) error {
 		return err
 	}
 	if err := hostbridgetls.EnsureChatClientMaterials(
-		b.Config.HostbridgeTLSRoot(),
-		b.Config.DefaultChatTLSDirByID(conv.ChatID),
-		b.Config.ChatClientIdentity(conv.ChatID),
+		b.Config.Hostbridge().TLSRoot(),
+		b.Config.Chat(conv.ChatID).Profile().TLSDir(),
+		b.Config.Chat(conv.ChatID).ClientIdentity(),
 	); err != nil {
 		return fmt.Errorf("ensure hostbridge tls client materials: %w", err)
 	}
@@ -74,7 +74,7 @@ func (b *Broker) ensureSandboxRuntime(ctx context.Context, conv *Thread) error {
 
 func (b *Broker) developerInstructions(chatID modeluuid.UUID, conv *Thread) string {
 	allowedCommands := append([]string{}, hostbridgeserver.AllowedCommandNames(
-		hostbridgeserver.MergeNamedAllowedCommands(b.Config.ChatHostbridgeAllowedCommandsByID(chatID)),
+		hostbridgeserver.MergeNamedAllowedCommands(b.Config.Chat(chatID).Hostbridge().AllowedCommands()),
 	)...)
 	sort.Strings(allowedCommands)
 
@@ -107,7 +107,7 @@ func (b *Broker) developerInstructions(chatID modeluuid.UUID, conv *Thread) stri
 		CodexHome:          conv.ContainerHome,
 		ContainerOS:        "linux",
 		HostOS:             runtime.GOOS,
-		HostbridgeAddr:     b.Config.DockerContainerHostbridgeTCPAddr(),
+		HostbridgeAddr:     b.Config.Docker().ContainerHostbridgeTCPAddr(),
 		Binaries:           allowedCommandsText,
 		ChatProvider:       chatProvider,
 		MessagePrefix:      messagePrefix,

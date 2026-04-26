@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/chatcommands"
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
 
 type RunCommandRunner struct {
@@ -17,18 +18,19 @@ type RunCommandRunner struct {
 	DefaultTimeoutSec int
 }
 
-func NewRunner(resolve AllowedCommandResolver, defaultTimeoutSec int, provider chatcommands.Provider) chatcommands.Runner {
-	return NewRunnerForClient(resolve, "", defaultTimeoutSec, provider)
+func RegisterRunCommandHandler(registry *commandengine.Registry, runner *RunCommandRunner) error {
+	return commandengine.Register[schemacommands.RunCommand](registry, runner.RunCommand)
 }
 
-func NewRunnerForClient(resolve AllowedCommandResolver, clientIdentity string, defaultTimeoutSec int, provider chatcommands.Provider) chatcommands.Runner {
-	return chatcommands.NewDispatchRunner(
-		&RunCommandRunner{ResolveAllowed: resolve, ClientIdentity: clientIdentity, DefaultTimeoutSec: defaultTimeoutSec},
-		chatcommands.NewProviderRunner(provider),
-	)
+func (r *RunCommandRunner) RunCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
+	text, err := r.run(ctx, cmd.Command, cmd.Args, cmd.Stdin, cmd.Timeout)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: text}, nil
 }
 
-func (r *RunCommandRunner) ExecuteRunCommand(ctx context.Context, req chatcommands.Request, cmd chatcommands.RunCommand) (chatcommands.Result, error) {
+func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []string, stdin []byte, timeoutSec int) (string, error) {
 	allowed := StaticAllowedCommandResolver(nil)("")
 	if r != nil && r.ResolveAllowed != nil {
 		allowed = r.ResolveAllowed(r.ClientIdentity)
@@ -36,24 +38,24 @@ func (r *RunCommandRunner) ExecuteRunCommand(ctx context.Context, req chatcomman
 	if allowed == nil {
 		allowed = DefaultAllowedCommands()
 	}
-	spec, ok := allowed[cmd.Command]
+	spec, ok := allowed[commandName]
 	if !ok {
-		return chatcommands.Result{}, fmt.Errorf("command not allowed: %s", cmd.Command)
+		return "", fmt.Errorf("command not allowed: %s", commandName)
 	}
 
-	plan, err := BuildExecutionPlan(cmd.Command, cmd.Args, spec)
+	plan, err := BuildExecutionPlan(commandName, args, spec)
 	if err != nil {
-		return chatcommands.Result{}, err
+		return "", err
 	}
 
-	timeout := r.defaultTimeoutSec(cmd.Timeout)
+	timeout := r.defaultTimeoutSec(timeoutSec)
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	command := exec.CommandContext(runCtx, plan.Name, plan.Args...)
 	command.Dir = plan.Dir
 	command.Env = plan.Env
-	command.Stdin = bytes.NewReader(cmd.Stdin)
+	command.Stdin = bytes.NewReader(stdin)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	command.Stdout = &stdout
@@ -63,7 +65,7 @@ func (r *RunCommandRunner) ExecuteRunCommand(ctx context.Context, req chatcomman
 		select {
 		case <-time.After(plan.Delay):
 		case <-runCtx.Done():
-			return chatcommands.Result{}, runCtx.Err()
+			return "", runCtx.Err()
 		}
 	}
 
@@ -73,16 +75,16 @@ func (r *RunCommandRunner) ExecuteRunCommand(ctx context.Context, req chatcomman
 			detail = strings.TrimSpace(stdout.String())
 		}
 		if detail != "" {
-			return chatcommands.Result{}, fmt.Errorf("%w: %s", err, detail)
+			return "", fmt.Errorf("%w: %s", err, detail)
 		}
-		return chatcommands.Result{}, err
+		return "", err
 	}
 
 	text := stdout.String()
 	if strings.TrimSpace(text) == "" {
 		text = stderr.String()
 	}
-	return chatcommands.Result{Text: text}, nil
+	return text, nil
 }
 
 func (r *RunCommandRunner) defaultTimeoutSec(timeout int) int {

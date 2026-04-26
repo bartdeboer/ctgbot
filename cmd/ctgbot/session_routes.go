@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
-	"github.com/bartdeboer/ctgbot/internal/appstate"
+	appstate "github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"

@@ -8,8 +8,13 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/chatcommands"
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/configengine"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	configschema "github.com/bartdeboer/ctgbot/internal/schema/config"
+	"github.com/bartdeboer/ctgbot/internal/schema/routers"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.InboundPayload) (messenger.OutboundPayload, error) {
@@ -56,11 +61,19 @@ func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.Inbound
 		if len(args) == 0 {
 			return messenger.OutboundPayload{}, nil
 		}
-		provider := NewChatCommandsProvider(b)
-		cmds := chatcommands.New(chatcommands.NewProviderRunner(provider))
-		result, err := cmds.RunUserRequest(ctx, chatcommands.Request{
-			ThreadID: threadIDOrNil(thread),
-			Context:  chatcommands.CommandContext{IsRoot: msg.IsAdmin},
+		if args[0] == "help" {
+			return payloadResult(commandHelp(routers.MessageDefinitions())), nil
+		}
+		engine, err := b.messageCommandEngine()
+		if err != nil {
+			return payloadResult(fmt.Sprintf("command error: %v", err)), nil
+		}
+		result, err := engine.Run(ctx, commandengine.Request{
+			Context: commandengine.Context{
+				ChatID:   chatCfg.ID,
+				ThreadID: threadIDOrNil(thread),
+				Actor:    b.messageActor(chatCfg.ID, msg),
+			},
 		}, args)
 		if err != nil {
 			return payloadResult(fmt.Sprintf("command error: %v", err)), nil
@@ -95,6 +108,41 @@ func (b *Broker) HandleInboundPayload(ctx context.Context, msg messenger.Inbound
 	}
 
 	return payloadResult(outcome.Reply), nil
+}
+
+func (b *Broker) messageCommandEngine() (*commandengine.Engine, error) {
+	registry, err := configschema.Registry(b.Config)
+	if err != nil {
+		return nil, err
+	}
+	handlers := NewCommandHandlers(b)
+	return routers.NewMessageCommandEngine(configengine.New(registry), handlers, handlers)
+}
+
+func (b *Broker) messageActor(chatID modeluuid.UUID, msg messenger.InboundPayload) commandengine.Actor {
+	if msg.IsAdmin {
+		return commandengine.Actor{ID: strings.TrimSpace(msg.UserLabel), Roles: []simplerbac.Role{simplerbac.RoleRoot}}
+	}
+	roles := []simplerbac.Role{simplerbac.RoleUser}
+	if b != nil && b.Config != nil && !chatID.IsNull() && b.Config.Chat(chatID).ProcessToolsEnabled() {
+		roles = append(roles, simplerbac.RoleElevated)
+	}
+	return commandengine.Actor{ID: strings.TrimSpace(msg.UserLabel), Roles: roles}
+}
+
+func commandHelp(definitions []commandengine.Definition) string {
+	var lines []string
+	for _, definition := range definitions {
+		for _, route := range definition.Routes {
+			pattern := "/" + commandengine.NormalizePattern(route.Pattern)
+			if strings.TrimSpace(route.Help) == "" {
+				lines = append(lines, pattern)
+				continue
+			}
+			lines = append(lines, pattern+" - "+strings.TrimSpace(route.Help))
+		}
+	}
+	return "Commands:\n" + strings.Join(lines, "\n")
 }
 
 func payloadResult(text string) messenger.OutboundPayload {
@@ -174,7 +222,7 @@ func (b *Broker) handleIncomingAttachments(ctx context.Context, msg messenger.In
 		return nil, nil
 	}
 
-	workspaceHost := b.Config.ChatWorkspaceHostPathByID(chatCfg.ID)
+	workspaceHost := b.Config.Chat(chatCfg.ID).WorkspaceHostPath()
 	inboxHost := filepath.Join(workspaceHost, "inbox")
 	if err := os.MkdirAll(inboxHost, 0o755); err != nil {
 		return nil, err

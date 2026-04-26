@@ -275,18 +275,18 @@ func (b *Broker) prepareThread(ctx context.Context, chatID modeluuid.UUID, threa
 		return nil, err
 	}
 
-	workspaceHostPath, err := b.Config.ResolveChatWorkspaceHostPathByID(chatID, workspace)
+	workspaceHostPath, err := b.Config.Chat(chatID).ResolveWorkspaceHostPath(workspace)
 	if err != nil {
 		return nil, err
 	}
 
 	thread.Active = true
 	thread.AgentProviderType = b.defaultAgentName()
-	thread.RuntimeName = b.Config.ThreadContainerName(thread.ID)
+	thread.RuntimeName = b.Config.Thread(chatID, thread.ID).ContainerName()
 	thread.WorkspaceHost = workspaceHostPath
-	thread.HomeHost = b.Config.ChatCodexProfileHostPathByID(thread.ChatID)
-	thread.ContainerWorkspace = b.Config.DockerContainerWorkspacePath()
-	thread.ContainerHome = b.Config.DockerContainerHomePath()
+	thread.HomeHost = b.Config.Chat(thread.ChatID).CodexProfileHostPath()
+	thread.ContainerWorkspace = b.Config.Docker().ContainerWorkspacePath()
+	thread.ContainerHome = b.Config.Docker().ContainerHomePath()
 	thread.Initialized = false
 	thread.AgentThreadID = ""
 	thread.LastError = ""

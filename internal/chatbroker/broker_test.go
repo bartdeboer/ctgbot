@@ -11,7 +11,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/chatcommands"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
@@ -26,12 +26,12 @@ func ensureTelegramChat(t *testing.T, cfg *appstate.Config, providerChatID int64
 		t.Fatalf("ensure provider chat: %v", err)
 	}
 	if enabled {
-		if err := cfg.SetChatEnabledByID(entry.ID, true); err != nil {
+		if err := cfg.Chat(entry.ID).SetEnabled(true); err != nil {
 			t.Fatalf("set chat enabled: %v", err)
 		}
 	}
 	if processTools {
-		if err := cfg.SetChatProcessToolsEnabledByID(entry.ID, true); err != nil {
+		if err := cfg.Chat(entry.ID).SetProcessToolsEnabled(true); err != nil {
 			t.Fatalf("set chat process tools enabled: %v", err)
 		}
 	}
@@ -88,7 +88,7 @@ func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
 	if sbx.GPUs != "" {
 		t.Fatalf("expected GPUs disabled by default, got %q", sbx.GPUs)
 	}
-	if err := cfg.SetChatGPUsByID(chatID, "all"); err != nil {
+	if err := cfg.Chat(chatID).SetGPUs("all"); err != nil {
 		t.Fatalf("set chat gpus: %v", err)
 	}
 	sbx = broker.sandboxForThread(&Thread{
@@ -143,8 +143,106 @@ func TestHandleInboundPayloadRoutesTelegramCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
 	}
-	if result.Text.Text != chatcommands.New(nil).UserHelpText() {
-		t.Fatalf("message text = %q, want %q", result.Text.Text, chatcommands.New(nil).UserHelpText())
+	for _, want := range []string{"/config list", "/config set <key> <value>", "/refresh", "/container refresh", "/status"} {
+		if !strings.Contains(result.Text.Text, want) {
+			t.Fatalf("help text missing %q:\n%s", want, result.Text.Text)
+		}
+	}
+	if strings.Contains(result.Text.Text, "/config hostbridge scaffold") {
+		t.Fatalf("help text includes CLI-only scaffold command:\n%s", result.Text.Text)
+	}
+}
+
+func TestHandleInboundPayloadConfigSetUsesElevatedChatRole(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	chat := ensureTelegramChat(t, cfg, 42, "Test Chat", true, true)
+
+	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/config set chat.enabled false"},
+		ChatLabel:        "Test Chat",
+		UserLabel:        "member",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if result.Text.Text != "chat.enabled=false" {
+		t.Fatalf("reply = %q, want chat.enabled=false", result.Text.Text)
+	}
+	if cfg.Chat(chat.ID).Enabled() {
+		t.Fatal("chat.enabled was not updated through message command")
+	}
+}
+
+func TestHandleInboundPayloadRejectsHostbridgeScaffoldCommand(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	chat := ensureTelegramChat(t, cfg, 42, "Test Chat", true, true)
+
+	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/config hostbridge scaffold deploy"},
+		ChatLabel:        "Test Chat",
+		UserLabel:        "member",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if !strings.Contains(result.Text.Text, "command error: no matching command") {
+		t.Fatalf("reply = %q, want command rejection", result.Text.Text)
+	}
+
+	var commands map[string]hostbridgeserver.AllowedCommand
+	key := `chats["` + chat.ID.String() + `"].hostbridge.allowed_commands`
+	if store.GetStruct(key, &commands) {
+		t.Fatalf("allowed command skeleton stored at %s: %#v", key, commands)
 	}
 }
 
@@ -428,11 +526,11 @@ func TestHandleInboundPayloadRefreshesActiveConversation(t *testing.T) {
 		ChatID:             chatEntry.ID,
 		ProviderThreadID:   "7",
 		AgentProviderType:  "codex",
-		RuntimeName:        cfg.ThreadContainerName(threadID),
+		RuntimeName:        cfg.Thread(modeluuid.Nil, threadID).ContainerName(),
 		WorkspaceHost:      filepath.Join(root, "workspace"),
-		HomeHost:           cfg.ChatCodexProfileHostPathByID(chatEntry.ID),
-		ContainerWorkspace: cfg.DockerContainerWorkspacePath(),
-		ContainerHome:      cfg.DockerContainerHomePath(),
+		HomeHost:           cfg.Chat(chatEntry.ID).CodexProfileHostPath(),
+		ContainerWorkspace: cfg.Docker().ContainerWorkspacePath(),
+		ContainerHome:      cfg.Docker().ContainerHomePath(),
 		AgentThreadID:      "agent-thread-123",
 		Initialized:        true,
 		Active:             true,
@@ -502,7 +600,7 @@ func TestHandleInboundPayloadRefreshInstallsConfiguredSkills(t *testing.T) {
 	chatEntry := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 	skillOne := filepath.Join(root, "skills", "one")
 	skillTwo := filepath.Join(root, "skills", "two")
-	if err := cfg.SetChatSkillsByID(chatEntry.ID, []string{skillTwo, skillOne}); err != nil {
+	if err := cfg.Chat(chatEntry.ID).SetSkills([]string{skillTwo, skillOne}); err != nil {
 		t.Fatalf("set chat skills: %v", err)
 	}
 
@@ -512,11 +610,11 @@ func TestHandleInboundPayloadRefreshInstallsConfiguredSkills(t *testing.T) {
 		ChatID:             chatEntry.ID,
 		ProviderThreadID:   "7",
 		AgentProviderType:  "codex",
-		RuntimeName:        cfg.ThreadContainerName(threadID),
+		RuntimeName:        cfg.Thread(modeluuid.Nil, threadID).ContainerName(),
 		WorkspaceHost:      filepath.Join(root, "workspace"),
-		HomeHost:           cfg.ChatCodexProfileHostPathByID(chatEntry.ID),
-		ContainerWorkspace: cfg.DockerContainerWorkspacePath(),
-		ContainerHome:      cfg.DockerContainerHomePath(),
+		HomeHost:           cfg.Chat(chatEntry.ID).CodexProfileHostPath(),
+		ContainerWorkspace: cfg.Docker().ContainerWorkspacePath(),
+		ContainerHome:      cfg.Docker().ContainerHomePath(),
 		AgentThreadID:      "agent-thread-123",
 		Initialized:        true,
 		Active:             true,
@@ -694,11 +792,11 @@ func TestHandleInboundPayloadPurgesActiveConversation(t *testing.T) {
 		ChatID:             chatEntry.ID,
 		ProviderThreadID:   "7",
 		AgentProviderType:  "codex",
-		RuntimeName:        cfg.ThreadContainerName(threadID),
+		RuntimeName:        cfg.Thread(modeluuid.Nil, threadID).ContainerName(),
 		WorkspaceHost:      filepath.Join(root, "workspace"),
-		HomeHost:           cfg.ChatCodexProfileHostPathByID(chatEntry.ID),
-		ContainerWorkspace: cfg.DockerContainerWorkspacePath(),
-		ContainerHome:      cfg.DockerContainerHomePath(),
+		HomeHost:           cfg.Chat(chatEntry.ID).CodexProfileHostPath(),
+		ContainerWorkspace: cfg.Docker().ContainerWorkspacePath(),
+		ContainerHome:      cfg.Docker().ContainerHomePath(),
 		AgentThreadID:      "agent-thread-123",
 		Initialized:        true,
 		Active:             true,
@@ -1016,7 +1114,7 @@ func TestHandleInboundPayloadInterruptDisabledForChat(t *testing.T) {
 		t.Fatalf("new config: %v", err)
 	}
 	chat := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
-	if err := cfg.SetChatInteractiveInterruptEnabledByID(chat.ID, false); err != nil {
+	if err := cfg.Chat(chat.ID).SetInteractiveInterruptEnabled(false); err != nil {
 		t.Fatalf("disable interrupt: %v", err)
 	}
 	thread := &Thread{ID: modeluuid.New(), ChatID: chat.ID, ProviderThreadID: "7", Active: true}

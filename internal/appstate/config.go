@@ -1,299 +1,98 @@
 package appstate
 
 import (
-	"context"
-	"fmt"
-	"github.com/bartdeboer/ctgbot/internal/durationparse"
-	"io"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/durationparse"
 	"github.com/bartdeboer/go-clistate"
 )
 
 type Config struct {
-	root  string
-	Store *clistate.Store
+	root   string
+	store  *clistate.Store
+	global *clistate.Store
 }
 
-const CodexLoginCallbackPort = 1455
-
-const (
-	stateDirName         = ".ctgbot"
-	namePrefix           = "ctgbot-"
-	chatClientNamePrefix = "ctgbot-chat-"
-)
-
-type ChatConfigEntry struct {
-	ID                          modeluuid.UUID
-	ProviderType                string
-	ProviderChatID              string
-	ProviderChatTitle           string
-	Enabled                     bool
-	InteractiveInterruptEnabled bool
-}
-
-type GitIdentity struct {
-	Name  string
-	Email string
-}
-
-func NewConfig(root string, store *clistate.Store) (*Config, error) {
-	if strings.TrimSpace(root) == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, err
-		}
-		root = filepath.Join(cwd, stateDirName)
+func New(root string, store *clistate.Store, globalStore ...*clistate.Store) *Config {
+	var global *clistate.Store
+	if len(globalStore) > 0 {
+		global = globalStore[0]
 	}
-
-	absRoot, err := filepath.Abs(root)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Config{
-		root:  absRoot,
-		Store: store,
-	}, nil
+	return &Config{root: absOrEmpty(root), store: store, global: global}
 }
 
-func (c *Config) Root() string {
-	return c.root
-}
-
-func (c *Config) ProjectRoot() string {
+func (c *Config) RootDir() string {
 	if c == nil {
 		return ""
 	}
-	return filepath.Dir(c.Root())
+	return c.root
 }
 
-func (c *Config) EnsurePaths() error {
-	for _, dir := range []string{c.Root(), c.ChatsRoot()} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-	}
-	if err := c.migrateLegacyLocalLayout(); err != nil {
-		return err
-	}
-	return nil
+func (c *Config) ProjectDir() string {
+	return c.Global().ProjectDir()
 }
 
-func (c *Config) EnsureChatRuntimePaths(chatID modeluuid.UUID) (string, error) {
-	name := c.ChatRuntimeName(chatID)
-	for _, dir := range []string{
-		c.ChatRuntimeRoot(chatID),
-		c.DefaultChatCodexProfileDirByID(chatID),
-		c.DefaultChatWorkspaceDirByID(chatID),
-		c.DefaultChatLogDirByID(chatID),
-		c.DefaultChatTLSDirByID(chatID),
-		c.ChatThreadsRoot(chatID),
-	} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return "", err
-		}
-	}
-	if err := ensureGitWorkspace(c.DefaultChatWorkspaceDirByID(chatID)); err != nil {
-		return "", err
-	}
-	return name, nil
-}
-
-func (c *Config) migrateLegacyLocalLayout() error {
-	legacyRoot := filepath.Join(c.Root(), "conversations")
-	entries, err := os.ReadDir(legacyRoot)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	if err := os.MkdirAll(c.ChatsRoot(), 0o755); err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		key := strings.TrimPrefix(name, namePrefix)
-		if key == name {
-			continue
-		}
-
-		srcRoot := filepath.Join(legacyRoot, name)
-		dstRoot := c.ChatRoot(key)
-		if !pathExists(dstRoot) {
-			if err := os.Rename(srcRoot, dstRoot); err != nil {
-				return err
-			}
-		}
-
-		oldHome := filepath.Join(dstRoot, "home")
-		newHome := filepath.Join(dstRoot, ".codex")
-		if pathExists(oldHome) && !pathExists(newHome) {
-			if err := os.Rename(oldHome, newHome); err != nil {
-				return err
-			}
-		}
-		if err := os.MkdirAll(filepath.Join(dstRoot, "workspace"), 0o755); err != nil {
-			return err
-		}
-	}
-
-	remaining, err := os.ReadDir(legacyRoot)
-	if err == nil && len(remaining) == 0 {
-		if err := os.Remove(legacyRoot); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *Config) ResolveWorkspaceHostPath(raw string) (string, error) {
-	candidate := strings.TrimSpace(raw)
-	if candidate == "" {
-		candidate = c.DockerDefaultWorkspaceHostPath()
-	}
-	if candidate == "" {
-		return "", fmt.Errorf("missing workspace host path")
-	}
-
-	abs, err := filepath.Abs(candidate)
-	if err != nil {
-		return "", err
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		return "", err
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("workspace host path is not a directory: %s", abs)
-	}
-	return abs, nil
-}
-
-func pathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func fileExistsAndNonEmpty(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return false
-	}
-	return info.Size() > 0
-}
-
-func copyFile(src, dst string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if info.IsDir() {
-		return fmt.Errorf("expected file, got directory: %s", src)
-	}
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-	return os.Chmod(dst, info.Mode().Perm())
-}
-
-func ensureGitWorkspace(dir string) error {
-	if strings.TrimSpace(dir) == "" {
-		return fmt.Errorf("workspace dir is empty")
-	}
-	if pathExists(filepath.Join(dir, ".git")) {
-		return nil
-	}
-	cmd := exec.Command("git", "init", "-q", dir)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git init %s: %w: %s", dir, err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-func absOrEmpty(v string) string {
-	v = strings.TrimSpace(v)
-	if v == "" {
+func (c *Config) ProjectRoot() string {
+	if c == nil || c.root == "" {
 		return ""
 	}
-	abs, err := filepath.Abs(v)
-	if err != nil {
-		return v
-	}
-	return abs
+	return filepath.Dir(c.root)
 }
 
-func readGitConfig(ctx context.Context, key string) string {
-	if strings.TrimSpace(key) == "" {
-		return ""
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	cmd := exec.CommandContext(ctx, "git", "config", "--global", key)
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return string(out)
+func (c *Config) DBPath() string {
+	return c.Profile().DBPath()
 }
 
-func stringFromAny(v any) string {
-	s, _ := v.(string)
-	return strings.TrimSpace(s)
-}
-
-func firstNonEmptyString(values ...any) string {
-	for _, value := range values {
-		if s := stringFromAny(value); s != "" {
-			return s
-		}
+func (c *Config) string(key string, fallback string) string {
+	if c == nil || c.store == nil {
+		return fallback
 	}
-	return ""
+	return strings.TrimSpace(c.store.GetString(key, fallback))
 }
 
-func boolFromAny(v any) bool {
-	b, _ := v.(bool)
-	return b
+func (c *Config) bool(key string, fallback bool) bool {
+	if c == nil || c.store == nil {
+		return fallback
+	}
+	return c.store.GetBool(key, fallback)
 }
 
-func (c *Config) durationFromConfig(key string, fallback int, unit time.Duration) time.Duration {
-	if c == nil || c.Store == nil {
+func (c *Config) duration(key string, fallback int, unit time.Duration) time.Duration {
+	raw := c.string(key, "")
+	if raw == "" {
 		return time.Duration(fallback) * unit
 	}
-	if raw := strings.TrimSpace(c.Store.GetString(key, "")); raw != "" {
-		d, err := durationparse.Parse(raw, unit)
-		if err == nil {
-			return d
-		}
+	parsed, err := durationparse.Parse(raw, unit)
+	if err != nil || parsed == 0 {
+		return time.Duration(fallback) * unit
 	}
-	return time.Duration(c.Store.GetInt(key, fallback)) * unit
+	return parsed
+}
+
+func (c *Config) structValue(key string, out any) bool {
+	if c == nil || c.store == nil {
+		return false
+	}
+	return c.store.GetStruct(key, out)
+}
+
+func (c *Config) persistString(key string, value string) error {
+	if c == nil || c.store == nil {
+		return errMissingConfigStore()
+	}
+	return c.store.PersistString(key, value)
+}
+
+func absOrEmpty(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	return abs
 }

@@ -20,7 +20,7 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 	if m == nil || m.Config == nil {
 		return fmt.Errorf("missing config")
 	}
-	if err := m.Config.EnsureCodexCLIHome(); err != nil {
+	if err := m.Config.Codex().EnsureCLIHome(); err != nil {
 		return err
 	}
 
@@ -29,7 +29,7 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 		return err
 	}
 
-	relay, err := startSigninRelay(m.Config.DockerCLIContainerName(), appstate.CodexLoginCallbackPort, m.Logger)
+	relay, err := startSigninRelay(m.Config.Docker().CLIContainerName(), appstate.CodexLoginCallbackPort, m.Logger)
 	if err != nil {
 		return err
 	}
@@ -40,12 +40,12 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 		"--rm",
 		"-i",
 		"--security-opt", "seccomp=unconfined",
-		"--name", m.Config.DockerCLIContainerName(),
-		"--env", "HOME=" + m.Config.DockerContainerHomePath(),
-		"--env", "CODEX_HOME=" + m.Config.DockerContainerHomePath(),
-		"--workdir", m.Config.DockerContainerHomePath(),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.CodexProfileHostPath(), m.Config.DockerContainerHomePath()),
-		m.Config.DockerImage(),
+		"--name", m.Config.Docker().CLIContainerName(),
+		"--env", "HOME=" + m.Config.Docker().ContainerHomePath(),
+		"--env", "CODEX_HOME=" + m.Config.Docker().ContainerHomePath(),
+		"--workdir", m.Config.Docker().ContainerHomePath(),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.Codex().ProfileHostPath(), m.Config.Docker().ContainerHomePath()),
+		m.Config.Docker().Image(),
 		"codex",
 		"login",
 	}
@@ -60,7 +60,7 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	m.logf("starting containerized codex signin codex_home=%s callback_port=%d", m.Config.CodexProfileHostPath(), appstate.CodexLoginCallbackPort)
+	m.logf("starting containerized codex signin codex_home=%s callback_port=%d", m.Config.Codex().ProfileHostPath(), appstate.CodexLoginCallbackPort)
 	return cmd.Run()
 }
 
@@ -68,7 +68,7 @@ func (m *CodexManager) LoginStatus(ctx context.Context) error {
 	if m == nil || m.Config == nil {
 		return fmt.Errorf("missing config")
 	}
-	if err := m.Config.EnsureCodexCLIHome(); err != nil {
+	if err := m.Config.Codex().EnsureCLIHome(); err != nil {
 		return err
 	}
 
@@ -81,12 +81,12 @@ func (m *CodexManager) LoginStatus(ctx context.Context) error {
 		ctx,
 		"docker", "run", "--rm",
 		"--security-opt", "seccomp=unconfined",
-		"--name", m.Config.DockerCLIContainerName(),
-		"--env", "HOME="+m.Config.DockerContainerHomePath(),
-		"--env", "CODEX_HOME="+m.Config.DockerContainerHomePath(),
-		"--workdir", m.Config.DockerContainerHomePath(),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.CodexProfileHostPath(), m.Config.DockerContainerHomePath()),
-		m.Config.DockerImage(),
+		"--name", m.Config.Docker().CLIContainerName(),
+		"--env", "HOME="+m.Config.Docker().ContainerHomePath(),
+		"--env", "CODEX_HOME="+m.Config.Docker().ContainerHomePath(),
+		"--workdir", m.Config.Docker().ContainerHomePath(),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.Codex().ProfileHostPath(), m.Config.Docker().ContainerHomePath()),
+		m.Config.Docker().Image(),
 		"codex", "login", "status",
 	)
 	cmd.Stdout = os.Stdout
@@ -98,7 +98,7 @@ func (m *CodexManager) RunCLI(ctx context.Context, workdir string, args []string
 	if m == nil || m.Config == nil {
 		return fmt.Errorf("missing config")
 	}
-	if err := m.Config.EnsureCodexCLIHome(); err != nil {
+	if err := m.Config.Codex().EnsureCLIHome(); err != nil {
 		return err
 	}
 
@@ -125,12 +125,12 @@ func (m *CodexManager) RunCLI(ctx context.Context, workdir string, args []string
 		"--rm",
 		"-i",
 		"--security-opt", "seccomp=unconfined",
-		"--name", m.Config.DockerCLIContainerName(),
-		"--env", "HOME=" + m.Config.DockerContainerHomePath(),
-		"--env", "CODEX_HOME=" + m.Config.DockerContainerHomePath(),
-		"--workdir", m.Config.DockerContainerWorkspacePath(),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", workspaceHostPath, m.Config.DockerContainerWorkspacePath()),
-		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.CodexProfileHostPath(), m.Config.DockerContainerHomePath()),
+		"--name", m.Config.Docker().CLIContainerName(),
+		"--env", "HOME=" + m.Config.Docker().ContainerHomePath(),
+		"--env", "CODEX_HOME=" + m.Config.Docker().ContainerHomePath(),
+		"--workdir", m.Config.Docker().ContainerWorkspacePath(),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", workspaceHostPath, m.Config.Docker().ContainerWorkspacePath()),
+		"--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m.Config.Codex().ProfileHostPath(), m.Config.Docker().ContainerHomePath()),
 	}
 	if isTerminal(os.Stdin) && isTerminal(os.Stdout) {
 		dockerArgs = append(dockerArgs, "-t")
@@ -139,7 +139,7 @@ func (m *CodexManager) RunCLI(ctx context.Context, workdir string, args []string
 		dockerArgs = append(dockerArgs, "--env", "TERM="+term)
 	}
 
-	dockerArgs = append(dockerArgs, m.Config.DockerImage(), "codex")
+	dockerArgs = append(dockerArgs, m.Config.Docker().Image(), "codex")
 	dockerArgs = append(dockerArgs, args...)
 
 	cmd := exec.CommandContext(ctx, "docker", dockerArgs...)

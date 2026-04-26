@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"gorm.io/gorm"
 )
@@ -29,14 +30,12 @@ type Thread struct {
 	UpdatedAt time.Time
 }
 
-func (t *Thread) ContainerName(cfg interface {
-	ThreadContainerName(threadID modeluuid.UUID) string
-}) string {
+func (t *Thread) ContainerName(cfg *appstate.Config) string {
 	if t == nil {
 		return ""
 	}
 	if cfg != nil && !t.ID.IsNull() {
-		if name := strings.TrimSpace(cfg.ThreadContainerName(t.ID)); name != "" {
+		if name := strings.TrimSpace(cfg.Thread(t.ChatID, t.ID).ContainerName()); name != "" {
 			return name
 		}
 	}

@@ -76,7 +76,7 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 		return agent.TurnResult{}, fmt.Errorf("missing prompt")
 	}
 
-	timeout := e.Config.CodexSessionTimeout()
+	timeout := e.Config.Codex().SessionTimeout()
 	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
@@ -96,7 +96,7 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 		"-C", sbx.ContainerWorkspace,
 	}
 
-	if model := e.Config.CodexModel(); model != "" {
+	if model := e.Config.Codex().Model(); model != "" {
 		innerArgs = append(innerArgs, "-m", model)
 	}
 	if strings.TrimSpace(providerThreadID) != "" {

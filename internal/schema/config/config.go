@@ -1,0 +1,39 @@
+package config
+
+import (
+	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/configengine"
+)
+
+func Registry(cfg *appstate.Config) (*configengine.Registry, error) {
+	return configengine.NewRegistry(Items(cfg)...)
+}
+
+func Items(cfg *appstate.Config) []configengine.Item {
+	return []configengine.Item{
+		BuildCompilerPath(cfg),
+		ChatEnabled(cfg),
+		ChatProcessToolsEnabled(cfg),
+		ChatInteractiveInterruptEnabled(cfg),
+		ChatGPUs(cfg),
+		ChatWorkspaceHostPath(cfg),
+		ChatCodexProfileHostPath(cfg),
+		ChatSkills(cfg),
+		CodexCLIHomePath(cfg),
+		CodexLoginCallbackPort(),
+		CodexModel(cfg),
+		CodexProfileHostPath(cfg),
+		CodexSessionTimeout(cfg),
+		CodexSharedHomePath(cfg),
+		DockerCLIContainerName(cfg),
+		DockerContainerHostbridgeTCPAddr(cfg),
+		DockerImage(cfg),
+		DockerWorkspaceHostPath(cfg),
+		HostbridgeTCPListenAddr(cfg),
+		TelegramAdminUserID(cfg),
+		TelegramDebounceWindow(cfg),
+		TelegramPollTimeout(cfg),
+		TelegramRenderFormat(cfg),
+		TelegramToken(cfg),
+	}
+}

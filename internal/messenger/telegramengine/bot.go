@@ -196,10 +196,10 @@ func (tb *TelegramBot) Run(ctx context.Context, onUpdate func(context.Context, m
 	handler := func(cbCtx context.Context, u TelegramUpdate) {
 		tb.handleUpdate(cbCtx, u, onUpdate)
 	}
-	if window := tb.Config.TelegramDebounceWindow(); window > 0 {
-		return NewDebouncer(window, tb.Logger, handler).Run(ctx, tb.API, tb.Config.TelegramPollTimeout())
+	if window := tb.Config.Telegram().DebounceWindow(); window > 0 {
+		return NewDebouncer(window, tb.Logger, handler).Run(ctx, tb.API, tb.Config.Telegram().PollTimeout())
 	}
-	return tb.API.Run(ctx, tb.Config.TelegramPollTimeout(), handler)
+	return tb.API.Run(ctx, tb.Config.Telegram().PollTimeout(), handler)
 }
 
 func (tb *TelegramBot) handleUpdate(ctx context.Context, u TelegramUpdate, onUpdate func(context.Context, messenger.InboundPayload) (messenger.OutboundPayload, error)) {
@@ -234,7 +234,7 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u TelegramUpd
 		ChatLabel:         strings.TrimSpace(u.ChatTitle),
 		UserLabel:         u.UserLabel(),
 		UserID:            u.UserID,
-		IsAdmin:           tb.Config != nil && u.UserID != 0 && u.UserID == tb.Config.TelegramAdminUserID(),
+		IsAdmin:           tb.Config != nil && u.UserID != 0 && u.UserID == tb.Config.Telegram().AdminUserID(),
 		ProviderMessageID: fmt.Sprintf("%d", u.MessageID),
 		Text:              messenger.TextMessage{Text: text},
 	}
@@ -379,7 +379,7 @@ func telegramPreview(text string) string {
 func (tb *TelegramBot) telegramRenderAttempts() []telegramRenderAttempt {
 	preferred := telegramRenderAttempt{format: markdown.RenderPlain, parseMode: "", name: "plain"}
 	if tb != nil && tb.Config != nil {
-		switch tb.Config.TelegramRenderFormat() {
+		switch tb.Config.Telegram().RenderFormat() {
 		case "html":
 			preferred = telegramRenderAttempt{format: markdown.RenderHTML, parseMode: "HTML", name: "html"}
 		case "markdown_v2":

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bartdeboer/ctgbot/internal/appstate"
+	appstate "github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
 )

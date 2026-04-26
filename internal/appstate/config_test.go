@@ -3,825 +3,327 @@ package appstate
 import (
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
+	"time"
 
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clistate"
 )
 
-func ensureTelegramChat(t *testing.T, cfg *Config, providerChatID int64, title string) ChatConfigEntry {
+func newTestConfig(t *testing.T) (*Config, *clistate.Store) {
 	t.Helper()
-
-	entry, err := cfg.EnsureProviderChat("telegram", strconv.FormatInt(providerChatID, 10), title)
-	if err != nil {
-		t.Fatalf("ensure provider chat: %v", err)
-	}
-	return *entry
-}
-
-func TestNormalizeContainerPath(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		raw      string
-		fallback string
-		want     string
-	}{
-		{name: "empty uses fallback", raw: "", fallback: "/codex-home", want: "/codex-home"},
-		{name: "windows absolute becomes posix", raw: `\codex-home\ctgbot-bootstrap.md`, fallback: "/codex-home", want: "/codex-home/ctgbot-bootstrap.md"},
-		{name: "mixed separators cleaned", raw: `/etc\ctgbot/hostbridge-tls`, fallback: "/etc/ctgbot/hostbridge-tls", want: "/etc/ctgbot/hostbridge-tls"},
-		{name: "missing leading slash", raw: `workspace`, fallback: "/workspace", want: "/workspace"},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := normalizeContainerPath(tt.raw, tt.fallback); got != tt.want {
-				t.Fatalf("normalizeContainerPath(%q, %q) = %q, want %q", tt.raw, tt.fallback, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestResolveChatWorkspaceHostPathPrefersChatThenGlobalThenDefault(t *testing.T) {
 	root := t.TempDir()
-	prevWD, err := os.Getwd()
+	prev, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
 	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
+		t.Fatalf("chdir: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
+	t.Cleanup(func() { _ = os.Chdir(prev) })
 
 	store, err := clistate.NewCwd("ctgbot", "config")
 	if err != nil {
-		t.Fatalf("new store: %v", err)
+		t.Fatalf("new cwd store: %v", err)
 	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	globalDir := filepath.Join(root, "global-workspace")
-	chatDir := filepath.Join(root, "chat-workspace")
-	if err := os.MkdirAll(globalDir, 0o755); err != nil {
-		t.Fatalf("mkdir global workspace: %v", err)
-	}
-	if err := os.MkdirAll(chatDir, 0o755); err != nil {
-		t.Fatalf("mkdir chat workspace: %v", err)
-	}
-	if err := store.PersistString("docker.workspace_host_path", globalDir); err != nil {
-		t.Fatalf("persist global workspace: %v", err)
-	}
-	entry := ensureTelegramChat(t, cfg, -123, "Test Chat")
-
-	got, err := cfg.ResolveChatWorkspaceHostPathByID(entry.ID, "")
-	if err != nil {
-		t.Fatalf("resolve with global fallback: %v", err)
-	}
-	if got != globalDir {
-		t.Fatalf("resolve with global fallback = %q, want %q", got, globalDir)
-	}
-
-	if err := cfg.SetChatWorkspaceHostPathByID(entry.ID, chatDir); err != nil {
-		t.Fatalf("set chat workspace: %v", err)
-	}
-	got, err = cfg.ResolveChatWorkspaceHostPathByID(entry.ID, "")
-	if err != nil {
-		t.Fatalf("resolve with chat-local workspace: %v", err)
-	}
-	if got != chatDir {
-		t.Fatalf("resolve with chat-local workspace = %q, want %q", got, chatDir)
-	}
-
-	explicitDir := filepath.Join(root, "explicit-workspace")
-	if err := os.MkdirAll(explicitDir, 0o755); err != nil {
-		t.Fatalf("mkdir explicit workspace: %v", err)
-	}
-	got, err = cfg.ResolveChatWorkspaceHostPathByID(entry.ID, explicitDir)
-	if err != nil {
-		t.Fatalf("resolve with explicit workspace: %v", err)
-	}
-	if got != explicitDir {
-		t.Fatalf("resolve with explicit workspace = %q, want %q", got, explicitDir)
-	}
+	return New(filepath.Join(root, ".ctgbot"), store), store
 }
 
-func TestResolveChatWorkspaceHostPathByIDFallsBackToChatWorkspace(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
+func TestGroupedRootConfigReadsRealShapedTelegramConfig(t *testing.T) {
+	cfg, store := newTestConfig(t)
 
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
+	if err := store.PersistString("telegram.token", "secret"); err != nil {
+		t.Fatalf("persist token: %v", err)
 	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
+	if err := store.PersistString("telegram.defaults.render_format", "markdown"); err != nil {
+		t.Fatalf("persist render: %v", err)
 	}
-
-	chatID := modeluuid.New()
-	got, err := cfg.ResolveChatWorkspaceHostPathByID(chatID, "")
-	if err != nil {
-		t.Fatalf("resolve chat workspace by id: %v", err)
-	}
-	want := cfg.DefaultChatWorkspaceDirByID(chatID)
-	if got != want {
-		t.Fatalf("ResolveChatWorkspaceHostPathByID() = %q, want %q", got, want)
-	}
-}
-
-func TestEnsureChatRuntimePathsUsesChatScopedLayout(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	chatID, err := modeluuid.Parse("00000000100000000000000")
-	if err != nil {
-		t.Fatalf("parse chat uuid: %v", err)
-	}
-	name, err := cfg.EnsureChatRuntimePaths(chatID)
-	if err != nil {
-		t.Fatalf("ensure chat runtime paths: %v", err)
-	}
-	if name != chatID.String() {
-		t.Fatalf("runtime name = %q, want %q", name, chatID.String())
-	}
-
-	for _, dir := range []string{
-		filepath.Join(root, "chats", chatID.String()),
-		filepath.Join(root, "chats", chatID.String(), ".codex"),
-		filepath.Join(root, "chats", chatID.String(), "workspace"),
-		filepath.Join(root, "chats", chatID.String(), "logs"),
-		filepath.Join(root, "chats", chatID.String(), "tls"),
-		filepath.Join(root, "chats", chatID.String(), "threads"),
-	} {
-		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-			t.Fatalf("expected runtime dir %q to exist: %v", dir, err)
-		}
-	}
-}
-
-func TestChatTLSDirUsesChatScopedLayout(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	chatID, err := modeluuid.Parse("00000000200000000000000")
-	if err != nil {
-		t.Fatalf("parse chat uuid: %v", err)
-	}
-	got := cfg.DefaultChatTLSDirByID(chatID)
-	want := filepath.Join(root, "chats", chatID.String(), "tls")
-	if got != want {
-		t.Fatalf("DefaultChatTLSDirByID() = %q, want %q", got, want)
-	}
-}
-
-func TestChatClientIdentityRoundTrip(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	chatID, err := modeluuid.Parse("00000000200000000000000")
-	if err != nil {
-		t.Fatalf("parse chat uuid: %v", err)
-	}
-	name := cfg.ChatClientIdentity(chatID)
-	if name != "ctgbot-chat-"+chatID.String() {
-		t.Fatalf("ChatClientIdentity() = %q", name)
-	}
-	gotChatID, ok := cfg.ParseChatClientIdentity(name)
-	if !ok {
-		t.Fatalf("expected parse success")
-	}
-	if gotChatID != chatID {
-		t.Fatalf("ParseChatClientIdentity() = %q, want %q", gotChatID.String(), chatID.String())
-	}
-}
-
-func TestChatProcessToolsEnabledRoundTrip(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-	if err := cfg.EnsurePaths(); err != nil {
-		t.Fatalf("ensure paths: %v", err)
-	}
-	entry := ensureTelegramChat(t, cfg, -123, "Test Chat")
-
-	if cfg.ChatProcessToolsEnabledByID(entry.ID) {
-		t.Fatalf("expected process tools disabled by default")
-	}
-	if err := cfg.SetChatProcessToolsEnabledByID(entry.ID, true); err != nil {
-		t.Fatalf("set process tools enabled: %v", err)
-	}
-	if !cfg.ChatProcessToolsEnabledByID(entry.ID) {
-		t.Fatalf("expected process tools enabled")
-	}
-	if err := cfg.SetChatProcessToolsEnabledByID(entry.ID, false); err != nil {
-		t.Fatalf("set process tools disabled: %v", err)
-	}
-	if cfg.ChatProcessToolsEnabledByID(entry.ID) {
-		t.Fatalf("expected process tools disabled")
-	}
-}
-
-func TestChatGPUsRoundTrip(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-	entry, err := cfg.EnsureProviderChat("telegram", "42", "Test Chat")
-	if err != nil {
-		t.Fatalf("ensure provider chat: %v", err)
-	}
-
-	if got := cfg.ChatGPUsByID(entry.ID); got != "" {
-		t.Fatalf("expected gpus disabled by default, got %q", got)
-	}
-	if err := cfg.SetChatGPUsByID(entry.ID, " all "); err != nil {
-		t.Fatalf("set chat gpus: %v", err)
-	}
-	if got := cfg.ChatGPUsByID(entry.ID); got != "all" {
-		t.Fatalf("expected trimmed gpus value, got %q", got)
-	}
-	if err := cfg.SetChatGPUsByID(entry.ID, ""); err != nil {
-		t.Fatalf("clear chat gpus: %v", err)
-	}
-	if got := cfg.ChatGPUsByID(entry.ID); got != "" {
-		t.Fatalf("expected gpus cleared, got %q", got)
-	}
-}
-
-func TestChatHostbridgeAllowedCommandsRoundTrip(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-	if err := cfg.EnsurePaths(); err != nil {
-		t.Fatalf("ensure paths: %v", err)
-	}
-	entry := ensureTelegramChat(t, cfg, -123, "Test Chat")
-
-	err = cfg.SetChatHostbridgeAllowedCommandByID(entry.ID, "git-push-ctgbot", hostbridgeserver.AllowedCommand{
-		Name: "git",
-		Args: []string{"push"},
-		Dir:  filepath.Join(root, "ctgbot"),
-	})
-	if err != nil {
-		t.Fatalf("set hostbridge allowed command: %v", err)
-	}
-
-	commands := cfg.ChatHostbridgeAllowedCommandsByID(entry.ID)
-	spec, ok := commands["git-push-ctgbot"]
-	if !ok {
-		t.Fatalf("expected git-push-ctgbot alias")
-	}
-	if spec.Name != "git" {
-		t.Fatalf("spec.Name = %q, want git", spec.Name)
-	}
-	if len(spec.Args) != 1 || spec.Args[0] != "push" {
-		t.Fatalf("spec.Args = %#v, want [push]", spec.Args)
-	}
-	if spec.Dir != filepath.Join(root, "ctgbot") {
-		t.Fatalf("spec.Dir = %q", spec.Dir)
-	}
-}
-
-func TestChatHostbridgeAllowedCommandsFallsBackToLegacySpecs(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-	chatID := modeluuid.New()
-	if err := store.PersistStruct(cfg.ChatKey(chatID, "hostbridge.allowed_commands"), []string{"/usr/bin/git"}); err != nil {
-		t.Fatalf("persist legacy specs: %v", err)
-	}
-
-	commands := cfg.ChatHostbridgeAllowedCommandsByID(chatID)
-	spec, ok := commands["git"]
-	if !ok {
-		t.Fatalf("expected legacy git alias")
-	}
-	if spec.Name != "/usr/bin/git" {
-		t.Fatalf("spec.Name = %q, want /usr/bin/git", spec.Name)
-	}
-}
-
-func TestChatSkillsByIDRoundTrip(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	chatID := modeluuid.New()
-	skillA := filepath.Join(root, "skills", "human-first-coding")
-	skillB := filepath.Join(root, "skills", "checks")
-	if err := cfg.SetChatSkillsByID(chatID, []string{skillB, skillA, skillA}); err != nil {
-		t.Fatalf("set chat skills: %v", err)
-	}
-
-	got := cfg.ChatSkillsByID(chatID)
-	want := []string{skillB, skillA}
-	if len(got) != len(want) {
-		t.Fatalf("skills len = %d, want %d (%v)", len(got), len(want), got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("skills[%d] = %q, want %q", i, got[i], want[i])
-		}
-	}
-
-	if err := cfg.RemoveChatSkillByID(chatID, skillA); err != nil {
-		t.Fatalf("remove chat skill: %v", err)
-	}
-	got = cfg.ChatSkillsByID(chatID)
-	if len(got) != 1 || got[0] != skillB {
-		t.Fatalf("skills after remove = %v, want [%q]", got, skillB)
-	}
-}
-
-func TestThreadContainerNameParsesUUID(t *testing.T) {
-	root := t.TempDir()
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-	threadID, err := modeluuid.Parse("00000000500000000000000")
-	if err != nil {
-		t.Fatalf("parse thread uuid: %v", err)
-	}
-
-	name := cfg.ThreadContainerName(threadID)
-	gotThreadID, ok := cfg.ParseThreadContainerName(name)
-	if !ok {
-		t.Fatalf("expected container name to parse")
-	}
-	if gotThreadID != threadID {
-		t.Fatalf("parsed thread id = %q, want %q", gotThreadID, threadID)
-	}
-}
-
-func TestCodexCLIHomeRootDefaultsToLocalWhenNoAuthExists(t *testing.T) {
-	root := t.TempDir()
-	home := filepath.Join(root, "home")
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	prevHome := os.Getenv("HOME")
-	if err := os.MkdirAll(home, 0o755); err != nil {
-		t.Fatalf("mkdir home: %v", err)
-	}
-	if err := os.Setenv("HOME", home); err != nil {
-		t.Fatalf("set HOME: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Setenv("HOME", prevHome)
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	got := cfg.CodexCLIHomeRoot()
-	want := filepath.Join(root, ".ctgbot", ".codex")
-	if got != want {
-		t.Fatalf("CodexCLIHomeRoot() = %q, want %q", got, want)
-	}
-}
-
-func TestEnsureProviderChatPersistsExactUUIDChatKey(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	entry, err := cfg.EnsureProviderChat("telegram", "-1003803364247", "Codex #2")
-	if err != nil {
-		t.Fatalf("EnsureProviderChat: %v", err)
-	}
-
-	chats, ok := store.Get("chats", nil).(map[string]any)
-	if !ok {
-		t.Fatalf("expected chats map")
-	}
-	if _, ok := chats[entry.ID.String()]; !ok {
-		t.Fatalf("expected exact UUID chat key %q in chats map", entry.ID.String())
-	}
-}
-
-func TestFindProviderChatScansChatsWithoutReverseIndex(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	chatID := modeluuid.New()
-	if err := store.PersistStruct("chats", map[string]any{
-		chatID.String(): map[string]any{
-			"chat_provider_type":  "telegram",
-			"provider_chat_id":    "-1003803364247",
-			"provider_chat_title": "Codex #2",
-			"enabled":             true,
-		},
-	}); err != nil {
-		t.Fatalf("persist chats map: %v", err)
-	}
-
-	entry, err := cfg.FindProviderChat("telegram", "-1003803364247")
-	if err != nil {
-		t.Fatalf("FindProviderChat: %v", err)
-	}
-	if entry == nil {
-		t.Fatalf("expected migrated provider chat entry")
-	}
-	if entry.ID != chatID {
-		t.Fatalf("resolved chat id = %q, want %q", entry.ID, chatID)
-	}
-}
-
-func TestCodexCLIHomeRootPrefersExistingAuthSources(t *testing.T) {
-	root := t.TempDir()
-	home := filepath.Join(root, "home")
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	prevHome := os.Getenv("HOME")
-	if err := os.MkdirAll(home, 0o755); err != nil {
-		t.Fatalf("mkdir home: %v", err)
-	}
-	if err := os.Setenv("HOME", home); err != nil {
-		t.Fatalf("set HOME: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Setenv("HOME", prevHome)
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	managedAuth := filepath.Join(home, ".ctgbot", ".codex", "auth.json")
-	if err := os.MkdirAll(filepath.Dir(managedAuth), 0o755); err != nil {
-		t.Fatalf("mkdir managed auth dir: %v", err)
-	}
-	if err := os.WriteFile(managedAuth, []byte("managed"), 0o600); err != nil {
-		t.Fatalf("write managed auth: %v", err)
-	}
-	if got := cfg.CodexCLIHomeRoot(); got != filepath.Join(home, ".ctgbot", ".codex") {
-		t.Fatalf("CodexCLIHomeRoot() with managed auth = %q", got)
-	}
-
-	localAuth := filepath.Join(root, ".ctgbot", ".codex", "auth.json")
-	if err := os.MkdirAll(filepath.Dir(localAuth), 0o755); err != nil {
-		t.Fatalf("mkdir local auth dir: %v", err)
-	}
-	if err := os.WriteFile(localAuth, []byte("local"), 0o600); err != nil {
-		t.Fatalf("write local auth: %v", err)
-	}
-	if got := cfg.CodexCLIHomeRoot(); got != filepath.Join(root, ".ctgbot", ".codex") {
-		t.Fatalf("CodexCLIHomeRoot() with local auth = %q", got)
-	}
-}
-
-func TestEnsureCodexCLIHomeImportsAuthIntoSelectedLocalHome(t *testing.T) {
-	root := t.TempDir()
-	home := filepath.Join(root, "home")
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	prevHome := os.Getenv("HOME")
-	if err := os.MkdirAll(home, 0o755); err != nil {
-		t.Fatalf("mkdir home: %v", err)
-	}
-	if err := os.Setenv("HOME", home); err != nil {
-		t.Fatalf("set HOME: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Setenv("HOME", prevHome)
-		_ = os.Chdir(prevWD)
-	})
-
-	hostAuth := filepath.Join(home, ".codex", "auth.json")
-	if err := os.MkdirAll(filepath.Dir(hostAuth), 0o755); err != nil {
-		t.Fatalf("mkdir host auth dir: %v", err)
-	}
-	if err := os.WriteFile(hostAuth, []byte("host-auth"), 0o600); err != nil {
-		t.Fatalf("write host auth: %v", err)
-	}
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	localSharedHome := filepath.Join(root, ".ctgbot", ".codex")
-	if err := store.PersistString("codex.cli_home_host_path", localSharedHome); err != nil {
-		t.Fatalf("persist codex cli home path: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-
-	if err := cfg.EnsureCodexCLIHome(); err != nil {
-		t.Fatalf("EnsureCodexCLIHome: %v", err)
-	}
-
-	target := filepath.Join(localSharedHome, "auth.json")
-	body, err := os.ReadFile(target)
-	if err != nil {
-		t.Fatalf("read copied auth: %v", err)
-	}
-	if string(body) != "host-auth" {
-		t.Fatalf("copied auth = %q, want %q", string(body), "host-auth")
-	}
-}
-
-func TestConfigDurationParsingSupportsStringDurations(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
-
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
-	}
-	if err := store.PersistString("telegram.defaults.poll_timeout_sec", "1500ms"); err != nil {
-		t.Fatalf("persist poll timeout: %v", err)
-	}
-	if err := store.PersistString("telegram.defaults.debounce_ms", "1s"); err != nil {
+	if err := store.PersistInt("telegram.defaults.debounce_ms", 800); err != nil {
 		t.Fatalf("persist debounce: %v", err)
 	}
-	if err := store.PersistString("session.timeout_min", "90s"); err != nil {
-		t.Fatalf("persist session timeout: %v", err)
-	}
 
-	if got := cfg.TelegramPollTimeout(); got.String() != "1.5s" {
-		t.Fatalf("TelegramPollTimeout() = %s, want 1.5s", got)
+	telegram := cfg.Telegram()
+	if got := telegram.Token(); got != "secret" {
+		t.Fatalf("Token() = %q", got)
 	}
-	if got := cfg.TelegramDebounceWindow(); got.String() != "1s" {
-		t.Fatalf("TelegramDebounceWindow() = %s, want 1s", got)
+	if got := telegram.RenderFormat(); got != "markdown_v2" {
+		t.Fatalf("RenderFormat() = %q", got)
 	}
-	if got := cfg.CodexSessionTimeout(); got.String() != "1m30s" {
-		t.Fatalf("CodexSessionTimeout() = %s, want 1m30s", got)
+	if got := telegram.DebounceWindow(); got != 800*time.Millisecond {
+		t.Fatalf("DebounceWindow() = %s", got)
 	}
 }
 
-func TestChatInteractiveInterruptEnabledDefaultsTrueAndRoundTrips(t *testing.T) {
-	root := t.TempDir()
-	prevWD, err := os.Getwd()
+func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
+	cfg, store := newTestConfig(t)
+	chatID, err := modeluuid.Parse("00VGELUQw7YRR1m4St4KGe0")
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("parse chat id: %v", err)
 	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp root: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(prevWD)
-	})
 
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new store: %v", err)
+	if err := store.PersistString(cfg.Chat(chatID).key("chat_provider_type"), "telegram"); err != nil {
+		t.Fatalf("persist provider type: %v", err)
 	}
-	cfg, err := NewConfig(filepath.Join(root, ".ctgbot"), store)
-	if err != nil {
-		t.Fatalf("new config: %v", err)
+	if err := store.PersistBool(cfg.Chat(chatID).key("enabled"), true); err != nil {
+		t.Fatalf("persist enabled: %v", err)
 	}
-	if err := cfg.EnsurePaths(); err != nil {
-		t.Fatalf("ensure paths: %v", err)
+	if err := store.PersistString(cfg.Chat(chatID).key("provider_chat_id"), "-1003759705932"); err != nil {
+		t.Fatalf("persist provider chat id: %v", err)
 	}
-	entry := ensureTelegramChat(t, cfg, -123, "Test Chat")
+	if err := store.PersistString(cfg.Chat(chatID).key("provider_chat_title"), "Codex #1"); err != nil {
+		t.Fatalf("persist title: %v", err)
+	}
+	if err := store.PersistString(cfg.Chat(chatID).key("workspace_host_path"), `D:\workspace`); err != nil {
+		t.Fatalf("persist workspace: %v", err)
+	}
+	if err := store.PersistStruct(cfg.Chat(chatID).key("skills"), []string{`D:\bots\ctgbot-01\skills\human-first-coding`}); err != nil {
+		t.Fatalf("persist skills: %v", err)
+	}
+	if err := store.PersistStruct(cfg.Chat(chatID).Hostbridge().key("allowed_commands"), map[string]hostbridgeserver.AllowedCommand{
+		"git-push-workspace-docs": {
+			Name:  "git",
+			Args:  []string{"push"},
+			Delay: "500ms",
+			Dir:   `D:\workspace\WORKSPACE-DOCS`,
+		},
+	}); err != nil {
+		t.Fatalf("persist allowed commands: %v", err)
+	}
 
-	if !cfg.ChatInteractiveInterruptEnabledByID(entry.ID) {
-		t.Fatalf("expected interactive interrupt enabled by default")
+	chat := cfg.Chat(chatID)
+	if got := chat.ProviderType(); got != "telegram" {
+		t.Fatalf("ProviderType() = %q", got)
 	}
-	if err := cfg.SetChatInteractiveInterruptEnabledByID(entry.ID, false); err != nil {
-		t.Fatalf("set false: %v", err)
+	if !chat.Enabled() {
+		t.Fatal("Enabled() = false")
 	}
-	if cfg.ChatInteractiveInterruptEnabledByID(entry.ID) {
-		t.Fatalf("expected interactive interrupt disabled")
+	if got := chat.ProviderChatID(); got != "-1003759705932" {
+		t.Fatalf("ProviderChatID() = %q", got)
+	}
+	if got := chat.ProviderChatTitle(); got != "Codex #1" {
+		t.Fatalf("ProviderChatTitle() = %q", got)
+	}
+	if got := chat.WorkspaceHostPath(); got == "" {
+		t.Fatal("WorkspaceHostPath() is empty")
+	}
+	if got := chat.Skills(); len(got) != 1 {
+		t.Fatalf("Skills() = %#v", got)
+	}
+	commands := chat.Hostbridge().AllowedCommands()
+	if commands["git-push-workspace-docs"].Name != "git" {
+		t.Fatalf("AllowedCommands() = %#v", commands)
+	}
+}
+
+func TestChatWorkspaceFallbacksStayExplicit(t *testing.T) {
+	cfg, store := newTestConfig(t)
+	chatID := modeluuid.New()
+
+	wantDefault := filepath.Join(cfg.ProjectRoot(), "chats", chatID.String(), "workspace")
+	if got := cfg.Chat(chatID).WorkspaceHostPath(); got != wantDefault {
+		t.Fatalf("default workspace = %q, want %q", got, wantDefault)
+	}
+
+	global := filepath.Join(t.TempDir(), "workspace")
+	if err := store.PersistString("docker.workspace_host_path", global); err != nil {
+		t.Fatalf("persist global workspace: %v", err)
+	}
+	if got := cfg.Chat(chatID).WorkspaceHostPath(); got != global {
+		t.Fatalf("global workspace = %q, want %q", got, global)
+	}
+
+	chatWorkspace := filepath.Join(t.TempDir(), "chat-workspace")
+	if err := store.PersistString(cfg.Chat(chatID).key("workspace_host_path"), chatWorkspace); err != nil {
+		t.Fatalf("persist chat workspace: %v", err)
+	}
+	if got := cfg.Chat(chatID).WorkspaceHostPath(); got != chatWorkspace {
+		t.Fatalf("chat workspace = %q, want %q", got, chatWorkspace)
+	}
+}
+
+func TestChatSettersAndKnownChats(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	chatID := modeluuid.New()
+	chat := cfg.Chat(chatID)
+
+	if err := chat.SetProviderType("telegram"); err != nil {
+		t.Fatalf("set provider: %v", err)
+	}
+	if err := chat.SetProviderChatID("123"); err != nil {
+		t.Fatalf("set provider chat id: %v", err)
+	}
+	if err := chat.SetProviderChatTitle("Test Chat"); err != nil {
+		t.Fatalf("set title: %v", err)
+	}
+	if err := chat.SetEnabled(true); err != nil {
+		t.Fatalf("set enabled: %v", err)
+	}
+
+	found, err := cfg.FindProviderChat("telegram", "123")
+	if err != nil {
+		t.Fatalf("find provider chat: %v", err)
+	}
+	if found == nil || found.ID != chatID || !found.Enabled {
+		t.Fatalf("found = %#v", found)
+	}
+	if chats := cfg.KnownChats(); len(chats) != 1 || chats[0].ProviderChatTitle != "Test Chat" {
+		t.Fatalf("known chats = %#v", chats)
+	}
+}
+
+func TestEnsureProviderChatCreatesDisabledChat(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	entry, err := cfg.EnsureProviderChat("telegram", "456", "Created Chat")
+	if err != nil {
+		t.Fatalf("ensure provider chat: %v", err)
+	}
+	if entry == nil || entry.ID.IsNull() {
+		t.Fatalf("entry = %#v", entry)
+	}
+	chat := cfg.Chat(entry.ID)
+	if chat.Enabled() {
+		t.Fatal("new chat should default disabled")
+	}
+	if got := chat.ProviderChatTitle(); got != "Created Chat" {
+		t.Fatalf("title = %q", got)
+	}
+}
+
+func TestChatHostbridgeSetters(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	chatID := modeluuid.New()
+	hostbridge := cfg.Chat(chatID).Hostbridge()
+	if err := hostbridge.SetAllowedCommand("git-push", hostbridgeserver.AllowedCommand{Name: "git", Args: []string{"push"}}); err != nil {
+		t.Fatalf("set allowed command: %v", err)
+	}
+	commands := hostbridge.AllowedCommands()
+	if commands["git-push"].Name != "git" || len(commands["git-push"].Args) != 1 {
+		t.Fatalf("commands = %#v", commands)
+	}
+	if err := hostbridge.RemoveAllowedCommand("git-push"); err != nil {
+		t.Fatalf("remove allowed command: %v", err)
+	}
+	if got := hostbridge.AllowedCommands(); len(got) != 0 {
+		t.Fatalf("commands after remove = %#v", got)
+	}
+	if err := hostbridge.ScaffoldAllowedCommand("deploy"); err != nil {
+		t.Fatalf("scaffold allowed command: %v", err)
+	}
+	if got := hostbridge.AllowedCommands(); len(got) != 0 {
+		t.Fatalf("executable commands after scaffold = %#v, want none until name is configured", got)
+	}
+	configured := hostbridge.ConfiguredAllowedCommands()
+	if _, ok := configured["deploy"]; !ok {
+		t.Fatalf("configured commands = %#v, want deploy scaffold", configured)
+	}
+}
+
+func TestIdentityHelpers(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+
+	if parsed, ok := cfg.ParseChatClientIdentity(cfg.Chat(chatID).ClientIdentity()); !ok || parsed != chatID {
+		t.Fatalf("parse chat client identity = %s %t", parsed, ok)
+	}
+	if parsed, ok := cfg.ParseThreadContainerName(cfg.Thread(chatID, threadID).ContainerName()); !ok || parsed != threadID {
+		t.Fatalf("parse thread container name = %s %t", parsed, ok)
+	}
+}
+
+func TestChatProfileEnsurePaths(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	chatID := modeluuid.New()
+	profile := cfg.Chat(chatID).Profile()
+
+	if err := profile.EnsurePaths(); err != nil {
+		t.Fatalf("ensure profile paths: %v", err)
+	}
+	for _, dir := range []string{
+		profile.Root(),
+		profile.CodexProfileDir(),
+		profile.WorkspaceDir(),
+		profile.LogDir(),
+		profile.TLSDir(),
+		profile.ThreadsRoot(),
+	} {
+		info, err := os.Stat(dir)
+		if err != nil || !info.IsDir() {
+			t.Fatalf("expected profile dir %q: %v", dir, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(profile.WorkspaceDir(), ".git")); err != nil {
+		t.Fatalf("expected git workspace: %v", err)
+	}
+}
+
+func TestRootSettersAndGlobalConfig(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	global, err := clistate.NewGlobal("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new global store: %v", err)
+	}
+	cfg.global = global
+
+	if err := cfg.Telegram().SetToken("secret"); err != nil {
+		t.Fatalf("set token: %v", err)
+	}
+	if got := cfg.Telegram().Token(); got != "secret" {
+		t.Fatalf("token = %q", got)
+	}
+	if err := cfg.Docker().SetImage("ctgbot:test"); err != nil {
+		t.Fatalf("set image: %v", err)
+	}
+	if got := cfg.Docker().Image(); got != "ctgbot:test" {
+		t.Fatalf("image = %q", got)
+	}
+	if err := cfg.Codex().SetModel("gpt-test"); err != nil {
+		t.Fatalf("set model: %v", err)
+	}
+	if got := cfg.Codex().Model(); got != "gpt-test" {
+		t.Fatalf("model = %q", got)
+	}
+	if err := cfg.Global().SetBuildCompilerPath("/tmp/compiler"); err != nil {
+		t.Fatalf("set compiler: %v", err)
+	}
+	if got := cfg.Global().BuildCompilerPath(); got != "/tmp/compiler" {
+		t.Fatalf("compiler = %q", got)
+	}
+}
+
+func TestRootProfile(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	profile := cfg.Profile()
+	if profile.Root() != cfg.RootDir() {
+		t.Fatalf("profile root = %q, want %q", profile.Root(), cfg.RootDir())
+	}
+	if profile.DBPath() != cfg.DBPath() {
+		t.Fatalf("profile db path = %q, db path = %q", profile.DBPath(), cfg.DBPath())
+	}
+	if err := profile.EnsurePaths(); err != nil {
+		t.Fatalf("ensure profile: %v", err)
+	}
+}
+
+func TestCompatAliases(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	chatID := modeluuid.New()
+	workspace := t.TempDir()
+
+	if err := cfg.Chat(chatID).SetEnabled(true); err != nil {
+		t.Fatalf("set enabled compat: %v", err)
+	}
+	if !cfg.Chat(chatID).Enabled() {
+		t.Fatal("expected enabled through compat alias")
+	}
+	if err := cfg.Chat(chatID).SetWorkspaceHostPath(workspace); err != nil {
+		t.Fatalf("set workspace compat: %v", err)
+	}
+	if got := cfg.Chat(chatID).WorkspaceHostPath(); got != workspace {
+		t.Fatalf("workspace compat = %q, want %q", got, workspace)
+	}
+	if cfg.Thread(modeluuid.Nil, chatID).ContainerName() == "" {
+		t.Fatal("expected thread container name")
 	}
 }

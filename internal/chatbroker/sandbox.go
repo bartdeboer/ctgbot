@@ -10,14 +10,14 @@ import (
 func (b *Broker) newSandboxSpec(conv *Thread) *sandboxengine.SandboxSpec {
 	containerName := conv.ContainerName(b.Config)
 	spec := sandboxengine.NewBuilder(containerName).
-		InteractiveInterruptEnabled(b.Config.ChatInteractiveInterruptEnabledByID(conv.ChatID)).
+		InteractiveInterruptEnabled(b.Config.Chat(conv.ChatID).InteractiveInterruptEnabled()).
 		WorkspaceDir(conv.WorkspaceHost).
 		ProfileDir(conv.HomeHost).
 		ContainerWorkspace(conv.ContainerWorkspace).
 		ContainerHome(conv.ContainerHome).
 		DeveloperInstructions(b.developerInstructions(conv.ChatID, conv)).
 		Hostname(containerName).
-		Image(b.Config.DockerImage()).
+		Image(b.Config.Docker().Image()).
 		Workdir(conv.ContainerWorkspace).
 		Labels(map[string]string{
 			"ctgbot.managed":   "true",
@@ -29,8 +29,8 @@ func (b *Broker) newSandboxSpec(conv *Thread) *sandboxengine.SandboxSpec {
 			{Source: conv.WorkspaceHost, Target: conv.ContainerWorkspace},
 			{Source: conv.HomeHost, Target: conv.ContainerHome},
 			{
-				Source:   b.Config.DefaultChatTLSDirByID(conv.ChatID),
-				Target:   b.Config.DockerContainerHostbridgeTLSDir(),
+				Source:   b.Config.Chat(conv.ChatID).Profile().TLSDir(),
+				Target:   b.Config.Docker().ContainerHostbridgeTLSDir(),
 				ReadOnly: true,
 			},
 		}).
@@ -38,7 +38,7 @@ func (b *Broker) newSandboxSpec(conv *Thread) *sandboxengine.SandboxSpec {
 		Cmd([]string{"tail", "-f", "/dev/null"}).
 		AddHosts(b.sandboxAddHosts())
 
-	if gpus := b.Config.ChatGPUsByID(conv.ChatID); gpus != "" {
+	if gpus := b.Config.Chat(conv.ChatID).GPUs(); gpus != "" {
 		spec = spec.GPUs(gpus)
 	}
 
@@ -60,8 +60,8 @@ func (b *Broker) sandboxEnv(conv *Thread) []string {
 		"GOMODCACHE=/tmp/go-mod-cache",
 		"GOPATH=/tmp/go",
 		"XDG_CACHE_HOME=/tmp/.cache",
-		"HOSTBRIDGE_ADDR=" + b.Config.DockerContainerHostbridgeTCPAddr(),
-		"HOSTBRIDGE_TLS_DIR=" + b.Config.DockerContainerHostbridgeTLSDir(),
+		"HOSTBRIDGE_ADDR=" + b.Config.Docker().ContainerHostbridgeTCPAddr(),
+		"HOSTBRIDGE_TLS_DIR=" + b.Config.Docker().ContainerHostbridgeTLSDir(),
 		"CTGBOT_SANDBOX_ID=" + conv.ID.String(),
 	}
 	if b.Config == nil {

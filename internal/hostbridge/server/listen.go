@@ -18,12 +18,12 @@ func ListenTLS(address string, tlsConfig *tls.Config) (net.Listener, error) {
 	return tls.Listen("tcp", address, tlsConfig)
 }
 
-func ServeListener(ctx context.Context, ln net.Listener, srv *Server) error {
+func ServeCommandListener(ctx context.Context, ln net.Listener, srv *CommandServer) error {
 	if ln == nil {
 		return fmt.Errorf("missing listener")
 	}
 	if srv == nil {
-		return fmt.Errorf("missing server")
+		return fmt.Errorf("missing command server")
 	}
 	go func() {
 		<-ctx.Done()
@@ -40,7 +40,7 @@ func ServeListener(ctx context.Context, ln net.Listener, srv *Server) error {
 			}
 		}
 		go func() {
-			_ = srv.ServeConn(ctx, conn)
+			_ = srv.ServeCommandConn(ctx, conn)
 		}()
 	}
 }

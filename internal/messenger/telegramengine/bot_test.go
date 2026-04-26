@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
-	"github.com/bartdeboer/ctgbot/internal/appstate"
+	appstate "github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -31,7 +31,7 @@ func ensureTelegramChat(t *testing.T, cfg *appstate.Config, providerChatID int64
 		t.Fatalf("ensure provider chat: %v", err)
 	}
 	if enabled {
-		if err := cfg.SetChatEnabledByID(entry.ID, true); err != nil {
+		if err := cfg.Chat(entry.ID).SetEnabled(true); err != nil {
 			t.Fatalf("set chat enabled: %v", err)
 		}
 	}
@@ -383,7 +383,7 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
 
-	inboxPath := filepath.Join(cfg.DefaultChatWorkspaceDirByID(entry.ID), "inbox", "poem.zip")
+	inboxPath := filepath.Join(cfg.Chat(entry.ID).Profile().WorkspaceDir(), "inbox", "poem.zip")
 	data, err := os.ReadFile(inboxPath)
 	if err != nil {
 		t.Fatalf("read saved upload: %v", err)
@@ -493,7 +493,7 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 	if agent.sentPrompt != "Files made available:\n- /workspace/inbox/notes.txt\n\nplease review it" {
 		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "Files made available:\n- /workspace/inbox/notes.txt\n\nplease review it")
 	}
-	inboxPath := filepath.Join(cfg.DefaultChatWorkspaceDirByID(entry.ID), "inbox", "notes.txt")
+	inboxPath := filepath.Join(cfg.Chat(entry.ID).Profile().WorkspaceDir(), "inbox", "notes.txt")
 	if _, err := os.Stat(inboxPath); err != nil {
 		t.Fatalf("stat saved upload: %v", err)
 	}
@@ -553,7 +553,7 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 	if agent.sentPrompt != "Files made available:\n- /workspace/inbox/photo-101.jpg\n\nplease inspect" {
 		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "Files made available:\n- /workspace/inbox/photo-101.jpg\n\nplease inspect")
 	}
-	inboxPath := filepath.Join(cfg.DefaultChatWorkspaceDirByID(entry.ID), "inbox", "photo-101.jpg")
+	inboxPath := filepath.Join(cfg.Chat(entry.ID).Profile().WorkspaceDir(), "inbox", "photo-101.jpg")
 	data, err := os.ReadFile(inboxPath)
 	if err != nil {
 		t.Fatalf("read saved upload: %v", err)
@@ -612,7 +612,7 @@ func TestHandleUpdateDebouncesSlidingPrompt(t *testing.T) {
 	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
-	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
+	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
 		tb.handleUpdate(ctx, u, broker.HandleInboundPayload)
 	})
 
@@ -669,7 +669,7 @@ func TestHandleUpdateDebounceSeparatesUsers(t *testing.T) {
 	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
-	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
+	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
 		tb.handleUpdate(ctx, u, broker.HandleInboundPayload)
 	})
 
@@ -723,7 +723,7 @@ func TestHandleUpdateCommandFlushesPendingDebounce(t *testing.T) {
 	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
-	debouncer := NewDebouncer(cfg.TelegramDebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
+	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
 		tb.handleUpdate(ctx, u, broker.HandleInboundPayload)
 	})
 

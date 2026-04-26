@@ -21,7 +21,7 @@ func (b *ImageBuilder) EnsureImage(ctx context.Context) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
-	if imageExists(ctx, b.Config.DockerImage()) {
+	if imageExists(ctx, b.Config.Docker().Image()) {
 		return nil
 	}
 	return b.Build(ctx, false)
@@ -39,7 +39,7 @@ func (b *ImageBuilder) Build(ctx context.Context, noCache bool) error {
 
 	args := []string{
 		"build",
-		"-t", b.Config.DockerImage(),
+		"-t", b.Config.Docker().Image(),
 		"--build-arg", "TARGETARCH=" + runtime.GOARCH,
 	}
 	if noCache {
@@ -52,7 +52,7 @@ func (b *ImageBuilder) Build(ctx context.Context, noCache bool) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	b.logf("building docker image=%s build_context=embedded_tar", b.Config.DockerImage())
+	b.logf("building docker image=%s build_context=embedded_tar", b.Config.Docker().Image())
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("docker build: %w", err)
 	}

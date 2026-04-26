@@ -129,16 +129,6 @@ func EnsureChatClientMaterials(serverRoot string, chatTLSDir string, commonName 
 	return writeECPrivateKeyPEM(clientKeyPath, clientKey)
 }
 
-func InitTLSConfig(cfg serverTLSRootConfig) (*tls.Config, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("missing config")
-	}
-	if err := EnsureServerMaterials(cfg.HostbridgeTLSRoot()); err != nil {
-		return nil, err
-	}
-	return LoadServerTLSConfig(cfg.HostbridgeTLSRoot())
-}
-
 func LoadServerTLSConfig(root string) (*tls.Config, error) {
 	cert, err := tls.LoadX509KeyPair(filepath.Join(root, ServerCertFile), filepath.Join(root, ServerKeyFile))
 	if err != nil {
@@ -303,8 +293,4 @@ func copyFile(src, dst string, mode os.FileMode) error {
 		return err
 	}
 	return os.Chmod(dst, mode)
-}
-
-type serverTLSRootConfig interface {
-	HostbridgeTLSRoot() string
 }
