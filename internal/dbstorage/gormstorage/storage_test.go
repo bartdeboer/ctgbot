@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/dbmodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -54,6 +55,47 @@ func TestStorageEnsuresProviderThreadAndPersistsThread(t *testing.T) {
 	}
 	if byID == nil || byID.ProviderThreadID != "7" {
 		t.Fatalf("unexpected thread by id: %#v", byID)
+	}
+}
+
+func TestStoragePersistsTelegramUpdates(t *testing.T) {
+	t.Parallel()
+
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "ctgbot.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	store := New(db)
+	ctx := context.Background()
+
+	if err := store.AutoMigrate(ctx); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	event := &dbmodel.TelegramUpdate{
+		ChatID:    42,
+		MessageID: 99,
+		Text:      "hello",
+		Username:  "bart",
+	}
+	if err := store.TelegramUpdates().Create(ctx, event); err != nil {
+		t.Fatalf("create telegram update: %v", err)
+	}
+	if event.ID == 0 {
+		t.Fatal("expected telegram update id")
+	}
+
+	event.ResponseText = "reply"
+	if err := store.TelegramUpdates().Save(ctx, event); err != nil {
+		t.Fatalf("save telegram update: %v", err)
+	}
+
+	var got dbmodel.TelegramUpdate
+	if err := db.WithContext(ctx).First(&got, event.ID).Error; err != nil {
+		t.Fatalf("load telegram update: %v", err)
+	}
+	if got.ResponseText != "reply" || got.UserLabel() != "@bart" {
+		t.Fatalf("unexpected telegram update: %#v", got)
 	}
 }
 

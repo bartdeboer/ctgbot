@@ -14,6 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	appstate "github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
+	"github.com/bartdeboer/ctgbot/internal/dbmodel"
 	"github.com/bartdeboer/ctgbot/internal/dbstorage"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -193,6 +194,9 @@ type fakeStorage struct {
 func (f *fakeStorage) AutoMigrate(ctx context.Context) error { return nil }
 
 func (f *fakeStorage) Threads() dbstorage.ThreadStorage { return f }
+func (f *fakeStorage) TelegramUpdates() dbstorage.TelegramUpdateStorage {
+	return fakeTelegramUpdateStorage{}
+}
 
 func (f *fakeStorage) GetByProviderThreadID(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
 	return f.thread, nil
@@ -242,6 +246,16 @@ func (f *fakeStorage) SetAgentThreadID(ctx context.Context, threadID modeluuid.U
 	if f.thread != nil {
 		f.thread.AgentThreadID = value
 	}
+	return nil
+}
+
+type fakeTelegramUpdateStorage struct{}
+
+func (fakeTelegramUpdateStorage) Create(ctx context.Context, event *dbmodel.TelegramUpdate) error {
+	return nil
+}
+
+func (fakeTelegramUpdateStorage) Save(ctx context.Context, event *dbmodel.TelegramUpdate) error {
 	return nil
 }
 

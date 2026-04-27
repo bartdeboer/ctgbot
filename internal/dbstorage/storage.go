@@ -10,6 +10,7 @@ import (
 type Storage interface {
 	AutoMigrate(ctx context.Context) error
 	Threads() ThreadStorage
+	TelegramUpdates() TelegramUpdateStorage
 }
 
 type ThreadStorage interface {
@@ -22,4 +23,9 @@ type ThreadStorage interface {
 	SetWorkspaceHost(ctx context.Context, threadID modeluuid.UUID, value string) error
 	AgentThreadID(ctx context.Context, threadID modeluuid.UUID) (string, error)
 	SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error
+}
+
+type TelegramUpdateStorage interface {
+	Create(ctx context.Context, event *dbmodel.TelegramUpdate) error
+	Save(ctx context.Context, event *dbmodel.TelegramUpdate) error
 }

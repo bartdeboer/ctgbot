@@ -26,6 +26,9 @@ type fakeStorage struct{}
 
 func (fakeStorage) AutoMigrate(ctx context.Context) error { return nil }
 func (fakeStorage) Threads() dbstorage.ThreadStorage      { return fakeThreadStorage{} }
+func (fakeStorage) TelegramUpdates() dbstorage.TelegramUpdateStorage {
+	return fakeTelegramUpdateStorage{}
+}
 
 type fakeThreadStorage struct{}
 
@@ -58,5 +61,15 @@ func (fakeThreadStorage) AgentThreadID(ctx context.Context, threadID modeluuid.U
 }
 
 func (fakeThreadStorage) SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	return nil
+}
+
+type fakeTelegramUpdateStorage struct{}
+
+func (fakeTelegramUpdateStorage) Create(ctx context.Context, event *dbmodel.TelegramUpdate) error {
+	return nil
+}
+
+func (fakeTelegramUpdateStorage) Save(ctx context.Context, event *dbmodel.TelegramUpdate) error {
 	return nil
 }

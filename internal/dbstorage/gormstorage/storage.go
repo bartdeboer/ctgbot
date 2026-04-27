@@ -9,18 +9,26 @@ import (
 )
 
 type Storage struct {
-	db      *gorm.DB
-	threads dbstorage.ThreadStorage
+	db              *gorm.DB
+	threads         dbstorage.ThreadStorage
+	telegramUpdates dbstorage.TelegramUpdateStorage
 }
 
 var _ dbstorage.Storage = (*Storage)(nil)
 
 func New(db *gorm.DB) *Storage {
-	return &Storage{db: db, threads: &ThreadStorage{db: db}}
+	return &Storage{
+		db:              db,
+		threads:         &ThreadStorage{db: db},
+		telegramUpdates: &TelegramUpdateStorage{db: db},
+	}
 }
 
 func (s *Storage) AutoMigrate(ctx context.Context) error {
-	return s.db.WithContext(ctx).AutoMigrate(&dbmodel.Thread{})
+	return s.db.WithContext(ctx).AutoMigrate(
+		&dbmodel.Thread{},
+		&dbmodel.TelegramUpdate{},
+	)
 }
 
 func (s *Storage) Threads() dbstorage.ThreadStorage {
@@ -28,4 +36,11 @@ func (s *Storage) Threads() dbstorage.ThreadStorage {
 		return nil
 	}
 	return s.threads
+}
+
+func (s *Storage) TelegramUpdates() dbstorage.TelegramUpdateStorage {
+	if s == nil {
+		return nil
+	}
+	return s.telegramUpdates
 }
