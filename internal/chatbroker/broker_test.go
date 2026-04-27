@@ -715,7 +715,14 @@ func TestHandleInboundPayloadStartsContainerKeepRunning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new config: %v", err)
 	}
-	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+	chatEntry := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+	cliHome := cfg.Codex().LocalHomeRoot()
+	if err := os.MkdirAll(cliHome, 0o755); err != nil {
+		t.Fatalf("mkdir cli home: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cliHome, "auth.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatalf("write cli auth: %v", err)
+	}
 
 	storage := &fakeBrokerStorage{}
 	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
@@ -736,6 +743,9 @@ func TestHandleInboundPayloadStartsContainerKeepRunning(t *testing.T) {
 	}
 	if storage.thread == nil || !storage.thread.Active || !storage.thread.Initialized || !storage.thread.KeepRunning {
 		t.Fatalf("unexpected thread: %#v", storage.thread)
+	}
+	if got, want := storage.thread.HomeHost, cfg.Chat(chatEntry.ID).DefaultCodexProfileDir(); got != want {
+		t.Fatalf("HomeHost = %q, want chat profile %q", got, want)
 	}
 }
 

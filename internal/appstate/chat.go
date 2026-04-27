@@ -70,7 +70,7 @@ func (c ChatConfig) CodexProfileHostPath() string {
 	if raw := absOrEmpty(c.cfg.string(c.key("codex_profile_host_path"), "")); raw != "" {
 		return raw
 	}
-	if raw := c.cfg.Codex().ProfileHostPath(); raw != "" {
+	if raw := c.cfg.Codex().profileHostPathOverride(); raw != "" {
 		return raw
 	}
 	return c.Profile().CodexProfileDir()
