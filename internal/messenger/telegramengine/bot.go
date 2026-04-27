@@ -239,7 +239,7 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u TelegramUpd
 		Text:              messenger.TextMessage{Text: text},
 	}
 
-	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q text=%q attachments=%d", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), text, len(u.Attachments))
+	tb.logf("telegram update chat=%d thread=%d msg=%d user=%q user_id=%d text=%q attachments=%d", u.ChatID, u.ThreadID, u.MessageID, u.UserLabel(), u.UserID, text, len(u.Attachments))
 
 	if len(u.Attachments) > 0 {
 		attachments, err := tb.loadIncomingAttachments(ctx, u.Attachments)
