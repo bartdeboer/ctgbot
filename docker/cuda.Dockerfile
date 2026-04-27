@@ -18,13 +18,14 @@ FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
 ARG CODEX_VERSION=latest
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/usr/local/go/bin:${PATH}"
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates git curl bash make tar zip unzip jq \
-        golang bubblewrap gcc g++ libc6-dev ffmpeg \
+        bubblewrap gcc g++ libc6-dev ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
     && chmod +x /tmp/install-codex.sh \
@@ -42,6 +43,7 @@ RUN apt-get update \
     && chmod 755 /usr/local/bin/codex \
     && codex --version
 
+COPY --from=hostbridge-build /usr/local/go /usr/local/go
 COPY --from=hostbridge-build /out/hostbridge /usr/bin/hostbridge
 
 WORKDIR /workspace
