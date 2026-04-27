@@ -9,6 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/dbstorage"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
@@ -20,7 +21,7 @@ type PromptOutcome struct {
 
 type Broker struct {
 	Config            *appstate.Config
-	Sessions          SessionStore
+	Storage           dbstorage.Storage
 	Sandboxes         sandboxengine.Manager
 	Dispatch          *Dispatcher
 	ProcessActions    ProcessActions
@@ -34,13 +35,13 @@ type Broker struct {
 	activeRuns   map[modeluuid.UUID]context.CancelFunc
 }
 
-func New(cfg *appstate.Config, sessions SessionStore, sandboxes sandboxengine.Manager, logger *log.Logger) *Broker {
+func New(cfg *appstate.Config, storage dbstorage.Storage, sandboxes sandboxengine.Manager, logger *log.Logger) *Broker {
 	if sandboxes == nil {
 		sandboxes = sandboxengine.NewSandboxManager(logger)
 	}
 	return &Broker{
 		Config:            cfg,
-		Sessions:          sessions,
+		Storage:           storage,
 		Sandboxes:         sandboxes,
 		Dispatch:          NewDispatcher(),
 		Agents:            map[string]agent.Agent{},
@@ -73,10 +74,17 @@ func (b *Broker) RegisterOutboundChatProvider(name string, provider messenger.Ou
 }
 
 func (b *Broker) AutoMigrate(ctx context.Context) error {
-	if b.Sessions == nil {
+	if b.Storage == nil {
 		return nil
 	}
-	return b.Sessions.AutoMigrate(ctx)
+	return b.Storage.AutoMigrate(ctx)
+}
+
+func (b *Broker) threads() dbstorage.ThreadStorage {
+	if b == nil || b.Storage == nil {
+		return nil
+	}
+	return b.Storage.Threads()
 }
 
 func (b *Broker) agent(name string) (agent.Agent, error) {

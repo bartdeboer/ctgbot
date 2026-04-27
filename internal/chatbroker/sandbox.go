@@ -8,7 +8,7 @@ import (
 )
 
 func (b *Broker) newSandboxSpec(conv *Thread) *sandboxengine.SandboxSpec {
-	containerName := conv.ContainerName(b.Config)
+	containerName := ThreadContainerName(b.Config, conv)
 	spec := sandboxengine.NewBuilder(containerName).
 		InteractiveInterruptEnabled(b.Config.Chat(conv.ChatID).InteractiveInterruptEnabled()).
 		WorkspaceDir(conv.WorkspaceHost).

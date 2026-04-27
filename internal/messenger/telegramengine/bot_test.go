@@ -14,6 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	appstate "github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
+	"github.com/bartdeboer/ctgbot/internal/dbstorage"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
@@ -191,26 +192,56 @@ type fakeSessionStore struct {
 
 func (f *fakeSessionStore) AutoMigrate(ctx context.Context) error { return nil }
 
-func (f *fakeSessionStore) FindThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
+func (f *fakeSessionStore) Threads() dbstorage.ThreadStorage { return f }
+
+func (f *fakeSessionStore) GetByProviderThreadID(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
 	return f.thread, nil
 }
 
-func (f *fakeSessionStore) FindThreadByID(ctx context.Context, threadID modeluuid.UUID) (*chatbroker.Thread, error) {
+func (f *fakeSessionStore) GetByID(ctx context.Context, threadID modeluuid.UUID) (*chatbroker.Thread, error) {
 	if f.thread != nil && f.thread.ID == threadID {
 		return f.thread, nil
 	}
 	return nil, nil
 }
 
-func (f *fakeSessionStore) EnsureThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
+func (f *fakeSessionStore) EnsureProviderThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
 	if f.thread == nil {
 		f.thread = &chatbroker.Thread{ID: modeluuid.New(), ChatID: chatID, ProviderThreadID: providerThreadID}
 	}
 	return f.thread, nil
 }
 
-func (f *fakeSessionStore) SaveThread(ctx context.Context, thread *chatbroker.Thread) error {
+func (f *fakeSessionStore) Save(ctx context.Context, thread *chatbroker.Thread) error {
 	f.thread = thread
+	return nil
+}
+
+func (f *fakeSessionStore) WorkspaceHost(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	if f.thread == nil {
+		return "", nil
+	}
+	return f.thread.WorkspaceHost, nil
+}
+
+func (f *fakeSessionStore) SetWorkspaceHost(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	if f.thread != nil {
+		f.thread.WorkspaceHost = value
+	}
+	return nil
+}
+
+func (f *fakeSessionStore) AgentThreadID(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	if f.thread == nil {
+		return "", nil
+	}
+	return f.thread.AgentThreadID, nil
+}
+
+func (f *fakeSessionStore) SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	if f.thread != nil {
+		f.thread.AgentThreadID = value
+	}
 	return nil
 }
 

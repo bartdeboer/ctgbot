@@ -13,14 +13,15 @@ func (b *Broker) SendPayload(ctx context.Context, sandboxID modeluuid.UUID, payl
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
-	if b.Sessions == nil {
-		return fmt.Errorf("missing session store")
+	threads := b.threads()
+	if threads == nil {
+		return fmt.Errorf("missing storage")
 	}
 	if sandboxID.IsNull() {
 		return fmt.Errorf("sandbox id is null")
 	}
 
-	thread, err := b.Sessions.FindThreadByID(ctx, sandboxID)
+	thread, err := threads.GetByID(ctx, sandboxID)
 	if err != nil {
 		return fmt.Errorf("find thread: %w", err)
 	}

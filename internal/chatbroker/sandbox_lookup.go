@@ -11,14 +11,15 @@ func (b *Broker) ResolveThreadIDBySandboxID(ctx context.Context, sandboxID model
 	if b == nil {
 		return nil, fmt.Errorf("missing broker")
 	}
-	if b.Sessions == nil {
-		return nil, fmt.Errorf("missing session store")
+	threads := b.threads()
+	if threads == nil {
+		return nil, fmt.Errorf("missing storage")
 	}
 	if sandboxID.IsNull() {
 		return nil, fmt.Errorf("sandbox id is null")
 	}
 
-	thread, err := b.Sessions.FindThreadByID(ctx, sandboxID)
+	thread, err := threads.GetByID(ctx, sandboxID)
 	if err != nil {
 		return nil, fmt.Errorf("find thread by sandbox id: %w", err)
 	}

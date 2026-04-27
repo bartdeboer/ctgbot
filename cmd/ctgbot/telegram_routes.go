@@ -16,6 +16,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/configengine"
+	"github.com/bartdeboer/ctgbot/internal/dbstorage/gormstorage"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
 	"github.com/bartdeboer/ctgbot/internal/messenger/telegramengine"
@@ -59,9 +60,9 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			}
 
 			updates := telegramengine.NewUpdateStorage(db)
-			sessions := chatbroker.NewSessionStorage(db)
+			storage := gormstorage.New(db)
 			sandboxes := sandboxengine.NewSandboxManager(logger)
-			broker := chatbroker.New(cfg, sessions, sandboxes, logger)
+			broker := chatbroker.New(cfg, storage, sandboxes, logger)
 			broker.RegisterAgent("codex", codexengine.NewSessionExecutor(cfg, logger))
 			bot := telegramengine.NewTelegramBot(api, updates, cfg, logger)
 			broker.RegisterInboundChatProvider("telegram", bot)

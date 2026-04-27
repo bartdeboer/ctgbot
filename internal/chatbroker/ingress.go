@@ -155,8 +155,9 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.Inboun
 	if b.Config == nil {
 		return nil, nil, fmt.Errorf("missing config")
 	}
-	if b.Sessions == nil {
-		return nil, nil, fmt.Errorf("missing session store")
+	threads := b.threads()
+	if threads == nil {
+		return nil, nil, fmt.Errorf("missing storage")
 	}
 
 	providerType := strings.TrimSpace(msg.ProviderType)
@@ -193,9 +194,9 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.Inboun
 
 	var thread *Thread
 	if create {
-		thread, err = b.Sessions.EnsureThread(ctx, chatCfg.ID, providerThreadID)
+		thread, err = threads.EnsureProviderThread(ctx, chatCfg.ID, providerThreadID)
 	} else {
-		thread, err = b.Sessions.FindThread(ctx, chatCfg.ID, providerThreadID)
+		thread, err = threads.GetByProviderThreadID(ctx, chatCfg.ID, providerThreadID)
 	}
 
 	if err != nil {

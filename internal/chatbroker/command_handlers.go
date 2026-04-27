@@ -190,7 +190,7 @@ func (h *CommandHandlers) Status(ctx context.Context, req commandengine.Request)
 		"active conversation\nchat_id: %s\nthread_id: %s\ncontainer: %s\nworkspace: %s\ninitialized: %t",
 		thread.ChatID,
 		thread.ID,
-		thread.ContainerName(h.Broker.Config),
+		ThreadContainerName(h.Broker.Config, thread),
 		thread.WorkspaceHost,
 		thread.Initialized,
 	)}, nil
@@ -223,8 +223,9 @@ func (h *CommandHandlers) threadFromRequest(ctx context.Context, req commandengi
 	if h == nil || h.Broker == nil {
 		return nil, fmt.Errorf("missing broker")
 	}
-	if h.Broker.Sessions == nil {
-		return nil, fmt.Errorf("missing session store")
+	threads := h.Broker.threads()
+	if threads == nil {
+		return nil, fmt.Errorf("missing storage")
 	}
 	threadID := req.Context.ThreadID
 	if threadID.IsNull() {
@@ -233,7 +234,7 @@ func (h *CommandHandlers) threadFromRequest(ctx context.Context, req commandengi
 	if threadID.IsNull() {
 		return nil, nil
 	}
-	thread, err := h.Broker.Sessions.FindThreadByID(ctx, threadID)
+	thread, err := threads.GetByID(ctx, threadID)
 	if err != nil {
 		return nil, fmt.Errorf("find thread by id: %w", err)
 	}

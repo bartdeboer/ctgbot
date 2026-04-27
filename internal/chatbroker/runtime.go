@@ -41,12 +41,12 @@ func (b *Broker) prepareRuntime(ctx context.Context, conv *Thread, forceSetup bo
 
 	if forceSetup || !conv.Initialized {
 		conv.Initialized = true
-		if b.Sessions != nil {
-			_ = b.Sessions.SaveThread(ctx, conv)
+		if threads := b.threads(); threads != nil {
+			_ = threads.Save(ctx, conv)
 		}
 	}
 	if ensureAction == sandboxengine.EnsureCreated {
-		if err := b.SendSystemMessage(ctx, conv, fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName(b.Config), conv.WorkspaceHost)); err != nil {
+		if err := b.SendSystemMessage(ctx, conv, fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", ThreadContainerName(b.Config, conv), conv.WorkspaceHost)); err != nil {
 			b.logf("send conversation started message failed thread=%s err=%v", conv.ID, err)
 		}
 	}

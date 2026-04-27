@@ -57,10 +57,10 @@ func (b *Broker) startSession(ctx context.Context, chatID modeluuid.UUID, thread
 			return current, nil
 		}
 		_ = b.sandboxForThread(current).Remove(ctx)
-		if b.Sessions != nil {
+		if threads := b.threads(); threads != nil {
 			current.Active = false
 			current.LastError = "replaced by session reset"
-			_ = b.Sessions.SaveThread(ctx, current)
+			_ = threads.Save(ctx, current)
 		}
 	}
 
@@ -71,8 +71,8 @@ func (b *Broker) startSession(ctx context.Context, chatID modeluuid.UUID, thread
 	if _, _, err := b.prepareRuntime(ctx, conv, true); err != nil {
 		return nil, err
 	}
-	if b.Sessions != nil {
-		if err := b.Sessions.SaveThread(ctx, conv); err != nil {
+	if threads := b.threads(); threads != nil {
+		if err := threads.Save(ctx, conv); err != nil {
 			_ = b.sandboxForThread(conv).Remove(context.Background())
 			return nil, err
 		}
@@ -114,12 +114,13 @@ func (b *Broker) stopSession(ctx context.Context, conv *Thread) error {
 	if err := b.sandboxForThread(conv).Remove(ctx); err != nil {
 		return err
 	}
-	if b.Sessions == nil {
+	threads := b.threads()
+	if threads == nil {
 		return nil
 	}
 	conv.Active = false
 	conv.LastError = "stopped by /stop"
-	return b.Sessions.SaveThread(ctx, conv)
+	return threads.Save(ctx, conv)
 }
 
 func (b *Broker) refreshSession(ctx context.Context, conv *Thread) error {
@@ -131,8 +132,8 @@ func (b *Broker) refreshSession(ctx context.Context, conv *Thread) error {
 	}
 	conv.Initialized = false
 	conv.LastError = ""
-	if b.Sessions != nil {
-		return b.Sessions.SaveThread(ctx, conv)
+	if threads := b.threads(); threads != nil {
+		return threads.Save(ctx, conv)
 	}
 	return nil
 }
@@ -150,9 +151,9 @@ func (b *Broker) purgeSession(ctx context.Context, conv *Thread) error {
 	}
 	if purgingAgent, ok := agentImpl.(agent.PurgingAgent); ok && strings.TrimSpace(conv.AgentThreadID) != "" {
 		if err := purgingAgent.Purge(ctx, b.sandboxForThread(conv), conv.AgentThreadID); err != nil {
-			if b.Sessions != nil {
+			if threads := b.threads(); threads != nil {
 				conv.LastError = err.Error()
-				_ = b.Sessions.SaveThread(ctx, conv)
+				_ = threads.Save(ctx, conv)
 			}
 			return err
 		}
@@ -161,8 +162,8 @@ func (b *Broker) purgeSession(ctx context.Context, conv *Thread) error {
 	conv.Initialized = false
 	conv.AgentThreadID = ""
 	conv.LastError = ""
-	if b.Sessions != nil {
-		return b.Sessions.SaveThread(ctx, conv)
+	if threads := b.threads(); threads != nil {
+		return threads.Save(ctx, conv)
 	}
 	return nil
 }
@@ -211,7 +212,7 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 	}
 	defer func() {
 		if stopErr := sbx.Stop(context.Background()); stopErr != nil {
-			b.logf("stop conversation sandbox %s failed: %v", conv.ContainerName(b.Config), stopErr)
+			b.logf("stop conversation sandbox %s failed: %v", ThreadContainerName(b.Config, conv), stopErr)
 		}
 	}()
 
@@ -225,7 +226,7 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 		conv.AgentThreadID = result.ProviderThreadID
 	}
 	interrupted := errors.Is(runErr, context.Canceled)
-	if b.Sessions != nil {
+	if threads := b.threads(); threads != nil {
 		if interrupted {
 			conv.LastError = "interrupted"
 		} else if runErr != nil {
@@ -233,7 +234,7 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 		} else {
 			conv.LastError = ""
 		}
-		_ = b.Sessions.SaveThread(ctx, conv)
+		_ = threads.Save(ctx, conv)
 	}
 	if interrupted {
 		return PromptOutcome{}, nil
@@ -289,8 +290,8 @@ func (b *Broker) prepareThread(ctx context.Context, chatID modeluuid.UUID, threa
 	thread.LastError = ""
 
 	if err := b.sandboxForThread(thread).Remove(ctx); err != nil {
-		b.logf("ignoring stale sandbox cleanup error for %s: %v", thread.ContainerName(b.Config), err)
+		b.logf("ignoring stale sandbox cleanup error for %s: %v", ThreadContainerName(b.Config, thread), err)
 	}
-	b.logf("thread prepared name=%s workspace=%s", thread.ContainerName(b.Config), thread.WorkspaceHost)
+	b.logf("thread prepared name=%s workspace=%s", ThreadContainerName(b.Config, thread), thread.WorkspaceHost)
 	return thread, nil
 }
