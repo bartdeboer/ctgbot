@@ -13,12 +13,12 @@ import (
 )
 
 type AllowedCommand struct {
-	Name           string
-	Args           []string
-	Dir            string
-	Delay          string
-	Env            map[string]string
-	AllowExtraArgs bool
+	Name           string            `json:"name"`
+	Args           []string          `json:"args"`
+	Dir            string            `json:"dir"`
+	Delay          string            `json:"delay"`
+	Env            map[string]string `json:"env"`
+	AllowExtraArgs bool              `json:"allow_extra_args"`
 }
 
 type AllowedCommandResolver func(clientIdentity string) map[string]AllowedCommand
