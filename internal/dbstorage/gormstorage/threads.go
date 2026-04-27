@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/dbmodel"
+	"github.com/bartdeboer/ctgbot/internal/dbstorage"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"gorm.io/gorm"
 )
@@ -12,6 +13,8 @@ import (
 type ThreadStorage struct {
 	db *gorm.DB
 }
+
+var _ dbstorage.ThreadStorage = (*ThreadStorage)(nil)
 
 func (s *ThreadStorage) GetByID(ctx context.Context, threadID modeluuid.UUID) (*dbmodel.Thread, error) {
 	var thread dbmodel.Thread

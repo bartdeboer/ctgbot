@@ -13,6 +13,8 @@ type Storage struct {
 	threads dbstorage.ThreadStorage
 }
 
+var _ dbstorage.Storage = (*Storage)(nil)
+
 func New(db *gorm.DB) *Storage {
 	return &Storage{db: db, threads: &ThreadStorage{db: db}}
 }
