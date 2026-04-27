@@ -10,6 +10,8 @@ type FileSpec struct {
 func SelectedFiles() []FileSpec {
 	return []FileSpec{
 		{Source: "docker/Dockerfile", Target: "Dockerfile"},
+		{Source: "docker/Dockerfile.agent", Target: "Dockerfile.agent"},
+		{Source: "docker/Dockerfile.agent-gpu", Target: "Dockerfile.agent-gpu"},
 		{Source: "go.mod", Target: "go.mod"},
 		{Source: "go.sum", Target: "go.sum"},
 		{Source: "cmd/hostbridge/main.go", Target: "cmd/hostbridge/main.go"},

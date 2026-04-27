@@ -37,26 +37,32 @@ func (b *ImageBuilder) Build(ctx context.Context, noCache bool) error {
 	}
 	defer buildContext.Close()
 
-	args := []string{
-		"build",
-		"-t", b.Config.Docker().Image(),
-		"--build-arg", "TARGETARCH=" + runtime.GOARCH,
-	}
-	if noCache {
-		args = append(args, "--no-cache")
-	}
-	args = append(args, "-")
+	args := dockerBuildArgs(b.Config, noCache)
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdin = buildContext
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	b.logf("building docker image=%s build_context=embedded_tar", b.Config.Docker().Image())
+	b.logf("building docker image=%s dockerfile=%s build_context=embedded_tar", b.Config.Docker().Image(), b.Config.Docker().Dockerfile())
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("docker build: %w", err)
 	}
 	return nil
+}
+
+func dockerBuildArgs(cfg *appstate.Config, noCache bool) []string {
+	args := []string{
+		"build",
+		"-f", cfg.Docker().Dockerfile(),
+		"-t", cfg.Docker().Image(),
+		"--build-arg", "TARGETARCH=" + runtime.GOARCH,
+	}
+	if noCache {
+		args = append(args, "--no-cache")
+	}
+	args = append(args, "-")
+	return args
 }
 
 func (b *ImageBuilder) logf(format string, args ...any) {

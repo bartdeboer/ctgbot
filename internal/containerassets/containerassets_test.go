@@ -6,15 +6,15 @@ import (
 	"testing"
 )
 
-func TestBuildContextTarContainsDockerfile(t *testing.T) {
-	rc, err := BuildContextTar()
+func TestBuildContextTarContainsDockerfiles(t *testing.T) {
+	rc, err := tarFromModule()
 	if err != nil {
-		t.Fatalf("BuildContextTar: %v", err)
+		t.Fatalf("tarFromModule: %v", err)
 	}
 	defer rc.Close()
 
 	tr := tar.NewReader(rc)
-	foundDockerfile := false
+	found := map[string]bool{}
 	for {
 		hdr, err := tr.Next()
 		if err != nil {
@@ -23,13 +23,12 @@ func TestBuildContextTarContainsDockerfile(t *testing.T) {
 			}
 			break
 		}
-		if hdr.Name == "Dockerfile" {
-			foundDockerfile = true
-			break
-		}
+		found[hdr.Name] = true
 	}
 
-	if !foundDockerfile {
-		t.Fatalf("build context tar does not contain Dockerfile")
+	for _, name := range []string{"Dockerfile", "Dockerfile.agent", "Dockerfile.agent-gpu"} {
+		if !found[name] {
+			t.Fatalf("build context tar does not contain %s", name)
+		}
 	}
 }

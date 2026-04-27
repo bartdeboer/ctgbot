@@ -105,6 +105,14 @@ func DockerImage(cfg *appstate.Config) configengine.Item {
 	)
 }
 
+func Dockerfile(cfg *appstate.Config) configengine.Item {
+	return rootString("docker.dockerfile", "Dockerfile used to build the agent image", configengine.ValueString, cfg,
+		func(cfg *appstate.Config) string { return cfg.Docker().Dockerfile() },
+		func(cfg *appstate.Config, value string) error { return cfg.Docker().SetDockerfile(value) },
+		rootOrAgent(), rootOnly(),
+	)
+}
+
 func DockerCLIContainerName(cfg *appstate.Config) configengine.Item {
 	return rootString("docker.cli-container-name", "Docker container name used by ctgbot codex", configengine.ValueString, cfg,
 		func(cfg *appstate.Config) string { return cfg.Docker().CLIContainerName() },

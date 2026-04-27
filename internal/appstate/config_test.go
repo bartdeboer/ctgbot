@@ -55,6 +55,23 @@ func TestGroupedRootConfigReadsRealShapedTelegramConfig(t *testing.T) {
 	}
 }
 
+func TestDockerfileConfigDefaultsAndValidation(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+
+	if got := cfg.Docker().Dockerfile(); got != "Dockerfile" {
+		t.Fatalf("Dockerfile() = %q, want Dockerfile", got)
+	}
+	if err := cfg.Docker().SetDockerfile("Dockerfile.agent"); err != nil {
+		t.Fatalf("SetDockerfile() error = %v", err)
+	}
+	if got := cfg.Docker().Dockerfile(); got != "Dockerfile.agent" {
+		t.Fatalf("Dockerfile() = %q, want Dockerfile.agent", got)
+	}
+	if err := cfg.Docker().SetDockerfile("../Dockerfile"); err == nil {
+		t.Fatalf("expected path traversal error")
+	}
+}
+
 func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	cfg, store := newTestConfig(t)
 	chatID, err := modeluuid.Parse("00VGELUQw7YRR1m4St4KGe0")

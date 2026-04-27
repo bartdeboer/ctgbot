@@ -1,6 +1,7 @@
 package appstate
 
 import (
+	"fmt"
 	"path"
 	"strings"
 )
@@ -19,6 +20,25 @@ func (d DockerConfig) Image() string {
 
 func (d DockerConfig) SetImage(image string) error {
 	return d.cfg.persistString("docker.image", strings.TrimSpace(image))
+}
+
+func (d DockerConfig) Dockerfile() string {
+	name := strings.TrimSpace(d.cfg.string("docker.dockerfile", "Dockerfile"))
+	if name == "" {
+		return "Dockerfile"
+	}
+	return name
+}
+
+func (d DockerConfig) SetDockerfile(name string) error {
+	name = strings.TrimSpace(strings.ReplaceAll(name, "\\", "/"))
+	if name == "" {
+		name = "Dockerfile"
+	}
+	if strings.Contains(name, "/") || name == "." || name == ".." {
+		return fmt.Errorf("dockerfile must be a file name in the build context root: %s", name)
+	}
+	return d.cfg.persistString("docker.dockerfile", name)
 }
 
 func (d DockerConfig) CLIContainerName() string {

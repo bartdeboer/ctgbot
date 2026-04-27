@@ -28,6 +28,7 @@ func Items(cfg *appstate.Config) []configengine.Item {
 		CodexSharedHomePath(cfg),
 		DockerCLIContainerName(cfg),
 		DockerContainerHostbridgeTCPAddr(cfg),
+		Dockerfile(cfg),
 		DockerImage(cfg),
 		DockerWorkspaceHostPath(cfg),
 		HostbridgeTCPListenAddr(cfg),
