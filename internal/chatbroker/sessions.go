@@ -131,12 +131,8 @@ func (b *Broker) refreshSession(ctx context.Context, conv *Thread) error {
 	}
 	conv.Initialized = false
 	conv.LastError = ""
-	if _, _, err := b.prepareRuntime(ctx, conv, true); err != nil {
-		if b.Sessions != nil {
-			conv.LastError = err.Error()
-			_ = b.Sessions.SaveThread(ctx, conv)
-		}
-		return err
+	if b.Sessions != nil {
+		return b.Sessions.SaveThread(ctx, conv)
 	}
 	return nil
 }

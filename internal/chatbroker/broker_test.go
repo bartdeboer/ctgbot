@@ -618,8 +618,8 @@ func TestHandleInboundPayloadRefreshesActiveConversation(t *testing.T) {
 	if sessions.thread == nil {
 		t.Fatalf("expected saved thread")
 	}
-	if !sessions.thread.Initialized {
-		t.Fatalf("expected refreshed thread to be initialized")
+	if sessions.thread.Initialized {
+		t.Fatalf("expected refreshed thread to be marked uninitialized")
 	}
 	if sessions.thread.AgentThreadID != "agent-thread-123" {
 		t.Fatalf("AgentThreadID = %q, want preserved value", sessions.thread.AgentThreadID)
@@ -629,7 +629,7 @@ func TestHandleInboundPayloadRefreshesActiveConversation(t *testing.T) {
 	}
 }
 
-func TestHandleInboundPayloadRefreshInstallsConfiguredSkills(t *testing.T) {
+func TestHandleInboundPayloadRefreshDefersSkillInstallUntilNextRuntime(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
 	if err != nil {
@@ -699,8 +699,11 @@ func TestHandleInboundPayloadRefreshInstallsConfiguredSkills(t *testing.T) {
 	if result.Text.Text != "conversation runtime refreshed" {
 		t.Fatalf("unexpected refresh response: %#v", result)
 	}
-	if !reflect.DeepEqual(agent.installedSkills, []string{skillOne, skillTwo}) {
-		t.Fatalf("installedSkills = %#v, want %#v", agent.installedSkills, []string{skillOne, skillTwo})
+	if len(agent.installedSkills) != 0 {
+		t.Fatalf("installedSkills = %#v, want none until next runtime", agent.installedSkills)
+	}
+	if sessions.thread.Initialized {
+		t.Fatalf("expected refreshed thread to be marked uninitialized")
 	}
 }
 
