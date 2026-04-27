@@ -186,59 +186,59 @@ func TestTelegramBotReplyPayloadIgnoresZeroPayload(t *testing.T) {
 	}
 }
 
-type fakeSessionStore struct {
+type fakeStorage struct {
 	thread *chatbroker.Thread
 }
 
-func (f *fakeSessionStore) AutoMigrate(ctx context.Context) error { return nil }
+func (f *fakeStorage) AutoMigrate(ctx context.Context) error { return nil }
 
-func (f *fakeSessionStore) Threads() dbstorage.ThreadStorage { return f }
+func (f *fakeStorage) Threads() dbstorage.ThreadStorage { return f }
 
-func (f *fakeSessionStore) GetByProviderThreadID(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
+func (f *fakeStorage) GetByProviderThreadID(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
 	return f.thread, nil
 }
 
-func (f *fakeSessionStore) GetByID(ctx context.Context, threadID modeluuid.UUID) (*chatbroker.Thread, error) {
+func (f *fakeStorage) GetByID(ctx context.Context, threadID modeluuid.UUID) (*chatbroker.Thread, error) {
 	if f.thread != nil && f.thread.ID == threadID {
 		return f.thread, nil
 	}
 	return nil, nil
 }
 
-func (f *fakeSessionStore) EnsureProviderThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
+func (f *fakeStorage) EnsureProviderThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*chatbroker.Thread, error) {
 	if f.thread == nil {
 		f.thread = &chatbroker.Thread{ID: modeluuid.New(), ChatID: chatID, ProviderThreadID: providerThreadID}
 	}
 	return f.thread, nil
 }
 
-func (f *fakeSessionStore) Save(ctx context.Context, thread *chatbroker.Thread) error {
+func (f *fakeStorage) Save(ctx context.Context, thread *chatbroker.Thread) error {
 	f.thread = thread
 	return nil
 }
 
-func (f *fakeSessionStore) WorkspaceHost(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+func (f *fakeStorage) WorkspaceHost(ctx context.Context, threadID modeluuid.UUID) (string, error) {
 	if f.thread == nil {
 		return "", nil
 	}
 	return f.thread.WorkspaceHost, nil
 }
 
-func (f *fakeSessionStore) SetWorkspaceHost(ctx context.Context, threadID modeluuid.UUID, value string) error {
+func (f *fakeStorage) SetWorkspaceHost(ctx context.Context, threadID modeluuid.UUID, value string) error {
 	if f.thread != nil {
 		f.thread.WorkspaceHost = value
 	}
 	return nil
 }
 
-func (f *fakeSessionStore) AgentThreadID(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+func (f *fakeStorage) AgentThreadID(ctx context.Context, threadID modeluuid.UUID) (string, error) {
 	if f.thread == nil {
 		return "", nil
 	}
 	return f.thread.AgentThreadID, nil
 }
 
-func (f *fakeSessionStore) SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error {
+func (f *fakeStorage) SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error {
 	if f.thread != nil {
 		f.thread.AgentThreadID = value
 	}
@@ -316,9 +316,9 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true)
 
 	api := &fakeTelegramAPI{}
-	sessions := &fakeSessionStore{}
+	storage := &fakeStorage{}
 	agent := &fakeAgent{}
-	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{
 		API:    api,
@@ -338,7 +338,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	if agent.sentPrompt != "hello there" {
 		t.Fatalf("sent prompt = %q, want %q", agent.sentPrompt, "hello there")
 	}
-	if sessions.thread == nil {
+	if storage.thread == nil {
 		t.Fatalf("expected thread to be created")
 	}
 	chatCfg, err := cfg.FindProviderChat("telegram", "42")
@@ -348,13 +348,13 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 	if chatCfg == nil {
 		t.Fatalf("expected provider chat mapping to be created")
 	}
-	if !sessions.thread.Active {
+	if !storage.thread.Active {
 		t.Fatalf("expected thread to be active")
 	}
-	if !sessions.thread.Initialized {
+	if !storage.thread.Initialized {
 		t.Fatalf("expected thread to be initialized")
 	}
-	if sessions.thread.ChatID != chatCfg.ID {
+	if storage.thread.ChatID != chatCfg.ID {
 		t.Fatalf("thread does not reference chat")
 	}
 	if !agent.setupCalled {
@@ -392,8 +392,8 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 	entry := ensureTelegramChat(t, cfg, 42, "Test Chat", true)
 
 	api := &fakeTelegramAPI{downloads: map[string][]byte{"doc-1": []byte("zip-bytes")}}
-	sessions := &fakeSessionStore{}
-	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	storage := &fakeStorage{}
+	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	tb := &TelegramBot{
 		API:    api,
 		Config: cfg,
@@ -454,7 +454,7 @@ func TestHandleUpdateSerializedDisabledChatSendsNoReply(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Disabled Chat", false)
 
 	api := &fakeTelegramAPI{}
-	broker := chatbroker.New(cfg, &fakeSessionStore{}, fakeSandboxManager{}, nil)
+	broker := chatbroker.New(cfg, &fakeStorage{}, fakeSandboxManager{}, nil)
 	tb := &TelegramBot{
 		API:    api,
 		Config: cfg,
@@ -497,9 +497,9 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 	entry := ensureTelegramChat(t, cfg, 42, "Test Chat", true)
 
 	api := &fakeTelegramAPI{downloads: map[string][]byte{"doc-2": []byte("zip-bytes")}}
-	sessions := &fakeSessionStore{}
+	storage := &fakeStorage{}
 	agent := &fakeAgent{}
-	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{
 		API:    api,
@@ -557,9 +557,9 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 	entry := ensureTelegramChat(t, cfg, 42, "Test Chat", true)
 
 	api := &fakeTelegramAPI{downloads: map[string][]byte{"photo-1": []byte("jpeg-bytes")}}
-	sessions := &fakeSessionStore{}
+	storage := &fakeStorage{}
 	agent := &fakeAgent{}
-	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{
 		API:    api,
@@ -638,9 +638,9 @@ func TestHandleUpdateDebouncesSlidingPrompt(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true)
 
 	api := &fakeTelegramAPI{}
-	sessions := &fakeSessionStore{}
+	storage := &fakeStorage{}
 	agent := &fakeAgent{}
-	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
 	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
@@ -695,9 +695,9 @@ func TestHandleUpdateDebounceSeparatesUsers(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true)
 
 	api := &fakeTelegramAPI{}
-	sessions := &fakeSessionStore{}
+	storage := &fakeStorage{}
 	agent := &fakeAgent{}
-	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
 	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
@@ -749,9 +749,9 @@ func TestHandleUpdateCommandFlushesPendingDebounce(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true)
 
 	api := &fakeTelegramAPI{}
-	sessions := &fakeSessionStore{}
+	storage := &fakeStorage{}
 	agent := &fakeAgent{}
-	broker := chatbroker.New(cfg, sessions, fakeSandboxManager{}, nil)
+	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
 	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {

@@ -72,7 +72,7 @@ func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
 
 	chatID := modeluuid.New()
 	threadID := modeluuid.New()
-	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, &fakeBrokerStorage{}, fakeBrokerSandboxManager{}, nil)
 	sbx := broker.sandboxForThread(&Thread{
 		ID:                 threadID,
 		ChatID:             chatID,
@@ -131,8 +131,8 @@ func TestHandleInboundPayloadRoutesTelegramCommand(t *testing.T) {
 	}
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
-	sessions := &fakeBrokerSessionStore{}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	storage := &fakeBrokerStorage{}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
@@ -179,7 +179,7 @@ func TestHandleInboundPayloadConfigSetUsesElevatedChatRole(t *testing.T) {
 	}
 	chat := ensureTelegramChat(t, cfg, 42, "Test Chat", true, true)
 
-	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, &fakeBrokerStorage{}, fakeBrokerSandboxManager{}, nil)
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
@@ -224,7 +224,7 @@ func TestHandleInboundPayloadRejectsHostbridgeScaffoldCommand(t *testing.T) {
 	}
 	chat := ensureTelegramChat(t, cfg, 42, "Test Chat", true, true)
 
-	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, &fakeBrokerStorage{}, fakeBrokerSandboxManager{}, nil)
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
@@ -273,8 +273,8 @@ func TestHandleInboundPayloadRunsUpgradeCommand(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, true)
 
 	process := &fakeProcessActions{}
-	sessions := &fakeBrokerSessionStore{}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	storage := &fakeBrokerStorage{}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
@@ -321,8 +321,8 @@ func TestHandleInboundPayloadRunsQuitCommand(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, true)
 
 	process := &fakeProcessActions{}
-	sessions := &fakeBrokerSessionStore{}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	storage := &fakeBrokerStorage{}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
@@ -368,9 +368,9 @@ func TestHandleInboundPayloadStartsTypingChatAction(t *testing.T) {
 	}
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
-	sessions := &fakeBrokerSessionStore{}
+	storage := &fakeBrokerStorage{}
 	provider := &fakeOutboundBrokerProvider{}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", fakeBrokerAgent{})
 	broker.RegisterOutboundChatProvider("telegram", provider)
 
@@ -426,9 +426,9 @@ func TestHandleInboundPayloadSendsIntermediateAgentMessages(t *testing.T) {
 	}
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
-	sessions := &fakeBrokerSessionStore{}
+	storage := &fakeBrokerStorage{}
 	provider := &fakeOutboundBrokerProvider{}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", fakeStreamingBrokerAgent{
 		intermediate: "checking runtime",
 		reply:        "checking runtime",
@@ -482,8 +482,8 @@ func TestHandleInboundPayloadBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	process := &fakeProcessActions{}
-	sessions := &fakeBrokerSessionStore{}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	storage := &fakeBrokerStorage{}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
@@ -530,8 +530,8 @@ func TestHandleInboundPayloadBlocksQuitWithoutProcessTools(t *testing.T) {
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	process := &fakeProcessActions{}
-	sessions := &fakeBrokerSessionStore{}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	storage := &fakeBrokerStorage{}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.ProcessActions = process
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
@@ -599,8 +599,8 @@ func TestHandleInboundPayloadRefreshesActiveConversation(t *testing.T) {
 		t.Fatalf("mkdir home: %v", err)
 	}
 
-	sessions := &fakeBrokerSessionStore{thread: thread}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	storage := &fakeBrokerStorage{thread: thread}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", fakeBrokerAgent{})
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
@@ -616,17 +616,17 @@ func TestHandleInboundPayloadRefreshesActiveConversation(t *testing.T) {
 	if result.Text.Text != "conversation runtime refreshed" {
 		t.Fatalf("message text = %q", result.Text.Text)
 	}
-	if sessions.thread == nil {
+	if storage.thread == nil {
 		t.Fatalf("expected saved thread")
 	}
-	if sessions.thread.Initialized {
+	if storage.thread.Initialized {
 		t.Fatalf("expected refreshed thread to be marked uninitialized")
 	}
-	if sessions.thread.AgentThreadID != "agent-thread-123" {
-		t.Fatalf("AgentThreadID = %q, want preserved value", sessions.thread.AgentThreadID)
+	if storage.thread.AgentThreadID != "agent-thread-123" {
+		t.Fatalf("AgentThreadID = %q, want preserved value", storage.thread.AgentThreadID)
 	}
-	if sessions.thread.LastError != "" {
-		t.Fatalf("LastError = %q, want cleared", sessions.thread.LastError)
+	if storage.thread.LastError != "" {
+		t.Fatalf("LastError = %q, want cleared", storage.thread.LastError)
 	}
 }
 
@@ -682,9 +682,9 @@ func TestHandleInboundPayloadRefreshDefersSkillInstallUntilNextRuntime(t *testin
 		t.Fatalf("mkdir home: %v", err)
 	}
 
-	sessions := &fakeBrokerSessionStore{thread: thread}
+	storage := &fakeBrokerStorage{thread: thread}
 	agent := &fakeSkillInstallingBrokerAgent{}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
@@ -703,7 +703,7 @@ func TestHandleInboundPayloadRefreshDefersSkillInstallUntilNextRuntime(t *testin
 	if len(agent.installedSkills) != 0 {
 		t.Fatalf("installedSkills = %#v, want none until next runtime", agent.installedSkills)
 	}
-	if sessions.thread.Initialized {
+	if storage.thread.Initialized {
 		t.Fatalf("expected refreshed thread to be marked uninitialized")
 	}
 }
@@ -733,7 +733,7 @@ func TestHandleInboundPayloadRefreshWithoutActiveConversation(t *testing.T) {
 	}
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
-	sessions := &fakeBrokerSessionStore{
+	storage := &fakeBrokerStorage{
 		thread: &Thread{
 			ID:               modeluuid.New(),
 			ChatID:           modeluuid.New(),
@@ -741,7 +741,7 @@ func TestHandleInboundPayloadRefreshWithoutActiveConversation(t *testing.T) {
 			Active:           false,
 		},
 	}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
@@ -784,7 +784,7 @@ func TestHandleInboundPayloadStatusIncludesInternalIDs(t *testing.T) {
 	chatCfg := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 	threadID := modeluuid.New()
 
-	sessions := &fakeBrokerSessionStore{
+	storage := &fakeBrokerStorage{
 		thread: &Thread{
 			ID:               threadID,
 			ChatID:           chatCfg.ID,
@@ -795,7 +795,7 @@ func TestHandleInboundPayloadStatusIncludesInternalIDs(t *testing.T) {
 			LastError:        "previous error",
 		},
 	}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
@@ -868,9 +868,9 @@ func TestHandleInboundPayloadPurgesActiveConversation(t *testing.T) {
 		t.Fatalf("mkdir home: %v", err)
 	}
 
-	sessions := &fakeBrokerSessionStore{thread: thread}
+	storage := &fakeBrokerStorage{thread: thread}
 	agent := &fakePurgingBrokerAgent{}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
@@ -892,20 +892,20 @@ func TestHandleInboundPayloadPurgesActiveConversation(t *testing.T) {
 	if agent.providerThreadID != "agent-thread-123" {
 		t.Fatalf("providerThreadID = %q", agent.providerThreadID)
 	}
-	if sessions.thread == nil {
+	if storage.thread == nil {
 		t.Fatalf("expected saved thread")
 	}
-	if sessions.thread.Active {
+	if storage.thread.Active {
 		t.Fatalf("expected purged thread to be inactive")
 	}
-	if sessions.thread.Initialized {
+	if storage.thread.Initialized {
 		t.Fatalf("expected purged thread to be uninitialized")
 	}
-	if sessions.thread.AgentThreadID != "" {
-		t.Fatalf("AgentThreadID = %q, want cleared", sessions.thread.AgentThreadID)
+	if storage.thread.AgentThreadID != "" {
+		t.Fatalf("AgentThreadID = %q, want cleared", storage.thread.AgentThreadID)
 	}
-	if sessions.thread.LastError != "" {
-		t.Fatalf("LastError = %q, want cleared", sessions.thread.LastError)
+	if storage.thread.LastError != "" {
+		t.Fatalf("LastError = %q, want cleared", storage.thread.LastError)
 	}
 }
 
@@ -934,7 +934,7 @@ func TestHandleInboundPayloadPurgeWithoutActiveConversation(t *testing.T) {
 	}
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
-	sessions := &fakeBrokerSessionStore{
+	storage := &fakeBrokerStorage{
 		thread: &Thread{
 			ID:               modeluuid.New(),
 			ChatID:           modeluuid.New(),
@@ -942,7 +942,7 @@ func TestHandleInboundPayloadPurgeWithoutActiveConversation(t *testing.T) {
 			Active:           false,
 		},
 	}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
@@ -986,10 +986,10 @@ func TestBrokerSendMediaRoutesToOutboundProvider(t *testing.T) {
 	chat := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
 	thread := &Thread{ID: modeluuid.New(), ChatID: chat.ID, ProviderThreadID: "7"}
-	sessions := &fakeBrokerSessionStore{thread: thread}
+	storage := &fakeBrokerStorage{thread: thread}
 	provider := &fakeOutboundBrokerProvider{}
 
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 	broker.RegisterOutboundChatProvider("telegram", provider)
 
 	err = broker.SendPayload(context.Background(), thread.ID, messenger.OutboundPayload{
@@ -1039,59 +1039,59 @@ func TestBrokerSendMediaRoutesToOutboundProvider(t *testing.T) {
 	}
 }
 
-type fakeBrokerSessionStore struct {
+type fakeBrokerStorage struct {
 	thread *Thread
 }
 
-func (f *fakeBrokerSessionStore) AutoMigrate(ctx context.Context) error { return nil }
+func (f *fakeBrokerStorage) AutoMigrate(ctx context.Context) error { return nil }
 
-func (f *fakeBrokerSessionStore) Threads() dbstorage.ThreadStorage { return f }
+func (f *fakeBrokerStorage) Threads() dbstorage.ThreadStorage { return f }
 
-func (f *fakeBrokerSessionStore) GetByProviderThreadID(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
+func (f *fakeBrokerStorage) GetByProviderThreadID(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
 	return f.thread, nil
 }
 
-func (f *fakeBrokerSessionStore) GetByID(ctx context.Context, threadID modeluuid.UUID) (*Thread, error) {
+func (f *fakeBrokerStorage) GetByID(ctx context.Context, threadID modeluuid.UUID) (*Thread, error) {
 	if f.thread != nil && f.thread.ID == threadID {
 		return f.thread, nil
 	}
 	return nil, nil
 }
 
-func (f *fakeBrokerSessionStore) EnsureProviderThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
+func (f *fakeBrokerStorage) EnsureProviderThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*Thread, error) {
 	if f.thread == nil {
 		f.thread = &Thread{ID: modeluuid.New(), ChatID: chatID, ProviderThreadID: providerThreadID}
 	}
 	return f.thread, nil
 }
 
-func (f *fakeBrokerSessionStore) Save(ctx context.Context, thread *Thread) error {
+func (f *fakeBrokerStorage) Save(ctx context.Context, thread *Thread) error {
 	f.thread = thread
 	return nil
 }
 
-func (f *fakeBrokerSessionStore) WorkspaceHost(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+func (f *fakeBrokerStorage) WorkspaceHost(ctx context.Context, threadID modeluuid.UUID) (string, error) {
 	if f.thread == nil {
 		return "", nil
 	}
 	return f.thread.WorkspaceHost, nil
 }
 
-func (f *fakeBrokerSessionStore) SetWorkspaceHost(ctx context.Context, threadID modeluuid.UUID, value string) error {
+func (f *fakeBrokerStorage) SetWorkspaceHost(ctx context.Context, threadID modeluuid.UUID, value string) error {
 	if f.thread != nil {
 		f.thread.WorkspaceHost = value
 	}
 	return nil
 }
 
-func (f *fakeBrokerSessionStore) AgentThreadID(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+func (f *fakeBrokerStorage) AgentThreadID(ctx context.Context, threadID modeluuid.UUID) (string, error) {
 	if f.thread == nil {
 		return "", nil
 	}
 	return f.thread.AgentThreadID, nil
 }
 
-func (f *fakeBrokerSessionStore) SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error {
+func (f *fakeBrokerStorage) SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error {
 	if f.thread != nil {
 		f.thread.AgentThreadID = value
 	}
@@ -1231,8 +1231,8 @@ func TestHandleInboundPayloadInterruptDisabledForChat(t *testing.T) {
 		t.Fatalf("disable interrupt: %v", err)
 	}
 	thread := &Thread{ID: modeluuid.New(), ChatID: chat.ID, ProviderThreadID: "7", Active: true}
-	sessions := &fakeBrokerSessionStore{thread: thread}
-	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	storage := &fakeBrokerStorage{thread: thread}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
 
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
@@ -1273,7 +1273,7 @@ func TestHandleInboundPayloadRoutesGroupedContainerRefreshCommand(t *testing.T) 
 	}
 	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
 
-	broker := New(cfg, &fakeBrokerSessionStore{}, fakeBrokerSandboxManager{}, nil)
+	broker := New(cfg, &fakeBrokerStorage{}, fakeBrokerSandboxManager{}, nil)
 	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
 		ProviderType:     "telegram",
 		ProviderChatID:   "42",
