@@ -400,6 +400,61 @@ func TestHandleInboundPayloadStartsTypingChatAction(t *testing.T) {
 	}
 }
 
+func TestHandleInboundPayloadSendsIntermediateAgentMessages(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+
+	sessions := &fakeBrokerSessionStore{}
+	provider := &fakeOutboundBrokerProvider{}
+	broker := New(cfg, sessions, fakeBrokerSandboxManager{}, nil)
+	broker.RegisterAgent("codex", fakeStreamingBrokerAgent{
+		intermediate: "checking runtime",
+		reply:        "checking runtime",
+	})
+	broker.RegisterOutboundChatProvider("telegram", provider)
+
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "hello"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if result.Text.Text != "" {
+		t.Fatalf("expected duplicate final response to be suppressed, got %q", result.Text.Text)
+	}
+	if len(provider.payloads) != 2 {
+		t.Fatalf("payloads len = %d, want 2", len(provider.payloads))
+	}
+	if provider.payloads[1].Text.Text != "checking runtime" {
+		t.Fatalf("intermediate text = %q", provider.payloads[1].Text.Text)
+	}
+}
+
 func TestHandleInboundPayloadBlocksUpgradeWithoutProcessTools(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
@@ -1041,8 +1096,30 @@ func (fakeBrokerAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.
 	return nil
 }
 
-func (fakeBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (agent.TurnResult, error) {
+func (fakeBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string) (agent.TurnResult, error) {
 	return agent.TurnResult{Reply: "reply text"}, nil
+}
+
+type fakeStreamingBrokerAgent struct {
+	intermediate string
+	reply        string
+}
+
+func (fakeStreamingBrokerAgent) Name() string { return "codex" }
+
+func (fakeStreamingBrokerAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.Sandbox) error {
+	return nil
+}
+
+func (f fakeStreamingBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string) (agent.TurnResult, error) {
+	if output != nil {
+		if err := output.Send(ctx, messenger.OutboundPayload{
+			Text: messenger.TextMessage{Text: f.intermediate},
+		}); err != nil {
+			return agent.TurnResult{}, err
+		}
+	}
+	return agent.TurnResult{Reply: f.reply}, nil
 }
 
 type fakePurgingBrokerAgent struct {
@@ -1069,6 +1146,7 @@ func (f *fakeSkillInstallingBrokerAgent) InstallSkill(ctx context.Context, sbx *
 
 type fakeOutboundBrokerProvider struct {
 	payload        *messenger.OutboundPayload
+	payloads       []messenger.OutboundPayload
 	actions        []messenger.ChatAction
 	actionTargets  []messenger.ChatTarget
 	stoppedActions []messenger.ChatAction
@@ -1083,6 +1161,7 @@ func (f *fakeOutboundBrokerProvider) Send(ctx context.Context, payload messenger
 		copyPayload.Attachments[i].Content = append([]byte(nil), copyPayload.Attachments[i].Content...)
 	}
 	f.payload = &copyPayload
+	f.payloads = append(f.payloads, copyPayload)
 	return nil
 }
 

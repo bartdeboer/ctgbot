@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 
+	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -14,7 +15,11 @@ type TurnResult struct {
 type Agent interface {
 	Name() string
 	SetupEnvironment(ctx context.Context, sbx *sandboxengine.Sandbox) error
-	HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (TurnResult, error)
+	HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output OutputHandler, providerThreadID string, prompt string) (TurnResult, error)
+}
+
+type OutputHandler interface {
+	Send(ctx context.Context, payload messenger.OutboundPayload) error
 }
 
 type PurgingAgent interface {

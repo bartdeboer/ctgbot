@@ -230,7 +230,7 @@ func (f *fakeAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.San
 	return nil
 }
 
-func (f *fakeAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (agent.TurnResult, error) {
+func (f *fakeAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string) (agent.TurnResult, error) {
 	f.mu.Lock()
 	f.sentPrompt = prompt
 	f.prompts = append(f.prompts, prompt)

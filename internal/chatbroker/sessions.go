@@ -226,7 +226,8 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 	defer stopTyping()
 
 	b.logf("agent turn starting chat=%s thread=%s agent=%s", conv.ChatID, conv.ID, agent.Name())
-	result, runErr := agent.HandleTurn(runCtx, sbx, conv.AgentThreadID, prompt)
+	output := newTurnOutputHandler(b, conv.ID)
+	result, runErr := agent.HandleTurn(runCtx, sbx, output, conv.AgentThreadID, prompt)
 	if result.ProviderThreadID != "" {
 		conv.AgentThreadID = result.ProviderThreadID
 	}
@@ -245,9 +246,12 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 		return PromptOutcome{}, nil
 	}
 
-	return PromptOutcome{
-		Reply: result.Reply,
-	}, runErr
+	reply := strings.TrimSpace(result.Reply)
+	if reply == output.LastText() {
+		reply = ""
+	}
+
+	return PromptOutcome{Reply: reply}, runErr
 }
 
 func (b *Broker) prepareThread(ctx context.Context, chatID modeluuid.UUID, thread *Thread, workspace string) (*Thread, error) {

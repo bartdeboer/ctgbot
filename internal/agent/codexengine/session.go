@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
+	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -65,7 +66,7 @@ func (e *SessionExecutor) InstallSkill(ctx context.Context, sbx *sandboxengine.S
 	return nil
 }
 
-func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, providerThreadID string, prompt string) (agent.TurnResult, error) {
+func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string) (agent.TurnResult, error) {
 	if e.Config == nil {
 		return agent.TurnResult{}, fmt.Errorf("missing config")
 	}
@@ -108,7 +109,16 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
-	stdout := newCodexJSONWriter(&stdoutBuf, e.logf)
+	stdout := newCodexJSONWriter(&stdoutBuf, e.logf, func(text string) {
+		if output == nil {
+			return
+		}
+		if err := output.Send(ctx, messenger.OutboundPayload{
+			Text: messenger.TextMessage{Text: text},
+		}); err != nil {
+			e.logf("send codex agent message failed: %v", err)
+		}
+	})
 	err := sbx.Exec(ctx, stdout, io.MultiWriter(os.Stderr, &stderrBuf), args[0], args[1:]...)
 	stdout.Flush()
 

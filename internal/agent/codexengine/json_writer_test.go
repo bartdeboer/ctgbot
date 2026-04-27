@@ -10,8 +10,11 @@ import (
 func TestCodexJSONWriterCopiesAndExtractsEvents(t *testing.T) {
 	var dst bytes.Buffer
 	var logs []string
+	var messages []string
 	writer := newCodexJSONWriter(&dst, func(format string, args ...any) {
 		logs = append(logs, sprintf(format, args...))
+	}, func(text string) {
+		messages = append(messages, text)
 	})
 
 	input := strings.Join([]string{
@@ -33,6 +36,9 @@ func TestCodexJSONWriterCopiesAndExtractsEvents(t *testing.T) {
 	}
 	if writer.AgentMessage() != "hello" {
 		t.Fatalf("AgentMessage() = %q", writer.AgentMessage())
+	}
+	if len(messages) != 1 || messages[0] != "hello" {
+		t.Fatalf("messages = %#v, want [hello]", messages)
 	}
 	if writer.InputTokens() != 12 || writer.CachedInputTokens() != 3 || writer.OutputTokens() != 4 {
 		t.Fatalf("usage = %d/%d/%d", writer.InputTokens(), writer.CachedInputTokens(), writer.OutputTokens())

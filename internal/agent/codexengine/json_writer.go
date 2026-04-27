@@ -8,8 +8,9 @@ import (
 )
 
 type codexJSONWriter struct {
-	dst  io.Writer
-	logf func(string, ...any)
+	dst            io.Writer
+	logf           func(string, ...any)
+	onAgentMessage func(string)
 
 	pending bytes.Buffer
 
@@ -38,8 +39,12 @@ type codexJSONUsage struct {
 	OutputTokens      int `json:"output_tokens"`
 }
 
-func newCodexJSONWriter(dst io.Writer, logf func(string, ...any)) *codexJSONWriter {
-	return &codexJSONWriter{dst: dst, logf: logf}
+func newCodexJSONWriter(dst io.Writer, logf func(string, ...any), onAgentMessage ...func(string)) *codexJSONWriter {
+	w := &codexJSONWriter{dst: dst, logf: logf}
+	if len(onAgentMessage) > 0 {
+		w.onAgentMessage = onAgentMessage[0]
+	}
+	return w
 }
 
 func (w *codexJSONWriter) Write(p []byte) (int, error) {
@@ -136,6 +141,9 @@ func (w *codexJSONWriter) handleLine(line string) {
 		if ev.Item.Type == "agent_message" {
 			w.agentMessage = strings.TrimSpace(ev.Item.Text)
 			w.log("codex json agent message chars=%d", len(w.agentMessage))
+			if w.agentMessage != "" && w.onAgentMessage != nil {
+				w.onAgentMessage(w.agentMessage)
+			}
 		}
 	case "turn.completed":
 		w.inputTokens = ev.Usage.InputTokens
