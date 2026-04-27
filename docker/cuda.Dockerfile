@@ -24,7 +24,7 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates git curl bash make tar zip unzip jq \
-        bubblewrap gcc g++ libc6-dev ffmpeg \
+        golang bubblewrap gcc g++ libc6-dev ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
     && chmod +x /tmp/install-codex.sh \
