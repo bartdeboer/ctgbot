@@ -77,6 +77,54 @@ func TestBuildCreateArgsIncludesUser(t *testing.T) {
 	}
 }
 
+func TestResolveContainerUserMode(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		mode string
+		want string
+	}{
+		{name: "empty default", mode: "", want: ""},
+		{name: "default", mode: "default", want: ""},
+		{name: "root", mode: "root", want: "0:0"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := resolveContainerUser(context.Background(), tc.mode, "")
+			if err != nil {
+				t.Fatalf("resolveContainerUser() error = %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("resolveContainerUser() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveContainerUserModeUsesExplicitUser(t *testing.T) {
+	t.Parallel()
+
+	got, err := resolveContainerUser(context.Background(), "root", "123:456")
+	if err != nil {
+		t.Fatalf("resolveContainerUser() error = %v", err)
+	}
+	if got != "123:456" {
+		t.Fatalf("resolveContainerUser() = %q, want explicit user", got)
+	}
+}
+
+func TestResolveContainerUserModeRejectsUnknownMode(t *testing.T) {
+	t.Parallel()
+
+	if _, err := resolveContainerUser(context.Background(), "danger", ""); err == nil {
+		t.Fatalf("expected unsupported mode error")
+	}
+}
+
 func TestManagerRetainsContainerInstancesByName(t *testing.T) {
 	t.Parallel()
 

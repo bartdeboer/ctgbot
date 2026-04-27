@@ -48,6 +48,14 @@ func (c ChatConfig) GPUs() string {
 	return c.cfg.string(c.key("gpus"), "")
 }
 
+func (c ChatConfig) ContainerUserMode() string {
+	mode := normalizeContainerUserMode(c.cfg.string(c.key("container_user_mode"), "default"))
+	if mode == "" {
+		return "default"
+	}
+	return mode
+}
+
 func (c ChatConfig) WorkspaceHostPath() string {
 	if raw := absOrEmpty(c.cfg.string(c.key("workspace_host_path"), "")); raw != "" {
 		return raw
@@ -113,6 +121,16 @@ func (c ChatConfig) ClientIdentity() string {
 
 func (c ChatConfig) key(key string) string {
 	return fmt.Sprintf(`chats["%s"].%s`, c.chatID.String(), strings.TrimSpace(key))
+}
+
+func normalizeContainerUserMode(mode string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case "", "default", "host", "sudo", "root":
+		return mode
+	default:
+		return "default"
+	}
 }
 
 func normalizeSkillPaths(skills []string) []string {

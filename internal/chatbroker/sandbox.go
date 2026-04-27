@@ -19,6 +19,7 @@ func (b *Broker) newSandboxSpec(conv *Thread) *sandboxengine.SandboxSpec {
 		Hostname(containerName).
 		Image(b.Config.Docker().Image()).
 		Workdir(conv.ContainerWorkspace).
+		UserMode(b.Config.Chat(conv.ChatID).ContainerUserMode()).
 		Labels(map[string]string{
 			"ctgbot.managed":   "true",
 			"ctgbot.chat_id":   conv.ChatID.String(),

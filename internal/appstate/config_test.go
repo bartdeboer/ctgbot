@@ -74,6 +74,9 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	if err := store.PersistString(cfg.Chat(chatID).key("provider_chat_title"), "Codex #1"); err != nil {
 		t.Fatalf("persist title: %v", err)
 	}
+	if err := store.PersistString(cfg.Chat(chatID).key("container_user_mode"), "sudo"); err != nil {
+		t.Fatalf("persist container user mode: %v", err)
+	}
 	if err := store.PersistString(cfg.Chat(chatID).key("workspace_host_path"), `D:\workspace`); err != nil {
 		t.Fatalf("persist workspace: %v", err)
 	}
@@ -103,6 +106,9 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	}
 	if got := chat.ProviderChatTitle(); got != "Codex #1" {
 		t.Fatalf("ProviderChatTitle() = %q", got)
+	}
+	if got := chat.ContainerUserMode(); got != "sudo" {
+		t.Fatalf("ContainerUserMode() = %q", got)
 	}
 	if got := chat.WorkspaceHostPath(); got == "" {
 		t.Fatal("WorkspaceHostPath() is empty")
@@ -139,6 +145,25 @@ func TestChatWorkspaceFallbacksStayExplicit(t *testing.T) {
 	}
 	if got := cfg.Chat(chatID).WorkspaceHostPath(); got != chatWorkspace {
 		t.Fatalf("chat workspace = %q, want %q", got, chatWorkspace)
+	}
+}
+
+func TestChatContainerUserModeDefaultsAndValidation(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	chatID := modeluuid.New()
+	chat := cfg.Chat(chatID)
+
+	if got := chat.ContainerUserMode(); got != "default" {
+		t.Fatalf("ContainerUserMode() = %q, want default", got)
+	}
+	if err := chat.SetContainerUserMode("root"); err != nil {
+		t.Fatalf("SetContainerUserMode(root) error = %v", err)
+	}
+	if got := chat.ContainerUserMode(); got != "root" {
+		t.Fatalf("ContainerUserMode() = %q, want root", got)
+	}
+	if err := chat.SetContainerUserMode("danger"); err == nil {
+		t.Fatalf("expected invalid mode error")
 	}
 }
 

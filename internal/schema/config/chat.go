@@ -37,6 +37,14 @@ func ChatGPUs(cfg *appstate.Config) configengine.Item {
 	)
 }
 
+func ChatContainerUserMode(cfg *appstate.Config) configengine.Item {
+	return chatString("chat.container-user-mode", "Container user mode: default, host, sudo, or root", configengine.ValueString, cfg,
+		func(chat appstate.ChatConfig) string { return chat.ContainerUserMode() },
+		func(chat appstate.ChatConfig, value string) error { return chat.SetContainerUserMode(value) },
+		rootOrElevated(),
+	)
+}
+
 func ChatWorkspaceHostPath(cfg *appstate.Config) configengine.Item {
 	return chatString("chat.workspace-host-path", "Workspace host path for the current chat", configengine.ValueString, cfg,
 		func(chat appstate.ChatConfig) string { return chat.WorkspaceHostPath() },

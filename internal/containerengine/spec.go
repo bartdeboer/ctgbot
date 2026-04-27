@@ -30,7 +30,7 @@ type ContainerSpec struct {
 	Image        string
 	Workdir      string
 	User         string
-	UseHostUser  bool
+	UserMode     string
 	GPUs         string
 	Labels       map[string]string
 	Env          []string

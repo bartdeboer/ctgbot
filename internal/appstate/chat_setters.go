@@ -37,6 +37,19 @@ func (c ChatConfig) SetGPUs(raw string) error {
 	return c.persistString("gpus", strings.TrimSpace(raw))
 }
 
+func (c ChatConfig) SetContainerUserMode(raw string) error {
+	mode := strings.ToLower(strings.TrimSpace(raw))
+	if mode == "" {
+		mode = "default"
+	}
+	switch mode {
+	case "default", "host", "sudo", "root":
+		return c.persistString("container_user_mode", mode)
+	default:
+		return fmt.Errorf("unsupported container user mode: %s", strings.TrimSpace(raw))
+	}
+}
+
 func (c ChatConfig) SetWorkspaceHostPath(raw string) error {
 	resolved, err := c.ResolveWorkspaceHostPath(raw)
 	if err != nil {

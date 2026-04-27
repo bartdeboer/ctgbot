@@ -56,11 +56,11 @@ func (m *Manager) inspectState(ctx context.Context, containerName string) (State
 
 func (m *Manager) Create(ctx context.Context, spec ContainerSpec) (*Container, error) {
 	container := m.Container(spec.Name)
-	if spec.UseHostUser && strings.TrimSpace(spec.User) == "" {
-		user, err := currentUIDGID(ctx)
-		if err != nil {
-			return container, fmt.Errorf("resolve host uid/gid: %w", err)
-		}
+	user, err := resolveContainerUser(ctx, spec.UserMode, spec.User)
+	if err != nil {
+		return container, err
+	}
+	if user != "" {
 		spec.User = user
 	}
 	container.ApplySpec(spec)
@@ -136,6 +136,30 @@ func buildCreateArgs(spec ContainerSpec) []string {
 	args = append(args, spec.Image)
 	args = append(args, spec.Cmd...)
 	return args
+}
+
+func resolveContainerUser(ctx context.Context, mode string, explicitUser string) (string, error) {
+	if user := strings.TrimSpace(explicitUser); user != "" {
+		return user, nil
+	}
+	switch normalizeContainerUserMode(mode) {
+	case "", "default":
+		return "", nil
+	case "root":
+		return "0:0", nil
+	case "host", "sudo":
+		user, err := currentUIDGID(ctx)
+		if err != nil {
+			return "", fmt.Errorf("resolve host uid/gid: %w", err)
+		}
+		return user, nil
+	default:
+		return "", fmt.Errorf("unsupported container user mode: %s", strings.TrimSpace(mode))
+	}
+}
+
+func normalizeContainerUserMode(mode string) string {
+	return strings.ToLower(strings.TrimSpace(mode))
 }
 
 func currentUIDGID(ctx context.Context) (string, error) {
