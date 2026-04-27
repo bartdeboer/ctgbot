@@ -14,17 +14,15 @@ COPY internal/simplerbac ./internal/simplerbac
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/hostbridge ./cmd/hostbridge
 
-FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
+FROM debian:bookworm-slim
 
 ARG CODEX_VERSION=latest
 ENV DEBIAN_FRONTEND=noninteractive
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates git curl bash make tar zip unzip jq \
-        nodejs npm bubblewrap gcc g++ libc6-dev ffmpeg \
+        bubblewrap gcc g++ libc6-dev \
     && rm -rf /var/lib/apt/lists/* \
     && curl -fsSL https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
     && chmod +x /tmp/install-codex.sh \

@@ -61,11 +61,11 @@ func TestDockerfileConfigDefaultsAndValidation(t *testing.T) {
 	if got := cfg.Docker().Dockerfile(); got != "Dockerfile" {
 		t.Fatalf("Dockerfile() = %q, want Dockerfile", got)
 	}
-	if err := cfg.Docker().SetDockerfile("Dockerfile.agent"); err != nil {
+	if err := cfg.Docker().SetDockerfile("slim.Dockerfile"); err != nil {
 		t.Fatalf("SetDockerfile() error = %v", err)
 	}
-	if got := cfg.Docker().Dockerfile(); got != "Dockerfile.agent" {
-		t.Fatalf("Dockerfile() = %q, want Dockerfile.agent", got)
+	if got := cfg.Docker().Dockerfile(); got != "slim.Dockerfile" {
+		t.Fatalf("Dockerfile() = %q, want slim.Dockerfile", got)
 	}
 	if err := cfg.Docker().SetDockerfile("../Dockerfile"); err == nil {
 		t.Fatalf("expected path traversal error")

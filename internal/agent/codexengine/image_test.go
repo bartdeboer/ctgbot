@@ -33,14 +33,14 @@ func TestDockerBuildArgsIncludeConfiguredDockerfile(t *testing.T) {
 	if err := cfg.Docker().SetImage("ctgbot-codex:gpu"); err != nil {
 		t.Fatalf("set image: %v", err)
 	}
-	if err := cfg.Docker().SetDockerfile("Dockerfile.agent-gpu"); err != nil {
+	if err := cfg.Docker().SetDockerfile("cuda.Dockerfile"); err != nil {
 		t.Fatalf("set dockerfile: %v", err)
 	}
 
 	got := dockerBuildArgs(cfg, true)
 	want := []string{
 		"build",
-		"-f", "Dockerfile.agent-gpu",
+		"-f", "cuda.Dockerfile",
 		"-t", "ctgbot-codex:gpu",
 		"--build-arg", "TARGETARCH=" + runtime.GOARCH,
 		"--no-cache",
