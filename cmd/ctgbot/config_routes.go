@@ -199,7 +199,7 @@ func printConfigSummary(cfg *appstate.Config, store *clistate.Store, globalStore
 	fmt.Println("    enable a chat with: ctgbot config chat <chat-id> set chat.enabled true")
 	fmt.Println("    set chat process tools with: ctgbot config chat <chat-id> set chat.process-tools-enabled true")
 	fmt.Println("    set chat GPUs with: ctgbot config chat <chat-id> set chat.gpus all")
-	fmt.Println("    set chat container user mode with: ctgbot config chat <chat-id> set chat.container-user-mode sudo")
+	fmt.Println("    set chat container user mode with: ctgbot config chat <chat-id> set chat.container-user-mode host")
 	fmt.Println("    set a chat workspace with: ctgbot config chat <chat-id> set chat.workspace-host-path <path>")
 	fmt.Println("    set chat skills with: ctgbot config chat <chat-id> set chat.skills <absolute-skill-dir>[,<absolute-skill-dir>]")
 	fmt.Println("    scaffold a chat hostbridge command with: ctgbot config chat <chat-id> hostbridge scaffold <alias>")

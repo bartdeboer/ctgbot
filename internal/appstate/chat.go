@@ -126,7 +126,7 @@ func (c ChatConfig) key(key string) string {
 func normalizeContainerUserMode(mode string) string {
 	mode = strings.ToLower(strings.TrimSpace(mode))
 	switch mode {
-	case "", "default", "host", "sudo", "root":
+	case "", "default", "host", "root":
 		return mode
 	default:
 		return "default"

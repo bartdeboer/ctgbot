@@ -74,7 +74,7 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	if err := store.PersistString(cfg.Chat(chatID).key("provider_chat_title"), "Codex #1"); err != nil {
 		t.Fatalf("persist title: %v", err)
 	}
-	if err := store.PersistString(cfg.Chat(chatID).key("container_user_mode"), "sudo"); err != nil {
+	if err := store.PersistString(cfg.Chat(chatID).key("container_user_mode"), "host"); err != nil {
 		t.Fatalf("persist container user mode: %v", err)
 	}
 	if err := store.PersistString(cfg.Chat(chatID).key("workspace_host_path"), `D:\workspace`); err != nil {
@@ -107,7 +107,7 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	if got := chat.ProviderChatTitle(); got != "Codex #1" {
 		t.Fatalf("ProviderChatTitle() = %q", got)
 	}
-	if got := chat.ContainerUserMode(); got != "sudo" {
+	if got := chat.ContainerUserMode(); got != "host" {
 		t.Fatalf("ContainerUserMode() = %q", got)
 	}
 	if got := chat.WorkspaceHostPath(); got == "" {

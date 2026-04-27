@@ -147,7 +147,7 @@ func resolveContainerUser(ctx context.Context, mode string, explicitUser string)
 		return "", nil
 	case "root":
 		return "0:0", nil
-	case "host", "sudo":
+	case "host":
 		user, err := currentUIDGID(ctx)
 		if err != nil {
 			return "", fmt.Errorf("resolve host uid/gid: %w", err)

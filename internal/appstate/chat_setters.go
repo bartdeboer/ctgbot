@@ -43,7 +43,7 @@ func (c ChatConfig) SetContainerUserMode(raw string) error {
 		mode = "default"
 	}
 	switch mode {
-	case "default", "host", "sudo", "root":
+	case "default", "host", "root":
 		return c.persistString("container_user_mode", mode)
 	default:
 		return fmt.Errorf("unsupported container user mode: %s", strings.TrimSpace(raw))
