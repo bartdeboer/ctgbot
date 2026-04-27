@@ -25,10 +25,24 @@ func TestThreadCommandAliasesParseToSameCommandType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse container refresh: %v", err)
 	}
+	containerStart, err := router.Parse(context.Background(), base, []string{"container", "start"})
+	if err != nil {
+		t.Fatalf("parse container start: %v", err)
+	}
+	containerStop, err := router.Parse(context.Background(), base, []string{"container", "stop"})
+	if err != nil {
+		t.Fatalf("parse container stop: %v", err)
+	}
 	if _, ok := refresh.Command.(RefreshContainer); !ok {
 		t.Fatalf("refresh command = %T, want RefreshContainer", refresh.Command)
 	}
 	if _, ok := containerRefresh.Command.(RefreshContainer); !ok {
 		t.Fatalf("container refresh command = %T, want RefreshContainer", containerRefresh.Command)
+	}
+	if _, ok := containerStart.Command.(StartContainer); !ok {
+		t.Fatalf("container start command = %T, want StartContainer", containerStart.Command)
+	}
+	if _, ok := containerStop.Command.(StopContainer); !ok {
+		t.Fatalf("container stop command = %T, want StopContainer", containerStop.Command)
 	}
 }

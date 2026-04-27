@@ -46,8 +46,8 @@ func (b *Broker) prepareRuntime(ctx context.Context, conv *Thread, forceSetup bo
 		}
 	}
 	if ensureAction == sandboxengine.EnsureCreated {
-		if err := b.SendSystemMessage(ctx, conv, fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", ThreadContainerName(b.Config, conv), conv.WorkspaceHost)); err != nil {
-			b.logf("send conversation started message failed thread=%s err=%v", conv.ID, err)
+		if err := b.SendSystemMessage(ctx, conv, fmt.Sprintf("container started\ncontainer: %s\nworkspace: %s", ThreadContainerName(b.Config, conv), conv.WorkspaceHost)); err != nil {
+			b.logf("send container started message failed thread=%s err=%v", conv.ID, err)
 		}
 	}
 	return agent, sbx, nil

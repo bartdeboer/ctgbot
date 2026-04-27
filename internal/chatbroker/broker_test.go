@@ -694,6 +694,111 @@ func TestHandleInboundPayloadRefreshesActiveConversation(t *testing.T) {
 	}
 }
 
+func TestHandleInboundPayloadStartsContainerKeepRunning(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+
+	storage := &fakeBrokerStorage{}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
+	broker.RegisterAgent("codex", fakeBrokerAgent{})
+
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/container start"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if !strings.Contains(result.Text.Text, "keep_running: true") {
+		t.Fatalf("unexpected response: %q", result.Text.Text)
+	}
+	if storage.thread == nil || !storage.thread.Active || !storage.thread.Initialized || !storage.thread.KeepRunning {
+		t.Fatalf("unexpected thread: %#v", storage.thread)
+	}
+}
+
+func TestHandleInboundPayloadStopsContainerKeepRunning(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	chatCfg := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+	threadID := modeluuid.New()
+	thread := &Thread{
+		ID:                 threadID,
+		ChatID:             chatCfg.ID,
+		ProviderThreadID:   "7",
+		Active:             true,
+		AgentProviderType:  "codex",
+		RuntimeName:        cfg.Thread(chatCfg.ID, threadID).ContainerName(),
+		KeepRunning:        true,
+		WorkspaceHost:      filepath.Join(root, "workspace"),
+		HomeHost:           filepath.Join(root, "home"),
+		ContainerWorkspace: "/workspace",
+		ContainerHome:      "/home/codex",
+		Initialized:        true,
+	}
+
+	storage := &fakeBrokerStorage{thread: thread}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
+	broker.RegisterAgent("codex", fakeBrokerAgent{})
+
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/container stop"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if result.Text.Text != "container stopped\nkeep_running: false" {
+		t.Fatalf("unexpected response: %q", result.Text.Text)
+	}
+	if storage.thread == nil || storage.thread.KeepRunning || storage.thread.Initialized == true || !storage.thread.Active {
+		t.Fatalf("unexpected thread: %#v", storage.thread)
+	}
+}
+
 func TestHandleInboundPayloadRefreshDefersSkillInstallUntilNextRuntime(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
@@ -875,6 +980,7 @@ func TestHandleInboundPayloadStatusIncludesInternalIDs(t *testing.T) {
 		"active conversation",
 		"chat_id: " + chatCfg.ID.String(),
 		"thread_id: " + threadID.String(),
+		"keep_running: false",
 	} {
 		if !strings.Contains(result.Text.Text, want) {
 			t.Fatalf("status missing %q:\n%s", want, result.Text.Text)
@@ -1161,6 +1267,20 @@ func (f *fakeBrokerStorage) AgentThreadID(ctx context.Context, threadID modeluui
 func (f *fakeBrokerStorage) SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error {
 	if f.thread != nil {
 		f.thread.AgentThreadID = value
+	}
+	return nil
+}
+
+func (f *fakeBrokerStorage) KeepRunning(ctx context.Context, threadID modeluuid.UUID) (bool, error) {
+	if f.thread == nil {
+		return false, nil
+	}
+	return f.thread.KeepRunning, nil
+}
+
+func (f *fakeBrokerStorage) SetKeepRunning(ctx context.Context, threadID modeluuid.UUID, value bool) error {
+	if f.thread != nil {
+		f.thread.KeepRunning = value
 	}
 	return nil
 }

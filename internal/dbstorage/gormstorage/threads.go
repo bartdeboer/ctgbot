@@ -89,6 +89,18 @@ func (s *ThreadStorage) SetAgentThreadID(ctx context.Context, threadID modeluuid
 	return s.update(ctx, threadID, "agent_thread_id", strings.TrimSpace(value))
 }
 
+func (s *ThreadStorage) KeepRunning(ctx context.Context, threadID modeluuid.UUID) (bool, error) {
+	thread, err := s.GetByID(ctx, threadID)
+	if thread == nil || err != nil {
+		return false, err
+	}
+	return thread.KeepRunning, nil
+}
+
+func (s *ThreadStorage) SetKeepRunning(ctx context.Context, threadID modeluuid.UUID, value bool) error {
+	return s.update(ctx, threadID, "keep_running", value)
+}
+
 func (s *ThreadStorage) update(ctx context.Context, threadID modeluuid.UUID, column string, value any) error {
 	return s.db.WithContext(ctx).
 		Model(&dbmodel.Thread{}).

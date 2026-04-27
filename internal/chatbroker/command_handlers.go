@@ -95,6 +95,36 @@ func (h *CommandHandlers) RefreshContainer(ctx context.Context, req commandengin
 	return commandengine.Result{Text: "conversation runtime refreshed"}, nil
 }
 
+func (h *CommandHandlers) StartContainer(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	thread, err := h.thread(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	conv, err := h.Broker.StartContainer(ctx, thread)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if conv == nil {
+		conv = thread
+	}
+	return commandengine.Result{Text: fmt.Sprintf(
+		"container started\nkeep_running: %t\ncontainer: %s",
+		conv.KeepRunning,
+		ThreadContainerName(h.Broker.Config, conv),
+	)}, nil
+}
+
+func (h *CommandHandlers) StopContainer(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	thread, err := h.thread(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if err := h.Broker.StopContainer(ctx, thread); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "container stopped\nkeep_running: false"}, nil
+}
+
 func (h *CommandHandlers) PurgeChat(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	thread, active, err := h.activeThread(ctx, req)
 	if err != nil {
@@ -181,18 +211,20 @@ func (h *CommandHandlers) Status(ctx context.Context, req commandengine.Request)
 	}
 	if active == nil {
 		return commandengine.Result{Text: fmt.Sprintf(
-			"no active conversation\nchat_id: %s\nthread_id: %s",
+			"no active conversation\nchat_id: %s\nthread_id: %s\nkeep_running: %t",
 			thread.ChatID,
 			thread.ID,
+			thread.KeepRunning,
 		)}, nil
 	}
 	return commandengine.Result{Text: fmt.Sprintf(
-		"active conversation\nchat_id: %s\nthread_id: %s\ncontainer: %s\nworkspace: %s\ninitialized: %t",
+		"active conversation\nchat_id: %s\nthread_id: %s\ncontainer: %s\nworkspace: %s\ninitialized: %t\nkeep_running: %t",
 		thread.ChatID,
 		thread.ID,
 		ThreadContainerName(h.Broker.Config, thread),
 		thread.WorkspaceHost,
 		thread.Initialized,
+		thread.KeepRunning,
 	)}, nil
 }
 

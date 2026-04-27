@@ -249,6 +249,20 @@ func (f *fakeStorage) SetAgentThreadID(ctx context.Context, threadID modeluuid.U
 	return nil
 }
 
+func (f *fakeStorage) KeepRunning(ctx context.Context, threadID modeluuid.UUID) (bool, error) {
+	if f.thread == nil {
+		return false, nil
+	}
+	return f.thread.KeepRunning, nil
+}
+
+func (f *fakeStorage) SetKeepRunning(ctx context.Context, threadID modeluuid.UUID, value bool) error {
+	if f.thread != nil {
+		f.thread.KeepRunning = value
+	}
+	return nil
+}
+
 type fakeTelegramUpdateStorage struct{}
 
 func (fakeTelegramUpdateStorage) Create(ctx context.Context, event *dbmodel.TelegramUpdate) error {

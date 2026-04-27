@@ -7,6 +7,8 @@ import (
 )
 
 type RefreshContainer struct{}
+type StartContainer struct{}
+type StopContainer struct{}
 type PurgeChat struct{}
 type InterruptTurn struct{}
 type Upgrade struct{}
@@ -17,6 +19,8 @@ type Status struct{}
 func ThreadCommands() []commandengine.Definition {
 	return []commandengine.Definition{
 		threadCommand("thread.refresh", RefreshContainer{}, "Refresh the active container", []string{"refresh", "container refresh"}),
+		threadCommand("thread.container-start", StartContainer{}, "Start the active container and keep it running", []string{"container start"}),
+		threadCommand("thread.container-stop", StopContainer{}, "Stop the active container and disable keep-running", []string{"container stop"}),
 		threadCommand("thread.purge", PurgeChat{}, "Purge the active chat state", []string{"purge", "chat purge"}),
 		threadCommand("thread.interrupt", InterruptTurn{}, "Interrupt the active turn", []string{"interrupt"}),
 		threadCommand("thread.upgrade", Upgrade{}, "Upgrade ctgbot", []string{"upgrade"}),

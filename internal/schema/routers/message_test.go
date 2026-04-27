@@ -53,6 +53,16 @@ func (f *fakeThreadHandlers) RefreshContainer(ctx context.Context, req commanden
 	return commandengine.Result{Text: "refresh"}, nil
 }
 
+func (f *fakeThreadHandlers) StartContainer(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	f.calls = "container start"
+	return commandengine.Result{Text: "container start"}, nil
+}
+
+func (f *fakeThreadHandlers) StopContainer(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	f.calls = "container stop"
+	return commandengine.Result{Text: "container stop"}, nil
+}
+
 func (f *fakeThreadHandlers) PurgeChat(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	f.calls = "purge"
 	return commandengine.Result{Text: "purge"}, nil

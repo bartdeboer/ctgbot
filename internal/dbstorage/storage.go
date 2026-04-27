@@ -23,6 +23,8 @@ type ThreadStorage interface {
 	SetWorkspaceHost(ctx context.Context, threadID modeluuid.UUID, value string) error
 	AgentThreadID(ctx context.Context, threadID modeluuid.UUID) (string, error)
 	SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error
+	KeepRunning(ctx context.Context, threadID modeluuid.UUID) (bool, error)
+	SetKeepRunning(ctx context.Context, threadID modeluuid.UUID, value bool) error
 }
 
 type TelegramUpdateStorage interface {

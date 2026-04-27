@@ -15,6 +15,7 @@ type Thread struct {
 	AgentProviderType  string
 	AgentThreadID      string
 	RuntimeName        string `gorm:"column:container_name"`
+	KeepRunning        bool
 	WorkspaceHost      string
 	HomeHost           string
 	ContainerWorkspace string

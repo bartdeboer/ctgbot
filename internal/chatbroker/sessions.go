@@ -98,6 +98,48 @@ func (b *Broker) RefreshSession(ctx context.Context, thread *Thread) error {
 	})
 }
 
+func (b *Broker) StartContainer(ctx context.Context, thread *Thread) (*Thread, error) {
+	if thread == nil {
+		return nil, nil
+	}
+	var out *Thread
+	err := b.dispatcher().Run(ctx, b.dispatchKey(thread.ChatID, thread.ID), func(runCtx context.Context) error {
+		var err error
+		thread.KeepRunning = true
+		if active, _ := b.GetActiveSession(runCtx, thread); active == nil {
+			out, err = b.startSession(runCtx, thread.ChatID, thread, "", false)
+			return err
+		}
+		if threads := b.threads(); threads != nil {
+			if err := threads.Save(runCtx, thread); err != nil {
+				return err
+			}
+		}
+		_, _, err = b.prepareRuntime(runCtx, thread, true)
+		out = thread
+		return err
+	})
+	return out, err
+}
+
+func (b *Broker) StopContainer(ctx context.Context, thread *Thread) error {
+	if thread == nil {
+		return nil
+	}
+	return b.dispatcher().Run(ctx, b.dispatchKey(thread.ChatID, thread.ID), func(runCtx context.Context) error {
+		if err := b.sandboxForThread(thread).Remove(runCtx); err != nil {
+			return err
+		}
+		thread.KeepRunning = false
+		thread.Initialized = false
+		thread.LastError = ""
+		if threads := b.threads(); threads != nil {
+			return threads.Save(runCtx, thread)
+		}
+		return nil
+	})
+}
+
 func (b *Broker) PurgeSession(ctx context.Context, thread *Thread) error {
 	if thread == nil {
 		return nil
@@ -210,11 +252,13 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 	if err != nil {
 		return PromptOutcome{}, err
 	}
-	defer func() {
-		if stopErr := sbx.Stop(context.Background()); stopErr != nil {
-			b.logf("stop conversation sandbox %s failed: %v", ThreadContainerName(b.Config, conv), stopErr)
-		}
-	}()
+	if !conv.KeepRunning {
+		defer func() {
+			if stopErr := sbx.Stop(context.Background()); stopErr != nil {
+				b.logf("stop conversation sandbox %s failed: %v", ThreadContainerName(b.Config, conv), stopErr)
+			}
+		}()
+	}
 
 	stopTyping := b.startThreadChatAction(runCtx, conv, messenger.ChatActionTyping)
 	defer stopTyping()

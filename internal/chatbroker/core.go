@@ -39,6 +39,9 @@ func New(cfg *appstate.Config, storage dbstorage.Storage, sandboxes sandboxengin
 	if sandboxes == nil {
 		sandboxes = sandboxengine.NewSandboxManager(logger)
 	}
+	if cfg != nil && cfg.Storage() == nil && storage != nil {
+		cfg.SetStorage(storage)
+	}
 	return &Broker{
 		Config:            cfg,
 		Storage:           storage,

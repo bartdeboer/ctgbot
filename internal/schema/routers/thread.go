@@ -10,6 +10,8 @@ import (
 
 type ThreadHandlers interface {
 	RefreshContainer(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
+	StartContainer(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
+	StopContainer(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 	PurgeChat(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 	InterruptTurn(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 	Upgrade(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
@@ -24,6 +26,16 @@ func RegisterThreadHandlers(registry *commandengine.Registry, handlers ThreadHan
 	}
 	if err := commandengine.Register[schemacommands.RefreshContainer](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.RefreshContainer) (commandengine.Result, error) {
 		return handlers.RefreshContainer(ctx, req)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.Register[schemacommands.StartContainer](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.StartContainer) (commandengine.Result, error) {
+		return handlers.StartContainer(ctx, req)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.Register[schemacommands.StopContainer](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.StopContainer) (commandengine.Result, error) {
+		return handlers.StopContainer(ctx, req)
 	}); err != nil {
 		return err
 	}

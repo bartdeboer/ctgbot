@@ -124,6 +124,9 @@ func TestThreadFieldAccessors(t *testing.T) {
 	if err := store.Threads().SetAgentThreadID(ctx, thread.ID, " provider-thread "); err != nil {
 		t.Fatalf("set agent thread id: %v", err)
 	}
+	if err := store.Threads().SetKeepRunning(ctx, thread.ID, true); err != nil {
+		t.Fatalf("set keep running: %v", err)
+	}
 
 	workspace, err := store.Threads().WorkspaceHost(ctx, thread.ID)
 	if err != nil {
@@ -133,7 +136,11 @@ func TestThreadFieldAccessors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("agent thread id: %v", err)
 	}
-	if workspace != "/workspace" || agentThreadID != "provider-thread" {
-		t.Fatalf("unexpected values workspace=%q agent_thread_id=%q", workspace, agentThreadID)
+	keepRunning, err := store.Threads().KeepRunning(ctx, thread.ID)
+	if err != nil {
+		t.Fatalf("keep running: %v", err)
+	}
+	if workspace != "/workspace" || agentThreadID != "provider-thread" || !keepRunning {
+		t.Fatalf("unexpected values workspace=%q agent_thread_id=%q keep_running=%t", workspace, agentThreadID, keepRunning)
 	}
 }
