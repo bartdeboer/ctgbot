@@ -12,11 +12,14 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/dbstorage"
+	"github.com/bartdeboer/ctgbot/internal/dbstorage/gormstorage"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func ensureTelegramChat(t *testing.T, cfg *appstate.Config, providerChatID int64, title string, enabled bool, processTools bool) *appstate.ChatConfigEntry {
@@ -103,6 +106,66 @@ func TestNewSandboxIncludesInternalChatAndThreadIDs(t *testing.T) {
 	})
 	if sbx.GPUs != "all" {
 		t.Fatalf("expected GPUs=all, got %q", sbx.GPUs)
+	}
+}
+
+func TestBrokerPersistsIncomingThreadThroughStorage(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	chatCfg := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+
+	db, err := gorm.Open(sqlite.Open(filepath.Join(root, "ctgbot.db")), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	storage := gormstorage.New(db)
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
+	broker.RegisterAgent("codex", fakeBrokerAgent{})
+
+	if err := broker.AutoMigrate(context.Background()); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "hello"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle inbound payload: %v", err)
+	}
+	if result.Text.Text != "reply text" {
+		t.Fatalf("reply = %q", result.Text.Text)
+	}
+
+	thread, err := storage.Threads().GetByProviderThreadID(context.Background(), chatCfg.ID, "7")
+	if err != nil {
+		t.Fatalf("load stored thread: %v", err)
+	}
+	if thread == nil {
+		t.Fatal("expected stored thread")
+	}
+	if !thread.Active || !thread.Initialized || thread.AgentProviderType != "codex" {
+		t.Fatalf("unexpected stored thread: %#v", thread)
 	}
 }
 
