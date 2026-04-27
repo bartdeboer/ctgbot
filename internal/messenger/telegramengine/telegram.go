@@ -4,11 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/dbmodel"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 
 type TelegramAPI interface {
-	Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(ctx context.Context, u TelegramUpdate)) error
+	Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(ctx context.Context, u dbmodel.TelegramUpdate)) error
 	SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string, parseMode string) error
 	SendDocument(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
 	SendPhoto(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error

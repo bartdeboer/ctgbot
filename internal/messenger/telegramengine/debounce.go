@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/bartdeboer/ctgbot/internal/dbmodel"
 )
 
 type debounceKey struct {
@@ -17,7 +19,7 @@ type debounceKey struct {
 
 type pendingUpdate struct {
 	key        debounceKey
-	update     TelegramUpdate
+	update     dbmodel.TelegramUpdate
 	textParts  []string
 	timer      *time.Timer
 	generation uint64
@@ -27,13 +29,13 @@ type pendingUpdate struct {
 type Debouncer struct {
 	Window time.Duration
 	Logger *log.Logger
-	Next   func(context.Context, TelegramUpdate)
+	Next   func(context.Context, dbmodel.TelegramUpdate)
 
 	mu      sync.Mutex
 	pending map[debounceKey]*pendingUpdate
 }
 
-func NewDebouncer(window time.Duration, logger *log.Logger, next func(context.Context, TelegramUpdate)) *Debouncer {
+func NewDebouncer(window time.Duration, logger *log.Logger, next func(context.Context, dbmodel.TelegramUpdate)) *Debouncer {
 	return &Debouncer{
 		Window: window,
 		Logger: logger,
@@ -49,7 +51,7 @@ func (d *Debouncer) Run(ctx context.Context, api TelegramAPI, pollTimeout time.D
 	return api.Run(ctx, pollTimeout, d.HandleUpdate)
 }
 
-func (d *Debouncer) HandleUpdate(ctx context.Context, u TelegramUpdate) {
+func (d *Debouncer) HandleUpdate(ctx context.Context, u dbmodel.TelegramUpdate) {
 	if d == nil || d.Next == nil {
 		return
 	}
@@ -222,7 +224,7 @@ func (d *Debouncer) logf(format string, args ...any) {
 	}
 }
 
-func debounceKeyForUpdate(u TelegramUpdate) debounceKey {
+func debounceKeyForUpdate(u dbmodel.TelegramUpdate) debounceKey {
 	return debounceKey{ChatID: u.ChatID, ThreadID: u.ThreadID, UserID: u.UserID}
 }
 
@@ -234,7 +236,7 @@ func sameChatThread(a debounceKey, chatID int64, threadID int) bool {
 	return a.ChatID == chatID && a.ThreadID == threadID
 }
 
-func formatDebounceAttachments(attachments []TelegramAttachment) string {
+func formatDebounceAttachments(attachments []dbmodel.TelegramAttachment) string {
 	if len(attachments) == 0 {
 		return "[]"
 	}

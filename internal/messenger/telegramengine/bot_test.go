@@ -74,7 +74,7 @@ type fakeTelegramAPI struct {
 	sendHook        func(sentMessage) error
 }
 
-func (f *fakeTelegramAPI) Run(ctx context.Context, _ time.Duration, _ func(context.Context, TelegramUpdate)) error {
+func (f *fakeTelegramAPI) Run(ctx context.Context, _ time.Duration, _ func(context.Context, dbmodel.TelegramUpdate)) error {
 	return nil
 }
 
@@ -175,7 +175,7 @@ func TestTelegramBotReplyPayloadIgnoresZeroPayload(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	tb := &TelegramBot{API: api}
 
-	err := tb.replyPayload(context.Background(), TelegramUpdate{
+	err := tb.replyPayload(context.Background(), dbmodel.TelegramUpdate{
 		ChatID:   42,
 		ThreadID: 7,
 	}, messenger.OutboundPayload{})
@@ -339,7 +339,7 @@ func TestHandleUpdateSerializedAutoStartsConversation(t *testing.T) {
 		Config: cfg,
 	}
 
-	u := TelegramUpdate{
+	u := dbmodel.TelegramUpdate{
 		ChatID:    42,
 		ThreadID:  7,
 		MessageID: 99,
@@ -413,11 +413,11 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 		Config: cfg,
 	}
 
-	u := TelegramUpdate{
+	u := dbmodel.TelegramUpdate{
 		ChatID:    42,
 		ThreadID:  7,
 		MessageID: 99,
-		Attachments: []TelegramAttachment{{
+		Attachments: []dbmodel.TelegramAttachment{{
 			Kind:     "document",
 			FileID:   "doc-1",
 			Filename: "poem.zip",
@@ -474,7 +474,7 @@ func TestHandleUpdateSerializedDisabledChatSendsNoReply(t *testing.T) {
 		Config: cfg,
 	}
 
-	err = tb.handleUpdateSerialized(context.Background(), TelegramUpdate{
+	err = tb.handleUpdateSerialized(context.Background(), dbmodel.TelegramUpdate{
 		ChatID:    42,
 		ThreadID:  7,
 		MessageID: 99,
@@ -520,11 +520,11 @@ func TestHandleUpdateSerializedProcessesTextAfterSavingDocument(t *testing.T) {
 		Config: cfg,
 	}
 
-	u := TelegramUpdate{
+	u := dbmodel.TelegramUpdate{
 		ChatID:    42,
 		ThreadID:  7,
 		MessageID: 99,
-		Attachments: []TelegramAttachment{{
+		Attachments: []dbmodel.TelegramAttachment{{
 			Kind:     "document",
 			FileID:   "doc-2",
 			Filename: "notes.txt",
@@ -580,11 +580,11 @@ func TestHandleUpdateSerializedSavesPhotoUploadAndUsesCaptionAsText(t *testing.T
 		Config: cfg,
 	}
 
-	u := TelegramUpdate{
+	u := dbmodel.TelegramUpdate{
 		ChatID:    42,
 		ThreadID:  7,
 		MessageID: 101,
-		Attachments: []TelegramAttachment{{
+		Attachments: []dbmodel.TelegramAttachment{{
 			Kind:     "photo",
 			FileID:   "photo-1",
 			Filename: "photo-101.jpg",
@@ -657,16 +657,16 @@ func TestHandleUpdateDebouncesSlidingPrompt(t *testing.T) {
 	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
-	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
+	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u dbmodel.TelegramUpdate) {
 		tb.handleUpdate(ctx, u, broker.HandleInboundPayload)
 	})
 
-	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), dbmodel.TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 100, UserID: 1, Text: "hello",
 	})
 
 	time.Sleep(25 * time.Millisecond)
-	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), dbmodel.TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 101, UserID: 1, Text: "world",
 	})
 
@@ -714,14 +714,14 @@ func TestHandleUpdateDebounceSeparatesUsers(t *testing.T) {
 	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
-	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
+	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u dbmodel.TelegramUpdate) {
 		tb.handleUpdate(ctx, u, broker.HandleInboundPayload)
 	})
 
-	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), dbmodel.TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 100, UserID: 1, Text: "from alice",
 	})
-	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), dbmodel.TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 101, UserID: 2, Text: "from bob",
 	})
 
@@ -768,18 +768,18 @@ func TestHandleUpdateCommandFlushesPendingDebounce(t *testing.T) {
 	broker := chatbroker.New(cfg, storage, fakeSandboxManager{}, nil)
 	broker.RegisterAgent("codex", agent)
 	tb := &TelegramBot{API: api, Config: cfg}
-	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u TelegramUpdate) {
+	debouncer := NewDebouncer(cfg.Telegram().DebounceWindow(), nil, func(ctx context.Context, u dbmodel.TelegramUpdate) {
 		tb.handleUpdate(ctx, u, broker.HandleInboundPayload)
 	})
 
-	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), dbmodel.TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 100, UserID: 1, Text: "please review",
 	})
 	if got := agent.PromptCount(); got != 0 {
 		t.Fatalf("prompt count before command = %d, want 0", got)
 	}
 
-	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), dbmodel.TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 101, UserID: 1, Text: "/help",
 	})
 
@@ -1064,14 +1064,14 @@ func TestTelegramBotSendAllowsRenderedTextAboveSemanticChunkLimit(t *testing.T) 
 }
 
 func TestDebouncerDoesNotDuplicateSingleUpdateAttachments(t *testing.T) {
-	updates := make(chan TelegramUpdate, 1)
-	debouncer := NewDebouncer(10*time.Millisecond, nil, func(ctx context.Context, u TelegramUpdate) {
+	updates := make(chan dbmodel.TelegramUpdate, 1)
+	debouncer := NewDebouncer(10*time.Millisecond, nil, func(ctx context.Context, u dbmodel.TelegramUpdate) {
 		updates <- u
 	})
 
-	debouncer.HandleUpdate(context.Background(), TelegramUpdate{
+	debouncer.HandleUpdate(context.Background(), dbmodel.TelegramUpdate{
 		ChatID: 42, ThreadID: 7, MessageID: 1408, UserID: 1,
-		Attachments: []TelegramAttachment{{
+		Attachments: []dbmodel.TelegramAttachment{{
 			Kind:     "photo",
 			FileID:   "photo-file-id",
 			Filename: "photo-1408.jpg",
