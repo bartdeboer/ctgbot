@@ -61,6 +61,7 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 
 			updates := telegramengine.NewUpdateStorage(db)
 			storage := gormstorage.New(db)
+			cfg.SetStorage(storage)
 			sandboxes := sandboxengine.NewSandboxManager(logger)
 			broker := chatbroker.New(cfg, storage, sandboxes, logger)
 			broker.RegisterAgent("codex", codexengine.NewSessionExecutor(cfg, logger))

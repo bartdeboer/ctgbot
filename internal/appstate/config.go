@@ -5,14 +5,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/dbstorage"
 	"github.com/bartdeboer/ctgbot/internal/durationparse"
 	"github.com/bartdeboer/go-clistate"
 )
 
 type Config struct {
-	root   string
-	store  *clistate.Store
-	global *clistate.Store
+	root    string
+	store   *clistate.Store
+	global  *clistate.Store
+	storage dbstorage.Storage
 }
 
 func New(root string, store *clistate.Store, globalStore ...*clistate.Store) *Config {
@@ -43,6 +45,19 @@ func (c *Config) ProjectRoot() string {
 
 func (c *Config) DBPath() string {
 	return c.Profile().DBPath()
+}
+
+func (c *Config) SetStorage(storage dbstorage.Storage) {
+	if c != nil {
+		c.storage = storage
+	}
+}
+
+func (c *Config) Storage() dbstorage.Storage {
+	if c == nil {
+		return nil
+	}
+	return c.storage
 }
 
 func (c *Config) string(key string, fallback string) string {
