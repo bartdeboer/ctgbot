@@ -447,11 +447,11 @@ func TestHandleInboundPayloadSendsIntermediateAgentMessages(t *testing.T) {
 	if result.Text.Text != "" {
 		t.Fatalf("expected duplicate final response to be suppressed, got %q", result.Text.Text)
 	}
-	if len(provider.payloads) != 2 {
-		t.Fatalf("payloads len = %d, want 2", len(provider.payloads))
+	if len(provider.payloads) != 1 {
+		t.Fatalf("payloads len = %d, want 1", len(provider.payloads))
 	}
-	if provider.payloads[1].Text.Text != "checking runtime" {
-		t.Fatalf("intermediate text = %q", provider.payloads[1].Text.Text)
+	if provider.payloads[0].Text.Text != "checking runtime" {
+		t.Fatalf("intermediate text = %q", provider.payloads[0].Text.Text)
 	}
 }
 

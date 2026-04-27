@@ -153,7 +153,7 @@ func TestSandboxEnsureContainerUsesDockerManagerContainerRegistry(t *testing.T) 
 func TestSandboxWithoutDockerIsNoop(t *testing.T) {
 	t.Parallel()
 	sbx := &Sandbox{SandboxSpec: SandboxSpec{Name: "ctgbot-test"}}
-	if err := sbx.Ensure(context.Background()); err != nil {
+	if action, err := sbx.Ensure(context.Background()); err != nil || action != EnsureNoop {
 		t.Fatalf("Ensure: %v", err)
 	}
 	if err := sbx.Stop(context.Background()); err != nil {

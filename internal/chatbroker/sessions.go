@@ -71,9 +71,6 @@ func (b *Broker) startSession(ctx context.Context, chatID modeluuid.UUID, thread
 	if _, _, err := b.prepareRuntime(ctx, conv, true); err != nil {
 		return nil, err
 	}
-	if err := b.SendSystemMessage(ctx, conv, fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName(b.Config), conv.WorkspaceHost)); err != nil {
-		b.logf("send conversation started message failed thread=%s err=%v", conv.ID, err)
-	}
 	if b.Sessions != nil {
 		if err := b.Sessions.SaveThread(ctx, conv); err != nil {
 			_ = b.sandboxForThread(conv).Remove(context.Background())

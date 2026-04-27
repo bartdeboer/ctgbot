@@ -112,46 +112,56 @@ func (m *DockerManager) CreateSandbox(spec *SandboxSpec) *Sandbox {
 	return sbx
 }
 
-func (m *DockerManager) ensure(ctx context.Context, sbx *Sandbox) error {
+func (m *DockerManager) ensure(ctx context.Context, sbx *Sandbox) (EnsureAction, error) {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
-		return fmt.Errorf("missing sandbox name")
+		return EnsureNoop, fmt.Errorf("missing sandbox name")
 	}
-	return m.withLock(sbx.Name, func() error {
-		return sbx.ensureReady(ctx)
+	var action EnsureAction
+	err := m.withLock(sbx.Name, func() error {
+		var err error
+		action, err = sbx.ensureReady(ctx)
+		return err
 	})
+	if err != nil {
+		return EnsureNoop, err
+	}
+	return action, nil
 }
 
-func (s *Sandbox) ensureReady(ctx context.Context) error {
+func (s *Sandbox) ensureReady(ctx context.Context) (EnsureAction, error) {
 	if s == nil {
-		return fmt.Errorf("missing sandbox")
+		return EnsureNoop, fmt.Errorf("missing sandbox")
 	}
 	if s.ImageBuilder != nil {
 		if err := s.ImageBuilder.EnsureImage(ctx); err != nil {
-			return err
+			return EnsureNoop, err
 		}
 	}
 	container := s.ensureContainer()
 	if container == nil {
-		return fmt.Errorf("missing backing container")
+		return EnsureNoop, fmt.Errorf("missing backing container")
 	}
 	state, err := container.InspectState(ctx)
 	if err != nil {
-		return err
+		return EnsureNoop, err
 	}
 	switch State(state) {
 	case StateRunning:
-		return nil
+		return EnsureNoop, nil
 	case StateCreated, StateExited:
-		return container.Start(ctx)
+		return EnsureStarted, container.Start(ctx)
 	case StateMissing:
 		container, err := s.docker.containerManager().Create(ctx, s.ContainerSpec())
 		if err != nil {
-			return err
+			return EnsureNoop, err
 		}
 		s.setContainer(container)
-		return container.Start(ctx)
+		if err := container.Start(ctx); err != nil {
+			return EnsureNoop, err
+		}
+		return EnsureCreated, nil
 	default:
-		return fmt.Errorf("unsupported sandbox state %q for %s", state, s.Name)
+		return EnsureNoop, fmt.Errorf("unsupported sandbox state %q for %s", state, s.Name)
 	}
 }
 
@@ -181,7 +191,7 @@ func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer
 		return fmt.Errorf("missing executable name")
 	}
 	return m.withLock(sbx.Name, func() error {
-		if err := sbx.ensureReady(ctx); err != nil {
+		if _, err := sbx.ensureReady(ctx); err != nil {
 			return err
 		}
 		container := sbx.ensureContainer()
@@ -204,7 +214,7 @@ func (m *DockerManager) combinedOutput(ctx context.Context, sbx *Sandbox, name s
 	}
 	var out []byte
 	err := m.withLock(sbx.Name, func() error {
-		if err := sbx.ensureReady(ctx); err != nil {
+		if _, err := sbx.ensureReady(ctx); err != nil {
 			return err
 		}
 		container := sbx.ensureContainer()

@@ -17,6 +17,14 @@ const (
 	StateExited  State = "exited"
 )
 
+type EnsureAction string
+
+const (
+	EnsureNoop    EnsureAction = ""
+	EnsureCreated EnsureAction = "created"
+	EnsureStarted EnsureAction = "started"
+)
+
 type Mount struct {
 	Source   string
 	Target   string
@@ -191,9 +199,9 @@ func (s *Sandbox) ActiveCommand() (SandboxCommand, bool) {
 	}, true
 }
 
-func (s *Sandbox) Ensure(ctx context.Context) error {
+func (s *Sandbox) Ensure(ctx context.Context) (EnsureAction, error) {
 	if s == nil || s.docker == nil {
-		return nil
+		return EnsureNoop, nil
 	}
 	return s.docker.ensure(ctx, s)
 }

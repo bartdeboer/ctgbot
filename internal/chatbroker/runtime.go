@@ -24,6 +24,7 @@ func (b *Broker) prepareRuntime(ctx context.Context, conv *Thread, forceSetup bo
 		return nil, nil, err
 	}
 	sbx := b.sandboxForThread(conv)
+
 	if forceSetup || !conv.Initialized {
 		if err := agent.SetupEnvironment(ctx, sbx); err != nil {
 			return nil, nil, err
@@ -31,9 +32,22 @@ func (b *Broker) prepareRuntime(ctx context.Context, conv *Thread, forceSetup bo
 		if err := b.installConfiguredSkills(ctx, conv.ChatID, agent, sbx); err != nil {
 			return nil, nil, err
 		}
+	}
+
+	ensureAction, err := sbx.Ensure(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if forceSetup || !conv.Initialized {
 		conv.Initialized = true
 		if b.Sessions != nil {
 			_ = b.Sessions.SaveThread(ctx, conv)
+		}
+	}
+	if ensureAction == sandboxengine.EnsureCreated {
+		if err := b.SendSystemMessage(ctx, conv, fmt.Sprintf("conversation started\ncontainer: %s\nworkspace: %s", conv.ContainerName(b.Config), conv.WorkspaceHost)); err != nil {
+			b.logf("send conversation started message failed thread=%s err=%v", conv.ID, err)
 		}
 	}
 	return agent, sbx, nil
