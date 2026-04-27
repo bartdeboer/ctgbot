@@ -94,6 +94,7 @@ func (s *Sandbox) ContainerSpec() containerengine.ContainerSpec {
 		Hostname:     s.Hostname,
 		Image:        s.Image,
 		Workdir:      s.Workdir,
+		UseHostUser:  true,
 		GPUs:         s.GPUs,
 		Labels:       s.Labels,
 		Env:          s.Env,

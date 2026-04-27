@@ -30,7 +30,10 @@ func (m *Manager) Container(name string) *Container {
 	if c := m.containers[name]; c != nil {
 		return c
 	}
-	c := &Container{ContainerSpec: ContainerSpec{Name: name}, manager: m}
+	c := &Container{
+		ContainerSpec: ContainerSpec{Name: name},
+		manager:       m,
+	}
 	m.containers[name] = c
 	return c
 }
@@ -53,6 +56,13 @@ func (m *Manager) inspectState(ctx context.Context, containerName string) (State
 
 func (m *Manager) Create(ctx context.Context, spec ContainerSpec) (*Container, error) {
 	container := m.Container(spec.Name)
+	if spec.UseHostUser && strings.TrimSpace(spec.User) == "" {
+		user, err := currentUIDGID(ctx)
+		if err != nil {
+			return container, fmt.Errorf("resolve host uid/gid: %w", err)
+		}
+		spec.User = user
+	}
 	container.ApplySpec(spec)
 	args := buildCreateArgs(spec)
 	if len(args) == 0 {
@@ -101,6 +111,9 @@ func buildCreateArgs(spec ContainerSpec) []string {
 	if workdir := strings.TrimSpace(spec.Workdir); workdir != "" {
 		args = append(args, "--workdir", workdir)
 	}
+	if user := strings.TrimSpace(spec.User); user != "" {
+		args = append(args, "--user", user)
+	}
 	for _, mount := range spec.Mounts {
 		if strings.TrimSpace(mount.Source) == "" || strings.TrimSpace(mount.Target) == "" {
 			continue
@@ -123,6 +136,27 @@ func buildCreateArgs(spec ContainerSpec) []string {
 	args = append(args, spec.Image)
 	args = append(args, spec.Cmd...)
 	return args
+}
+
+func currentUIDGID(ctx context.Context) (string, error) {
+	uid, err := runCommand(ctx, "id", "-u")
+	if err != nil {
+		return "", fmt.Errorf("id -u: %w: %s", err, strings.TrimSpace(uid))
+	}
+
+	gid, err := runCommand(ctx, "id", "-g")
+	if err != nil {
+		return "", fmt.Errorf("id -g: %w: %s", err, strings.TrimSpace(gid))
+	}
+
+	uid = strings.TrimSpace(uid)
+	gid = strings.TrimSpace(gid)
+
+	if uid == "" || gid == "" {
+		return "", fmt.Errorf("empty uid/gid: uid=%q gid=%q", uid, gid)
+	}
+
+	return uid + ":" + gid, nil
 }
 
 func (m *Manager) Start(ctx context.Context, containerName string) error {

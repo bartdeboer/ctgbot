@@ -28,6 +28,12 @@ RUN apk add --no-cache ca-certificates git curl libc6-compat \
         CODEX_INSTALL_DIR=/usr/local/bin /tmp/install-codex.sh; \
     fi \
     && rm -f /tmp/install-codex.sh \
+    && mkdir -p /opt/codex \
+    && codex_target="$(readlink -f /usr/local/bin/codex)" \
+    && cp -a "$(dirname "${codex_target}")/." /opt/codex/ \
+    && ln -sf /opt/codex/codex /usr/local/bin/codex \
+    && chmod -R a+rX /opt/codex \
+    && chmod 755 /usr/local/bin/codex \
     && codex --version
 
 COPY --from=hostbridge-build /out/hostbridge /usr/bin/hostbridge

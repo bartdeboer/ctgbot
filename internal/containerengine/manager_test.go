@@ -51,6 +51,32 @@ func TestBuildCreateArgsIncludesGPUs(t *testing.T) {
 	}
 }
 
+func TestBuildCreateArgsIncludesUser(t *testing.T) {
+	t.Parallel()
+
+	args := buildCreateArgs(ContainerSpec{
+		Name:  "ctgbot-test",
+		Image: "ctgbot:latest",
+		User:  "1000:1000",
+		Cmd:   []string{"tail", "-f", "/dev/null"},
+	})
+
+	if len(args) == 0 {
+		t.Fatalf("expected docker create args")
+	}
+
+	found := false
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--user" && args[i+1] == "1000:1000" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected --user 1000:1000 in args: %#v", args)
+	}
+}
+
 func TestManagerRetainsContainerInstancesByName(t *testing.T) {
 	t.Parallel()
 

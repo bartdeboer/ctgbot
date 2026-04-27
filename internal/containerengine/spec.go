@@ -29,6 +29,8 @@ type ContainerSpec struct {
 	Hostname     string
 	Image        string
 	Workdir      string
+	User         string
+	UseHostUser  bool
 	GPUs         string
 	Labels       map[string]string
 	Env          []string
