@@ -83,11 +83,6 @@ func (f *fakeThreadHandlers) Quit(ctx context.Context, req commandengine.Request
 	return commandengine.Result{Text: "quit"}, nil
 }
 
-func (f *fakeThreadHandlers) Stop(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	f.calls = "stop"
-	return commandengine.Result{Text: "stop"}, nil
-}
-
 func (f *fakeThreadHandlers) Status(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	f.calls = "status"
 	return commandengine.Result{Text: "status"}, nil

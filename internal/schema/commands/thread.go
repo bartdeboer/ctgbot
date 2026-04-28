@@ -13,7 +13,6 @@ type PurgeChat struct{}
 type InterruptTurn struct{}
 type Upgrade struct{}
 type Quit struct{}
-type Stop struct{}
 type Status struct{}
 
 func ThreadCommands() []commandengine.Definition {
@@ -25,7 +24,6 @@ func ThreadCommands() []commandengine.Definition {
 		threadCommand("thread.interrupt", InterruptTurn{}, "Interrupt the active turn", []string{"interrupt"}),
 		threadCommand("thread.upgrade", Upgrade{}, "Upgrade ctgbot", []string{"upgrade"}),
 		threadCommand("thread.quit", Quit{}, "Quit ctgbot", []string{"quit"}),
-		threadCommand("thread.stop", Stop{}, "Stop the active conversation", []string{"stop"}),
 		threadCommand("thread.status", Status{}, "Show active conversation status", []string{"status"}),
 	}
 }

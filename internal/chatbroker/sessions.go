@@ -80,15 +80,6 @@ func (b *Broker) startSession(ctx context.Context, chatID modeluuid.UUID, thread
 	return conv, nil
 }
 
-func (b *Broker) StopSession(ctx context.Context, thread *Thread) error {
-	if thread == nil {
-		return nil
-	}
-	return b.dispatcher().Run(ctx, b.dispatchKey(thread.ChatID, thread.ID), func(runCtx context.Context) error {
-		return b.stopSession(runCtx, thread)
-	})
-}
-
 func (b *Broker) RefreshSession(ctx context.Context, thread *Thread) error {
 	if thread == nil {
 		return nil
@@ -147,22 +138,6 @@ func (b *Broker) PurgeSession(ctx context.Context, thread *Thread) error {
 	return b.dispatcher().Run(ctx, b.dispatchKey(thread.ChatID, thread.ID), func(runCtx context.Context) error {
 		return b.purgeSession(runCtx, thread)
 	})
-}
-
-func (b *Broker) stopSession(ctx context.Context, conv *Thread) error {
-	if conv == nil {
-		return nil
-	}
-	if err := b.sandboxForThread(conv).Remove(ctx); err != nil {
-		return err
-	}
-	threads := b.threads()
-	if threads == nil {
-		return nil
-	}
-	conv.Active = false
-	conv.LastError = "stopped by /stop"
-	return threads.Save(ctx, conv)
 }
 
 func (b *Broker) refreshSession(ctx context.Context, conv *Thread) error {
@@ -330,7 +305,9 @@ func (b *Broker) prepareThread(ctx context.Context, chatID modeluuid.UUID, threa
 	thread.ContainerWorkspace = b.Config.Docker().ContainerWorkspacePath()
 	thread.ContainerHome = b.Config.Docker().ContainerHomePath()
 	thread.Initialized = false
-	thread.AgentThreadID = ""
+	// Keep AgentThreadID intact: container lifecycle should not reset the provider conversation.
+	// Destructive conversation resets belong in purgeSession.
+	// thread.AgentThreadID = ""
 	thread.LastError = ""
 
 	if err := b.sandboxForThread(thread).Remove(ctx); err != nil {

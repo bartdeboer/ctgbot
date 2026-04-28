@@ -16,7 +16,6 @@ type ThreadHandlers interface {
 	InterruptTurn(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 	Upgrade(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 	Quit(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
-	Stop(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 	Status(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 }
 
@@ -56,11 +55,6 @@ func RegisterThreadHandlers(registry *commandengine.Registry, handlers ThreadHan
 	}
 	if err := commandengine.Register[schemacommands.Quit](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.Quit) (commandengine.Result, error) {
 		return handlers.Quit(ctx, req)
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.Register[schemacommands.Stop](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.Stop) (commandengine.Result, error) {
-		return handlers.Stop(ctx, req)
 	}); err != nil {
 		return err
 	}

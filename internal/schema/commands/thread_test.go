@@ -45,4 +45,7 @@ func TestThreadCommandAliasesParseToSameCommandType(t *testing.T) {
 	if _, ok := containerStop.Command.(StopContainer); !ok {
 		t.Fatalf("container stop command = %T, want StopContainer", containerStop.Command)
 	}
+	if _, err := router.Parse(context.Background(), base, []string{"stop"}); err == nil {
+		t.Fatal("expected stop command to be unregistered")
+	}
 }

@@ -47,7 +47,6 @@ func RegisterGobTypes(register func(any)) {
 	register(InterruptTurn{})
 	register(Upgrade{})
 	register(Quit{})
-	register(Stop{})
 	register(Status{})
 }
 

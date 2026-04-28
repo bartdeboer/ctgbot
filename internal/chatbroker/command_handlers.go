@@ -190,20 +190,6 @@ func (h *CommandHandlers) Quit(ctx context.Context, req commandengine.Request) (
 	return commandengine.Result{Text: "shutting down ctgbot"}, nil
 }
 
-func (h *CommandHandlers) Stop(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, active, err := h.activeThread(ctx, req)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	if active == nil {
-		return commandengine.Result{Text: "no active conversation"}, nil
-	}
-	if err := h.Broker.StopSession(ctx, thread); err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: "conversation stopped"}, nil
-}
-
 func (h *CommandHandlers) Status(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	thread, active, err := h.activeThread(ctx, req)
 	if err != nil {
