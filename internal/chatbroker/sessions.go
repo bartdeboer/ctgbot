@@ -244,13 +244,7 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 		Model:           strings.TrimSpace(conv.CodexModel),
 		ReasoningEffort: strings.TrimSpace(conv.CodexReasoningEffort),
 	}
-	var result agentpkg.TurnResult
-	var runErr error
-	if optionAgent, ok := agent.(agentpkg.OptionAgent); ok {
-		result, runErr = optionAgent.HandleTurnWithOptions(runCtx, sbx, output, conv.AgentThreadID, prompt, options)
-	} else {
-		result, runErr = agent.HandleTurn(runCtx, sbx, output, conv.AgentThreadID, prompt)
-	}
+	result, runErr := agent.HandleTurn(runCtx, sbx, output, conv.AgentThreadID, prompt, options)
 	if result.ProviderThreadID != "" {
 		conv.AgentThreadID = result.ProviderThreadID
 	}

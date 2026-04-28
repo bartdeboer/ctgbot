@@ -20,11 +20,7 @@ type TurnOptions struct {
 type Agent interface {
 	Name() string
 	SetupEnvironment(ctx context.Context, sbx *sandboxengine.Sandbox) error
-	HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output OutputHandler, providerThreadID string, prompt string) (TurnResult, error)
-}
-
-type OptionAgent interface {
-	HandleTurnWithOptions(ctx context.Context, sbx *sandboxengine.Sandbox, output OutputHandler, providerThreadID string, prompt string, options TurnOptions) (TurnResult, error)
+	HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output OutputHandler, providerThreadID string, prompt string, options TurnOptions) (TurnResult, error)
 }
 
 type OutputHandler interface {

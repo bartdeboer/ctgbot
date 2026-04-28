@@ -1533,7 +1533,7 @@ func (fakeBrokerAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.
 	return nil
 }
 
-func (fakeBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string) (agent.TurnResult, error) {
+func (fakeBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
 	return agent.TurnResult{Reply: "reply text"}, nil
 }
 
@@ -1543,7 +1543,7 @@ type fakeOptionBrokerAgent struct {
 	reasoningEffort string
 }
 
-func (f *fakeOptionBrokerAgent) HandleTurnWithOptions(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
+func (f *fakeOptionBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
 	f.model = options.Model
 	f.reasoningEffort = options.ReasoningEffort
 	return agent.TurnResult{Reply: "reply text"}, nil
@@ -1560,7 +1560,7 @@ func (fakeStreamingBrokerAgent) SetupEnvironment(ctx context.Context, sbx *sandb
 	return nil
 }
 
-func (f fakeStreamingBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string) (agent.TurnResult, error) {
+func (f fakeStreamingBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
 	if output != nil {
 		if err := output.Send(ctx, messenger.OutboundPayload{
 			Text: messenger.TextMessage{Text: f.intermediate},

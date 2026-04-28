@@ -66,11 +66,7 @@ func (e *SessionExecutor) InstallSkill(ctx context.Context, sbx *sandboxengine.S
 	return nil
 }
 
-func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string) (agent.TurnResult, error) {
-	return e.HandleTurnWithOptions(ctx, sbx, output, providerThreadID, prompt, agent.TurnOptions{})
-}
-
-func (e *SessionExecutor) HandleTurnWithOptions(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
+func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
 	if e.Config == nil {
 		return agent.TurnResult{}, fmt.Errorf("missing config")
 	}
