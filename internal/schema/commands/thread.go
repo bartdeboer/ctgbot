@@ -17,14 +17,14 @@ type Status struct{}
 
 func ThreadCommands() []commandengine.Definition {
 	return []commandengine.Definition{
-		threadCommand("thread.refresh", RefreshContainer{}, "Refresh the active container", []string{"refresh", "container refresh"}),
+		threadCommand("thread.refresh", RefreshContainer{}, "Delete and recreate the container on next turn", []string{"refresh", "container refresh"}),
 		threadCommand("thread.container-start", StartContainer{}, "Start the active container and keep it running", []string{"container start"}),
-		threadCommand("thread.container-stop", StopContainer{}, "Stop the active container and disable keep-running", []string{"container stop"}),
-		threadCommand("thread.purge", PurgeChat{}, "Purge the active chat state", []string{"purge", "chat purge"}),
+		threadCommand("thread.container-stop", StopContainer{}, "Stop the container but keep its data", []string{"container stop"}),
+		threadCommand("thread.purge", PurgeChat{}, "Reset the conversation and delete the container", []string{"purge", "chat purge"}),
 		threadCommand("thread.interrupt", InterruptTurn{}, "Interrupt the active turn", []string{"interrupt"}),
 		threadCommand("thread.upgrade", Upgrade{}, "Upgrade ctgbot", []string{"upgrade"}),
-		threadCommand("thread.quit", Quit{}, "Quit ctgbot", []string{"quit"}),
-		threadCommand("thread.status", Status{}, "Show active conversation status", []string{"status"}),
+		threadCommand("thread.quit", Quit{}, "Restart ctgbot", []string{"quit"}),
+		threadCommand("thread.status", Status{}, "Show conversation and container status", []string{"status"}),
 	}
 }
 

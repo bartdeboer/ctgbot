@@ -32,7 +32,7 @@ func ConfigCommands() []commandengine.Definition {
 			Policy:  anyOperator(),
 			Routes: []commandengine.Route{{
 				Pattern: "config list",
-				Help:    "List config items visible in the current context",
+				Help:    "List available config keys",
 				Build:   func(req *clir.Request) (any, error) { return ConfigList{}, nil },
 			}},
 		},
@@ -42,7 +42,7 @@ func ConfigCommands() []commandengine.Definition {
 			Policy:  anyOperator(),
 			Routes: []commandengine.Route{{
 				Pattern: "config get <key>",
-				Help:    "Read a config value",
+				Help:    "Show a config value",
 				Build: func(req *clir.Request) (any, error) {
 					key := strings.TrimSpace(req.Params["key"])
 					if key == "" {
@@ -58,7 +58,7 @@ func ConfigCommands() []commandengine.Definition {
 			Policy:  anyOperator(),
 			Routes: []commandengine.Route{{
 				Pattern: "config set <key> <value>",
-				Help:    "Write a config value",
+				Help:    "Update a config value",
 				Build: func(req *clir.Request) (any, error) {
 					key := strings.TrimSpace(req.Params["key"])
 					if key == "" {
