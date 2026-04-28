@@ -5,7 +5,7 @@
 // can build on component/codex directly.
 package codex
 
-import "github.com/bartdeboer/ctgbot/internal/component"
+import "github.com/bartdeboer/ctgbot/internal/v2/component"
 
 const ComponentType = "codex"
 

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/v2/component"
 )
 
 type fakeAPI struct {

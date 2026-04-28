@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
-	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/v2/component"
 	gmailapi "google.golang.org/api/gmail/v1"
 )
 

@@ -3,7 +3,7 @@ package codex
 import (
 	"testing"
 
-	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/v2/component"
 )
 
 func TestComponentCapabilities(t *testing.T) {
