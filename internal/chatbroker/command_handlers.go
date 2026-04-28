@@ -3,6 +3,7 @@ package chatbroker
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
@@ -13,6 +14,22 @@ import (
 type CommandHandlers struct {
 	Broker         *Broker
 	RunCommandFunc func(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error)
+}
+
+var suggestedCodexModels = []string{
+	"gpt-5.5",
+	"gpt-5.4",
+	"gpt-5.4-mini",
+	"gpt-5.3-codex",
+	"gpt-5.3-codex-spark",
+	"gpt-5.2",
+}
+
+var suggestedCodexReasoningEfforts = []string{
+	"low",
+	"medium",
+	"high",
+	"xhigh",
 }
 
 func NewCommandHandlers(broker *Broker) *CommandHandlers {
@@ -196,22 +213,149 @@ func (h *CommandHandlers) Status(ctx context.Context, req commandengine.Request)
 		return commandengine.Result{}, err
 	}
 	if active == nil {
+		model, source := h.effectiveCodexModel(thread)
+		effort, effortSource := h.effectiveCodexReasoningEffort(thread)
 		return commandengine.Result{Text: fmt.Sprintf(
-			"no active conversation\nchat_id: %s\nthread_id: %s\nkeep_running: %t",
+			"no active conversation\nchat_id: %s\nthread_id: %s\nkeep_running: %t\ncodex_model: %s\ncodex_model_source: %s\ncodex_reasoning_effort: %s\ncodex_reasoning_effort_source: %s",
 			thread.ChatID,
 			thread.ID,
 			thread.KeepRunning,
+			model,
+			source,
+			effort,
+			effortSource,
 		)}, nil
 	}
+	model, source := h.effectiveCodexModel(thread)
+	effort, effortSource := h.effectiveCodexReasoningEffort(thread)
 	return commandengine.Result{Text: fmt.Sprintf(
-		"active conversation\nchat_id: %s\nthread_id: %s\ncontainer: %s\nworkspace: %s\ninitialized: %t\nkeep_running: %t",
+		"active conversation\nchat_id: %s\nthread_id: %s\ncontainer: %s\nworkspace: %s\ninitialized: %t\nkeep_running: %t\ncodex_model: %s\ncodex_model_source: %s\ncodex_reasoning_effort: %s\ncodex_reasoning_effort_source: %s",
 		thread.ChatID,
 		thread.ID,
 		ThreadContainerName(h.Broker.Config, thread),
 		thread.WorkspaceHost,
 		thread.Initialized,
 		thread.KeepRunning,
+		model,
+		source,
+		effort,
+		effortSource,
 	)}, nil
+}
+
+func (h *CommandHandlers) ModelStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	thread, err := h.thread(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	model, source := h.effectiveCodexModel(thread)
+	return commandengine.Result{Text: fmt.Sprintf("codex model: %s\nsource: %s", model, source)}, nil
+}
+
+func (h *CommandHandlers) ModelList(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	return commandengine.Result{Text: "suggested Codex models:\n" + strings.Join(suggestedCodexModels, "\n")}, nil
+}
+
+func (h *CommandHandlers) ModelSet(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelSet) (commandengine.Result, error) {
+	thread, err := h.thread(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	model := strings.TrimSpace(cmd.Model)
+	if model == "" {
+		return commandengine.Result{}, fmt.Errorf("missing model")
+	}
+	if h.Broker == nil || h.Broker.Config == nil {
+		return commandengine.Result{}, fmt.Errorf("missing broker config")
+	}
+	if err := h.Broker.Config.Thread(thread.ChatID, thread.ID).SetCodexModel(ctx, model); err != nil {
+		return commandengine.Result{}, err
+	}
+	thread.CodexModel = model
+	return commandengine.Result{Text: "codex model=" + model}, nil
+}
+
+func (h *CommandHandlers) ModelClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	thread, err := h.thread(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if h.Broker == nil || h.Broker.Config == nil {
+		return commandengine.Result{}, fmt.Errorf("missing broker config")
+	}
+	if err := h.Broker.Config.Thread(thread.ChatID, thread.ID).SetCodexModel(ctx, ""); err != nil {
+		return commandengine.Result{}, err
+	}
+	thread.CodexModel = ""
+	model, source := h.effectiveCodexModel(thread)
+	return commandengine.Result{Text: fmt.Sprintf("codex model cleared\ncodex model: %s\nsource: %s", model, source)}, nil
+}
+
+func (h *CommandHandlers) ModelEffortStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	thread, err := h.thread(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	effort, source := h.effectiveCodexReasoningEffort(thread)
+	return commandengine.Result{Text: fmt.Sprintf("codex reasoning effort: %s\nsource: %s", effort, source)}, nil
+}
+
+func (h *CommandHandlers) ModelEffortList(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	return commandengine.Result{Text: "suggested Codex reasoning efforts:\n" + strings.Join(suggestedCodexReasoningEfforts, "\n")}, nil
+}
+
+func (h *CommandHandlers) ModelEffortSet(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelEffortSet) (commandengine.Result, error) {
+	thread, err := h.thread(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	effort := strings.TrimSpace(cmd.Effort)
+	if effort == "" {
+		return commandengine.Result{}, fmt.Errorf("missing reasoning effort")
+	}
+	if h.Broker == nil || h.Broker.Config == nil {
+		return commandengine.Result{}, fmt.Errorf("missing broker config")
+	}
+	if err := h.Broker.Config.Thread(thread.ChatID, thread.ID).SetCodexReasoningEffort(ctx, effort); err != nil {
+		return commandengine.Result{}, err
+	}
+	thread.CodexReasoningEffort = effort
+	return commandengine.Result{Text: "codex reasoning effort=" + effort}, nil
+}
+
+func (h *CommandHandlers) ModelEffortClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	thread, err := h.thread(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if h.Broker == nil || h.Broker.Config == nil {
+		return commandengine.Result{}, fmt.Errorf("missing broker config")
+	}
+	if err := h.Broker.Config.Thread(thread.ChatID, thread.ID).SetCodexReasoningEffort(ctx, ""); err != nil {
+		return commandengine.Result{}, err
+	}
+	thread.CodexReasoningEffort = ""
+	effort, source := h.effectiveCodexReasoningEffort(thread)
+	return commandengine.Result{Text: fmt.Sprintf("codex reasoning effort cleared\ncodex reasoning effort: %s\nsource: %s", effort, source)}, nil
+}
+
+func (h *CommandHandlers) effectiveCodexModel(thread *Thread) (string, string) {
+	if model := strings.TrimSpace(thread.CodexModel); model != "" {
+		return model, "thread"
+	}
+	if h != nil && h.Broker != nil && h.Broker.Config != nil {
+		if model := strings.TrimSpace(h.Broker.Config.Codex().Model()); model != "" {
+			return model, "global"
+		}
+	}
+	return "(codex default)", "codex"
+}
+
+func (h *CommandHandlers) effectiveCodexReasoningEffort(thread *Thread) (string, string) {
+	if effort := strings.TrimSpace(thread.CodexReasoningEffort); effort != "" {
+		return effort, "thread"
+	}
+	return "(codex default)", "codex"
 }
 
 func (h *CommandHandlers) activeThread(ctx context.Context, req commandengine.Request) (*Thread, *Thread, error) {

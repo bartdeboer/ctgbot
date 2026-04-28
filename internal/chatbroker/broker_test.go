@@ -1001,6 +1001,174 @@ func TestHandleInboundPayloadStatusIncludesInternalIDs(t *testing.T) {
 	}
 }
 
+func TestHandleInboundPayloadModelCommandsUseThreadState(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	chatCfg := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+	thread := &Thread{ID: modeluuid.New(), ChatID: chatCfg.ID, ProviderThreadID: "7"}
+	storage := &fakeBrokerStorage{thread: thread}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
+
+	setResult, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/model set gpt-test"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("model set: %v", err)
+	}
+	if setResult.Text.Text != "codex model=gpt-test" {
+		t.Fatalf("set result = %q, want codex model=gpt-test", setResult.Text.Text)
+	}
+	if storage.thread.CodexModel != "gpt-test" {
+		t.Fatalf("stored model = %q, want gpt-test", storage.thread.CodexModel)
+	}
+
+	statusResult, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/model"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("model status: %v", err)
+	}
+	for _, want := range []string{"codex model: gpt-test", "source: thread"} {
+		if !strings.Contains(statusResult.Text.Text, want) {
+			t.Fatalf("model status missing %q:\n%s", want, statusResult.Text.Text)
+		}
+	}
+
+	clearResult, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/model clear"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("model clear: %v", err)
+	}
+	if !strings.Contains(clearResult.Text.Text, "codex model cleared") {
+		t.Fatalf("clear result = %q, want cleared message", clearResult.Text.Text)
+	}
+	if storage.thread.CodexModel != "" {
+		t.Fatalf("stored model = %q, want cleared", storage.thread.CodexModel)
+	}
+
+	effortResult, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/model effort set high"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("model effort set: %v", err)
+	}
+	if effortResult.Text.Text != "codex reasoning effort=high" {
+		t.Fatalf("effort result = %q, want codex reasoning effort=high", effortResult.Text.Text)
+	}
+	if storage.thread.CodexReasoningEffort != "high" {
+		t.Fatalf("stored reasoning effort = %q, want high", storage.thread.CodexReasoningEffort)
+	}
+}
+
+func TestHandleInboundPayloadPassesThreadModelToAgent(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	chatCfg := ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+	threadID := modeluuid.New()
+	thread := &Thread{
+		ID:                   threadID,
+		ChatID:               chatCfg.ID,
+		ProviderThreadID:     "7",
+		Active:               true,
+		Initialized:          true,
+		AgentProviderType:    "codex",
+		CodexModel:           "gpt-test",
+		CodexReasoningEffort: "high",
+		RuntimeName:          cfg.Thread(chatCfg.ID, threadID).ContainerName(),
+		WorkspaceHost:        filepath.Join(root, "workspace"),
+		HomeHost:             cfg.Chat(chatCfg.ID).CodexProfileHostPath(),
+		ContainerWorkspace:   cfg.Docker().ContainerWorkspacePath(),
+		ContainerHome:        cfg.Docker().ContainerHomePath(),
+	}
+	if err := os.MkdirAll(thread.WorkspaceHost, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	if err := os.MkdirAll(thread.HomeHost, 0o755); err != nil {
+		t.Fatalf("mkdir home: %v", err)
+	}
+	storage := &fakeBrokerStorage{thread: thread}
+	agent := &fakeOptionBrokerAgent{}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
+	broker.RegisterAgent("codex", agent)
+
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "hello"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if result.Text.Text != "reply text" {
+		t.Fatalf("reply = %q, want reply text", result.Text.Text)
+	}
+	if agent.model != "gpt-test" {
+		t.Fatalf("agent model = %q, want gpt-test", agent.model)
+	}
+	if agent.reasoningEffort != "high" {
+		t.Fatalf("agent reasoning effort = %q, want high", agent.reasoningEffort)
+	}
+}
+
 func TestHandleInboundPayloadPurgesActiveConversation(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
@@ -1281,6 +1449,34 @@ func (f *fakeBrokerStorage) SetAgentThreadID(ctx context.Context, threadID model
 	return nil
 }
 
+func (f *fakeBrokerStorage) CodexModel(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	if f.thread == nil {
+		return "", nil
+	}
+	return f.thread.CodexModel, nil
+}
+
+func (f *fakeBrokerStorage) SetCodexModel(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	if f.thread != nil {
+		f.thread.CodexModel = value
+	}
+	return nil
+}
+
+func (f *fakeBrokerStorage) CodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	if f.thread == nil {
+		return "", nil
+	}
+	return f.thread.CodexReasoningEffort, nil
+}
+
+func (f *fakeBrokerStorage) SetCodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	if f.thread != nil {
+		f.thread.CodexReasoningEffort = value
+	}
+	return nil
+}
+
 func (f *fakeBrokerStorage) KeepRunning(ctx context.Context, threadID modeluuid.UUID) (bool, error) {
 	if f.thread == nil {
 		return false, nil
@@ -1338,6 +1534,18 @@ func (fakeBrokerAgent) SetupEnvironment(ctx context.Context, sbx *sandboxengine.
 }
 
 func (fakeBrokerAgent) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string) (agent.TurnResult, error) {
+	return agent.TurnResult{Reply: "reply text"}, nil
+}
+
+type fakeOptionBrokerAgent struct {
+	fakeBrokerAgent
+	model           string
+	reasoningEffort string
+}
+
+func (f *fakeOptionBrokerAgent) HandleTurnWithOptions(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
+	f.model = options.Model
+	f.reasoningEffort = options.ReasoningEffort
 	return agent.TurnResult{Reply: "reply text"}, nil
 }
 

@@ -67,6 +67,10 @@ func (e *SessionExecutor) InstallSkill(ctx context.Context, sbx *sandboxengine.S
 }
 
 func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string) (agent.TurnResult, error) {
+	return e.HandleTurnWithOptions(ctx, sbx, output, providerThreadID, prompt, agent.TurnOptions{})
+}
+
+func (e *SessionExecutor) HandleTurnWithOptions(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
 	if e.Config == nil {
 		return agent.TurnResult{}, fmt.Errorf("missing config")
 	}
@@ -97,8 +101,15 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 		"-C", sbx.ContainerWorkspace,
 	}
 
-	if model := e.Config.Codex().Model(); model != "" {
+	model := strings.TrimSpace(options.Model)
+	if model == "" {
+		model = e.Config.Codex().Model()
+	}
+	if model != "" {
 		innerArgs = append(innerArgs, "-m", model)
+	}
+	if effort := strings.TrimSpace(options.ReasoningEffort); effort != "" {
+		innerArgs = append(innerArgs, "-c", fmt.Sprintf("model_reasoning_effort=%q", effort))
 	}
 	if strings.TrimSpace(providerThreadID) != "" {
 		innerArgs = append(innerArgs, "resume", providerThreadID, prompt)

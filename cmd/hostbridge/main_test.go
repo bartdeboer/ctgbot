@@ -22,7 +22,9 @@ func TestPrintHelpDistinguishesStandaloneHostbridgeSurface(t *testing.T) {
 	for _, want := range []string{
 		"Commands for Telegram-attached ctgbot hostbridge:",
 		"Standalone ctgbot hostbridge serve accepts only:",
-		"config get <key> - Read a config value",
+		"config get <key> - Show a config value",
+		"model set <model> - Set the Codex model for this thread",
+		"model effort set <effort> - Set the Codex reasoning effort for this thread",
 		"run <command> - Run a whitelisted host command",
 	} {
 		if !strings.Contains(output, want) {

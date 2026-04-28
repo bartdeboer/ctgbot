@@ -89,6 +89,30 @@ func (s *ThreadStorage) SetAgentThreadID(ctx context.Context, threadID modeluuid
 	return s.update(ctx, threadID, "agent_thread_id", strings.TrimSpace(value))
 }
 
+func (s *ThreadStorage) CodexModel(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	thread, err := s.GetByID(ctx, threadID)
+	if thread == nil || err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(thread.CodexModel), nil
+}
+
+func (s *ThreadStorage) SetCodexModel(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	return s.update(ctx, threadID, "codex_model", strings.TrimSpace(value))
+}
+
+func (s *ThreadStorage) CodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	thread, err := s.GetByID(ctx, threadID)
+	if thread == nil || err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(thread.CodexReasoningEffort), nil
+}
+
+func (s *ThreadStorage) SetCodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	return s.update(ctx, threadID, "codex_reasoning_effort", strings.TrimSpace(value))
+}
+
 func (s *ThreadStorage) KeepRunning(ctx context.Context, threadID modeluuid.UUID) (bool, error) {
 	thread, err := s.GetByID(ctx, threadID)
 	if thread == nil || err != nil {

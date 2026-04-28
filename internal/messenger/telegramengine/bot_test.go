@@ -249,6 +249,34 @@ func (f *fakeStorage) SetAgentThreadID(ctx context.Context, threadID modeluuid.U
 	return nil
 }
 
+func (f *fakeStorage) CodexModel(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	if f.thread == nil {
+		return "", nil
+	}
+	return f.thread.CodexModel, nil
+}
+
+func (f *fakeStorage) SetCodexModel(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	if f.thread != nil {
+		f.thread.CodexModel = value
+	}
+	return nil
+}
+
+func (f *fakeStorage) CodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	if f.thread == nil {
+		return "", nil
+	}
+	return f.thread.CodexReasoningEffort, nil
+}
+
+func (f *fakeStorage) SetCodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	if f.thread != nil {
+		f.thread.CodexReasoningEffort = value
+	}
+	return nil
+}
+
 func (f *fakeStorage) KeepRunning(ctx context.Context, threadID modeluuid.UUID) (bool, error) {
 	if f.thread == nil {
 		return false, nil

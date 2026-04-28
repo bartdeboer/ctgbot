@@ -99,6 +99,22 @@ func (fakeThreadStorage) SetAgentThreadID(ctx context.Context, threadID modeluui
 	return nil
 }
 
+func (fakeThreadStorage) CodexModel(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	return "", nil
+}
+
+func (fakeThreadStorage) SetCodexModel(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	return nil
+}
+
+func (fakeThreadStorage) CodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	return "", nil
+}
+
+func (fakeThreadStorage) SetCodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID, value string) error {
+	return nil
+}
+
 func (fakeThreadStorage) KeepRunning(ctx context.Context, threadID modeluuid.UUID) (bool, error) {
 	return false, nil
 }

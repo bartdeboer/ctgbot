@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/agent"
+	agentpkg "github.com/bartdeboer/ctgbot/internal/agent"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
@@ -166,7 +166,7 @@ func (b *Broker) purgeSession(ctx context.Context, conv *Thread) error {
 	if err != nil {
 		return err
 	}
-	if purgingAgent, ok := agentImpl.(agent.PurgingAgent); ok && strings.TrimSpace(conv.AgentThreadID) != "" {
+	if purgingAgent, ok := agentImpl.(agentpkg.PurgingAgent); ok && strings.TrimSpace(conv.AgentThreadID) != "" {
 		if err := purgingAgent.Purge(ctx, b.sandboxForThread(conv), conv.AgentThreadID); err != nil {
 			if threads := b.threads(); threads != nil {
 				conv.LastError = err.Error()
@@ -240,7 +240,17 @@ func (b *Broker) handlePrompt(ctx context.Context, chatID modeluuid.UUID, thread
 
 	b.logf("agent turn starting chat=%s thread=%s agent=%s", conv.ChatID, conv.ID, agent.Name())
 	output := newTurnOutputHandler(b, conv.ID)
-	result, runErr := agent.HandleTurn(runCtx, sbx, output, conv.AgentThreadID, prompt)
+	options := agentpkg.TurnOptions{
+		Model:           strings.TrimSpace(conv.CodexModel),
+		ReasoningEffort: strings.TrimSpace(conv.CodexReasoningEffort),
+	}
+	var result agentpkg.TurnResult
+	var runErr error
+	if optionAgent, ok := agent.(agentpkg.OptionAgent); ok {
+		result, runErr = optionAgent.HandleTurnWithOptions(runCtx, sbx, output, conv.AgentThreadID, prompt, options)
+	} else {
+		result, runErr = agent.HandleTurn(runCtx, sbx, output, conv.AgentThreadID, prompt)
+	}
 	if result.ProviderThreadID != "" {
 		conv.AgentThreadID = result.ProviderThreadID
 	}

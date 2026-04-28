@@ -23,6 +23,10 @@ type ThreadStorage interface {
 	SetWorkspaceHost(ctx context.Context, threadID modeluuid.UUID, value string) error
 	AgentThreadID(ctx context.Context, threadID modeluuid.UUID) (string, error)
 	SetAgentThreadID(ctx context.Context, threadID modeluuid.UUID, value string) error
+	CodexModel(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	SetCodexModel(ctx context.Context, threadID modeluuid.UUID, value string) error
+	CodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	SetCodexReasoningEffort(ctx context.Context, threadID modeluuid.UUID, value string) error
 	KeepRunning(ctx context.Context, threadID modeluuid.UUID) (bool, error)
 	SetKeepRunning(ctx context.Context, threadID modeluuid.UUID, value bool) error
 }

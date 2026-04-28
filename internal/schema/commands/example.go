@@ -48,6 +48,14 @@ func RegisterGobTypes(register func(any)) {
 	register(Upgrade{})
 	register(Quit{})
 	register(Status{})
+	register(ModelStatus{})
+	register(ModelList{})
+	register(ModelSet{})
+	register(ModelClear{})
+	register(ModelEffortStatus{})
+	register(ModelEffortList{})
+	register(ModelEffortSet{})
+	register(ModelEffortClear{})
 }
 
 func buildEcho(req *clir.Request) (any, error) {

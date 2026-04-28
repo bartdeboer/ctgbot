@@ -124,6 +124,12 @@ func TestThreadFieldAccessors(t *testing.T) {
 	if err := store.Threads().SetAgentThreadID(ctx, thread.ID, " provider-thread "); err != nil {
 		t.Fatalf("set agent thread id: %v", err)
 	}
+	if err := store.Threads().SetCodexModel(ctx, thread.ID, " gpt-test "); err != nil {
+		t.Fatalf("set codex model: %v", err)
+	}
+	if err := store.Threads().SetCodexReasoningEffort(ctx, thread.ID, " high "); err != nil {
+		t.Fatalf("set codex reasoning effort: %v", err)
+	}
 	if err := store.Threads().SetKeepRunning(ctx, thread.ID, true); err != nil {
 		t.Fatalf("set keep running: %v", err)
 	}
@@ -136,11 +142,19 @@ func TestThreadFieldAccessors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("agent thread id: %v", err)
 	}
+	codexModel, err := store.Threads().CodexModel(ctx, thread.ID)
+	if err != nil {
+		t.Fatalf("codex model: %v", err)
+	}
+	reasoningEffort, err := store.Threads().CodexReasoningEffort(ctx, thread.ID)
+	if err != nil {
+		t.Fatalf("codex reasoning effort: %v", err)
+	}
 	keepRunning, err := store.Threads().KeepRunning(ctx, thread.ID)
 	if err != nil {
 		t.Fatalf("keep running: %v", err)
 	}
-	if workspace != "/workspace" || agentThreadID != "provider-thread" || !keepRunning {
-		t.Fatalf("unexpected values workspace=%q agent_thread_id=%q keep_running=%t", workspace, agentThreadID, keepRunning)
+	if workspace != "/workspace" || agentThreadID != "provider-thread" || codexModel != "gpt-test" || reasoningEffort != "high" || !keepRunning {
+		t.Fatalf("unexpected values workspace=%q agent_thread_id=%q codex_model=%q reasoning_effort=%q keep_running=%t", workspace, agentThreadID, codexModel, reasoningEffort, keepRunning)
 	}
 }

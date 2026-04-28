@@ -6,6 +6,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	"github.com/bartdeboer/ctgbot/internal/schema/routers"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
@@ -86,4 +87,44 @@ func (f *fakeThreadHandlers) Quit(ctx context.Context, req commandengine.Request
 func (f *fakeThreadHandlers) Status(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	f.calls = "status"
 	return commandengine.Result{Text: "status"}, nil
+}
+
+func (f *fakeThreadHandlers) ModelStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	f.calls = "model"
+	return commandengine.Result{Text: "model"}, nil
+}
+
+func (f *fakeThreadHandlers) ModelList(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	f.calls = "model list"
+	return commandengine.Result{Text: "model list"}, nil
+}
+
+func (f *fakeThreadHandlers) ModelSet(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelSet) (commandengine.Result, error) {
+	f.calls = "model set " + cmd.Model
+	return commandengine.Result{Text: f.calls}, nil
+}
+
+func (f *fakeThreadHandlers) ModelClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	f.calls = "model clear"
+	return commandengine.Result{Text: "model clear"}, nil
+}
+
+func (f *fakeThreadHandlers) ModelEffortStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	f.calls = "model effort"
+	return commandengine.Result{Text: "model effort"}, nil
+}
+
+func (f *fakeThreadHandlers) ModelEffortList(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	f.calls = "model effort list"
+	return commandengine.Result{Text: "model effort list"}, nil
+}
+
+func (f *fakeThreadHandlers) ModelEffortSet(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelEffortSet) (commandengine.Result, error) {
+	f.calls = "model effort set " + cmd.Effort
+	return commandengine.Result{Text: f.calls}, nil
+}
+
+func (f *fakeThreadHandlers) ModelEffortClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	f.calls = "model effort clear"
+	return commandengine.Result{Text: "model effort clear"}, nil
 }

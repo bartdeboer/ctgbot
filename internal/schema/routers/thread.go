@@ -17,6 +17,14 @@ type ThreadHandlers interface {
 	Upgrade(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 	Quit(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 	Status(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
+	ModelStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
+	ModelList(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
+	ModelSet(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelSet) (commandengine.Result, error)
+	ModelClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
+	ModelEffortStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
+	ModelEffortList(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
+	ModelEffortSet(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelEffortSet) (commandengine.Result, error)
+	ModelEffortClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 }
 
 func RegisterThreadHandlers(registry *commandengine.Registry, handlers ThreadHandlers) error {
@@ -58,7 +66,47 @@ func RegisterThreadHandlers(registry *commandengine.Registry, handlers ThreadHan
 	}); err != nil {
 		return err
 	}
-	return commandengine.Register[schemacommands.Status](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.Status) (commandengine.Result, error) {
+	if err := commandengine.Register[schemacommands.Status](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.Status) (commandengine.Result, error) {
 		return handlers.Status(ctx, req)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.Register[schemacommands.ModelStatus](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelStatus) (commandengine.Result, error) {
+		return handlers.ModelStatus(ctx, req)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.Register[schemacommands.ModelList](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelList) (commandengine.Result, error) {
+		return handlers.ModelList(ctx, req)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.Register[schemacommands.ModelSet](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelSet) (commandengine.Result, error) {
+		return handlers.ModelSet(ctx, req, cmd)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.Register[schemacommands.ModelClear](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelClear) (commandengine.Result, error) {
+		return handlers.ModelClear(ctx, req)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.Register[schemacommands.ModelEffortStatus](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelEffortStatus) (commandengine.Result, error) {
+		return handlers.ModelEffortStatus(ctx, req)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.Register[schemacommands.ModelEffortList](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelEffortList) (commandengine.Result, error) {
+		return handlers.ModelEffortList(ctx, req)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.Register[schemacommands.ModelEffortSet](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelEffortSet) (commandengine.Result, error) {
+		return handlers.ModelEffortSet(ctx, req, cmd)
+	}); err != nil {
+		return err
+	}
+	return commandengine.Register[schemacommands.ModelEffortClear](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelEffortClear) (commandengine.Result, error) {
+		return handlers.ModelEffortClear(ctx, req)
 	})
 }

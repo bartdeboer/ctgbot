@@ -33,6 +33,38 @@ func TestThreadCommandAliasesParseToSameCommandType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse container stop: %v", err)
 	}
+	modelStatus, err := router.Parse(context.Background(), base, []string{"model"})
+	if err != nil {
+		t.Fatalf("parse model: %v", err)
+	}
+	modelList, err := router.Parse(context.Background(), base, []string{"model", "list"})
+	if err != nil {
+		t.Fatalf("parse model list: %v", err)
+	}
+	modelSet, err := router.Parse(context.Background(), base, []string{"model", "set", "gpt-test"})
+	if err != nil {
+		t.Fatalf("parse model set: %v", err)
+	}
+	modelClear, err := router.Parse(context.Background(), base, []string{"model", "clear"})
+	if err != nil {
+		t.Fatalf("parse model clear: %v", err)
+	}
+	effortStatus, err := router.Parse(context.Background(), base, []string{"model", "effort"})
+	if err != nil {
+		t.Fatalf("parse model effort: %v", err)
+	}
+	effortList, err := router.Parse(context.Background(), base, []string{"model", "effort", "list"})
+	if err != nil {
+		t.Fatalf("parse model effort list: %v", err)
+	}
+	effortSet, err := router.Parse(context.Background(), base, []string{"model", "effort", "set", "high"})
+	if err != nil {
+		t.Fatalf("parse model effort set: %v", err)
+	}
+	effortClear, err := router.Parse(context.Background(), base, []string{"model", "effort", "clear"})
+	if err != nil {
+		t.Fatalf("parse model effort clear: %v", err)
+	}
 	if _, ok := refresh.Command.(RefreshContainer); !ok {
 		t.Fatalf("refresh command = %T, want RefreshContainer", refresh.Command)
 	}
@@ -44,6 +76,30 @@ func TestThreadCommandAliasesParseToSameCommandType(t *testing.T) {
 	}
 	if _, ok := containerStop.Command.(StopContainer); !ok {
 		t.Fatalf("container stop command = %T, want StopContainer", containerStop.Command)
+	}
+	if _, ok := modelStatus.Command.(ModelStatus); !ok {
+		t.Fatalf("model command = %T, want ModelStatus", modelStatus.Command)
+	}
+	if _, ok := modelList.Command.(ModelList); !ok {
+		t.Fatalf("model list command = %T, want ModelList", modelList.Command)
+	}
+	if cmd, ok := modelSet.Command.(ModelSet); !ok || cmd.Model != "gpt-test" {
+		t.Fatalf("model set command = %#v, want ModelSet{Model:gpt-test}", modelSet.Command)
+	}
+	if _, ok := modelClear.Command.(ModelClear); !ok {
+		t.Fatalf("model clear command = %T, want ModelClear", modelClear.Command)
+	}
+	if _, ok := effortStatus.Command.(ModelEffortStatus); !ok {
+		t.Fatalf("model effort command = %T, want ModelEffortStatus", effortStatus.Command)
+	}
+	if _, ok := effortList.Command.(ModelEffortList); !ok {
+		t.Fatalf("model effort list command = %T, want ModelEffortList", effortList.Command)
+	}
+	if cmd, ok := effortSet.Command.(ModelEffortSet); !ok || cmd.Effort != "high" {
+		t.Fatalf("model effort set command = %#v, want ModelEffortSet{Effort:high}", effortSet.Command)
+	}
+	if _, ok := effortClear.Command.(ModelEffortClear); !ok {
+		t.Fatalf("model effort clear command = %T, want ModelEffortClear", effortClear.Command)
 	}
 	if _, err := router.Parse(context.Background(), base, []string{"stop"}); err == nil {
 		t.Fatal("expected stop command to be unregistered")
