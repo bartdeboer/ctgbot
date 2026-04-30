@@ -34,11 +34,11 @@ func TestV2ComponentAuthCreatesProfileAndRepositoryRows(t *testing.T) {
 		registerV2Routes(router)
 
 		output := captureStdout(t, func() {
-			if err := router.Run(context.Background(), []string{"component", "auth", "codex", "personal"}); err != nil {
+			if err := router.Run(context.Background(), []string{"component", "auth", "codex", "personal", "--prepare-only"}); err != nil {
 				t.Fatalf("component auth: %v", err)
 			}
 		})
-		if !strings.Contains(output, "component profile ready") || !strings.Contains(output, "container_path: /profile") {
+		if !strings.Contains(output, "component profile ready") || !strings.Contains(output, "container_path: /profile") || !strings.Contains(output, "auth: prepare only") {
 			t.Fatalf("unexpected output: %q", output)
 		}
 		assertDirExists(t, filepath.Join(root, ".ctgbot", "profiles", "codex", "personal"))
@@ -61,6 +61,23 @@ func TestV2ComponentAuthCreatesProfileAndRepositoryRows(t *testing.T) {
 		if profile == nil || !profile.Enabled {
 			t.Fatalf("unexpected profile: %#v", profile)
 		}
+	})
+}
+
+func TestV2ComponentAuthReportsMissingAuthenticator(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		router := clir.New()
+		registerV2Routes(router)
+
+		output := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"component", "auth", "gmail", "work"}); err != nil {
+				t.Fatalf("component auth gmail: %v", err)
+			}
+		})
+		if !strings.Contains(output, "auth: not implemented yet") {
+			t.Fatalf("unexpected output: %q", output)
+		}
+		assertDirExists(t, filepath.Join(root, ".ctgbot", "profiles", "gmail", "work"))
 	})
 }
 

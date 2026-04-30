@@ -7,9 +7,12 @@ package component
 
 import (
 	"context"
+	"io"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
@@ -57,6 +60,10 @@ func (r *Registry) CommandSurfaces() []CommandSurface {
 
 func (r *Registry) ProfileOwners() []ProfileOwner {
 	return Capabilities[ProfileOwner](r)
+}
+
+func (r *Registry) Authenticators() []Authenticator {
+	return Capabilities[Authenticator](r)
 }
 
 func (r *Registry) Agents() []Agent {
@@ -117,6 +124,28 @@ type InboundEventEmitter func(ctx context.Context, event InboundEvent) error
 type EventSource interface {
 	Component
 	RunEvents(ctx context.Context, emit InboundEventEmitter) error
+}
+
+type AuthRequest struct {
+	ComponentType string
+	ProfileName   string
+
+	ProfileHostPath      string
+	ProfileContainerPath string
+
+	Image           string
+	CallbackPort    int
+	CallbackTimeout time.Duration
+
+	SandboxManager sandboxengine.Manager
+	Stdout         io.Writer
+	Stderr         io.Writer
+}
+
+// Authenticator prepares or refreshes a component profile's authentication.
+type Authenticator interface {
+	Component
+	Auth(ctx context.Context, req AuthRequest) error
 }
 
 // Agent processes canonical thread messages and may produce an outbound reply.

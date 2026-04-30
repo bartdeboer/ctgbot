@@ -27,6 +27,10 @@ func (profileComponent) ManagedFiles() []ManagedFile {
 	return []ManagedFile{{RelativePath: "auth.json", Required: true, Sensitive: true}}
 }
 
+type authComponent struct{ baseComponent }
+
+func (authComponent) Auth(ctx context.Context, req AuthRequest) error { return nil }
+
 type fullComponent struct{ baseComponent }
 
 func (fullComponent) RunEvents(ctx context.Context, emit InboundEventEmitter) error  { return nil }
@@ -51,13 +55,14 @@ func TestRegistryFiltersComponentsByCapability(t *testing.T) {
 		sourceComponent{baseComponent{typ: "source"}},
 		commandComponent{baseComponent{typ: "command"}},
 		profileComponent{baseComponent{typ: "profile"}},
+		authComponent{baseComponent{typ: "auth"}},
 		agentComponent{baseComponent{typ: "agent"}},
 		relayComponent{baseComponent{typ: "relay"}},
 		fullComponent{baseComponent{typ: "full"}},
 	)
 
-	if got := len(registry.Components()); got != 6 {
-		t.Fatalf("components len = %d, want 6", got)
+	if got := len(registry.Components()); got != 7 {
+		t.Fatalf("components len = %d, want 7", got)
 	}
 	if got := len(registry.EventSources()); got != 2 {
 		t.Fatalf("event sources len = %d, want 2", got)
@@ -67,6 +72,9 @@ func TestRegistryFiltersComponentsByCapability(t *testing.T) {
 	}
 	if got := len(registry.ProfileOwners()); got != 2 {
 		t.Fatalf("profile owners len = %d, want 2", got)
+	}
+	if got := len(registry.Authenticators()); got != 1 {
+		t.Fatalf("authenticators len = %d, want 1", got)
 	}
 	if got := len(registry.Agents()); got != 1 {
 		t.Fatalf("agents len = %d, want 1", got)
