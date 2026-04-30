@@ -74,6 +74,11 @@ func (f *fakeThreadHandlers) InterruptTurn(ctx context.Context, req commandengin
 	return commandengine.Result{Text: "interrupt"}, nil
 }
 
+func (f *fakeThreadHandlers) Install(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	f.calls = "install"
+	return commandengine.Result{Text: "install"}, nil
+}
+
 func (f *fakeThreadHandlers) Upgrade(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	f.calls = "upgrade"
 	return commandengine.Result{Text: "upgrade"}, nil

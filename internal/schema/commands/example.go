@@ -45,6 +45,7 @@ func RegisterGobTypes(register func(any)) {
 	register(RefreshContainer{})
 	register(PurgeChat{})
 	register(InterruptTurn{})
+	register(Install{})
 	register(Upgrade{})
 	register(Quit{})
 	register(Status{})

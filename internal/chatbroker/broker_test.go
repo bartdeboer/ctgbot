@@ -359,6 +359,54 @@ func TestHandleInboundPayloadRunsUpgradeCommand(t *testing.T) {
 	}
 }
 
+func TestHandleInboundPayloadRunsInstallCommand(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, true)
+
+	process := &fakeProcessActions{}
+	storage := &fakeBrokerStorage{}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
+	broker.ProcessActions = process
+
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/install"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if !process.installCalled {
+		t.Fatalf("expected install to be called")
+	}
+	if result.Text.Text != "install completed\ntype /quit to restart" {
+		t.Fatalf("message text = %q", result.Text.Text)
+	}
+}
+
 func TestHandleInboundPayloadRunsQuitCommand(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()
@@ -564,6 +612,54 @@ func TestHandleInboundPayloadBlocksUpgradeWithoutProcessTools(t *testing.T) {
 		t.Fatalf("did not expect upgrade to be called")
 	}
 	if result.Text.Text != "upgrade is not enabled for this chat" {
+		t.Fatalf("message text = %q", result.Text.Text)
+	}
+}
+
+func TestHandleInboundPayloadBlocksInstallWithoutProcessTools(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("ensure paths: %v", err)
+	}
+	ensureTelegramChat(t, cfg, 42, "Test Chat", true, false)
+
+	process := &fakeProcessActions{}
+	storage := &fakeBrokerStorage{}
+	broker := New(cfg, storage, fakeBrokerSandboxManager{}, nil)
+	broker.ProcessActions = process
+
+	result, err := broker.HandleInboundPayload(context.Background(), messenger.InboundPayload{
+		ProviderType:     "telegram",
+		ProviderChatID:   "42",
+		ProviderThreadID: "7",
+		Text:             messenger.TextMessage{Text: "/install"},
+		ChatLabel:        "Test Chat",
+	})
+	if err != nil {
+		t.Fatalf("handle incoming message: %v", err)
+	}
+	if process.installCalled {
+		t.Fatalf("did not expect install to be called")
+	}
+	if result.Text.Text != "install is not enabled for this chat" {
 		t.Fatalf("message text = %q", result.Text.Text)
 	}
 }
@@ -1511,8 +1607,14 @@ func (f fakeBrokerSandboxManager) CreateSandbox(spec *sandboxengine.SandboxSpec)
 }
 
 type fakeProcessActions struct {
+	installCalled bool
 	upgradeCalled bool
 	quitCalled    bool
+}
+
+func (f *fakeProcessActions) Install(ctx context.Context) error {
+	f.installCalled = true
+	return nil
 }
 
 func (f *fakeProcessActions) Upgrade(ctx context.Context) error {

@@ -173,6 +173,23 @@ func (h *CommandHandlers) InterruptTurn(ctx context.Context, req commandengine.R
 	return commandengine.Result{Text: "interrupt requested"}, nil
 }
 
+func (h *CommandHandlers) Install(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	thread, err := h.thread(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if h.Broker.Config == nil || !h.Broker.Config.Chat(thread.ChatID).ProcessToolsEnabled() {
+		return commandengine.Result{Text: "install is not enabled for this chat"}, nil
+	}
+	if h.Broker.ProcessActions == nil {
+		return commandengine.Result{Text: "install is not available in this runtime"}, nil
+	}
+	if err := h.Broker.ProcessActions.Install(ctx); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "install completed\ntype /quit to restart"}, nil
+}
+
 func (h *CommandHandlers) Upgrade(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	thread, err := h.thread(ctx, req)
 	if err != nil {

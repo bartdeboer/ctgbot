@@ -14,6 +14,7 @@ type StartContainer struct{}
 type StopContainer struct{}
 type PurgeChat struct{}
 type InterruptTurn struct{}
+type Install struct{}
 type Upgrade struct{}
 type Quit struct{}
 type Status struct{}
@@ -37,6 +38,7 @@ func ThreadCommands() []commandengine.Definition {
 		threadCommand("thread.container-stop", StopContainer{}, "Stop the container but keep its data", []string{"container stop"}),
 		threadCommand("thread.purge", PurgeChat{}, "Reset the conversation and delete the container", []string{"purge", "chat purge"}),
 		threadCommand("thread.interrupt", InterruptTurn{}, "Interrupt the active turn", []string{"interrupt"}),
+		threadCommand("thread.install", Install{}, "Install ctgbot binaries from source", []string{"install"}),
 		threadCommand("thread.upgrade", Upgrade{}, "Upgrade ctgbot", []string{"upgrade"}),
 		threadCommand("thread.quit", Quit{}, "Restart ctgbot", []string{"quit"}),
 		threadCommand("thread.status", Status{}, "Show conversation and container status", []string{"status"}),

@@ -71,7 +71,12 @@ func registerTelegramRoutes(r *clir.Router, store *clistate.Store) {
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			broker.ProcessActions = &runtimeProcessActions{stop: stop, upgrade: func(ctx context.Context) error { return runInstalledCtgbotCommand(ctx, "upgrade") }, logger: logger}
+			broker.ProcessActions = &runtimeProcessActions{
+				stop:    stop,
+				install: func(ctx context.Context) error { return runInstalledCtgbotCommand(ctx, "install") },
+				upgrade: func(ctx context.Context) error { return runInstalledCtgbotCommand(ctx, "upgrade") },
+				logger:  logger,
+			}
 
 			if err := broker.AutoMigrate(runCtx); err != nil {
 				return err

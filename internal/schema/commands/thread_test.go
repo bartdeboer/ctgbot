@@ -33,6 +33,10 @@ func TestThreadCommandAliasesParseToSameCommandType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse container stop: %v", err)
 	}
+	install, err := router.Parse(context.Background(), base, []string{"install"})
+	if err != nil {
+		t.Fatalf("parse install: %v", err)
+	}
 	modelStatus, err := router.Parse(context.Background(), base, []string{"model"})
 	if err != nil {
 		t.Fatalf("parse model: %v", err)
@@ -76,6 +80,9 @@ func TestThreadCommandAliasesParseToSameCommandType(t *testing.T) {
 	}
 	if _, ok := containerStop.Command.(StopContainer); !ok {
 		t.Fatalf("container stop command = %T, want StopContainer", containerStop.Command)
+	}
+	if _, ok := install.Command.(Install); !ok {
+		t.Fatalf("install command = %T, want Install", install.Command)
 	}
 	if _, ok := modelStatus.Command.(ModelStatus); !ok {
 		t.Fatalf("model command = %T, want ModelStatus", modelStatus.Command)

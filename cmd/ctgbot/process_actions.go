@@ -8,8 +8,17 @@ import (
 
 type runtimeProcessActions struct {
 	stop    context.CancelFunc
+	install func(context.Context) error
 	upgrade func(context.Context) error
 	logger  *log.Logger
+}
+
+func (p *runtimeProcessActions) Install(ctx context.Context) error {
+	p.logf("running ctgbot install from telegram")
+	if p == nil || p.install == nil {
+		return nil
+	}
+	return p.install(ctx)
 }
 
 func (p *runtimeProcessActions) Upgrade(ctx context.Context) error {
