@@ -18,6 +18,7 @@ import (
 	"github.com/bartdeboer/go-clistate"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 const (
@@ -90,7 +91,9 @@ func OpenStorage(ctx context.Context, dbPath string) (repository.Storage, error)
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		return nil, err
 	}
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+	})
 	if err != nil {
 		return nil, err
 	}

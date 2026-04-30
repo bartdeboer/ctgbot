@@ -101,6 +101,28 @@ func TestRunEventsEmitsInboundEvent(t *testing.T) {
 	}
 }
 
+func TestRunEventsSkipsEmptyTextUpdates(t *testing.T) {
+	api := &fakeAPI{updates: []dbmodel.TelegramUpdate{{
+		ChatID:    -10042,
+		ThreadID:  7,
+		MessageID: 99,
+		UserID:    123,
+		Text:      "",
+	}}}
+	telegram := New(api)
+
+	var events []component.InboundEvent
+	if err := telegram.RunEvents(context.Background(), func(ctx context.Context, event component.InboundEvent) error {
+		events = append(events, event)
+		return nil
+	}); err != nil {
+		t.Fatalf("RunEvents() error = %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("events len = %d, want 0", len(events))
+	}
+}
+
 func TestSendMessageUsesTelegramMetadata(t *testing.T) {
 	api := &fakeAPI{}
 	telegram := New(api)

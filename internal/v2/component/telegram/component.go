@@ -58,7 +58,11 @@ func (c *Component) RunEvents(ctx context.Context, emit component.InboundEventEm
 		return fmt.Errorf("missing inbound event emitter")
 	}
 	return c.API.Run(ctx, c.PollTimeout, func(updateCtx context.Context, update dbmodel.TelegramUpdate) {
-		_ = emit(updateCtx, InboundEventFromUpdate(update))
+		event := InboundEventFromUpdate(update)
+		if strings.TrimSpace(event.Text) == "" {
+			return
+		}
+		_ = emit(updateCtx, event)
 	})
 }
 
