@@ -31,6 +31,7 @@ type API interface {
 type Component struct {
 	API         API
 	PollTimeout time.Duration
+	Logf        func(format string, args ...any)
 }
 
 var _ component.Component = (*Component)(nil)
@@ -60,10 +61,17 @@ func (c *Component) RunEvents(ctx context.Context, emit component.InboundEventEm
 	return c.API.Run(ctx, c.PollTimeout, func(updateCtx context.Context, update dbmodel.TelegramUpdate) {
 		event := InboundEventFromUpdate(update)
 		if strings.TrimSpace(event.Text) == "" {
+			c.logf("v2 telegram empty update skipped chat=%d thread=%d msg=%d user=%q user_id=%d attachments=%d", update.ChatID, update.ThreadID, update.MessageID, update.UserLabel(), update.UserID, len(update.Attachments))
 			return
 		}
 		_ = emit(updateCtx, event)
 	})
+}
+
+func (c *Component) logf(format string, args ...any) {
+	if c != nil && c.Logf != nil {
+		c.Logf(format, args...)
+	}
 }
 
 func (c *Component) SendMessage(ctx context.Context, message coremodel.ThreadMessage) error {

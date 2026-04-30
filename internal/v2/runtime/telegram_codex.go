@@ -54,8 +54,10 @@ func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOption
 	if err != nil {
 		return err
 	}
+	logger := log.New(os.Stdout, "", log.LstdFlags)
 	telegramComponent := v2telegram.New(api)
 	telegramComponent.PollTimeout = opts.PollTimeout
+	telegramComponent.Logf = logger.Printf
 	workspaceRoot := filepath.Join(rt.StateRoot, "v2", "workspaces")
 
 	codexComponent := v2codex.New(v2codex.Config{
@@ -74,7 +76,6 @@ func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOption
 		{ComponentType: v2telegram.ComponentType, ProfileName: v2telegram.DefaultProfileName, Enabled: true},
 		{ComponentType: v2codex.ComponentType, ProfileName: codexProfile, Enabled: true},
 	}
-	logger := log.New(os.Stdout, "", log.LstdFlags)
 	broker.Logf = logger.Printf
 
 	runCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)

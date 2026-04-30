@@ -40,10 +40,10 @@ func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUp
 
 	opts := []bot.Option{
 		bot.WithDefaultHandler(func(hctx context.Context, b *bot.Bot, upd *models.Update) {
-			if upd == nil || upd.Message == nil {
+			msg := telegramUpdateMessage(upd)
+			if msg == nil {
 				return
 			}
-			msg := upd.Message
 			tupd := dbmodel.TelegramUpdate{
 				ChatID:      msg.Chat.ID,
 				ChatTitle:   msg.Chat.Title,
@@ -78,6 +78,28 @@ func (a *TelegramAPIV2) Run(ctx context.Context, pollTimeout time.Duration, onUp
 
 	b.Start(ctx)
 	return ctx.Err()
+}
+
+func telegramUpdateMessage(upd *models.Update) *models.Message {
+	if upd == nil {
+		return nil
+	}
+	switch {
+	case upd.Message != nil:
+		return upd.Message
+	case upd.EditedMessage != nil:
+		return upd.EditedMessage
+	case upd.ChannelPost != nil:
+		return upd.ChannelPost
+	case upd.EditedChannelPost != nil:
+		return upd.EditedChannelPost
+	case upd.BusinessMessage != nil:
+		return upd.BusinessMessage
+	case upd.EditedBusinessMessage != nil:
+		return upd.EditedBusinessMessage
+	default:
+		return nil
+	}
 }
 
 func (a *TelegramAPIV2) SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string, parseMode string) error {
