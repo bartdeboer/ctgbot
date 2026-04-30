@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	v2runtime "github.com/bartdeboer/ctgbot/internal/v2/runtime"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -43,7 +44,7 @@ func TestV2ComponentAuthCreatesProfileAndRepositoryRows(t *testing.T) {
 		}
 		assertDirExists(t, filepath.Join(root, ".ctgbot", "profiles", "codex", "personal"))
 
-		store, err := openV2Storage(context.Background(), filepath.Join(root, ".ctgbot", "ctgbotv2.db"))
+		store, err := v2runtime.OpenStorage(context.Background(), filepath.Join(root, ".ctgbot", "ctgbotv2.db"))
 		if err != nil {
 			t.Fatalf("open v2 storage: %v", err)
 		}
