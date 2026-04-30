@@ -213,6 +213,29 @@ func TestGORMStorageComponentSavesAreIdempotent(t *testing.T) {
 	if bindingAgain.ID != binding.ID {
 		t.Fatalf("binding IDs differ: first=%s second=%s", binding.ID, bindingAgain.ID)
 	}
+
+	thread, err := store.Threads().EnsureProviderThread(ctx, chat.ID, "845")
+	if err != nil {
+		t.Fatalf("ensure thread: %v", err)
+	}
+	state := &coremodel.ThreadComponentState{ThreadID: thread.ID, ComponentType: " codex ", ProfileName: " v2test ", StateJSON: `{"thread_id":"codex-1"}`}
+	if err := store.ThreadComponentStates().Save(ctx, state); err != nil {
+		t.Fatalf("save thread component state: %v", err)
+	}
+	stateAgain := &coremodel.ThreadComponentState{ThreadID: thread.ID, ComponentType: "codex", ProfileName: "v2test", StateJSON: `{"thread_id":"codex-2"}`}
+	if err := store.ThreadComponentStates().Save(ctx, stateAgain); err != nil {
+		t.Fatalf("save thread component state again: %v", err)
+	}
+	if stateAgain.ID != state.ID {
+		t.Fatalf("thread state IDs differ: first=%s second=%s", state.ID, stateAgain.ID)
+	}
+	gotState, err := store.ThreadComponentStates().Get(ctx, thread.ID, "codex", "v2test")
+	if err != nil {
+		t.Fatalf("get thread component state: %v", err)
+	}
+	if gotState == nil || gotState.StateJSON != `{"thread_id":"codex-2"}` {
+		t.Fatalf("unexpected thread component state: %#v", gotState)
+	}
 }
 
 func newTestStore(t *testing.T) *GORMStorage {

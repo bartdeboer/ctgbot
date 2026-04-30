@@ -14,9 +14,10 @@ import (
 )
 
 type Broker struct {
-	storage    repository.Storage
-	components *component.Registry
-	Logf       func(format string, args ...any)
+	storage               repository.Storage
+	components            *component.Registry
+	DefaultChatComponents []coremodel.ChatComponent
+	Logf                  func(format string, args ...any)
 }
 
 type EventOutcome struct {
@@ -54,6 +55,14 @@ func (b *Broker) HandleEvent(ctx context.Context, event component.InboundEvent) 
 		return EventOutcome{}, err
 	}
 	b.logf("v2 thread resolved chat=%s thread=%s", chat.ID, thread.ID)
+	if err := b.ensureDefaultChatComponents(ctx, chat.ID); err != nil {
+		return EventOutcome{}, err
+	}
+	bindings, err := b.enabledChatComponents(ctx, chat.ID)
+	if err != nil {
+		return EventOutcome{}, err
+	}
+	b.logf("v2 chat components chat=%s enabled=%d", chat.ID, len(bindings))
 
 	inbound, err := b.appendInbound(ctx, event, chat.ID, thread.ID)
 	if err != nil {
@@ -61,12 +70,12 @@ func (b *Broker) HandleEvent(ctx context.Context, event component.InboundEvent) 
 	}
 	b.logf("v2 inbound stored message=%s", inbound.ID)
 
-	outbound, err := b.runAgents(ctx, *inbound)
+	outbound, err := b.runAgents(ctx, *inbound, bindings)
 	if err != nil {
 		return EventOutcome{Inbound: inbound}, err
 	}
 	for i := range outbound {
-		if err := b.appendAndRelayOutbound(ctx, &outbound[i], *inbound); err != nil {
+		if err := b.appendAndRelayOutbound(ctx, &outbound[i], *inbound, bindings); err != nil {
 			return EventOutcome{Inbound: inbound, Outbound: outbound[:i]}, err
 		}
 	}
@@ -152,6 +161,41 @@ func (b *Broker) resolveThread(ctx context.Context, event component.InboundEvent
 	return b.storage.Threads().EnsureProviderThread(ctx, chatID, event.ProviderThreadID)
 }
 
+func (b *Broker) ensureDefaultChatComponents(ctx context.Context, chatID modeluuid.UUID) error {
+	existing, err := b.storage.ChatComponents().ListByChatID(ctx, chatID)
+	if err != nil {
+		return err
+	}
+	seen := map[string]struct{}{}
+	for _, binding := range existing {
+		seen[chatComponentKey(binding.ComponentType, binding.ProfileName)] = struct{}{}
+	}
+
+	for _, binding := range b.DefaultChatComponents {
+		if strings.TrimSpace(binding.ComponentType) == "" || strings.TrimSpace(binding.ProfileName) == "" {
+			continue
+		}
+		key := chatComponentKey(binding.ComponentType, binding.ProfileName)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		binding.ChatID = chatID
+		if err := b.storage.ChatComponents().Save(ctx, &binding); err != nil {
+			return err
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func chatComponentKey(componentType string, profileName string) string {
+	return strings.TrimSpace(componentType) + "\x00" + strings.TrimSpace(profileName)
+}
+
+func (b *Broker) enabledChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error) {
+	return b.storage.ChatComponents().ListEnabledByChatID(ctx, chatID)
+}
+
 func (b *Broker) appendInbound(ctx context.Context, event component.InboundEvent, chatID modeluuid.UUID, threadID modeluuid.UUID) (*coremodel.ThreadMessage, error) {
 	message := &coremodel.ThreadMessage{
 		ChatID:       chatID,
@@ -171,13 +215,16 @@ func (b *Broker) appendInbound(ctx context.Context, event component.InboundEvent
 	return message, nil
 }
 
-func (b *Broker) runAgents(ctx context.Context, inbound coremodel.ThreadMessage) ([]coremodel.ThreadMessage, error) {
+func (b *Broker) runAgents(ctx context.Context, inbound coremodel.ThreadMessage, bindings []coremodel.ChatComponent) ([]coremodel.ThreadMessage, error) {
 	if b.components == nil {
 		return nil, nil
 	}
 
 	var outbound []coremodel.ThreadMessage
 	for _, agent := range b.components.Agents() {
+		if !matchesAnyBinding(agent, bindings) {
+			continue
+		}
 		b.logf("v2 agent invoking type=%s thread=%s", agent.Type(), inbound.ThreadID)
 		message, err := agent.HandleMessage(ctx, inbound)
 		if err != nil {
@@ -193,7 +240,7 @@ func (b *Broker) runAgents(ctx context.Context, inbound coremodel.ThreadMessage)
 	return outbound, nil
 }
 
-func (b *Broker) appendAndRelayOutbound(ctx context.Context, message *coremodel.ThreadMessage, inbound coremodel.ThreadMessage) error {
+func (b *Broker) appendAndRelayOutbound(ctx context.Context, message *coremodel.ThreadMessage, inbound coremodel.ThreadMessage, bindings []coremodel.ChatComponent) error {
 	message.ChatID = inbound.ChatID
 	message.ThreadID = inbound.ThreadID
 	message.Direction = coremodel.DirectionOutbound
@@ -207,14 +254,17 @@ func (b *Broker) appendAndRelayOutbound(ctx context.Context, message *coremodel.
 		return err
 	}
 	b.logf("v2 outbound stored message=%s source=%s chars=%d", message.ID, message.SourceType, len(message.Text))
-	return b.relayOutbound(ctx, *message)
+	return b.relayOutbound(ctx, *message, bindings)
 }
 
-func (b *Broker) relayOutbound(ctx context.Context, message coremodel.ThreadMessage) error {
+func (b *Broker) relayOutbound(ctx context.Context, message coremodel.ThreadMessage, bindings []coremodel.ChatComponent) error {
 	if b.components == nil {
 		return nil
 	}
 	for _, relay := range b.components.OutboundRelays() {
+		if !matchesAnyBinding(relay, bindings) {
+			continue
+		}
 		b.logf("v2 relay sending type=%s message=%s", relay.Type(), message.ID)
 		if err := relay.SendMessage(ctx, message); err != nil {
 			return fmt.Errorf("relay %s: %w", relay.Type(), err)
@@ -222,6 +272,15 @@ func (b *Broker) relayOutbound(ctx context.Context, message coremodel.ThreadMess
 		b.logf("v2 relay sent type=%s message=%s", relay.Type(), message.ID)
 	}
 	return nil
+}
+
+func matchesAnyBinding(candidate component.Component, bindings []coremodel.ChatComponent) bool {
+	for _, binding := range bindings {
+		if component.MatchesBinding(candidate, binding) {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *Broker) logf(format string, args ...any) {

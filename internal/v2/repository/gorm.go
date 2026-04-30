@@ -17,6 +17,7 @@ type GORMStorage struct {
 	components        *GORMComponents
 	componentProfiles *GORMComponentProfiles
 	chatComponents    *GORMChatComponents
+	threadStates      *GORMThreadComponentStates
 	messages          *GORMMessages
 	artifacts         *GORMArtifacts
 }
@@ -31,6 +32,7 @@ func NewGORM(db *gorm.DB) *GORMStorage {
 		components:        &GORMComponents{db: db},
 		componentProfiles: &GORMComponentProfiles{db: db},
 		chatComponents:    &GORMChatComponents{db: db},
+		threadStates:      &GORMThreadComponentStates{db: db},
 		messages:          &GORMMessages{db: db},
 		artifacts:         &GORMArtifacts{db: db},
 	}
@@ -43,6 +45,7 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.Component{},
 		&coremodel.ComponentProfile{},
 		&coremodel.ChatComponent{},
+		&coremodel.ThreadComponentState{},
 		&coremodel.ThreadMessage{},
 		&coremodel.Artifact{},
 	)
@@ -53,8 +56,11 @@ func (s *GORMStorage) Threads() ThreadRepository                     { return s.
 func (s *GORMStorage) Components() ComponentRepository               { return s.components }
 func (s *GORMStorage) ComponentProfiles() ComponentProfileRepository { return s.componentProfiles }
 func (s *GORMStorage) ChatComponents() ChatComponentRepository       { return s.chatComponents }
-func (s *GORMStorage) Messages() MessageRepository                   { return s.messages }
-func (s *GORMStorage) Artifacts() ArtifactRepository                 { return s.artifacts }
+func (s *GORMStorage) ThreadComponentStates() ThreadComponentStateRepository {
+	return s.threadStates
+}
+func (s *GORMStorage) Messages() MessageRepository   { return s.messages }
+func (s *GORMStorage) Artifacts() ArtifactRepository { return s.artifacts }
 
 type GORMChats struct{ db *gorm.DB }
 
@@ -280,6 +286,39 @@ func (r *GORMChatComponents) listByChatID(ctx context.Context, chatID modeluuid.
 	}
 	err := tx.Order("created_at ASC").Find(&bindings).Error
 	return bindings, err
+}
+
+type GORMThreadComponentStates struct{ db *gorm.DB }
+
+var _ ThreadComponentStateRepository = (*GORMThreadComponentStates)(nil)
+
+func (r *GORMThreadComponentStates) Save(ctx context.Context, state *coremodel.ThreadComponentState) error {
+	state.ComponentType = clean(state.ComponentType)
+	state.ProfileName = clean(state.ProfileName)
+	if state.ID.IsNull() {
+		existing, err := r.Get(ctx, state.ThreadID, state.ComponentType, state.ProfileName)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			state.ID = existing.ID
+		}
+	}
+	ensureID(&state.ID)
+	return r.db.WithContext(ctx).Save(state).Error
+}
+
+func (r *GORMThreadComponentStates) Get(ctx context.Context, threadID modeluuid.UUID, componentType string, profileName string) (*coremodel.ThreadComponentState, error) {
+	var state coremodel.ThreadComponentState
+	if err := first(r.db.WithContext(ctx).
+		Where("thread_id = ? AND component_type = ? AND profile_name = ?", threadID, clean(componentType), clean(profileName)).
+		First(&state)); err != nil {
+		return nil, err
+	}
+	if state.ID.IsNull() {
+		return nil, nil
+	}
+	return &state, nil
 }
 
 type GORMMessages struct{ db *gorm.DB }

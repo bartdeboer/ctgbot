@@ -27,6 +27,13 @@ func (profileComponent) ManagedFiles() []ManagedFile {
 	return []ManagedFile{{RelativePath: "auth.json", Required: true, Sensitive: true}}
 }
 
+type namedProfileComponent struct {
+	baseComponent
+	profile string
+}
+
+func (c namedProfileComponent) ProfileName() string { return c.profile }
+
 type authComponent struct{ baseComponent }
 
 func (authComponent) Auth(ctx context.Context, req AuthRequest) error { return nil }
@@ -130,5 +137,22 @@ func TestManagedFileMetadata(t *testing.T) {
 	}
 	if files[0].RelativePath != "auth.json" || !files[0].Required || !files[0].Sensitive {
 		t.Fatalf("unexpected managed file: %#v", files[0])
+	}
+}
+
+func TestMatchesBindingRespectsComponentTypeAndProfile(t *testing.T) {
+	binding := coremodel.ChatComponent{ComponentType: "codex", ProfileName: "personal"}
+
+	if !MatchesBinding(namedProfileComponent{baseComponent: baseComponent{typ: "codex"}, profile: "personal"}, binding) {
+		t.Fatal("expected component profile to match binding")
+	}
+	if MatchesBinding(namedProfileComponent{baseComponent: baseComponent{typ: "codex"}, profile: "work"}, binding) {
+		t.Fatal("expected mismatched profile not to match")
+	}
+	if MatchesBinding(namedProfileComponent{baseComponent: baseComponent{typ: "gmail"}, profile: "personal"}, binding) {
+		t.Fatal("expected mismatched type not to match")
+	}
+	if !MatchesBinding(baseComponent{typ: "codex"}, binding) {
+		t.Fatal("expected unprofiled component to match by type")
 	}
 }

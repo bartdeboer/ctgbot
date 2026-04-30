@@ -6,8 +6,11 @@
 package codex
 
 import (
+	"strings"
+
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/v2/component"
+	"github.com/bartdeboer/ctgbot/internal/v2/repository"
 )
 
 const ComponentType = "codex"
@@ -19,6 +22,7 @@ type Config struct {
 	WorkspaceRoot        string
 	Image                string
 	SandboxManager       sandboxengine.Manager
+	StateStore           repository.ThreadComponentStateRepository
 }
 
 type Component struct {
@@ -29,6 +33,7 @@ var _ component.Component = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 var _ component.Authenticator = (*Component)(nil)
 var _ component.Agent = (*Component)(nil)
+var _ component.Profiled = (*Component)(nil)
 
 func New(config ...Config) *Component {
 	c := &Component{}
@@ -40,6 +45,13 @@ func New(config ...Config) *Component {
 
 func (c *Component) Type() string {
 	return ComponentType
+}
+
+func (c *Component) ProfileName() string {
+	if c == nil {
+		return ""
+	}
+	return strings.TrimSpace(c.Config.ProfileName)
 }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {

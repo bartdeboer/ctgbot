@@ -8,6 +8,7 @@ package component
 import (
 	"context"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -21,6 +22,30 @@ import (
 // Type should be a stable identifier such as "gmail", "telegram", or "codex".
 type Component interface {
 	Type() string
+}
+
+type Profiled interface {
+	Component
+	ProfileName() string
+}
+
+func MatchesBinding(component Component, binding coremodel.ChatComponent) bool {
+	if component == nil {
+		return false
+	}
+	if strings.TrimSpace(component.Type()) != strings.TrimSpace(binding.ComponentType) {
+		return false
+	}
+	profileName := ComponentProfileName(component)
+	return profileName == "" || profileName == strings.TrimSpace(binding.ProfileName)
+}
+
+func ComponentProfileName(component Component) string {
+	profiled, ok := component.(Profiled)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(profiled.ProfileName())
 }
 
 // Registry stores components and exposes views by capability.

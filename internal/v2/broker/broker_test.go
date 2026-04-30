@@ -70,6 +70,10 @@ func TestBrokerHandleEventRunsAgentStoresOutboundAndRelays(t *testing.T) {
 	relay := &fakeRelay{}
 	agent := &fakeAgent{reply: "agent reply"}
 	broker := New(store, component.NewRegistry(agent, relay))
+	broker.DefaultChatComponents = []coremodel.ChatComponent{
+		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
+	}
 
 	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
 		SourceType:       "telegram",
@@ -105,6 +109,42 @@ func TestBrokerHandleEventRunsAgentStoresOutboundAndRelays(t *testing.T) {
 	}
 }
 
+func TestBrokerOnlyRunsBoundComponents(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	boundAgent := &fakeAgent{typ: "bound-agent", reply: "bound reply"}
+	unboundAgent := &fakeAgent{typ: "unbound-agent", reply: "unbound reply"}
+	boundRelay := &fakeRelay{typ: "bound-relay"}
+	unboundRelay := &fakeRelay{typ: "unbound-relay"}
+	broker := New(store, component.NewRegistry(boundAgent, unboundAgent, boundRelay, unboundRelay))
+	broker.DefaultChatComponents = []coremodel.ChatComponent{
+		{ComponentType: boundAgent.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: boundRelay.Type(), ProfileName: "default", Enabled: true},
+	}
+
+	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
+		SourceType:       "telegram",
+		EventType:        "message.received",
+		ExternalID:       "telegram:1:2:5",
+		ProviderChatID:   "-1003759705932",
+		ProviderThreadID: "845",
+		Text:             "hello bound agent",
+	})
+	if err != nil {
+		t.Fatalf("handle event: %v", err)
+	}
+	if len(outcome.Outbound) != 1 || outcome.Outbound[0].Text != "bound reply" {
+		t.Fatalf("unexpected outbound: %#v", outcome.Outbound)
+	}
+	if boundAgent.calls != 1 || unboundAgent.calls != 0 {
+		t.Fatalf("unexpected agent calls: bound=%d unbound=%d", boundAgent.calls, unboundAgent.calls)
+	}
+	if len(boundRelay.sent) != 1 || len(unboundRelay.sent) != 0 {
+		t.Fatalf("unexpected relay calls: bound=%d unbound=%d", len(boundRelay.sent), len(unboundRelay.sent))
+	}
+}
+
 func newTestStore(t *testing.T) repository.Storage {
 	t.Helper()
 
@@ -120,14 +160,22 @@ func newTestStore(t *testing.T) repository.Storage {
 }
 
 type fakeAgent struct {
+	typ   string
 	reply string
+	calls int
 }
 
 var _ component.Agent = (*fakeAgent)(nil)
 
-func (a *fakeAgent) Type() string { return "fake-agent" }
+func (a *fakeAgent) Type() string {
+	if a.typ != "" {
+		return a.typ
+	}
+	return "fake-agent"
+}
 
 func (a *fakeAgent) HandleMessage(_ context.Context, message coremodel.ThreadMessage) (*coremodel.ThreadMessage, error) {
+	a.calls++
 	return &coremodel.ThreadMessage{
 		Kind:       coremodel.MessageKindAgent,
 		SourceType: a.Type(),
@@ -138,12 +186,18 @@ func (a *fakeAgent) HandleMessage(_ context.Context, message coremodel.ThreadMes
 }
 
 type fakeRelay struct {
+	typ  string
 	sent []coremodel.ThreadMessage
 }
 
 var _ component.OutboundRelay = (*fakeRelay)(nil)
 
-func (r *fakeRelay) Type() string { return "fake-relay" }
+func (r *fakeRelay) Type() string {
+	if r.typ != "" {
+		return r.typ
+	}
+	return "fake-relay"
+}
 
 func (r *fakeRelay) SendMessage(_ context.Context, message coremodel.ThreadMessage) error {
 	r.sent = append(r.sent, message)

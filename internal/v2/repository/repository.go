@@ -15,6 +15,7 @@ type Storage interface {
 	Components() ComponentRepository
 	ComponentProfiles() ComponentProfileRepository
 	ChatComponents() ChatComponentRepository
+	ThreadComponentStates() ThreadComponentStateRepository
 	Messages() MessageRepository
 	Artifacts() ArtifactRepository
 }
@@ -46,6 +47,11 @@ type ChatComponentRepository interface {
 	Save(ctx context.Context, binding *coremodel.ChatComponent) error
 	ListByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
 	ListEnabledByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
+}
+
+type ThreadComponentStateRepository interface {
+	Save(ctx context.Context, state *coremodel.ThreadComponentState) error
+	Get(ctx context.Context, threadID modeluuid.UUID, componentType string, profileName string) (*coremodel.ThreadComponentState, error)
 }
 
 type MessageRepository interface {

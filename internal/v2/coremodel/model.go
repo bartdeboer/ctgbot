@@ -93,6 +93,21 @@ type ChatComponent struct {
 	UpdatedAt time.Time
 }
 
+// ThreadComponentState is opaque runtime state owned by one component profile
+// for one canonical ctgbot thread.
+type ThreadComponentState struct {
+	ID modeluuid.UUID `gorm:"primaryKey"`
+
+	ThreadID      modeluuid.UUID `gorm:"index;uniqueIndex:idx_v2_thread_component_state"`
+	ComponentType string         `gorm:"uniqueIndex:idx_v2_thread_component_state"`
+	ProfileName   string         `gorm:"uniqueIndex:idx_v2_thread_component_state"`
+
+	StateJSON string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 // ThreadMessage is the canonical stream item routed into or produced by a
 // thread. Provider-specific identifiers live at the edge as source metadata.
 type ThreadMessage struct {

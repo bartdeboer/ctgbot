@@ -34,6 +34,10 @@ func (c *Component) HandleMessage(ctx context.Context, message coremodel.ThreadM
 	if err := os.MkdirAll(runtimeWorkspaceHostPath(c.Config, message), 0o755); err != nil {
 		return nil, err
 	}
+	conversation, err := c.loadThreadConversation(ctx, message.ThreadID)
+	if err != nil {
+		return nil, fmt.Errorf("load codex conversation profile=%s thread=%s: %w", c.Config.ProfileName, message.ThreadID, err)
+	}
 
 	sbx := c.Config.SandboxManager.CreateSandbox(spec)
 	defer func() { _ = sbx.Stop(context.Background()) }()
@@ -43,20 +47,19 @@ func (c *Component) HandleMessage(ctx context.Context, message coremodel.ThreadM
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	args := []string{
-		"-a", "never",
-		"-s", "workspace-write",
-		"exec",
-		"--skip-git-repo-check",
-		"--add-dir", DefaultWorkspacePath,
-		"-C", DefaultWorkspacePath,
-		prompt,
-	}
+	args := codexExecArgs(prompt, conversation)
 	if err := sbx.Exec(ctx, &stdout, stderr, "codex", args...); err != nil {
 		return nil, fmt.Errorf("codex exec profile=%s thread=%s: %w", c.Config.ProfileName, message.ThreadID, err)
 	}
-	reply := strings.TrimSpace(stdout.String())
-	if reply == "" {
+	result, err := parseCodexJSONOutput(stdout.String())
+	if err != nil {
+		return nil, fmt.Errorf("parse codex json profile=%s thread=%s: %w", c.Config.ProfileName, message.ThreadID, err)
+	}
+	conversation = mergeThreadConversation(conversation, result.Conversation)
+	if err := c.saveThreadConversation(ctx, message.ThreadID, conversation); err != nil {
+		return nil, fmt.Errorf("save codex conversation profile=%s thread=%s: %w", c.Config.ProfileName, message.ThreadID, err)
+	}
+	if result.Reply == "" {
 		return nil, nil
 	}
 	return &coremodel.ThreadMessage{
@@ -64,8 +67,34 @@ func (c *Component) HandleMessage(ctx context.Context, message coremodel.ThreadM
 		SourceType: ComponentType,
 		ActorID:    ComponentType,
 		ActorLabel: "Codex",
-		Text:       reply,
+		Text:       result.Reply,
 	}, nil
+}
+
+func codexExecArgs(prompt string, conversation CodexThreadConversation) []string {
+	args := []string{
+		"-a", "never",
+		"-s", "workspace-write",
+		"exec",
+		"--json",
+		"--skip-git-repo-check",
+		"--add-dir", DefaultWorkspacePath,
+		"-C", DefaultWorkspacePath,
+	}
+	if resumeID := conversation.ResumeID(); resumeID != "" {
+		return append(args, "resume", resumeID, prompt)
+	}
+	return append(args, prompt)
+}
+
+func mergeThreadConversation(current CodexThreadConversation, next CodexThreadConversation) CodexThreadConversation {
+	if threadID := strings.TrimSpace(next.ThreadID); threadID != "" {
+		current.ThreadID = threadID
+	}
+	if sessionID := strings.TrimSpace(next.SessionID); sessionID != "" {
+		current.SessionID = sessionID
+	}
+	return current
 }
 
 func RuntimeSandboxSpec(config Config, message coremodel.ThreadMessage) (*sandboxengine.SandboxSpec, error) {

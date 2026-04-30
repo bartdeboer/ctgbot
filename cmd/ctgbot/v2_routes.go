@@ -256,10 +256,15 @@ func runV2TelegramCodex(ctx context.Context, runtime *v2Runtime, token string, c
 		WorkspaceRoot:        workspaceRoot,
 		Image:                runtime.Image,
 		SandboxManager:       runtime.Sandboxes,
+		StateStore:           runtime.Storage.ThreadComponentStates(),
 	})
 
 	components := v2component.NewRegistry(telegramComponent, codexComponent)
 	broker := v2broker.New(runtime.Storage, components)
+	broker.DefaultChatComponents = []coremodel.ChatComponent{
+		{ComponentType: v2telegram.ComponentType, ProfileName: v2telegram.DefaultProfileName, Enabled: true},
+		{ComponentType: v2codex.ComponentType, ProfileName: codexProfile, Enabled: true},
+	}
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 	broker.Logf = logger.Printf
 
@@ -314,7 +319,7 @@ func ensureV2RuntimeRows(ctx context.Context, runtime *v2Runtime, codexProfile s
 	}
 	if err := runtime.Storage.ComponentProfiles().Save(ctx, &coremodel.ComponentProfile{
 		ComponentType: v2telegram.ComponentType,
-		ProfileName:   "default",
+		ProfileName:   v2telegram.DefaultProfileName,
 		Enabled:       true,
 	}); err != nil {
 		return err

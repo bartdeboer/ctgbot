@@ -19,6 +19,7 @@ import (
 
 const (
 	ComponentType        = "telegram"
+	DefaultProfileName   = "default"
 	EventMessageReceived = "message.received"
 )
 
@@ -35,6 +36,7 @@ type Component struct {
 var _ component.Component = (*Component)(nil)
 var _ component.EventSource = (*Component)(nil)
 var _ component.OutboundRelay = (*Component)(nil)
+var _ component.Profiled = (*Component)(nil)
 
 func New(api API) *Component {
 	return &Component{API: api}
@@ -42,6 +44,10 @@ func New(api API) *Component {
 
 func (c *Component) Type() string {
 	return ComponentType
+}
+
+func (c *Component) ProfileName() string {
+	return DefaultProfileName
 }
 
 func (c *Component) RunEvents(ctx context.Context, emit component.InboundEventEmitter) error {
