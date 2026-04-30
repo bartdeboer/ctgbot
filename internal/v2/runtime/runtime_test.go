@@ -39,6 +39,12 @@ func TestResolveTelegramTokenPrefersFlagThenEnv(t *testing.T) {
 	}
 }
 
+func TestResolveCodexProfilePrefersFlag(t *testing.T) {
+	if got := ResolveCodexProfile(" v2test ", nil); got != "v2test" {
+		t.Fatalf("profile = %q, want v2test", got)
+	}
+}
+
 func withTempCwd(t *testing.T, fn func(root string)) {
 	t.Helper()
 

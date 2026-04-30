@@ -37,7 +37,7 @@ func registerV2Routes(r *clir.Router) {
 			fmt.Printf("config: %s\n", rt.ConfigPath)
 			fmt.Printf("database: %s\n", rt.DBPath)
 			token := v2runtime.ResolveTelegramToken(*telegramToken, rt.Config)
-			profileName := strings.TrimSpace(*codexProfile)
+			profileName := v2runtime.ResolveCodexProfile(*codexProfile, rt.Config)
 			if token == "" || profileName == "" {
 				fmt.Println("status: runtime not started")
 				fmt.Println("hint: provide --telegram-token or TELEGRAM_BOT_TOKEN and --codex-profile")

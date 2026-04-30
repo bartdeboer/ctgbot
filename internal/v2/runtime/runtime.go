@@ -114,6 +114,16 @@ func ResolveTelegramToken(flagValue string, config *clistate.Store) string {
 	return strings.TrimSpace(config.GetString("telegram.token", ""))
 }
 
+func ResolveCodexProfile(flagValue string, config *clistate.Store) string {
+	if profile := strings.TrimSpace(flagValue); profile != "" {
+		return profile
+	}
+	if config == nil {
+		return ""
+	}
+	return strings.TrimSpace(config.GetString("codex.profile", ""))
+}
+
 func ComponentForType(componentType string) v2component.Component {
 	switch strings.ToLower(strings.TrimSpace(componentType)) {
 	case v2codex.ComponentType:
