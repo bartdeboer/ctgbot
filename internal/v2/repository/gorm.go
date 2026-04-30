@@ -173,8 +173,17 @@ type GORMComponents struct{ db *gorm.DB }
 var _ ComponentRepository = (*GORMComponents)(nil)
 
 func (r *GORMComponents) Save(ctx context.Context, component *coremodel.Component) error {
-	ensureID(&component.ID)
 	component.Type = clean(component.Type)
+	if component.ID.IsNull() {
+		existing, err := r.GetByType(ctx, component.Type)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			component.ID = existing.ID
+		}
+	}
+	ensureID(&component.ID)
 	return r.db.WithContext(ctx).Save(component).Error
 }
 
@@ -194,9 +203,18 @@ type GORMComponentProfiles struct{ db *gorm.DB }
 var _ ComponentProfileRepository = (*GORMComponentProfiles)(nil)
 
 func (r *GORMComponentProfiles) Save(ctx context.Context, profile *coremodel.ComponentProfile) error {
-	ensureID(&profile.ID)
 	profile.ComponentType = clean(profile.ComponentType)
 	profile.ProfileName = clean(profile.ProfileName)
+	if profile.ID.IsNull() {
+		existing, err := r.Get(ctx, profile.ComponentType, profile.ProfileName)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			profile.ID = existing.ID
+		}
+	}
+	ensureID(&profile.ID)
 	return r.db.WithContext(ctx).Save(profile).Error
 }
 
@@ -218,10 +236,32 @@ type GORMChatComponents struct{ db *gorm.DB }
 var _ ChatComponentRepository = (*GORMChatComponents)(nil)
 
 func (r *GORMChatComponents) Save(ctx context.Context, binding *coremodel.ChatComponent) error {
-	ensureID(&binding.ID)
 	binding.ComponentType = clean(binding.ComponentType)
 	binding.ProfileName = clean(binding.ProfileName)
+	if binding.ID.IsNull() {
+		existing, err := r.get(ctx, binding.ChatID, binding.ComponentType, binding.ProfileName)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			binding.ID = existing.ID
+		}
+	}
+	ensureID(&binding.ID)
 	return r.db.WithContext(ctx).Save(binding).Error
+}
+
+func (r *GORMChatComponents) get(ctx context.Context, chatID modeluuid.UUID, componentType string, profileName string) (*coremodel.ChatComponent, error) {
+	var binding coremodel.ChatComponent
+	if err := first(r.db.WithContext(ctx).
+		Where("chat_id = ? AND component_type = ? AND profile_name = ?", chatID, clean(componentType), clean(profileName)).
+		First(&binding)); err != nil {
+		return nil, err
+	}
+	if binding.ID.IsNull() {
+		return nil, nil
+	}
+	return &binding, nil
 }
 
 func (r *GORMChatComponents) ListByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error) {

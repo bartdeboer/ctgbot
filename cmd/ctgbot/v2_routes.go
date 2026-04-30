@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -145,6 +146,8 @@ func registerV2Routes(r *clir.Router) {
 }
 
 type v2Runtime struct {
+	StateRoot string
+
 	ConfigPath string
 	DBPath     string
 	Image      string
@@ -160,7 +163,11 @@ type v2RuntimeOptions struct {
 }
 
 func openV2Runtime(ctx context.Context, opts v2RuntimeOptions) (*v2Runtime, error) {
-	stateRoot := filepath.Join(".", ".ctgbot")
+	rootPath, err := filepath.Abs(".")
+	if err != nil {
+		return nil, err
+	}
+	stateRoot := filepath.Join(rootPath, ".ctgbot")
 	if err := os.MkdirAll(stateRoot, 0o755); err != nil {
 		return nil, err
 	}
@@ -176,6 +183,8 @@ func openV2Runtime(ctx context.Context, opts v2RuntimeOptions) (*v2Runtime, erro
 	resolvedDBPath := strings.TrimSpace(opts.DBPath)
 	if resolvedDBPath == "" {
 		resolvedDBPath = filepath.Join(stateRoot, v2DBName)
+	} else if !filepath.IsAbs(resolvedDBPath) {
+		resolvedDBPath = filepath.Join(rootPath, resolvedDBPath)
 	}
 	storage, err := openV2Storage(ctx, resolvedDBPath)
 	if err != nil {
@@ -188,12 +197,13 @@ func openV2Runtime(ctx context.Context, opts v2RuntimeOptions) (*v2Runtime, erro
 	}
 
 	return &v2Runtime{
+		StateRoot:  stateRoot,
 		ConfigPath: filepath.Join(stateRoot, v2ConfigName+".json"),
 		DBPath:     resolvedDBPath,
 		Image:      image,
 		Config:     config,
 		Storage:    storage,
-		Profiles:   profilemanager.New("."),
+		Profiles:   profilemanager.New(rootPath),
 		Sandboxes:  sandboxengine.NewSandboxManager(log.New(os.Stdout, "", log.LstdFlags)),
 	}, nil
 }
@@ -237,33 +247,60 @@ func runV2TelegramCodex(ctx context.Context, runtime *v2Runtime, token string, c
 	}
 	telegramComponent := v2telegram.New(api)
 	telegramComponent.PollTimeout = pollTimeout
+	workspaceRoot := filepath.Join(runtime.StateRoot, "v2", "workspaces")
 
 	codexComponent := v2codex.New(v2codex.Config{
 		ProfileName:          codexProfile,
 		ProfileHostPath:      profileHostPath,
 		ProfileContainerPath: runtime.Profiles.ContainerPath(),
-		WorkspaceRoot:        filepath.Join(".", ".ctgbot", "v2", "workspaces"),
+		WorkspaceRoot:        workspaceRoot,
 		Image:                runtime.Image,
 		SandboxManager:       runtime.Sandboxes,
 	})
 
 	components := v2component.NewRegistry(telegramComponent, codexComponent)
 	broker := v2broker.New(runtime.Storage, components)
-	broker.Logf = log.New(os.Stdout, "", log.LstdFlags).Printf
+	logger := log.New(os.Stdout, "", log.LstdFlags)
+	broker.Logf = logger.Printf
 
 	runCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	fmt.Println("ctgbot v2 runtime starting")
 	fmt.Printf("codex_profile: %s\n", profileHostPath)
-	fmt.Printf("workspace_root: %s\n", filepath.Join(".", ".ctgbot", "v2", "workspaces"))
+	fmt.Printf("workspace_root: %s\n", workspaceRoot)
 	fmt.Printf("image: %s\n", runtime.Image)
 	fmt.Println("telegram: configured")
 	fmt.Printf("status: running telegram -> codex(%s) -> telegram\n", codexProfile)
 	return telegramComponent.RunEvents(runCtx, func(eventCtx context.Context, event v2component.InboundEvent) error {
 		_, err := broker.HandleEvent(eventCtx, event)
-		return err
+		if err != nil {
+			logger.Printf("v2 event failed source=%s provider_chat=%q provider_thread=%q external=%q err=%v", event.SourceType, event.ProviderChatID, event.ProviderThreadID, event.ExternalID, err)
+			sendV2TelegramError(eventCtx, telegramComponent, event, err, logger)
+		}
+		return nil
 	})
+}
+
+func sendV2TelegramError(ctx context.Context, telegramComponent *v2telegram.Component, event v2component.InboundEvent, eventErr error, logger *log.Logger) {
+	if telegramComponent == nil || telegramComponent.API == nil || eventErr == nil {
+		return
+	}
+	chatID, err := strconv.ParseInt(strings.TrimSpace(event.ProviderChatID), 10, 64)
+	if err != nil {
+		return
+	}
+	threadID := 0
+	if rawThreadID := strings.TrimSpace(event.ProviderThreadID); rawThreadID != "" {
+		threadID, _ = strconv.Atoi(rawThreadID)
+	}
+	text := "conversation error: " + strings.TrimSpace(eventErr.Error())
+	if len(text) > 3500 {
+		text = text[:3500] + "..."
+	}
+	if err := telegramComponent.API.SendMessage(ctx, chatID, threadID, 0, text, ""); err != nil && logger != nil {
+		logger.Printf("v2 telegram error reply failed chat=%d thread=%d err=%v", chatID, threadID, err)
+	}
 }
 
 func ensureV2RuntimeRows(ctx context.Context, runtime *v2Runtime, codexProfile string) error {

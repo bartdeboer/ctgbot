@@ -167,6 +167,54 @@ func TestGORMStoragePersistsComponentProfilesAndChatBindings(t *testing.T) {
 	}
 }
 
+func TestGORMStorageComponentSavesAreIdempotent(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	chat, err := store.Chats().EnsureProviderChat(ctx, "telegram", "-1003759705932")
+	if err != nil {
+		t.Fatalf("ensure chat: %v", err)
+	}
+
+	component := &coremodel.Component{Type: " codex ", Enabled: true}
+	if err := store.Components().Save(ctx, component); err != nil {
+		t.Fatalf("save component: %v", err)
+	}
+	componentAgain := &coremodel.Component{Type: "codex", Enabled: true}
+	if err := store.Components().Save(ctx, componentAgain); err != nil {
+		t.Fatalf("save component again: %v", err)
+	}
+	if componentAgain.ID != component.ID {
+		t.Fatalf("component IDs differ: first=%s second=%s", component.ID, componentAgain.ID)
+	}
+
+	profile := &coremodel.ComponentProfile{ComponentType: " codex ", ProfileName: " v2test ", Enabled: true}
+	if err := store.ComponentProfiles().Save(ctx, profile); err != nil {
+		t.Fatalf("save profile: %v", err)
+	}
+	profileAgain := &coremodel.ComponentProfile{ComponentType: "codex", ProfileName: "v2test", Enabled: true}
+	if err := store.ComponentProfiles().Save(ctx, profileAgain); err != nil {
+		t.Fatalf("save profile again: %v", err)
+	}
+	if profileAgain.ID != profile.ID {
+		t.Fatalf("profile IDs differ: first=%s second=%s", profile.ID, profileAgain.ID)
+	}
+
+	binding := &coremodel.ChatComponent{ChatID: chat.ID, ComponentType: " codex ", ProfileName: " v2test ", Enabled: true}
+	if err := store.ChatComponents().Save(ctx, binding); err != nil {
+		t.Fatalf("save binding: %v", err)
+	}
+	bindingAgain := &coremodel.ChatComponent{ChatID: chat.ID, ComponentType: "codex", ProfileName: "v2test", Enabled: true}
+	if err := store.ChatComponents().Save(ctx, bindingAgain); err != nil {
+		t.Fatalf("save binding again: %v", err)
+	}
+	if bindingAgain.ID != binding.ID {
+		t.Fatalf("binding IDs differ: first=%s second=%s", binding.ID, bindingAgain.ID)
+	}
+}
+
 func newTestStore(t *testing.T) *GORMStorage {
 	t.Helper()
 

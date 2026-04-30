@@ -36,12 +36,23 @@ func (c *Component) HandleMessage(ctx context.Context, message coremodel.ThreadM
 	}
 
 	sbx := c.Config.SandboxManager.CreateSandbox(spec)
+	defer func() { _ = sbx.Stop(context.Background()) }()
+
 	var stdout bytes.Buffer
 	var stderr io.Writer = os.Stderr
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	if err := sbx.Exec(ctx, &stdout, stderr, "codex", "exec", "--skip-git-repo-check", prompt); err != nil {
+	args := []string{
+		"-a", "never",
+		"-s", "workspace-write",
+		"exec",
+		"--skip-git-repo-check",
+		"--add-dir", DefaultWorkspacePath,
+		"-C", DefaultWorkspacePath,
+		prompt,
+	}
+	if err := sbx.Exec(ctx, &stdout, stderr, "codex", args...); err != nil {
 		return nil, fmt.Errorf("codex exec profile=%s thread=%s: %w", c.Config.ProfileName, message.ThreadID, err)
 	}
 	reply := strings.TrimSpace(stdout.String())
