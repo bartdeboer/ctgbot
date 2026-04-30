@@ -11,7 +11,10 @@ import (
 	"strings"
 )
 
-const profilesDir = "profiles"
+const (
+	profilesDir          = "profiles"
+	containerProfilePath = "/profile"
+)
 
 type Manager struct {
 	RootDir string
@@ -42,13 +45,8 @@ func (m *Manager) HostPath(componentType string, profile string) (string, error)
 	return filepath.Join(root, profilesDir, componentType, profile), nil
 }
 
-func (m *Manager) ContainerPath(componentType string) string {
-	switch strings.TrimSpace(componentType) {
-	case "codex":
-		return "/codex-home"
-	default:
-		return "/profile"
-	}
+func (m *Manager) ContainerPath() string {
+	return containerProfilePath
 }
 
 func (m *Manager) Ensure(componentType string, profile string) (string, error) {
@@ -69,7 +67,7 @@ func (m *Manager) Mount(componentType string, profile string) (Mount, error) {
 	}
 	return Mount{
 		HostPath:      hostPath,
-		ContainerPath: m.ContainerPath(componentType),
+		ContainerPath: m.ContainerPath(),
 	}, nil
 }
 

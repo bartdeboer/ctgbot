@@ -75,9 +75,11 @@ func (u Update) InboundEvent() component.InboundEvent {
 		metadata[key] = value
 	}
 	return component.InboundEvent{
-		SourceType: ComponentType,
-		EventType:  EventMessageReceived,
-		ExternalID: externalID(u),
+		SourceType:       ComponentType,
+		EventType:        EventMessageReceived,
+		ExternalID:       externalID(u),
+		ProviderChatID:   strconv.FormatInt(u.ChatID, 10),
+		ProviderThreadID: strconv.Itoa(u.ThreadID),
 		Actor: component.Actor{
 			ID:      strconv.FormatInt(u.UserID, 10),
 			Label:   strings.TrimSpace(u.UserLabel),

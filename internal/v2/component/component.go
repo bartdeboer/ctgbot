@@ -10,6 +10,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
 // Component is the smallest registered unit in ctgbot.
@@ -58,6 +59,14 @@ func (r *Registry) ProfileOwners() []ProfileOwner {
 	return Capabilities[ProfileOwner](r)
 }
 
+func (r *Registry) Agents() []Agent {
+	return Capabilities[Agent](r)
+}
+
+func (r *Registry) OutboundRelays() []OutboundRelay {
+	return Capabilities[OutboundRelay](r)
+}
+
 // Capabilities returns the registered components that satisfy a capability
 // interface.
 //
@@ -91,6 +100,9 @@ type InboundEvent struct {
 	EventType  string
 	ExternalID string
 
+	ProviderChatID   string
+	ProviderThreadID string
+
 	ChatID   modeluuid.UUID
 	ThreadID modeluuid.UUID
 
@@ -105,6 +117,18 @@ type InboundEventEmitter func(ctx context.Context, event InboundEvent) error
 type EventSource interface {
 	Component
 	RunEvents(ctx context.Context, emit InboundEventEmitter) error
+}
+
+// Agent processes canonical thread messages and may produce an outbound reply.
+type Agent interface {
+	Component
+	HandleMessage(ctx context.Context, message coremodel.ThreadMessage) (*coremodel.ThreadMessage, error)
+}
+
+// OutboundRelay projects canonical outbound messages to an external system.
+type OutboundRelay interface {
+	Component
+	SendMessage(ctx context.Context, message coremodel.ThreadMessage) error
 }
 
 // CommandSurface contributes typed commands to a commandengine registry.

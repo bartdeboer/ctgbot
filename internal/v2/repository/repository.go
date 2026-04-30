@@ -12,6 +12,9 @@ type Storage interface {
 	AutoMigrate(ctx context.Context) error
 	Chats() ChatRepository
 	Threads() ThreadRepository
+	Components() ComponentRepository
+	ComponentProfiles() ComponentProfileRepository
+	ChatComponents() ChatComponentRepository
 	Messages() MessageRepository
 	Artifacts() ArtifactRepository
 }
@@ -19,12 +22,30 @@ type Storage interface {
 type ChatRepository interface {
 	Save(ctx context.Context, chat *coremodel.Chat) error
 	GetByID(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
+	EnsureProviderChat(ctx context.Context, providerType string, providerChatID string) (*coremodel.Chat, error)
 }
 
 type ThreadRepository interface {
 	Save(ctx context.Context, thread *coremodel.Thread) error
 	GetByID(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
+	EnsureProviderThread(ctx context.Context, chatID modeluuid.UUID, providerThreadID string) (*coremodel.Thread, error)
 	ListByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.Thread, error)
+}
+
+type ComponentRepository interface {
+	Save(ctx context.Context, component *coremodel.Component) error
+	GetByType(ctx context.Context, componentType string) (*coremodel.Component, error)
+}
+
+type ComponentProfileRepository interface {
+	Save(ctx context.Context, profile *coremodel.ComponentProfile) error
+	Get(ctx context.Context, componentType string, profileName string) (*coremodel.ComponentProfile, error)
+}
+
+type ChatComponentRepository interface {
+	Save(ctx context.Context, binding *coremodel.ChatComponent) error
+	ListByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
+	ListEnabledByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
 }
 
 type MessageRepository interface {

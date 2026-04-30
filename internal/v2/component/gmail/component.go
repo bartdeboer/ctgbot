@@ -80,10 +80,12 @@ func (c *Component) InboundEventFromMessage(message *gmailapi.Message) component
 		return component.InboundEvent{SourceType: ComponentType, EventType: EventMessageReceived}
 	}
 	return component.InboundEvent{
-		SourceType: ComponentType,
-		EventType:  EventMessageReceived,
-		ExternalID: strings.TrimSpace(message.Id),
-		Text:       strings.TrimSpace(message.Snippet),
+		SourceType:       ComponentType,
+		EventType:        EventMessageReceived,
+		ExternalID:       strings.TrimSpace(message.Id),
+		ProviderChatID:   c.userID(),
+		ProviderThreadID: strings.TrimSpace(message.ThreadId),
+		Text:             strings.TrimSpace(message.Snippet),
 		Metadata: map[string]string{
 			"gmail.message_id": strings.TrimSpace(message.Id),
 			"gmail.thread_id":  strings.TrimSpace(message.ThreadId),

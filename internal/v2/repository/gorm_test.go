@@ -87,6 +87,86 @@ func TestGORMStorageMissingRecordsReturnNil(t *testing.T) {
 	}
 }
 
+func TestGORMStorageEnsuresProviderChatAndThread(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	chat, err := store.Chats().EnsureProviderChat(ctx, " telegram ", " -1003759705932 ")
+	if err != nil {
+		t.Fatalf("ensure provider chat: %v", err)
+	}
+	again, err := store.Chats().EnsureProviderChat(ctx, "telegram", "-1003759705932")
+	if err != nil {
+		t.Fatalf("ensure provider chat again: %v", err)
+	}
+	if chat.ID != again.ID || chat.ProviderType != "telegram" || chat.ProviderChatID != "-1003759705932" {
+		t.Fatalf("unexpected provider chat: first=%#v second=%#v", chat, again)
+	}
+
+	thread, err := store.Threads().EnsureProviderThread(ctx, chat.ID, " 845 ")
+	if err != nil {
+		t.Fatalf("ensure provider thread: %v", err)
+	}
+	threadAgain, err := store.Threads().EnsureProviderThread(ctx, chat.ID, "845")
+	if err != nil {
+		t.Fatalf("ensure provider thread again: %v", err)
+	}
+	if thread.ID != threadAgain.ID || thread.ProviderThreadID != "845" {
+		t.Fatalf("unexpected provider thread: first=%#v second=%#v", thread, threadAgain)
+	}
+}
+
+func TestGORMStoragePersistsComponentProfilesAndChatBindings(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	chat, err := store.Chats().EnsureProviderChat(ctx, "telegram", "-1003759705932")
+	if err != nil {
+		t.Fatalf("ensure chat: %v", err)
+	}
+
+	component := &coremodel.Component{Type: "codex", Label: "Codex", Enabled: true}
+	if err := store.Components().Save(ctx, component); err != nil {
+		t.Fatalf("save component: %v", err)
+	}
+	profile := &coremodel.ComponentProfile{ComponentType: "codex", ProfileName: "personal", Enabled: true}
+	if err := store.ComponentProfiles().Save(ctx, profile); err != nil {
+		t.Fatalf("save profile: %v", err)
+	}
+	binding := &coremodel.ChatComponent{ChatID: chat.ID, ComponentType: "codex", ProfileName: "personal", Enabled: true}
+	if err := store.ChatComponents().Save(ctx, binding); err != nil {
+		t.Fatalf("save chat component: %v", err)
+	}
+
+	gotComponent, err := store.Components().GetByType(ctx, "codex")
+	if err != nil {
+		t.Fatalf("get component: %v", err)
+	}
+	if gotComponent == nil || gotComponent.ID != component.ID {
+		t.Fatalf("unexpected component: %#v", gotComponent)
+	}
+
+	gotProfile, err := store.ComponentProfiles().Get(ctx, "codex", "personal")
+	if err != nil {
+		t.Fatalf("get profile: %v", err)
+	}
+	if gotProfile == nil || gotProfile.ID != profile.ID {
+		t.Fatalf("unexpected profile: %#v", gotProfile)
+	}
+
+	bindings, err := store.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
+	if err != nil {
+		t.Fatalf("list enabled bindings: %v", err)
+	}
+	if len(bindings) != 1 || bindings[0].ComponentType != "codex" || bindings[0].ProfileName != "personal" {
+		t.Fatalf("unexpected bindings: %#v", bindings)
+	}
+}
+
 func newTestStore(t *testing.T) *GORMStorage {
 	t.Helper()
 

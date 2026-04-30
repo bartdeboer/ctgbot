@@ -67,6 +67,9 @@ func TestRunEventsEmitsInboundEvent(t *testing.T) {
 	if event.ExternalID != "-10042:7:99" {
 		t.Fatalf("ExternalID = %q, want -10042:7:99", event.ExternalID)
 	}
+	if event.ProviderChatID != "-10042" || event.ProviderThreadID != "7" {
+		t.Fatalf("unexpected provider identity: %#v", event)
+	}
 	if event.Actor.ID != "123" || event.Actor.Label != "@bart" || !event.Actor.IsAdmin {
 		t.Fatalf("unexpected actor: %#v", event.Actor)
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
 type baseComponent struct{ typ string }
@@ -33,16 +34,30 @@ func (fullComponent) CommandDefinitions() []commandengine.Definition            
 func (fullComponent) RegisterCommandHandlers(registry *commandengine.Registry) error { return nil }
 func (fullComponent) ManagedFiles() []ManagedFile                                    { return nil }
 
+type agentComponent struct{ baseComponent }
+
+func (agentComponent) HandleMessage(ctx context.Context, message coremodel.ThreadMessage) (*coremodel.ThreadMessage, error) {
+	return nil, nil
+}
+
+type relayComponent struct{ baseComponent }
+
+func (relayComponent) SendMessage(ctx context.Context, message coremodel.ThreadMessage) error {
+	return nil
+}
+
 func TestRegistryFiltersComponentsByCapability(t *testing.T) {
 	registry := NewRegistry(
 		sourceComponent{baseComponent{typ: "source"}},
 		commandComponent{baseComponent{typ: "command"}},
 		profileComponent{baseComponent{typ: "profile"}},
+		agentComponent{baseComponent{typ: "agent"}},
+		relayComponent{baseComponent{typ: "relay"}},
 		fullComponent{baseComponent{typ: "full"}},
 	)
 
-	if got := len(registry.Components()); got != 4 {
-		t.Fatalf("components len = %d, want 4", got)
+	if got := len(registry.Components()); got != 6 {
+		t.Fatalf("components len = %d, want 6", got)
 	}
 	if got := len(registry.EventSources()); got != 2 {
 		t.Fatalf("event sources len = %d, want 2", got)
@@ -52,6 +67,12 @@ func TestRegistryFiltersComponentsByCapability(t *testing.T) {
 	}
 	if got := len(registry.ProfileOwners()); got != 2 {
 		t.Fatalf("profile owners len = %d, want 2", got)
+	}
+	if got := len(registry.Agents()); got != 1 {
+		t.Fatalf("agents len = %d, want 1", got)
+	}
+	if got := len(registry.OutboundRelays()); got != 1 {
+		t.Fatalf("outbound relays len = %d, want 1", got)
 	}
 	if got := len(Capabilities[EventSource](registry)); got != 2 {
 		t.Fatalf("generic event source capabilities len = %d, want 2", got)

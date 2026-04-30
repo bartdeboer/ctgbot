@@ -74,6 +74,9 @@ func TestInboundEventFromMessage(t *testing.T) {
 	if event.ExternalID != "msg-123" {
 		t.Fatalf("ExternalID = %q, want msg-123", event.ExternalID)
 	}
+	if event.ProviderChatID != DefaultUserID || event.ProviderThreadID != "thread-456" {
+		t.Fatalf("unexpected provider identity: %#v", event)
+	}
 	if event.Text != "hello from gmail" {
 		t.Fatalf("Text = %q, want hello from gmail", event.Text)
 	}

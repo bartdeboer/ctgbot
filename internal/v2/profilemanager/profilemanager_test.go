@@ -20,17 +20,11 @@ func TestHostPathResolvesNamedComponentProfile(t *testing.T) {
 	}
 }
 
-func TestContainerPathUsesComponentDefaults(t *testing.T) {
+func TestContainerPathUsesUniversalProfileMount(t *testing.T) {
 	manager := New(t.TempDir())
 
-	if got := manager.ContainerPath("codex"); got != "/codex-home" {
-		t.Fatalf("codex ContainerPath() = %q, want /codex-home", got)
-	}
-	if got := manager.ContainerPath("gmail"); got != "/profile" {
-		t.Fatalf("gmail ContainerPath() = %q, want /profile", got)
-	}
-	if got := manager.ContainerPath("unknown"); got != "/profile" {
-		t.Fatalf("unknown ContainerPath() = %q, want /profile", got)
+	if got := manager.ContainerPath(); got != "/profile" {
+		t.Fatalf("ContainerPath() = %q, want /profile", got)
 	}
 }
 
@@ -60,7 +54,7 @@ func TestMountReturnsHostAndContainerPaths(t *testing.T) {
 		t.Fatalf("Mount() error = %v", err)
 	}
 	wantHost := filepath.Join(root, ".ctgbot", "profiles", "codex", "personal")
-	if mount.HostPath != wantHost || mount.ContainerPath != "/codex-home" {
+	if mount.HostPath != wantHost || mount.ContainerPath != "/profile" {
 		t.Fatalf("unexpected mount: %#v", mount)
 	}
 }
