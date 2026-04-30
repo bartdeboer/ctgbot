@@ -24,8 +24,8 @@ func TestV2RunCreatesConfigAndDatabase(t *testing.T) {
 		if !strings.Contains(output, "ctgbot v2 runtime initialized") {
 			t.Fatalf("unexpected output: %q", output)
 		}
-		assertFileExists(t, filepath.Join(root, ".ctgbot", "configv2.json"))
-		assertFileExists(t, filepath.Join(root, ".ctgbot", "ctgbotv2.db"))
+		assertFileExists(t, filepath.Join(root, ".ctgbot", "config.json"))
+		assertFileExists(t, filepath.Join(root, ".ctgbot", "ctgbot.db"))
 	})
 }
 
@@ -44,7 +44,7 @@ func TestV2ComponentAuthCreatesProfileAndRepositoryRows(t *testing.T) {
 		}
 		assertDirExists(t, filepath.Join(root, ".ctgbot", "profiles", "codex", "personal"))
 
-		store, err := v2runtime.OpenStorage(context.Background(), filepath.Join(root, ".ctgbot", "ctgbotv2.db"))
+		store, err := v2runtime.OpenStorage(context.Background(), filepath.Join(root, ".ctgbot", "ctgbot.db"))
 		if err != nil {
 			t.Fatalf("open v2 storage: %v", err)
 		}

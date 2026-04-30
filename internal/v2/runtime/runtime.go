@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	configName = "configv2"
-	dbName     = "ctgbotv2.db"
+	configName = "config"
+	dbName     = "ctgbot.db"
 )
 
 type Runtime struct {
