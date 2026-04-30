@@ -1,17 +1,20 @@
 // Package telegram contains the component-model Telegram implementation.
 //
-// This package intentionally does not wrap telegramengine.TelegramBot. It starts
-// from the component event-source model and can grow independently while the
-// existing Telegram engine remains in production.
+// This package intentionally stays small. It adapts the lower-level Telegram API
+// to the v2 component capabilities without pulling in the old broker shape.
 package telegram
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/dbmodel"
 	"github.com/bartdeboer/ctgbot/internal/v2/component"
+	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
 const (
@@ -20,15 +23,18 @@ const (
 )
 
 type API interface {
-	Run(ctx context.Context, onUpdate func(context.Context, Update) error) error
+	Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(context.Context, dbmodel.TelegramUpdate)) error
+	SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string, parseMode string) error
 }
 
 type Component struct {
-	API API
+	API         API
+	PollTimeout time.Duration
 }
 
 var _ component.Component = (*Component)(nil)
 var _ component.EventSource = (*Component)(nil)
+var _ component.OutboundRelay = (*Component)(nil)
 
 func New(api API) *Component {
 	return &Component{API: api}
@@ -45,51 +51,75 @@ func (c *Component) RunEvents(ctx context.Context, emit component.InboundEventEm
 	if emit == nil {
 		return fmt.Errorf("missing inbound event emitter")
 	}
-	return c.API.Run(ctx, func(updateCtx context.Context, update Update) error {
-		return emit(updateCtx, update.InboundEvent())
+	return c.API.Run(ctx, c.PollTimeout, func(updateCtx context.Context, update dbmodel.TelegramUpdate) {
+		_ = emit(updateCtx, InboundEventFromUpdate(update))
 	})
 }
 
-type Update struct {
-	ChatID    int64
-	ThreadID  int
-	MessageID int
-	UserID    int64
-	UserLabel string
-	IsAdmin   bool
-	Text      string
-	Metadata  map[string]string
+func (c *Component) SendMessage(ctx context.Context, message coremodel.ThreadMessage) error {
+	if c == nil || c.API == nil {
+		return fmt.Errorf("missing telegram api")
+	}
+	text := strings.TrimSpace(message.Text)
+	if text == "" {
+		return nil
+	}
+	chatID, threadID, err := providerIDsFromMessage(message)
+	if err != nil {
+		return err
+	}
+	if err := c.API.SendMessage(ctx, chatID, threadID, 0, text, ""); err != nil {
+		return fmt.Errorf("telegram send chat=%d thread=%d: %w", chatID, threadID, err)
+	}
+	return nil
 }
 
-func (u Update) InboundEvent() component.InboundEvent {
+func InboundEventFromUpdate(update dbmodel.TelegramUpdate) component.InboundEvent {
 	metadata := map[string]string{
-		"telegram.chat_id":    strconv.FormatInt(u.ChatID, 10),
-		"telegram.thread_id":  strconv.Itoa(u.ThreadID),
-		"telegram.message_id": strconv.Itoa(u.MessageID),
-	}
-	for key, value := range u.Metadata {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		metadata[key] = value
+		"telegram.chat_id":    strconv.FormatInt(update.ChatID, 10),
+		"telegram.thread_id":  strconv.Itoa(update.ThreadID),
+		"telegram.message_id": strconv.Itoa(update.MessageID),
 	}
 	return component.InboundEvent{
 		SourceType:       ComponentType,
 		EventType:        EventMessageReceived,
-		ExternalID:       externalID(u),
-		ProviderChatID:   strconv.FormatInt(u.ChatID, 10),
-		ProviderThreadID: strconv.Itoa(u.ThreadID),
-		Actor: component.Actor{
-			ID:      strconv.FormatInt(u.UserID, 10),
-			Label:   strings.TrimSpace(u.UserLabel),
-			IsAdmin: u.IsAdmin,
-		},
-		Text:     strings.TrimSpace(u.Text),
-		Metadata: metadata,
+		ExternalID:       externalID(update.ChatID, update.ThreadID, update.MessageID),
+		ProviderChatID:   strconv.FormatInt(update.ChatID, 10),
+		ProviderThreadID: strconv.Itoa(update.ThreadID),
+		Actor:            actorFromUpdate(update),
+		Text:             strings.TrimSpace(update.Text),
+		Metadata:         metadata,
 	}
 }
 
-func externalID(u Update) string {
-	return fmt.Sprintf("%d:%d:%d", u.ChatID, u.ThreadID, u.MessageID)
+func actorFromUpdate(update dbmodel.TelegramUpdate) component.Actor {
+	return component.Actor{
+		ID:    strconv.FormatInt(update.UserID, 10),
+		Label: strings.TrimSpace(update.UserLabel()),
+	}
+}
+
+func providerIDsFromMessage(message coremodel.ThreadMessage) (int64, int, error) {
+	var metadata map[string]string
+	if strings.TrimSpace(message.MetadataJSON) != "" {
+		if err := json.Unmarshal([]byte(message.MetadataJSON), &metadata); err != nil {
+			return 0, 0, fmt.Errorf("parse telegram metadata: %w", err)
+		}
+	}
+	chatID, err := strconv.ParseInt(strings.TrimSpace(metadata["telegram.chat_id"]), 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("missing telegram chat id")
+	}
+	threadID := 0
+	if rawThreadID := strings.TrimSpace(metadata["telegram.thread_id"]); rawThreadID != "" {
+		threadID, err = strconv.Atoi(rawThreadID)
+		if err != nil {
+			return 0, 0, fmt.Errorf("parse telegram thread id: %w", err)
+		}
+	}
+	return chatID, threadID, nil
+}
+
+func externalID(chatID int64, threadID int, messageID int) string {
+	return fmt.Sprintf("%d:%d:%d", chatID, threadID, messageID)
 }

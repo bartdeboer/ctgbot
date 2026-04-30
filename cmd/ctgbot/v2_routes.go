@@ -6,14 +6,19 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/messenger/telegramengine"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+	v2broker "github.com/bartdeboer/ctgbot/internal/v2/broker"
 	v2component "github.com/bartdeboer/ctgbot/internal/v2/component"
 	v2codex "github.com/bartdeboer/ctgbot/internal/v2/component/codex"
 	v2gmail "github.com/bartdeboer/ctgbot/internal/v2/component/gmail"
+	v2telegram "github.com/bartdeboer/ctgbot/internal/v2/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v2/profilemanager"
 	"github.com/bartdeboer/ctgbot/internal/v2/repository"
@@ -34,11 +39,15 @@ func registerV2Routes(r *clir.Router) {
 			fs := flag.NewFlagSet("run", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			dbPath := fs.String("db-path", "", "v2 SQLite DB path")
+			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
+			codexProfile := fs.String("codex-profile", "", "Codex component profile name")
+			codexImage := fs.String("codex-image", v2codex.DefaultImage, "Codex runtime image")
+			pollTimeout := fs.Duration("telegram-poll-timeout", 30*time.Second, "Telegram long-poll timeout")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			runtime, err := openV2Runtime(req.Context(), v2RuntimeOptions{DBPath: *dbPath})
+			runtime, err := openV2Runtime(req.Context(), v2RuntimeOptions{DBPath: *dbPath, Image: *codexImage})
 			if err != nil {
 				return err
 			}
@@ -46,8 +55,14 @@ func registerV2Routes(r *clir.Router) {
 			fmt.Println("ctgbot v2 runtime initialized")
 			fmt.Printf("config: %s\n", runtime.ConfigPath)
 			fmt.Printf("database: %s\n", runtime.DBPath)
-			fmt.Println("status: event sources are not wired yet")
-			return nil
+			token := resolveV2TelegramToken(*telegramToken, runtime.Config)
+			profileName := strings.TrimSpace(*codexProfile)
+			if token == "" || profileName == "" {
+				fmt.Println("status: runtime not started")
+				fmt.Println("hint: provide --telegram-token or TELEGRAM_BOT_TOKEN and --codex-profile")
+				return nil
+			}
+			return runV2TelegramCodex(req.Context(), runtime, token, profileName, *pollTimeout)
 		})
 
 		b.Handle("component auth <component> <profile>", "Prepare a v2 component profile for authentication", func(req *clir.Request) error {
@@ -199,6 +214,92 @@ func openV2Storage(ctx context.Context, dbPath string) (repository.Storage, erro
 		return nil, err
 	}
 	return storage, nil
+}
+
+func runV2TelegramCodex(ctx context.Context, runtime *v2Runtime, token string, codexProfile string, pollTimeout time.Duration) error {
+	if runtime == nil {
+		return fmt.Errorf("missing v2 runtime")
+	}
+	profileHostPath, err := runtime.Profiles.HostPath(v2codex.ComponentType, codexProfile)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(profileHostPath, "auth.json")); err != nil {
+		return fmt.Errorf("codex profile %q is not ready: %w", codexProfile, err)
+	}
+	if err := ensureV2RuntimeRows(ctx, runtime, codexProfile); err != nil {
+		return err
+	}
+
+	api, err := telegramengine.NewTelegramAPIV2(token)
+	if err != nil {
+		return err
+	}
+	telegramComponent := v2telegram.New(api)
+	telegramComponent.PollTimeout = pollTimeout
+
+	codexComponent := v2codex.New(v2codex.Config{
+		ProfileName:          codexProfile,
+		ProfileHostPath:      profileHostPath,
+		ProfileContainerPath: runtime.Profiles.ContainerPath(),
+		WorkspaceRoot:        filepath.Join(".", ".ctgbot", "v2", "workspaces"),
+		Image:                runtime.Image,
+		SandboxManager:       runtime.Sandboxes,
+	})
+
+	components := v2component.NewRegistry(telegramComponent, codexComponent)
+	broker := v2broker.New(runtime.Storage, components)
+	broker.Logf = log.New(os.Stdout, "", log.LstdFlags).Printf
+
+	runCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	fmt.Println("ctgbot v2 runtime starting")
+	fmt.Printf("codex_profile: %s\n", profileHostPath)
+	fmt.Printf("workspace_root: %s\n", filepath.Join(".", ".ctgbot", "v2", "workspaces"))
+	fmt.Printf("image: %s\n", runtime.Image)
+	fmt.Println("telegram: configured")
+	fmt.Printf("status: running telegram -> codex(%s) -> telegram\n", codexProfile)
+	return telegramComponent.RunEvents(runCtx, func(eventCtx context.Context, event v2component.InboundEvent) error {
+		_, err := broker.HandleEvent(eventCtx, event)
+		return err
+	})
+}
+
+func ensureV2RuntimeRows(ctx context.Context, runtime *v2Runtime, codexProfile string) error {
+	for _, componentType := range []string{v2telegram.ComponentType, v2codex.ComponentType} {
+		if err := runtime.Storage.Components().Save(ctx, &coremodel.Component{
+			Type:    componentType,
+			Enabled: true,
+		}); err != nil {
+			return err
+		}
+	}
+	if err := runtime.Storage.ComponentProfiles().Save(ctx, &coremodel.ComponentProfile{
+		ComponentType: v2telegram.ComponentType,
+		ProfileName:   "default",
+		Enabled:       true,
+	}); err != nil {
+		return err
+	}
+	return runtime.Storage.ComponentProfiles().Save(ctx, &coremodel.ComponentProfile{
+		ComponentType: v2codex.ComponentType,
+		ProfileName:   strings.TrimSpace(codexProfile),
+		Enabled:       true,
+	})
+}
+
+func resolveV2TelegramToken(flagValue string, config *clistate.Store) string {
+	if token := strings.TrimSpace(flagValue); token != "" {
+		return token
+	}
+	if token := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")); token != "" {
+		return token
+	}
+	if config == nil {
+		return ""
+	}
+	return strings.TrimSpace(config.GetString("telegram.token", ""))
 }
 
 func v2ComponentForType(componentType string) v2component.Component {

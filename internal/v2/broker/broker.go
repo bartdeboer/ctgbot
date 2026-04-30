@@ -16,6 +16,7 @@ import (
 type Broker struct {
 	storage    repository.Storage
 	components *component.Registry
+	Logf       func(format string, args ...any)
 }
 
 type EventOutcome struct {
@@ -47,15 +48,18 @@ func (b *Broker) HandleEvent(ctx context.Context, event component.InboundEvent) 
 	if err := validateEvent(event); err != nil {
 		return EventOutcome{}, err
 	}
+	b.logf("v2 inbound event source=%s provider_chat=%q provider_thread=%q external=%q text_len=%d", event.SourceType, event.ProviderChatID, event.ProviderThreadID, event.ExternalID, len(event.Text))
 	chat, thread, err := b.ensureTarget(ctx, event)
 	if err != nil {
 		return EventOutcome{}, err
 	}
+	b.logf("v2 thread resolved chat=%s thread=%s", chat.ID, thread.ID)
 
 	inbound, err := b.appendInbound(ctx, event, chat.ID, thread.ID)
 	if err != nil {
 		return EventOutcome{}, err
 	}
+	b.logf("v2 inbound stored message=%s", inbound.ID)
 
 	outbound, err := b.runAgents(ctx, *inbound)
 	if err != nil {
@@ -174,13 +178,16 @@ func (b *Broker) runAgents(ctx context.Context, inbound coremodel.ThreadMessage)
 
 	var outbound []coremodel.ThreadMessage
 	for _, agent := range b.components.Agents() {
+		b.logf("v2 agent invoking type=%s thread=%s", agent.Type(), inbound.ThreadID)
 		message, err := agent.HandleMessage(ctx, inbound)
 		if err != nil {
-			return outbound, err
+			return outbound, fmt.Errorf("agent %s: %w", agent.Type(), err)
 		}
 		if message == nil || message.Text == "" {
+			b.logf("v2 agent empty output type=%s thread=%s", agent.Type(), inbound.ThreadID)
 			continue
 		}
+		b.logf("v2 agent output type=%s chars=%d", agent.Type(), len(message.Text))
 		outbound = append(outbound, *message)
 	}
 	return outbound, nil
@@ -193,9 +200,13 @@ func (b *Broker) appendAndRelayOutbound(ctx context.Context, message *coremodel.
 	if message.Kind == "" {
 		message.Kind = coremodel.MessageKindAgent
 	}
+	if message.MetadataJSON == "" {
+		message.MetadataJSON = inbound.MetadataJSON
+	}
 	if err := b.storage.Messages().Append(ctx, message); err != nil {
 		return err
 	}
+	b.logf("v2 outbound stored message=%s source=%s chars=%d", message.ID, message.SourceType, len(message.Text))
 	return b.relayOutbound(ctx, *message)
 }
 
@@ -204,11 +215,19 @@ func (b *Broker) relayOutbound(ctx context.Context, message coremodel.ThreadMess
 		return nil
 	}
 	for _, relay := range b.components.OutboundRelays() {
+		b.logf("v2 relay sending type=%s message=%s", relay.Type(), message.ID)
 		if err := relay.SendMessage(ctx, message); err != nil {
-			return err
+			return fmt.Errorf("relay %s: %w", relay.Type(), err)
 		}
+		b.logf("v2 relay sent type=%s message=%s", relay.Type(), message.ID)
 	}
 	return nil
+}
+
+func (b *Broker) logf(format string, args ...any) {
+	if b != nil && b.Logf != nil {
+		b.Logf(format, args...)
+	}
 }
 
 func inboundKind(event component.InboundEvent) coremodel.MessageKind {

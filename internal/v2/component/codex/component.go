@@ -5,18 +5,37 @@
 // can build on component/codex directly.
 package codex
 
-import "github.com/bartdeboer/ctgbot/internal/v2/component"
+import (
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+	"github.com/bartdeboer/ctgbot/internal/v2/component"
+)
 
 const ComponentType = "codex"
 
-type Component struct{}
+type Config struct {
+	ProfileName          string
+	ProfileHostPath      string
+	ProfileContainerPath string
+	WorkspaceRoot        string
+	Image                string
+	SandboxManager       sandboxengine.Manager
+}
+
+type Component struct {
+	Config Config
+}
 
 var _ component.Component = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 var _ component.Authenticator = (*Component)(nil)
+var _ component.Agent = (*Component)(nil)
 
-func New() *Component {
-	return &Component{}
+func New(config ...Config) *Component {
+	c := &Component{}
+	if len(config) > 0 {
+		c.Config = config[0]
+	}
+	return c
 }
 
 func (c *Component) Type() string {

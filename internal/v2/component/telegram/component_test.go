@@ -4,48 +4,62 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/dbmodel"
 	"github.com/bartdeboer/ctgbot/internal/v2/component"
+	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
 type fakeAPI struct {
-	updates []Update
+	updates []dbmodel.TelegramUpdate
 	err     error
+	sent    []sentMessage
 }
 
-func (f fakeAPI) Run(ctx context.Context, onUpdate func(context.Context, Update) error) error {
+type sentMessage struct {
+	chatID    int64
+	threadID  int
+	replyTo   int
+	text      string
+	parseMode string
+}
+
+func (f *fakeAPI) Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(context.Context, dbmodel.TelegramUpdate)) error {
 	for _, update := range f.updates {
-		if err := onUpdate(ctx, update); err != nil {
-			return err
-		}
+		onUpdate(ctx, update)
 	}
 	return f.err
 }
 
-func TestComponentType(t *testing.T) {
-	if got := New(nil).Type(); got != ComponentType {
-		t.Fatalf("Type() = %q, want %q", got, ComponentType)
-	}
+func (f *fakeAPI) SendMessage(ctx context.Context, chatID int64, threadID int, replyTo int, text string, parseMode string) error {
+	f.sent = append(f.sent, sentMessage{chatID: chatID, threadID: threadID, replyTo: replyTo, text: text, parseMode: parseMode})
+	return nil
 }
 
-func TestRegistryDiscoversTelegramAsEventSource(t *testing.T) {
-	registry := component.NewRegistry(New(fakeAPI{}))
+func TestComponentCapabilities(t *testing.T) {
+	telegram := New(nil)
+	registry := component.NewRegistry(telegram)
 
+	if telegram.Type() != ComponentType {
+		t.Fatalf("Type() = %q, want %q", telegram.Type(), ComponentType)
+	}
 	if got := len(component.Capabilities[component.EventSource](registry)); got != 1 {
 		t.Fatalf("event source capabilities len = %d, want 1", got)
+	}
+	if got := len(component.Capabilities[component.OutboundRelay](registry)); got != 1 {
+		t.Fatalf("outbound relay capabilities len = %d, want 1", got)
 	}
 }
 
 func TestRunEventsEmitsInboundEvent(t *testing.T) {
-	api := fakeAPI{updates: []Update{{
+	api := &fakeAPI{updates: []dbmodel.TelegramUpdate{{
 		ChatID:    -10042,
 		ThreadID:  7,
 		MessageID: 99,
 		UserID:    123,
-		UserLabel: " @bart ",
-		IsAdmin:   true,
+		Username:  "bart",
 		Text:      " hello ",
-		Metadata:  map[string]string{"telegram.file_count": "2"},
 	}}}
 	telegram := New(api)
 
@@ -70,7 +84,7 @@ func TestRunEventsEmitsInboundEvent(t *testing.T) {
 	if event.ProviderChatID != "-10042" || event.ProviderThreadID != "7" {
 		t.Fatalf("unexpected provider identity: %#v", event)
 	}
-	if event.Actor.ID != "123" || event.Actor.Label != "@bart" || !event.Actor.IsAdmin {
+	if event.Actor.ID != "123" || event.Actor.Label != "@bart" {
 		t.Fatalf("unexpected actor: %#v", event.Actor)
 	}
 	if event.Text != "hello" {
@@ -80,7 +94,6 @@ func TestRunEventsEmitsInboundEvent(t *testing.T) {
 		"telegram.chat_id":    "-10042",
 		"telegram.thread_id":  "7",
 		"telegram.message_id": "99",
-		"telegram.file_count": "2",
 	} {
 		if got := event.Metadata[key]; got != want {
 			t.Fatalf("metadata[%q] = %q, want %q", key, got, want)
@@ -88,28 +101,37 @@ func TestRunEventsEmitsInboundEvent(t *testing.T) {
 	}
 }
 
+func TestSendMessageUsesTelegramMetadata(t *testing.T) {
+	api := &fakeAPI{}
+	telegram := New(api)
+
+	err := telegram.SendMessage(context.Background(), coremodel.ThreadMessage{
+		Text:         "hello back",
+		MetadataJSON: `{"telegram.chat_id":"-10042","telegram.thread_id":"7"}`,
+	})
+	if err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+	if len(api.sent) != 1 {
+		t.Fatalf("sent len = %d, want 1", len(api.sent))
+	}
+	if api.sent[0].chatID != -10042 || api.sent[0].threadID != 7 || api.sent[0].text != "hello back" {
+		t.Fatalf("unexpected sent message: %#v", api.sent[0])
+	}
+}
+
 func TestRunEventsRejectsMissingDependencies(t *testing.T) {
 	if err := New(nil).RunEvents(context.Background(), func(ctx context.Context, event component.InboundEvent) error { return nil }); err == nil {
 		t.Fatal("RunEvents() with nil api succeeded, want error")
 	}
-	if err := New(fakeAPI{}).RunEvents(context.Background(), nil); err == nil {
+	if err := New(&fakeAPI{}).RunEvents(context.Background(), nil); err == nil {
 		t.Fatal("RunEvents() with nil emitter succeeded, want error")
 	}
 }
 
 func TestRunEventsPropagatesAPIError(t *testing.T) {
 	want := errors.New("poll failed")
-	err := New(fakeAPI{err: want}).RunEvents(context.Background(), func(ctx context.Context, event component.InboundEvent) error { return nil })
-	if !errors.Is(err, want) {
-		t.Fatalf("RunEvents() error = %v, want %v", err, want)
-	}
-}
-
-func TestRunEventsPropagatesEmitterError(t *testing.T) {
-	want := errors.New("emit failed")
-	err := New(fakeAPI{updates: []Update{{Text: "hello"}}}).RunEvents(context.Background(), func(ctx context.Context, event component.InboundEvent) error {
-		return want
-	})
+	err := New(&fakeAPI{err: want}).RunEvents(context.Background(), func(ctx context.Context, event component.InboundEvent) error { return nil })
 	if !errors.Is(err, want) {
 		t.Fatalf("RunEvents() error = %v, want %v", err, want)
 	}
