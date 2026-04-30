@@ -23,6 +23,7 @@ type Broker struct {
 type EventOutcome struct {
 	Inbound  *coremodel.ThreadMessage
 	Outbound []coremodel.ThreadMessage
+	Blocked  bool
 }
 
 func New(storage repository.Storage, components *component.Registry) *Broker {
@@ -55,6 +56,10 @@ func (b *Broker) HandleEvent(ctx context.Context, event component.InboundEvent) 
 		return EventOutcome{}, err
 	}
 	b.logf("v2 thread resolved chat=%s thread=%s", chat.ID, thread.ID)
+	if !chat.Enabled {
+		b.logf("v2 chat disabled chat=%s provider=%s:%s external=%q; dropping event", chat.ID, chat.ProviderType, chat.ProviderChatID, event.ExternalID)
+		return EventOutcome{Blocked: true}, nil
+	}
 	if err := b.ensureDefaultChatComponents(ctx, chat.ID); err != nil {
 		return EventOutcome{}, err
 	}
@@ -96,6 +101,10 @@ func (b *Broker) RouteInboundEvent(ctx context.Context, event component.InboundE
 	chat, thread, err := b.ensureTarget(ctx, event)
 	if err != nil {
 		return nil, err
+	}
+	if !chat.Enabled {
+		b.logf("v2 chat disabled chat=%s provider=%s:%s external=%q; dropping event", chat.ID, chat.ProviderType, chat.ProviderChatID, event.ExternalID)
+		return nil, nil
 	}
 	return b.appendInbound(ctx, event, chat.ID, thread.ID)
 }

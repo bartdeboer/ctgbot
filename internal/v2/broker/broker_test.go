@@ -16,6 +16,7 @@ func TestBrokerRoutesInboundEventIntoThreadMessage(t *testing.T) {
 	t.Parallel()
 
 	store := newTestStore(t)
+	enableProviderChat(t, store, "telegram", "-1003759705932")
 
 	broker := New(store, component.NewRegistry())
 	message, err := broker.RouteInboundEvent(context.Background(), component.InboundEvent{
@@ -67,6 +68,7 @@ func TestBrokerHandleEventRunsAgentStoresOutboundAndRelays(t *testing.T) {
 	t.Parallel()
 
 	store := newTestStore(t)
+	enableProviderChat(t, store, "telegram", "-1003759705932")
 	relay := &fakeRelay{}
 	agent := &fakeAgent{reply: "agent reply"}
 	broker := New(store, component.NewRegistry(agent, relay))
@@ -113,6 +115,7 @@ func TestBrokerOnlyRunsBoundComponents(t *testing.T) {
 	t.Parallel()
 
 	store := newTestStore(t)
+	enableProviderChat(t, store, "telegram", "-1003759705932")
 	boundAgent := &fakeAgent{typ: "bound-agent", reply: "bound reply"}
 	unboundAgent := &fakeAgent{typ: "unbound-agent", reply: "unbound reply"}
 	boundRelay := &fakeRelay{typ: "bound-relay"}
@@ -145,6 +148,53 @@ func TestBrokerOnlyRunsBoundComponents(t *testing.T) {
 	}
 }
 
+func TestBrokerBlocksDisabledChats(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	relay := &fakeRelay{}
+	agent := &fakeAgent{reply: "agent reply"}
+	broker := New(store, component.NewRegistry(agent, relay))
+	broker.DefaultChatComponents = []coremodel.ChatComponent{
+		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
+	}
+
+	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
+		SourceType:       "telegram",
+		EventType:        "message.received",
+		ExternalID:       "telegram:1:2:6",
+		ProviderChatID:   "-1003759705932",
+		ProviderThreadID: "845",
+		Text:             "blocked",
+	})
+	if err != nil {
+		t.Fatalf("handle event: %v", err)
+	}
+	if !outcome.Blocked || outcome.Inbound != nil || len(outcome.Outbound) != 0 {
+		t.Fatalf("expected blocked empty outcome, got %#v", outcome)
+	}
+	if agent.calls != 0 || len(relay.sent) != 0 {
+		t.Fatalf("disabled chat should not call components: agent=%d relay=%d", agent.calls, len(relay.sent))
+	}
+
+	chat, err := store.Chats().EnsureProviderChat(context.Background(), "telegram", "-1003759705932")
+	if err != nil {
+		t.Fatalf("load chat: %v", err)
+	}
+	thread, err := store.Threads().EnsureProviderThread(context.Background(), chat.ID, "845")
+	if err != nil {
+		t.Fatalf("load thread: %v", err)
+	}
+	messages, err := store.Messages().ListByThreadID(context.Background(), thread.ID)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(messages) != 0 {
+		t.Fatalf("disabled chat should not store messages, got %#v", messages)
+	}
+}
+
 func newTestStore(t *testing.T) repository.Storage {
 	t.Helper()
 
@@ -157,6 +207,20 @@ func newTestStore(t *testing.T) repository.Storage {
 		t.Fatalf("auto migrate: %v", err)
 	}
 	return store
+}
+
+func enableProviderChat(t *testing.T, store repository.Storage, providerType string, providerChatID string) *coremodel.Chat {
+	t.Helper()
+
+	chat, err := store.Chats().EnsureProviderChat(context.Background(), providerType, providerChatID)
+	if err != nil {
+		t.Fatalf("ensure chat: %v", err)
+	}
+	chat.Enabled = true
+	if err := store.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatalf("enable chat: %v", err)
+	}
+	return chat
 }
 
 type fakeAgent struct {
