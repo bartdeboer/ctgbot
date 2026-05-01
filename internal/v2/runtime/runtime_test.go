@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/bartdeboer/go-clistate"
 )
 
 func TestOpenResolvesRuntimePaths(t *testing.T) {
@@ -43,6 +45,23 @@ func TestResolveCodexProfilePrefersFlag(t *testing.T) {
 	if got := ResolveCodexProfile(" v2test ", nil); got != "v2test" {
 		t.Fatalf("profile = %q, want v2test", got)
 	}
+}
+
+func TestResolveOperatorTelegramUserIDs(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		store, err := clistate.NewCwd("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		if err := clistate.PersistTyped(store, "operators", OperatorConfig{TelegramUserIDs: []int64{13145044}}); err != nil {
+			t.Fatalf("persist operators: %v", err)
+		}
+
+		ids := ResolveOperatorTelegramUserIDs(store)
+		if len(ids) != 1 || ids[0] != 13145044 {
+			t.Fatalf("operator ids = %#v", ids)
+		}
+	})
 }
 
 func withTempCwd(t *testing.T, fn func(root string)) {

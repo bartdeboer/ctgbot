@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -43,10 +45,19 @@ func registerV2Routes(r *clir.Router) {
 				fmt.Println("hint: provide --telegram-token or TELEGRAM_BOT_TOKEN and --codex-profile")
 				return nil
 			}
-			return v2runtime.RunTelegramCodex(req.Context(), rt, v2runtime.TelegramCodexOptions{
-				Token:        token,
-				CodexProfile: profileName,
-				PollTimeout:  *pollTimeout,
+			runCtx, stop := context.WithCancel(req.Context())
+			defer stop()
+			logger := log.New(os.Stdout, "", log.LstdFlags)
+			return v2runtime.RunTelegramCodex(runCtx, rt, v2runtime.TelegramCodexOptions{
+				Token:                   token,
+				CodexProfile:            profileName,
+				PollTimeout:             *pollTimeout,
+				OperatorTelegramUserIDs: v2runtime.ResolveOperatorTelegramUserIDs(rt.Config),
+				Actions: &runtimeProcessActions{
+					stop:    stop,
+					install: func(ctx context.Context) error { return runInstalledCtgbotCommand(ctx, "install") },
+					logger:  logger,
+				},
 			})
 		})
 

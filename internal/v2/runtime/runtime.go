@@ -127,6 +127,21 @@ func ResolveCodexProfile(flagValue string, config *clistate.Store) string {
 	return strings.TrimSpace(config.GetString("codex.profile", ""))
 }
 
+type OperatorConfig struct {
+	TelegramUserIDs []int64 `json:"telegram_user_ids"`
+}
+
+func ResolveOperatorTelegramUserIDs(config *clistate.Store) []int64 {
+	if config == nil {
+		return nil
+	}
+	operators, ok := clistate.GetTypedOK[OperatorConfig](config, "operators")
+	if !ok {
+		return nil
+	}
+	return append([]int64(nil), operators.TelegramUserIDs...)
+}
+
 func ComponentForType(componentType string) v2component.Component {
 	switch strings.ToLower(strings.TrimSpace(componentType)) {
 	case v2codex.ComponentType:

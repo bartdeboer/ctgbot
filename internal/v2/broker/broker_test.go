@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v2/component"
+	runtimecomponent "github.com/bartdeboer/ctgbot/internal/v2/component/runtime"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v2/repository"
 	"gorm.io/driver/sqlite"
@@ -195,6 +197,139 @@ func TestBrokerBlocksDisabledChats(t *testing.T) {
 	}
 }
 
+func TestBrokerRunsRuntimeCommandForRootActorInDisabledChat(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	relay := &fakeRelay{}
+	agent := &fakeAgent{reply: "agent reply"}
+	actions := &fakeRuntimeActions{}
+	runtimeComponent := runtimecomponent.New(actions)
+	broker := New(store, component.NewRegistry(agent, relay, runtimeComponent))
+	broker.DefaultChatComponents = []coremodel.ChatComponent{
+		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: runtimecomponent.ComponentType, Enabled: true},
+	}
+	broker.RoleResolver = func(ctx context.Context, event component.InboundEvent, chat coremodel.Chat) []simplerbac.Role {
+		return []simplerbac.Role{simplerbac.RoleUser, simplerbac.RoleRoot}
+	}
+
+	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
+		SourceType:       "telegram",
+		EventType:        "message.received",
+		ExternalID:       "telegram:1:2:7",
+		ProviderChatID:   "-1003759705932",
+		ProviderThreadID: "845",
+		Actor:            component.Actor{ID: "13145044", Label: "@bartdeboer"},
+		Text:             "/quit",
+	})
+	if err != nil {
+		t.Fatalf("handle event: %v", err)
+	}
+	if !outcome.Command || outcome.Inbound != nil || len(outcome.Outbound) != 1 {
+		t.Fatalf("unexpected command outcome: %#v", outcome)
+	}
+	if actions.quits != 1 || actions.installs != 0 {
+		t.Fatalf("unexpected runtime actions: %#v", actions)
+	}
+	if agent.calls != 0 {
+		t.Fatalf("command should not call agent, got %d calls", agent.calls)
+	}
+	if len(relay.sent) != 1 || relay.sent[0].Text != "quit requested" || relay.sent[0].Kind != coremodel.MessageKindSystem {
+		t.Fatalf("unexpected relayed command result: %#v", relay.sent)
+	}
+}
+
+func TestBrokerDeniesRuntimeCommandForNonRootActor(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	enableProviderChat(t, store, "telegram", "-1003759705932")
+	relay := &fakeRelay{}
+	agent := &fakeAgent{reply: "agent reply"}
+	actions := &fakeRuntimeActions{}
+	broker := New(store, component.NewRegistry(agent, relay, runtimecomponent.New(actions)))
+	broker.DefaultChatComponents = []coremodel.ChatComponent{
+		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: runtimecomponent.ComponentType, Enabled: true},
+	}
+
+	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
+		SourceType:       "telegram",
+		EventType:        "message.received",
+		ExternalID:       "telegram:1:2:8",
+		ProviderChatID:   "-1003759705932",
+		ProviderThreadID: "845",
+		Text:             "/install",
+	})
+	if err != nil {
+		t.Fatalf("handle event: %v", err)
+	}
+	if !outcome.Command || outcome.Inbound != nil || len(outcome.Outbound) != 1 {
+		t.Fatalf("unexpected command outcome: %#v", outcome)
+	}
+	if actions.installs != 0 || actions.quits != 0 || agent.calls != 0 {
+		t.Fatalf("denied command should not call actions or agent: actions=%#v agent=%d", actions, agent.calls)
+	}
+	if len(relay.sent) != 1 || relay.sent[0].Text == "" {
+		t.Fatalf("expected command error relay, got %#v", relay.sent)
+	}
+}
+
+func TestBrokerDoesNotSendUnknownSlashCommandToAgent(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	enableProviderChat(t, store, "telegram", "-1003759705932")
+	relay := &fakeRelay{}
+	agent := &fakeAgent{reply: "agent reply"}
+	broker := New(store, component.NewRegistry(agent, relay, runtimecomponent.New(&fakeRuntimeActions{})))
+	broker.DefaultChatComponents = []coremodel.ChatComponent{
+		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: runtimecomponent.ComponentType, Enabled: true},
+	}
+	broker.RoleResolver = func(ctx context.Context, event component.InboundEvent, chat coremodel.Chat) []simplerbac.Role {
+		return []simplerbac.Role{simplerbac.RoleRoot}
+	}
+
+	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
+		SourceType:       "telegram",
+		EventType:        "message.received",
+		ExternalID:       "telegram:1:2:9",
+		ProviderChatID:   "-1003759705932",
+		ProviderThreadID: "845",
+		Text:             "/start",
+	})
+	if err != nil {
+		t.Fatalf("handle event: %v", err)
+	}
+	if !outcome.Command || agent.calls != 0 {
+		t.Fatalf("unknown slash should be handled as command error without agent call: outcome=%#v agent=%d", outcome, agent.calls)
+	}
+	if len(relay.sent) != 1 || relay.sent[0].Text == "" {
+		t.Fatalf("expected command error relay, got %#v", relay.sent)
+	}
+}
+
+func TestCommandArgvNormalizesTelegramCommandText(t *testing.T) {
+	t.Parallel()
+
+	argv, ok := commandArgv(" /quit@codextg03bot now ")
+	if !ok {
+		t.Fatal("expected command")
+	}
+	if len(argv) != 2 || argv[0] != "quit" || argv[1] != "now" {
+		t.Fatalf("argv = %#v", argv)
+	}
+
+	if _, ok := commandArgv("hello"); ok {
+		t.Fatal("did not expect non-command text")
+	}
+}
+
 func newTestStore(t *testing.T) repository.Storage {
 	t.Helper()
 
@@ -265,5 +400,22 @@ func (r *fakeRelay) Type() string {
 
 func (r *fakeRelay) SendMessage(_ context.Context, message coremodel.ThreadMessage) error {
 	r.sent = append(r.sent, message)
+	return nil
+}
+
+type fakeRuntimeActions struct {
+	installs int
+	quits    int
+}
+
+var _ runtimecomponent.Actions = (*fakeRuntimeActions)(nil)
+
+func (f *fakeRuntimeActions) Install(ctx context.Context) error {
+	f.installs++
+	return nil
+}
+
+func (f *fakeRuntimeActions) Quit(ctx context.Context) error {
+	f.quits++
 	return nil
 }

@@ -13,17 +13,21 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/messenger/telegramengine"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	v2broker "github.com/bartdeboer/ctgbot/internal/v2/broker"
 	v2component "github.com/bartdeboer/ctgbot/internal/v2/component"
 	v2codex "github.com/bartdeboer/ctgbot/internal/v2/component/codex"
+	v2runtimecomponent "github.com/bartdeboer/ctgbot/internal/v2/component/runtime"
 	v2telegram "github.com/bartdeboer/ctgbot/internal/v2/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
 type TelegramCodexOptions struct {
-	Token        string
-	CodexProfile string
-	PollTimeout  time.Duration
+	Token                   string
+	CodexProfile            string
+	PollTimeout             time.Duration
+	Actions                 v2runtimecomponent.Actions
+	OperatorTelegramUserIDs []int64
 }
 
 func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOptions) error {
@@ -70,12 +74,15 @@ func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOption
 		StateStore:           rt.Storage.ThreadComponentStates(),
 	})
 
-	components := v2component.NewRegistry(telegramComponent, codexComponent)
+	runtimeComponent := v2runtimecomponent.New(opts.Actions)
+	components := v2component.NewRegistry(telegramComponent, codexComponent, runtimeComponent)
 	broker := v2broker.New(rt.Storage, components)
 	broker.DefaultChatComponents = []coremodel.ChatComponent{
 		{ComponentType: v2telegram.ComponentType, ProfileName: v2telegram.DefaultProfileName, Enabled: true},
 		{ComponentType: v2codex.ComponentType, ProfileName: codexProfile, Enabled: true},
+		{ComponentType: v2runtimecomponent.ComponentType, Enabled: true},
 	}
+	broker.RoleResolver = telegramRoleResolver(opts.OperatorTelegramUserIDs)
 	broker.Logf = logger.Printf
 
 	runCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -95,6 +102,25 @@ func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOption
 		}
 		return nil
 	})
+}
+
+func telegramRoleResolver(rootUserIDs []int64) v2broker.RoleResolver {
+	rootUsers := map[string]struct{}{}
+	for _, userID := range rootUserIDs {
+		if userID == 0 {
+			continue
+		}
+		rootUsers[strconv.FormatInt(userID, 10)] = struct{}{}
+	}
+	return func(ctx context.Context, event v2component.InboundEvent, chat coremodel.Chat) []simplerbac.Role {
+		_ = ctx
+		_ = chat
+		roles := []simplerbac.Role{simplerbac.RoleUser}
+		if _, ok := rootUsers[strings.TrimSpace(event.Actor.ID)]; ok {
+			roles = append(roles, simplerbac.RoleRoot)
+		}
+		return roles
+	}
 }
 
 func ensureRuntimeRows(ctx context.Context, rt *Runtime, codexProfile string) error {
