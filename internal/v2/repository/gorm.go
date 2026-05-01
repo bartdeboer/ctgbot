@@ -116,6 +116,15 @@ func (r *GORMChats) EnsureProviderChat(ctx context.Context, providerType string,
 	return &chat, nil
 }
 
+func (r *GORMChats) ListDisabled(ctx context.Context) ([]coremodel.Chat, error) {
+	var chats []coremodel.Chat
+	err := r.db.WithContext(ctx).
+		Where("enabled = ?", false).
+		Order("created_at ASC").
+		Find(&chats).Error
+	return chats, err
+}
+
 type GORMThreads struct{ db *gorm.DB }
 
 var _ ThreadRepository = (*GORMThreads)(nil)

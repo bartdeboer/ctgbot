@@ -130,9 +130,10 @@ type Actor struct {
 // InboundEvent is an external stimulus that ctgbot can route into a
 // canonical conversation thread.
 type InboundEvent struct {
-	SourceType string
-	EventType  string
-	ExternalID string
+	SourceType        string
+	SourceProfileName string
+	EventType         string
+	ExternalID        string
 
 	ProviderChatID   string
 	ProviderThreadID string

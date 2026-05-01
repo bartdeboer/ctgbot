@@ -9,31 +9,27 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
-func (b *Broker) ensureDefaultChatComponents(ctx context.Context, chatID modeluuid.UUID) error {
+func (b *Broker) ensureSourceChatComponent(ctx context.Context, chatID modeluuid.UUID, event component.InboundEvent) error {
+	componentType := strings.TrimSpace(event.SourceType)
+	if componentType == "" {
+		return nil
+	}
+	profileName := strings.TrimSpace(event.SourceProfileName)
 	existing, err := b.storage.ChatComponents().ListByChatID(ctx, chatID)
 	if err != nil {
 		return err
 	}
-	seen := map[string]struct{}{}
 	for _, binding := range existing {
-		seen[chatComponentKey(binding.ComponentType, binding.ProfileName)] = struct{}{}
+		if chatComponentKey(binding.ComponentType, binding.ProfileName) == chatComponentKey(componentType, profileName) {
+			return nil
+		}
 	}
-
-	for _, binding := range b.defaultChatComponents {
-		if strings.TrimSpace(binding.ComponentType) == "" {
-			continue
-		}
-		key := chatComponentKey(binding.ComponentType, binding.ProfileName)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		binding.ChatID = chatID
-		if err := b.storage.ChatComponents().Save(ctx, &binding); err != nil {
-			return err
-		}
-		seen[key] = struct{}{}
-	}
-	return nil
+	return b.storage.ChatComponents().Save(ctx, &coremodel.ChatComponent{
+		ChatID:        chatID,
+		ComponentType: componentType,
+		ProfileName:   profileName,
+		Enabled:       true,
+	})
 }
 
 func chatComponentKey(componentType string, profileName string) string {

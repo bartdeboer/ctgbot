@@ -115,14 +115,15 @@ func inboundEventFromUpdate(update dbmodel.TelegramUpdate, roles []simplerbac.Ro
 		"telegram.message_id": strconv.Itoa(update.MessageID),
 	}
 	return component.InboundEvent{
-		SourceType:       ComponentType,
-		EventType:        EventMessageReceived,
-		ExternalID:       externalID(update.ChatID, update.ThreadID, update.MessageID),
-		ProviderChatID:   strconv.FormatInt(update.ChatID, 10),
-		ProviderThreadID: strconv.Itoa(update.ThreadID),
-		Actor:            actorFromUpdate(update, roles),
-		Text:             strings.TrimSpace(update.Text),
-		Metadata:         metadata,
+		SourceType:        ComponentType,
+		SourceProfileName: DefaultProfileName,
+		EventType:         EventMessageReceived,
+		ExternalID:        externalID(update.ChatID, update.ThreadID, update.MessageID),
+		ProviderChatID:    strconv.FormatInt(update.ChatID, 10),
+		ProviderThreadID:  strconv.Itoa(update.ThreadID),
+		Actor:             actorFromUpdate(update, roles),
+		Text:              strings.TrimSpace(update.Text),
+		Metadata:          metadata,
 	}
 }
 

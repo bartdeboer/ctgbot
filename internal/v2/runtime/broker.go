@@ -15,6 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/messenger/telegramengine"
 	v2broker "github.com/bartdeboer/ctgbot/internal/v2/broker"
 	v2component "github.com/bartdeboer/ctgbot/internal/v2/component"
+	v2brokercomponent "github.com/bartdeboer/ctgbot/internal/v2/component/broker"
 	v2codex "github.com/bartdeboer/ctgbot/internal/v2/component/codex"
 	v2runtimecomponent "github.com/bartdeboer/ctgbot/internal/v2/component/runtime"
 	v2telegram "github.com/bartdeboer/ctgbot/internal/v2/component/telegram"
@@ -75,16 +76,12 @@ func WireBroker(ctx context.Context, rt *Runtime, opts BrokerOptions) (*v2broker
 	})
 
 	runtimeComponent := v2runtimecomponent.New(opts.Actions)
-	registry := v2component.NewRegistry(telegramComponent, codexComponent, runtimeComponent)
-	defaultChatComponents := []coremodel.ChatComponent{
-		{ComponentType: v2telegram.ComponentType, ProfileName: v2telegram.DefaultProfileName, Enabled: true},
-		{ComponentType: v2codex.ComponentType, ProfileName: codexProfile, Enabled: true},
-		{ComponentType: v2runtimecomponent.ComponentType, Enabled: true},
-	}
+	brokerComponent := v2brokercomponent.New(rt.Storage, v2brokercomponent.Config{CodexProfile: codexProfile})
+	registry := v2component.NewRegistry(telegramComponent, codexComponent, runtimeComponent, brokerComponent)
 	telegramComponent.EventErrorHandler = func(eventCtx context.Context, event v2component.InboundEvent, err error) {
 		sendTelegramError(eventCtx, telegramComponent, event, err, logger)
 	}
-	return v2broker.New(rt.Storage, registry, defaultChatComponents, logger.Printf), nil
+	return v2broker.New(rt.Storage, registry, logger.Printf), nil
 }
 
 func Run(ctx context.Context, rt *Runtime, opts BrokerOptions) error {
@@ -109,7 +106,7 @@ func Run(ctx context.Context, rt *Runtime, opts BrokerOptions) error {
 }
 
 func ensureRuntimeRows(ctx context.Context, rt *Runtime, codexProfile string) error {
-	for _, componentType := range []string{v2telegram.ComponentType, v2codex.ComponentType, v2runtimecomponent.ComponentType} {
+	for _, componentType := range []string{v2telegram.ComponentType, v2codex.ComponentType, v2runtimecomponent.ComponentType, v2brokercomponent.ComponentType} {
 		if err := rt.Storage.Components().Save(ctx, &coremodel.Component{
 			Type:    componentType,
 			Enabled: true,

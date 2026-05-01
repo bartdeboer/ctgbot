@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	v2component "github.com/bartdeboer/ctgbot/internal/v2/component"
+	v2brokercomponent "github.com/bartdeboer/ctgbot/internal/v2/component/broker"
 	v2codex "github.com/bartdeboer/ctgbot/internal/v2/component/codex"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 	v2runtime "github.com/bartdeboer/ctgbot/internal/v2/runtime"
@@ -136,6 +139,33 @@ func registerV2Routes(r *clir.Router) {
 				Stdout:               os.Stdout,
 				Stderr:               os.Stderr,
 			})
+		})
+
+		b.Handle("chat", "Run v2 chat administration commands", func(req *clir.Request) error {
+			rt, err := v2runtime.Open(req.Context(), v2runtime.Options{})
+			if err != nil {
+				return err
+			}
+			brokerComponent := v2brokercomponent.New(rt.Storage, v2brokercomponent.Config{
+				CodexProfile: v2runtime.ResolveCodexProfile("", rt.Config),
+			})
+			engine, err := v2component.NewRegistry(brokerComponent).CommandEngine(commandengine.SourceCLI)
+			if err != nil {
+				return err
+			}
+			result, err := engine.Run(req.Context(), commandengine.Request{
+				Context: commandengine.Context{
+					Source: commandengine.SourceCLI,
+					Actor:  commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleRoot}},
+				},
+			}, append([]string{"chat"}, req.Extra...))
+			if err != nil {
+				return err
+			}
+			if text := strings.TrimSpace(result.Text); text != "" {
+				fmt.Println(text)
+			}
+			return nil
 		})
 	})
 }

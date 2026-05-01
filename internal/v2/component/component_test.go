@@ -107,9 +107,10 @@ func TestRegistryReturnsCopies(t *testing.T) {
 
 func TestInboundEventCarriesThreadRoutingAndActor(t *testing.T) {
 	event := InboundEvent{
-		SourceType: "gmail",
-		EventType:  "email.received",
-		ExternalID: "msg-123",
+		SourceType:        "gmail",
+		SourceProfileName: "work",
+		EventType:         "email.received",
+		ExternalID:        "msg-123",
 		Actor: Actor{
 			ID:    "alice@example.com",
 			Label: "Alice",
@@ -118,7 +119,7 @@ func TestInboundEventCarriesThreadRoutingAndActor(t *testing.T) {
 		Metadata: map[string]string{"subject": "Question"},
 	}
 
-	if event.SourceType != "gmail" || event.EventType != "email.received" || event.ExternalID != "msg-123" {
+	if event.SourceType != "gmail" || event.SourceProfileName != "work" || event.EventType != "email.received" || event.ExternalID != "msg-123" {
 		t.Fatalf("unexpected event identity: %#v", event)
 	}
 	if event.Actor.ID != "alice@example.com" || event.Actor.Label != "Alice" {

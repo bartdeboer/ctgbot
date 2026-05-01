@@ -24,6 +24,7 @@ type ChatRepository interface {
 	Save(ctx context.Context, chat *coremodel.Chat) error
 	GetByID(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
 	EnsureProviderChat(ctx context.Context, providerType string, providerChatID string) (*coremodel.Chat, error)
+	ListDisabled(ctx context.Context) ([]coremodel.Chat, error)
 }
 
 type ThreadRepository interface {

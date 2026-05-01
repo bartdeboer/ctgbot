@@ -76,7 +76,7 @@ func TestRunEventsEmitsInboundEvent(t *testing.T) {
 		t.Fatalf("events len = %d, want 1", len(events))
 	}
 	event := events[0]
-	if event.SourceType != ComponentType || event.EventType != EventMessageReceived {
+	if event.SourceType != ComponentType || event.SourceProfileName != DefaultProfileName || event.EventType != EventMessageReceived {
 		t.Fatalf("unexpected event type: %#v", event)
 	}
 	if event.ExternalID != "-10042:7:99" {

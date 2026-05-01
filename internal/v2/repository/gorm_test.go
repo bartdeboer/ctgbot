@@ -118,6 +118,34 @@ func TestGORMStorageEnsuresProviderChatAndThread(t *testing.T) {
 	}
 }
 
+func TestGORMStorageListsDisabledChats(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	disabled, err := store.Chats().EnsureProviderChat(ctx, "telegram", "-100disabled")
+	if err != nil {
+		t.Fatalf("ensure disabled chat: %v", err)
+	}
+	enabled, err := store.Chats().EnsureProviderChat(ctx, "telegram", "-100enabled")
+	if err != nil {
+		t.Fatalf("ensure enabled chat: %v", err)
+	}
+	enabled.Enabled = true
+	if err := store.Chats().Save(ctx, enabled); err != nil {
+		t.Fatalf("save enabled chat: %v", err)
+	}
+
+	chats, err := store.Chats().ListDisabled(ctx)
+	if err != nil {
+		t.Fatalf("list disabled chats: %v", err)
+	}
+	if len(chats) != 1 || chats[0].ID != disabled.ID {
+		t.Fatalf("disabled chats = %#v, want %#v", chats, disabled)
+	}
+}
+
 func TestGORMStoragePersistsComponentProfilesAndChatBindings(t *testing.T) {
 	t.Parallel()
 

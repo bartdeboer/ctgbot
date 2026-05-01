@@ -10,10 +10,9 @@ import (
 )
 
 type Broker struct {
-	storage               repository.Storage
-	components            *component.Registry
-	defaultChatComponents []coremodel.ChatComponent
-	logfFunc              func(format string, args ...any)
+	storage    repository.Storage
+	components *component.Registry
+	logfFunc   func(format string, args ...any)
 }
 
 type EventOutcome struct {
@@ -23,12 +22,11 @@ type EventOutcome struct {
 	Command  bool
 }
 
-func New(storage repository.Storage, components *component.Registry, defaultChatComponents []coremodel.ChatComponent, logf func(format string, args ...any)) *Broker {
+func New(storage repository.Storage, components *component.Registry, logf func(format string, args ...any)) *Broker {
 	return &Broker{
-		storage:               storage,
-		components:            components,
-		defaultChatComponents: defaultChatComponents,
-		logfFunc:              logf,
+		storage:    storage,
+		components: components,
+		logfFunc:   logf,
 	}
 }
 

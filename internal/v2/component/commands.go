@@ -15,6 +15,10 @@ func (r *Registry) CommandEngineForBindings(bindings []coremodel.ChatComponent, 
 	return buildCommandEngine(r.CommandSurfacesForBindings(bindings), source)
 }
 
+func (r *Registry) CommandEngine(source commandengine.Source) (*commandengine.Engine, error) {
+	return buildCommandEngine(r.CommandSurfaces(), source)
+}
+
 func (r *Registry) CommandSurfacesForBindings(bindings []coremodel.ChatComponent) []CommandSurface {
 	if r == nil {
 		return nil

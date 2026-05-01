@@ -25,14 +25,23 @@ func (b *Broker) HandleEvent(ctx context.Context, event component.InboundEvent) 
 		return EventOutcome{}, err
 	}
 	b.logf("v2 inbound event source=%s provider_chat=%q provider_thread=%q external=%q text_len=%d", event.SourceType, event.ProviderChatID, event.ProviderThreadID, event.ExternalID, len(event.Text))
-	chat, thread, err := b.ensureTarget(ctx, event)
+	chat, err := b.resolveChat(ctx, event)
+	if err != nil {
+		return EventOutcome{}, err
+	}
+	b.logf("v2 chat resolved chat=%s enabled=%t", chat.ID, chat.Enabled)
+	if err := b.ensureSourceChatComponent(ctx, chat.ID, event); err != nil {
+		return EventOutcome{}, err
+	}
+	if !chat.Enabled {
+		b.logf("v2 chat disabled chat=%s provider=%s:%s external=%q; dropping event", chat.ID, chat.ProviderType, chat.ProviderChatID, event.ExternalID)
+		return EventOutcome{Blocked: true}, nil
+	}
+	thread, err := b.resolveThread(ctx, event, chat.ID)
 	if err != nil {
 		return EventOutcome{}, err
 	}
 	b.logf("v2 thread resolved chat=%s thread=%s", chat.ID, thread.ID)
-	if err := b.ensureDefaultChatComponents(ctx, chat.ID); err != nil {
-		return EventOutcome{}, err
-	}
 	bindings, err := b.enabledChatComponents(ctx, chat.ID)
 	if err != nil {
 		return EventOutcome{}, err
@@ -41,10 +50,6 @@ func (b *Broker) HandleEvent(ctx context.Context, event component.InboundEvent) 
 
 	if handled, outcome, err := b.tryHandleCommand(ctx, event, *chat, *thread, bindings); handled || err != nil {
 		return outcome, err
-	}
-	if !chat.Enabled {
-		b.logf("v2 chat disabled chat=%s provider=%s:%s external=%q; dropping event", chat.ID, chat.ProviderType, chat.ProviderChatID, event.ExternalID)
-		return EventOutcome{Blocked: true}, nil
 	}
 
 	inbound, err := b.appendInbound(ctx, event, chat.ID, thread.ID)
@@ -76,13 +81,20 @@ func (b *Broker) RouteInboundEvent(ctx context.Context, event component.InboundE
 	if err := validateEvent(event); err != nil {
 		return nil, err
 	}
-	chat, thread, err := b.ensureTarget(ctx, event)
+	chat, err := b.resolveChat(ctx, event)
 	if err != nil {
+		return nil, err
+	}
+	if err := b.ensureSourceChatComponent(ctx, chat.ID, event); err != nil {
 		return nil, err
 	}
 	if !chat.Enabled {
 		b.logf("v2 chat disabled chat=%s provider=%s:%s external=%q; dropping event", chat.ID, chat.ProviderType, chat.ProviderChatID, event.ExternalID)
 		return nil, nil
+	}
+	thread, err := b.resolveThread(ctx, event, chat.ID)
+	if err != nil {
+		return nil, err
 	}
 	return b.appendInbound(ctx, event, chat.ID, thread.ID)
 }
@@ -95,18 +107,6 @@ func validateEvent(event component.InboundEvent) error {
 		return fmt.Errorf("missing thread id")
 	}
 	return nil
-}
-
-func (b *Broker) ensureTarget(ctx context.Context, event component.InboundEvent) (*coremodel.Chat, *coremodel.Thread, error) {
-	chat, err := b.resolveChat(ctx, event)
-	if err != nil {
-		return nil, nil, err
-	}
-	thread, err := b.resolveThread(ctx, event, chat.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-	return chat, thread, nil
 }
 
 func (b *Broker) resolveChat(ctx context.Context, event component.InboundEvent) (*coremodel.Chat, error) {
