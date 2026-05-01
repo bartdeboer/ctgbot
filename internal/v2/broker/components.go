@@ -19,8 +19,9 @@ func (b *Broker) ensureSourceChatComponent(ctx context.Context, chatID modeluuid
 	if err != nil {
 		return err
 	}
+	sourceKey := component.Key{Type: componentType, Name: profileName}
 	for _, binding := range existing {
-		if chatComponentKey(binding.ComponentType, binding.ProfileName) == chatComponentKey(componentType, profileName) {
+		if component.KeyForBinding(binding).Fingerprint() == sourceKey.Fingerprint() {
 			return nil
 		}
 	}
@@ -32,19 +33,6 @@ func (b *Broker) ensureSourceChatComponent(ctx context.Context, chatID modeluuid
 	})
 }
 
-func chatComponentKey(componentType string, profileName string) string {
-	return strings.TrimSpace(componentType) + "\x00" + strings.TrimSpace(profileName)
-}
-
 func (b *Broker) enabledChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error) {
 	return b.storage.ChatComponents().ListEnabledByChatID(ctx, chatID)
-}
-
-func matchesAnyBinding(candidate component.Component, bindings []coremodel.ChatComponent) bool {
-	for _, binding := range bindings {
-		if component.MatchesBinding(candidate, binding) {
-			return true
-		}
-	}
-	return false
 }

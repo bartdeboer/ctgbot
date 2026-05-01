@@ -156,6 +156,29 @@ func TestMatchesBindingRespectsComponentTypeAndProfile(t *testing.T) {
 	if !MatchesBinding(baseComponent{typ: "codex"}, binding) {
 		t.Fatal("expected unprofiled component to match by type")
 	}
+	if !MatchesAnyBinding(namedProfileComponent{baseComponent: baseComponent{typ: "codex"}, profile: "personal"}, []coremodel.ChatComponent{binding}) {
+		t.Fatal("expected component to match one binding")
+	}
+}
+
+func TestComponentKeyNormalizesAndFormatsIdentity(t *testing.T) {
+	binding := coremodel.ChatComponent{ComponentType: " codex ", ProfileName: " personal "}
+	key := KeyForBinding(binding)
+
+	if key.Type != "codex" || key.Name != "personal" {
+		t.Fatalf("key = %#v, want codex/personal", key)
+	}
+	if key.String() != "codex/personal" {
+		t.Fatalf("String() = %q, want codex/personal", key.String())
+	}
+	if key.Fingerprint() != "codex\x00personal" {
+		t.Fatalf("Fingerprint() = %q", key.Fingerprint())
+	}
+
+	componentKey := KeyForComponent(namedProfileComponent{baseComponent: baseComponent{typ: " codex "}, profile: " personal "})
+	if componentKey != key {
+		t.Fatalf("component key = %#v, want %#v", componentKey, key)
+	}
 }
 
 func TestRegistryCommandSurfacesForBindings(t *testing.T) {

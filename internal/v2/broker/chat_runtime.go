@@ -91,7 +91,7 @@ func (b *Broker) componentsForBindings(bindings []coremodel.ChatComponent) []com
 	}
 	var out []component.Component
 	for _, candidate := range b.components.Components() {
-		if matchesAnyBinding(candidate, bindings) {
+		if component.MatchesAnyBinding(candidate, bindings) {
 			out = append(out, candidate)
 		}
 	}
@@ -115,7 +115,7 @@ func chatRuntimeFingerprint(bindings []coremodel.ChatComponent) string {
 	}
 	keys := make([]string, 0, len(bindings))
 	for _, binding := range bindings {
-		keys = append(keys, chatComponentKey(binding.ComponentType, binding.ProfileName))
+		keys = append(keys, component.KeyForBinding(binding).Fingerprint())
 	}
 	sort.Strings(keys)
 	return strings.Join(keys, "\n")

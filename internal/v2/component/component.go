@@ -30,15 +30,67 @@ type Profiled interface {
 	ProfileName() string
 }
 
-func MatchesBinding(component Component, binding coremodel.ChatComponent) bool {
+type Key struct {
+	Type string
+	Name string
+}
+
+func KeyForComponent(component Component) Key {
 	if component == nil {
+		return Key{}
+	}
+	return Key{
+		Type: strings.TrimSpace(component.Type()),
+		Name: ComponentProfileName(component),
+	}
+}
+
+func KeyForBinding(binding coremodel.ChatComponent) Key {
+	return Key{
+		Type: strings.TrimSpace(binding.ComponentType),
+		Name: strings.TrimSpace(binding.ProfileName),
+	}
+}
+
+func (k Key) String() string {
+	k = k.Clean()
+	if k.Name == "" {
+		return k.Type
+	}
+	return k.Type + "/" + k.Name
+}
+
+func (k Key) Fingerprint() string {
+	k = k.Clean()
+	return k.Type + "\x00" + k.Name
+}
+
+func (k Key) Clean() Key {
+	return Key{
+		Type: strings.TrimSpace(k.Type),
+		Name: strings.TrimSpace(k.Name),
+	}
+}
+
+func MatchesBinding(component Component, binding coremodel.ChatComponent) bool {
+	componentKey := KeyForComponent(component)
+	bindingKey := KeyForBinding(binding)
+	if componentKey.Type == "" {
 		return false
 	}
-	if strings.TrimSpace(component.Type()) != strings.TrimSpace(binding.ComponentType) {
+	if componentKey.Type != bindingKey.Type {
 		return false
 	}
-	profileName := ComponentProfileName(component)
-	return profileName == "" || profileName == strings.TrimSpace(binding.ProfileName)
+	return componentKey.Name == "" || componentKey.Name == bindingKey.Name
+}
+
+func MatchesAnyBinding(component Component, bindings []coremodel.ChatComponent) bool {
+	for _, binding := range bindings {
+		if MatchesBinding(component, binding) {
+			return true
+		}
+	}
+	return false
 }
 
 func ComponentProfileName(component Component) string {

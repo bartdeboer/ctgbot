@@ -25,20 +25,11 @@ func (r *Registry) CommandSurfacesForBindings(bindings []coremodel.ChatComponent
 	}
 	var out []CommandSurface
 	for _, surface := range r.CommandSurfaces() {
-		if matchesAnyBinding(surface, bindings) {
+		if MatchesAnyBinding(surface, bindings) {
 			out = append(out, surface)
 		}
 	}
 	return out
-}
-
-func matchesAnyBinding(component Component, bindings []coremodel.ChatComponent) bool {
-	for _, binding := range bindings {
-		if MatchesBinding(component, binding) {
-			return true
-		}
-	}
-	return false
 }
 
 func buildCommandEngine(surfaces []CommandSurface, source commandengine.Source) (*commandengine.Engine, error) {
