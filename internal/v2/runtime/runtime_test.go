@@ -64,6 +64,18 @@ func TestResolveOperatorTelegramUserIDs(t *testing.T) {
 	})
 }
 
+func TestWireBrokerRequiresTelegramToken(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		rt, err := Open(context.Background(), Options{})
+		if err != nil {
+			t.Fatalf("open runtime: %v", err)
+		}
+		if _, err := WireBroker(context.Background(), rt, BrokerOptions{}); err == nil {
+			t.Fatal("expected missing telegram token error")
+		}
+	})
+}
+
 func withTempCwd(t *testing.T, fn func(root string)) {
 	t.Helper()
 

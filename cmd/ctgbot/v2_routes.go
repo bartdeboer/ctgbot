@@ -48,10 +48,10 @@ func registerV2Routes(r *clir.Router) {
 			runCtx, stop := context.WithCancel(req.Context())
 			defer stop()
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			return v2runtime.RunTelegramCodex(runCtx, rt, v2runtime.TelegramCodexOptions{
-				Token:                   token,
+			return v2runtime.Run(runCtx, rt, v2runtime.BrokerOptions{
+				TelegramToken:           token,
 				CodexProfile:            profileName,
-				PollTimeout:             *pollTimeout,
+				TelegramPollTimeout:     *pollTimeout,
 				OperatorTelegramUserIDs: v2runtime.ResolveOperatorTelegramUserIDs(rt.Config),
 				Actions: &runtimeProcessActions{
 					stop:    stop,
