@@ -2,7 +2,9 @@ package broker
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -330,6 +332,47 @@ func TestCommandArgvNormalizesTelegramCommandText(t *testing.T) {
 	}
 }
 
+func TestBrokerRunStartsEventSources(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	enableProviderChat(t, store, "telegram", "-1003759705932")
+	source := &fakeEventSource{event: component.InboundEvent{
+		SourceType:       "telegram",
+		EventType:        "message.received",
+		ExternalID:       "telegram:1:2:10",
+		ProviderChatID:   "-1003759705932",
+		ProviderThreadID: "845",
+		Text:             "hello from source",
+	}}
+	agent := &fakeAgent{reply: "agent reply"}
+	relay := &fakeRelay{}
+	broker := New(store, component.NewRegistry(source, agent, relay))
+	broker.DefaultChatComponents = []coremodel.ChatComponent{
+		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
+		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
+	}
+
+	if err := broker.Run(context.Background()); err != nil {
+		t.Fatalf("run broker: %v", err)
+	}
+	if source.runs != 1 || agent.calls != 1 || len(relay.sent) != 1 {
+		t.Fatalf("unexpected run side effects: source=%d agent=%d relay=%d", source.runs, agent.calls, len(relay.sent))
+	}
+}
+
+func TestBrokerRunReturnsEventSourceError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("source failed")
+	broker := New(newTestStore(t), component.NewRegistry(&fakeEventSource{err: wantErr}))
+
+	err := broker.Run(context.Background())
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("run error = %v, want %v", err, wantErr)
+	}
+}
+
 func newTestStore(t *testing.T) repository.Storage {
 	t.Helper()
 
@@ -400,6 +443,33 @@ func (r *fakeRelay) Type() string {
 
 func (r *fakeRelay) SendMessage(_ context.Context, message coremodel.ThreadMessage) error {
 	r.sent = append(r.sent, message)
+	return nil
+}
+
+type fakeEventSource struct {
+	typ   string
+	event component.InboundEvent
+	err   error
+	runs  int
+}
+
+var _ component.EventSource = (*fakeEventSource)(nil)
+
+func (s *fakeEventSource) Type() string {
+	if s.typ != "" {
+		return s.typ
+	}
+	return "fake-source"
+}
+
+func (s *fakeEventSource) RunEvents(ctx context.Context, emit component.InboundEventEmitter) error {
+	s.runs++
+	if s.err != nil {
+		return s.err
+	}
+	if strings.TrimSpace(s.event.SourceType) != "" {
+		return emit(ctx, s.event)
+	}
 	return nil
 }
 

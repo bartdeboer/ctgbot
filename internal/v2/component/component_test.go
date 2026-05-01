@@ -156,3 +156,17 @@ func TestMatchesBindingRespectsComponentTypeAndProfile(t *testing.T) {
 		t.Fatal("expected unprofiled component to match by type")
 	}
 }
+
+func TestRegistryCommandSurfacesForBindings(t *testing.T) {
+	registry := NewRegistry(
+		commandComponent{baseComponent{typ: "runtime"}},
+		commandComponent{baseComponent{typ: "gmail"}},
+	)
+
+	surfaces := registry.CommandSurfacesForBindings([]coremodel.ChatComponent{
+		{ComponentType: "runtime", Enabled: true},
+	})
+	if len(surfaces) != 1 || surfaces[0].Type() != "runtime" {
+		t.Fatalf("unexpected command surfaces: %#v", surfaces)
+	}
+}

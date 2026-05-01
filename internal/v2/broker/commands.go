@@ -16,7 +16,7 @@ func (b *Broker) tryHandleCommand(ctx context.Context, event component.InboundEv
 		return false, EventOutcome{}, nil
 	}
 
-	engine, err := component.BuildCommandEngine(b.matchingCommandSurfaces(bindings), commandengine.SourceMessage)
+	engine, err := b.components.CommandEngineForBindings(bindings, commandengine.SourceMessage)
 	if err != nil {
 		return true, EventOutcome{Command: true}, err
 	}
@@ -55,19 +55,6 @@ func (b *Broker) tryHandleCommand(ctx context.Context, event component.InboundEv
 		return true, EventOutcome{Command: true, Outbound: []coremodel.ThreadMessage{message}}, err
 	}
 	return true, EventOutcome{Command: true, Outbound: []coremodel.ThreadMessage{message}}, nil
-}
-
-func (b *Broker) matchingCommandSurfaces(bindings []coremodel.ChatComponent) []component.CommandSurface {
-	if b == nil || b.components == nil {
-		return nil
-	}
-	var out []component.CommandSurface
-	for _, surface := range b.components.CommandSurfaces() {
-		if matchesAnyBinding(surface, bindings) {
-			out = append(out, surface)
-		}
-	}
-	return out
 }
 
 func (b *Broker) rolesForEvent(ctx context.Context, event component.InboundEvent, chat coremodel.Chat) []simplerbac.Role {

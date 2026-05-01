@@ -75,15 +75,12 @@ func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOption
 	})
 
 	runtimeComponent := v2runtimecomponent.New(opts.Actions)
-	components := v2component.NewRegistry(telegramComponent, codexComponent, runtimeComponent)
-	broker := v2broker.New(rt.Storage, components)
-	broker.DefaultChatComponents = []coremodel.ChatComponent{
+	registry := v2component.NewRegistry(telegramComponent, codexComponent, runtimeComponent)
+	defaultChatComponents := []coremodel.ChatComponent{
 		{ComponentType: v2telegram.ComponentType, ProfileName: v2telegram.DefaultProfileName, Enabled: true},
 		{ComponentType: v2codex.ComponentType, ProfileName: codexProfile, Enabled: true},
 		{ComponentType: v2runtimecomponent.ComponentType, Enabled: true},
 	}
-	broker.RoleResolver = telegramRoleResolver(opts.OperatorTelegramUserIDs)
-	broker.Logf = logger.Printf
 
 	runCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -94,13 +91,13 @@ func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOption
 	fmt.Printf("image: %s\n", rt.Image)
 	fmt.Println("telegram: configured")
 	fmt.Printf("status: running telegram -> codex(%s) -> telegram\n", codexProfile)
-	return telegramComponent.RunEvents(runCtx, func(eventCtx context.Context, event v2component.InboundEvent) error {
-		_, err := broker.HandleEvent(eventCtx, event)
-		if err != nil {
-			logger.Printf("v2 event failed source=%s provider_chat=%q provider_thread=%q external=%q err=%v", event.SourceType, event.ProviderChatID, event.ProviderThreadID, event.ExternalID, err)
+	return Run(runCtx, rt, registry, RunOptions{
+		DefaultChatComponents: defaultChatComponents,
+		RoleResolver:          telegramRoleResolver(opts.OperatorTelegramUserIDs),
+		EventErrorHandler: func(eventCtx context.Context, event v2component.InboundEvent, err error) {
 			sendTelegramError(eventCtx, telegramComponent, event, err, logger)
-		}
-		return nil
+		},
+		Logf: logger.Printf,
 	})
 }
 
@@ -124,7 +121,7 @@ func telegramRoleResolver(rootUserIDs []int64) v2broker.RoleResolver {
 }
 
 func ensureRuntimeRows(ctx context.Context, rt *Runtime, codexProfile string) error {
-	for _, componentType := range []string{v2telegram.ComponentType, v2codex.ComponentType} {
+	for _, componentType := range []string{v2telegram.ComponentType, v2codex.ComponentType, v2runtimecomponent.ComponentType} {
 		if err := rt.Storage.Components().Save(ctx, &coremodel.Component{
 			Type:    componentType,
 			Enabled: true,

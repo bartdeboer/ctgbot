@@ -18,6 +18,7 @@ type Broker struct {
 	components            *component.Registry
 	DefaultChatComponents []coremodel.ChatComponent
 	RoleResolver          RoleResolver
+	EventErrorHandler     func(ctx context.Context, event component.InboundEvent, err error)
 	Logf                  func(format string, args ...any)
 }
 
