@@ -98,19 +98,25 @@ func (c *Component) ApplyChatPreset(ctx context.Context, req commandengine.Reque
 	if codexProfile == "" {
 		return commandengine.Result{}, fmt.Errorf("missing codex profile")
 	}
-	chat.Enabled = true
-	if err := storage.Chats().Save(ctx, chat); err != nil {
-		return commandengine.Result{}, err
-	}
-
-	for _, binding := range []coremodel.ChatComponent{
+	bindings := []coremodel.ChatComponent{
 		{ChatID: chat.ID, ComponentType: v2telegram.ComponentType, ProfileName: v2telegram.DefaultProfileName, Enabled: true},
 		{ChatID: chat.ID, ComponentType: v2codex.ComponentType, ProfileName: codexProfile, Enabled: true},
 		{ChatID: chat.ID, ComponentType: v2runtimecomponent.ComponentType, ProfileName: DefaultRuntimeProfile, Enabled: true},
-	} {
-		if err := storage.ChatComponents().Save(ctx, &binding); err != nil {
-			return commandengine.Result{}, err
+	}
+
+	if err := storage.Transaction(ctx, func(tx repository.Storage) error {
+		chat.Enabled = true
+		if err := tx.Chats().Save(ctx, chat); err != nil {
+			return err
 		}
+		for _, binding := range bindings {
+			if err := tx.ChatComponents().Save(ctx, &binding); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: fmt.Sprintf("chat %s enabled with preset %s", chat.ID, PresetTelegramCodex)}, nil
 }

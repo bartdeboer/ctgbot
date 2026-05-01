@@ -10,6 +10,7 @@ import (
 
 type Storage interface {
 	AutoMigrate(ctx context.Context) error
+	Transaction(ctx context.Context, fn func(Storage) error) error
 	Chats() ChatRepository
 	Threads() ThreadRepository
 	Components() ComponentRepository

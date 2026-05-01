@@ -51,6 +51,15 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 	)
 }
 
+func (s *GORMStorage) Transaction(ctx context.Context, fn func(Storage) error) error {
+	if fn == nil {
+		return fmt.Errorf("missing transaction function")
+	}
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(NewGORM(tx))
+	})
+}
+
 func (s *GORMStorage) Chats() ChatRepository                         { return s.chats }
 func (s *GORMStorage) Threads() ThreadRepository                     { return s.threads }
 func (s *GORMStorage) Components() ComponentRepository               { return s.components }

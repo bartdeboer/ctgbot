@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -143,6 +144,36 @@ func TestGORMStorageListsDisabledChats(t *testing.T) {
 	}
 	if len(chats) != 1 || chats[0].ID != disabled.ID {
 		t.Fatalf("disabled chats = %#v, want %#v", chats, disabled)
+	}
+}
+
+func TestGORMStorageTransactionRollsBack(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	ctx := context.Background()
+	chat, err := store.Chats().EnsureProviderChat(ctx, "telegram", "-10042")
+	if err != nil {
+		t.Fatalf("ensure chat: %v", err)
+	}
+
+	wantErr := errors.New("rollback")
+	err = store.Transaction(ctx, func(tx Storage) error {
+		chat.Enabled = true
+		if err := tx.Chats().Save(ctx, chat); err != nil {
+			return err
+		}
+		return wantErr
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("transaction error = %v, want %v", err, wantErr)
+	}
+	got, err := store.Chats().GetByID(ctx, chat.ID)
+	if err != nil {
+		t.Fatalf("get chat: %v", err)
+	}
+	if got == nil || got.Enabled {
+		t.Fatalf("transaction should roll back chat enable, got %#v", got)
 	}
 }
 
