@@ -16,8 +16,15 @@ type ChatRuntime struct {
 
 	Components []component.Component
 
+	// MessageCommands parses and executes raw chat slash commands.
 	MessageCommands *commandengine.Engine
-	AgentCommands   *commandengine.Engine
+
+	// AgentCommands executes already-parsed commands from a sandbox runtime.
+	//
+	// Hostbridge clients parse the command inside the sandbox and send a typed
+	// commandengine.Request to the server. The runtime should prepare canonical
+	// chat/thread/actor context and then call Execute, not Run.
+	AgentCommands *commandengine.Engine
 
 	Agents []component.Agent
 	Relays []component.OutboundRelay

@@ -19,6 +19,10 @@ func (b *Broker) tryHandleCommand(ctx context.Context, event component.InboundEv
 		return true, EventOutcome{Command: true}, nil
 	}
 
+	// Chat commands arrive as raw message text, so this path parses argv
+	// through the cached message command router. Sandbox/hostbridge commands
+	// are already parsed by the hostbridge client and should use
+	// ChatRuntime.AgentCommands.Execute instead.
 	result, runErr := runtime.MessageCommands.Run(ctx, commandengine.Request{
 		Context: commandengine.Context{
 			Source:   commandengine.SourceMessage,

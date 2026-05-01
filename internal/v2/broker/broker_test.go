@@ -377,6 +377,42 @@ func TestBrokerReusesChatRuntimeUntilBindingsChange(t *testing.T) {
 	}
 }
 
+func TestChatRuntimeAgentCommandsExecuteParsedRequests(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	chat := enableProviderChat(t, store, "telegram", "-1003759705932")
+	thread, err := store.Threads().EnsureProviderThread(context.Background(), chat.ID, "845")
+	if err != nil {
+		t.Fatalf("ensure thread: %v", err)
+	}
+	surface := &fakeCommandSurface{typ: "fake-commands"}
+	enableChatComponent(t, store, chat.ID, surface.Type(), "default")
+	broker := New(store, component.NewRegistry(surface), nil)
+
+	runtime, err := broker.runtimeForChat(context.Background(), chat.ID)
+	if err != nil {
+		t.Fatalf("runtime for chat: %v", err)
+	}
+	result, err := runtime.AgentCommands.Execute(context.Background(), commandengine.Request{
+		Context: commandengine.Context{
+			Source:   commandengine.SourceHostbridge,
+			Actor:    commandengine.Actor{ID: "hostbridge", Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+			ChatID:   chat.ID,
+			ThreadID: thread.ID,
+		},
+		Command:      fakeCommand{},
+		DefinitionID: surface.Type() + ".ping",
+		Route:        surface.Type() + " ping",
+	})
+	if err != nil {
+		t.Fatalf("execute agent command: %v", err)
+	}
+	if result.Text != "pong" {
+		t.Fatalf("agent command result = %q, want pong", result.Text)
+	}
+}
+
 func TestCommandArgvNormalizesTelegramCommandText(t *testing.T) {
 	t.Parallel()
 
