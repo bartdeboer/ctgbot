@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/dbmodel"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v2/component"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
@@ -29,9 +30,11 @@ type API interface {
 }
 
 type Component struct {
-	API         API
-	PollTimeout time.Duration
-	Logf        func(format string, args ...any)
+	API               API
+	PollTimeout       time.Duration
+	RootUserIDs       []int64
+	EventErrorHandler func(context.Context, component.InboundEvent, error)
+	Logf              func(format string, args ...any)
 }
 
 var _ component.Component = (*Component)(nil)
@@ -59,12 +62,17 @@ func (c *Component) RunEvents(ctx context.Context, emit component.InboundEventEm
 		return fmt.Errorf("missing inbound event emitter")
 	}
 	return c.API.Run(ctx, c.PollTimeout, func(updateCtx context.Context, update dbmodel.TelegramUpdate) {
-		event := InboundEventFromUpdate(update)
+		event := c.inboundEventFromUpdate(update)
 		if strings.TrimSpace(event.Text) == "" {
 			c.logf("v2 telegram empty update skipped chat=%d thread=%d msg=%d user=%q user_id=%d attachments=%d", update.ChatID, update.ThreadID, update.MessageID, update.UserLabel(), update.UserID, len(update.Attachments))
 			return
 		}
-		_ = emit(updateCtx, event)
+		if err := emit(updateCtx, event); err != nil {
+			c.logf("v2 telegram event failed chat=%d thread=%d msg=%d err=%v", update.ChatID, update.ThreadID, update.MessageID, err)
+			if c.EventErrorHandler != nil {
+				c.EventErrorHandler(updateCtx, event, err)
+			}
+		}
 	})
 }
 
@@ -93,6 +101,14 @@ func (c *Component) SendMessage(ctx context.Context, message coremodel.ThreadMes
 }
 
 func InboundEventFromUpdate(update dbmodel.TelegramUpdate) component.InboundEvent {
+	return inboundEventFromUpdate(update, nil)
+}
+
+func (c *Component) inboundEventFromUpdate(update dbmodel.TelegramUpdate) component.InboundEvent {
+	return inboundEventFromUpdate(update, c.rolesForUpdate(update))
+}
+
+func inboundEventFromUpdate(update dbmodel.TelegramUpdate, roles []simplerbac.Role) component.InboundEvent {
 	metadata := map[string]string{
 		"telegram.chat_id":    strconv.FormatInt(update.ChatID, 10),
 		"telegram.thread_id":  strconv.Itoa(update.ThreadID),
@@ -104,17 +120,28 @@ func InboundEventFromUpdate(update dbmodel.TelegramUpdate) component.InboundEven
 		ExternalID:       externalID(update.ChatID, update.ThreadID, update.MessageID),
 		ProviderChatID:   strconv.FormatInt(update.ChatID, 10),
 		ProviderThreadID: strconv.Itoa(update.ThreadID),
-		Actor:            actorFromUpdate(update),
+		Actor:            actorFromUpdate(update, roles),
 		Text:             strings.TrimSpace(update.Text),
 		Metadata:         metadata,
 	}
 }
 
-func actorFromUpdate(update dbmodel.TelegramUpdate) component.Actor {
+func actorFromUpdate(update dbmodel.TelegramUpdate, roles []simplerbac.Role) component.Actor {
 	return component.Actor{
 		ID:    strconv.FormatInt(update.UserID, 10),
 		Label: strings.TrimSpace(update.UserLabel()),
+		Roles: append([]simplerbac.Role(nil), roles...),
 	}
+}
+
+func (c *Component) rolesForUpdate(update dbmodel.TelegramUpdate) []simplerbac.Role {
+	roles := []simplerbac.Role{simplerbac.RoleUser}
+	for _, userID := range c.RootUserIDs {
+		if userID == update.UserID {
+			return append(roles, simplerbac.RoleRoot)
+		}
+	}
+	return roles
 }
 
 func providerIDsFromMessage(message coremodel.ThreadMessage) (int64, int, error) {

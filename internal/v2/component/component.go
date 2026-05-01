@@ -14,6 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
@@ -123,6 +124,7 @@ type Actor struct {
 	ID      string
 	Label   string
 	IsAdmin bool
+	Roles   []simplerbac.Role
 }
 
 // InboundEvent is an external stimulus that ctgbot can route into a

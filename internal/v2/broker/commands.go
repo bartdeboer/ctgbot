@@ -24,7 +24,7 @@ func (b *Broker) tryHandleCommand(ctx context.Context, event component.InboundEv
 	result, runErr := engine.Run(ctx, commandengine.Request{
 		Context: commandengine.Context{
 			Source:   commandengine.SourceMessage,
-			Actor:    commandengine.Actor{ID: strings.TrimSpace(event.Actor.ID), Roles: b.rolesForEvent(ctx, event, chat)},
+			Actor:    commandengine.Actor{ID: strings.TrimSpace(event.Actor.ID), Roles: effectiveActorRoles(event.Actor.Roles)},
 			ChatID:   chat.ID,
 			ThreadID: thread.ID,
 		},
@@ -57,14 +57,11 @@ func (b *Broker) tryHandleCommand(ctx context.Context, event component.InboundEv
 	return true, EventOutcome{Command: true, Outbound: []coremodel.ThreadMessage{message}}, nil
 }
 
-func (b *Broker) rolesForEvent(ctx context.Context, event component.InboundEvent, chat coremodel.Chat) []simplerbac.Role {
-	if b != nil && b.RoleResolver != nil {
-		roles := b.RoleResolver(ctx, event, chat)
-		if len(roles) > 0 {
-			return roles
-		}
+func effectiveActorRoles(roles []simplerbac.Role) []simplerbac.Role {
+	if len(roles) == 0 {
+		return []simplerbac.Role{simplerbac.RoleUser}
 	}
-	return []simplerbac.Role{simplerbac.RoleUser}
+	return append([]simplerbac.Role(nil), roles...)
 }
 
 func commandArgv(text string) ([]string, bool) {

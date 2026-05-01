@@ -32,9 +32,6 @@ func (b *Broker) Run(ctx context.Context) error {
 				_, handleErr := b.HandleEvent(eventCtx, event)
 				if handleErr != nil {
 					b.logf("v2 event failed source=%s provider_chat=%q provider_thread=%q external=%q err=%v", event.SourceType, event.ProviderChatID, event.ProviderThreadID, event.ExternalID, handleErr)
-					if b.EventErrorHandler != nil {
-						b.EventErrorHandler(eventCtx, event, handleErr)
-					}
 				}
 				return handleErr
 			})

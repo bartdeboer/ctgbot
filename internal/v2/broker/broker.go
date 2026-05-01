@@ -2,24 +2,18 @@
 package broker
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v2/component"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v2/repository"
 )
 
-type RoleResolver func(ctx context.Context, event component.InboundEvent, chat coremodel.Chat) []simplerbac.Role
-
 type Broker struct {
 	storage               repository.Storage
 	components            *component.Registry
-	DefaultChatComponents []coremodel.ChatComponent
-	RoleResolver          RoleResolver
-	EventErrorHandler     func(ctx context.Context, event component.InboundEvent, err error)
-	Logf                  func(format string, args ...any)
+	defaultChatComponents []coremodel.ChatComponent
+	logfFunc              func(format string, args ...any)
 }
 
 type EventOutcome struct {
@@ -29,8 +23,13 @@ type EventOutcome struct {
 	Command  bool
 }
 
-func New(storage repository.Storage, components *component.Registry) *Broker {
-	return &Broker{storage: storage, components: components}
+func New(storage repository.Storage, components *component.Registry, defaultChatComponents []coremodel.ChatComponent, logf func(format string, args ...any)) *Broker {
+	return &Broker{
+		storage:               storage,
+		components:            components,
+		defaultChatComponents: defaultChatComponents,
+		logfFunc:              logf,
+	}
 }
 
 func (b *Broker) Components() *component.Registry {
@@ -48,7 +47,7 @@ func (b *Broker) ensureReady() error {
 }
 
 func (b *Broker) logf(format string, args ...any) {
-	if b != nil && b.Logf != nil {
-		b.Logf(format, args...)
+	if b != nil && b.logfFunc != nil {
+		b.logfFunc(format, args...)
 	}
 }

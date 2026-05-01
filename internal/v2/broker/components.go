@@ -19,7 +19,7 @@ func (b *Broker) ensureDefaultChatComponents(ctx context.Context, chatID modeluu
 		seen[chatComponentKey(binding.ComponentType, binding.ProfileName)] = struct{}{}
 	}
 
-	for _, binding := range b.DefaultChatComponents {
+	for _, binding := range b.defaultChatComponents {
 		if strings.TrimSpace(binding.ComponentType) == "" {
 			continue
 		}

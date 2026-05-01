@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/dbmodel"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v2/component"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
@@ -87,6 +88,9 @@ func TestRunEventsEmitsInboundEvent(t *testing.T) {
 	if event.Actor.ID != "123" || event.Actor.Label != "@bart" {
 		t.Fatalf("unexpected actor: %#v", event.Actor)
 	}
+	if len(event.Actor.Roles) != 1 || event.Actor.Roles[0] != simplerbac.RoleUser {
+		t.Fatalf("unexpected actor roles: %#v", event.Actor.Roles)
+	}
 	if event.Text != "hello" {
 		t.Fatalf("Text = %q, want hello", event.Text)
 	}
@@ -98,6 +102,54 @@ func TestRunEventsEmitsInboundEvent(t *testing.T) {
 		if got := event.Metadata[key]; got != want {
 			t.Fatalf("metadata[%q] = %q, want %q", key, got, want)
 		}
+	}
+}
+
+func TestRunEventsMarksConfiguredRootUsers(t *testing.T) {
+	api := &fakeAPI{updates: []dbmodel.TelegramUpdate{{
+		ChatID:    -10042,
+		ThreadID:  7,
+		MessageID: 99,
+		UserID:    123,
+		Text:      "hello",
+	}}}
+	telegram := New(api)
+	telegram.RootUserIDs = []int64{123}
+
+	var event component.InboundEvent
+	if err := telegram.RunEvents(context.Background(), func(ctx context.Context, got component.InboundEvent) error {
+		event = got
+		return nil
+	}); err != nil {
+		t.Fatalf("RunEvents() error = %v", err)
+	}
+	if len(event.Actor.Roles) != 2 || event.Actor.Roles[0] != simplerbac.RoleUser || event.Actor.Roles[1] != simplerbac.RoleRoot {
+		t.Fatalf("unexpected actor roles: %#v", event.Actor.Roles)
+	}
+}
+
+func TestRunEventsCallsEventErrorHandler(t *testing.T) {
+	api := &fakeAPI{updates: []dbmodel.TelegramUpdate{{
+		ChatID:    -10042,
+		ThreadID:  7,
+		MessageID: 99,
+		UserID:    123,
+		Text:      "hello",
+	}}}
+	telegram := New(api)
+	want := errors.New("handle event")
+	var handled error
+	telegram.EventErrorHandler = func(ctx context.Context, event component.InboundEvent, err error) {
+		handled = err
+	}
+
+	if err := telegram.RunEvents(context.Background(), func(ctx context.Context, event component.InboundEvent) error {
+		return want
+	}); err != nil {
+		t.Fatalf("RunEvents() error = %v", err)
+	}
+	if !errors.Is(handled, want) {
+		t.Fatalf("handled error = %v, want %v", handled, want)
 	}
 }
 

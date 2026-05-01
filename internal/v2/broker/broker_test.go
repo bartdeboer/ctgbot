@@ -22,7 +22,7 @@ func TestBrokerRoutesInboundEventIntoThreadMessage(t *testing.T) {
 	store := newTestStore(t)
 	enableProviderChat(t, store, "telegram", "-1003759705932")
 
-	broker := New(store, component.NewRegistry())
+	broker := New(store, component.NewRegistry(), nil, nil)
 	message, err := broker.RouteInboundEvent(context.Background(), component.InboundEvent{
 		SourceType:       "telegram",
 		EventType:        "message.received",
@@ -75,11 +75,10 @@ func TestBrokerHandleEventRunsAgentStoresOutboundAndRelays(t *testing.T) {
 	enableProviderChat(t, store, "telegram", "-1003759705932")
 	relay := &fakeRelay{}
 	agent := &fakeAgent{reply: "agent reply"}
-	broker := New(store, component.NewRegistry(agent, relay))
-	broker.DefaultChatComponents = []coremodel.ChatComponent{
+	broker := New(store, component.NewRegistry(agent, relay), []coremodel.ChatComponent{
 		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
-	}
+	}, nil)
 
 	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
 		SourceType:       "telegram",
@@ -124,11 +123,10 @@ func TestBrokerOnlyRunsBoundComponents(t *testing.T) {
 	unboundAgent := &fakeAgent{typ: "unbound-agent", reply: "unbound reply"}
 	boundRelay := &fakeRelay{typ: "bound-relay"}
 	unboundRelay := &fakeRelay{typ: "unbound-relay"}
-	broker := New(store, component.NewRegistry(boundAgent, unboundAgent, boundRelay, unboundRelay))
-	broker.DefaultChatComponents = []coremodel.ChatComponent{
+	broker := New(store, component.NewRegistry(boundAgent, unboundAgent, boundRelay, unboundRelay), []coremodel.ChatComponent{
 		{ComponentType: boundAgent.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: boundRelay.Type(), ProfileName: "default", Enabled: true},
-	}
+	}, nil)
 
 	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
 		SourceType:       "telegram",
@@ -158,11 +156,10 @@ func TestBrokerBlocksDisabledChats(t *testing.T) {
 	store := newTestStore(t)
 	relay := &fakeRelay{}
 	agent := &fakeAgent{reply: "agent reply"}
-	broker := New(store, component.NewRegistry(agent, relay))
-	broker.DefaultChatComponents = []coremodel.ChatComponent{
+	broker := New(store, component.NewRegistry(agent, relay), []coremodel.ChatComponent{
 		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
-	}
+	}, nil)
 
 	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
 		SourceType:       "telegram",
@@ -207,15 +204,11 @@ func TestBrokerRunsRuntimeCommandForRootActorInDisabledChat(t *testing.T) {
 	agent := &fakeAgent{reply: "agent reply"}
 	actions := &fakeRuntimeActions{}
 	runtimeComponent := runtimecomponent.New(actions)
-	broker := New(store, component.NewRegistry(agent, relay, runtimeComponent))
-	broker.DefaultChatComponents = []coremodel.ChatComponent{
+	broker := New(store, component.NewRegistry(agent, relay, runtimeComponent), []coremodel.ChatComponent{
 		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: runtimecomponent.ComponentType, Enabled: true},
-	}
-	broker.RoleResolver = func(ctx context.Context, event component.InboundEvent, chat coremodel.Chat) []simplerbac.Role {
-		return []simplerbac.Role{simplerbac.RoleUser, simplerbac.RoleRoot}
-	}
+	}, nil)
 
 	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
 		SourceType:       "telegram",
@@ -223,8 +216,12 @@ func TestBrokerRunsRuntimeCommandForRootActorInDisabledChat(t *testing.T) {
 		ExternalID:       "telegram:1:2:7",
 		ProviderChatID:   "-1003759705932",
 		ProviderThreadID: "845",
-		Actor:            component.Actor{ID: "13145044", Label: "@bartdeboer"},
-		Text:             "/quit",
+		Actor: component.Actor{
+			ID:    "13145044",
+			Label: "@bartdeboer",
+			Roles: []simplerbac.Role{simplerbac.RoleUser, simplerbac.RoleRoot},
+		},
+		Text: "/quit",
 	})
 	if err != nil {
 		t.Fatalf("handle event: %v", err)
@@ -251,12 +248,11 @@ func TestBrokerDeniesRuntimeCommandForNonRootActor(t *testing.T) {
 	relay := &fakeRelay{}
 	agent := &fakeAgent{reply: "agent reply"}
 	actions := &fakeRuntimeActions{}
-	broker := New(store, component.NewRegistry(agent, relay, runtimecomponent.New(actions)))
-	broker.DefaultChatComponents = []coremodel.ChatComponent{
+	broker := New(store, component.NewRegistry(agent, relay, runtimecomponent.New(actions)), []coremodel.ChatComponent{
 		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: runtimecomponent.ComponentType, Enabled: true},
-	}
+	}, nil)
 
 	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
 		SourceType:       "telegram",
@@ -287,15 +283,11 @@ func TestBrokerDoesNotSendUnknownSlashCommandToAgent(t *testing.T) {
 	enableProviderChat(t, store, "telegram", "-1003759705932")
 	relay := &fakeRelay{}
 	agent := &fakeAgent{reply: "agent reply"}
-	broker := New(store, component.NewRegistry(agent, relay, runtimecomponent.New(&fakeRuntimeActions{})))
-	broker.DefaultChatComponents = []coremodel.ChatComponent{
+	broker := New(store, component.NewRegistry(agent, relay, runtimecomponent.New(&fakeRuntimeActions{})), []coremodel.ChatComponent{
 		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: runtimecomponent.ComponentType, Enabled: true},
-	}
-	broker.RoleResolver = func(ctx context.Context, event component.InboundEvent, chat coremodel.Chat) []simplerbac.Role {
-		return []simplerbac.Role{simplerbac.RoleRoot}
-	}
+	}, nil)
 
 	outcome, err := broker.HandleEvent(context.Background(), component.InboundEvent{
 		SourceType:       "telegram",
@@ -303,6 +295,7 @@ func TestBrokerDoesNotSendUnknownSlashCommandToAgent(t *testing.T) {
 		ExternalID:       "telegram:1:2:9",
 		ProviderChatID:   "-1003759705932",
 		ProviderThreadID: "845",
+		Actor:            component.Actor{Roles: []simplerbac.Role{simplerbac.RoleRoot}},
 		Text:             "/start",
 	})
 	if err != nil {
@@ -347,11 +340,10 @@ func TestBrokerRunStartsEventSources(t *testing.T) {
 	}}
 	agent := &fakeAgent{reply: "agent reply"}
 	relay := &fakeRelay{}
-	broker := New(store, component.NewRegistry(source, agent, relay))
-	broker.DefaultChatComponents = []coremodel.ChatComponent{
+	broker := New(store, component.NewRegistry(source, agent, relay), []coremodel.ChatComponent{
 		{ComponentType: agent.Type(), ProfileName: "default", Enabled: true},
 		{ComponentType: relay.Type(), ProfileName: "default", Enabled: true},
-	}
+	}, nil)
 
 	if err := broker.Run(context.Background()); err != nil {
 		t.Fatalf("run broker: %v", err)
@@ -365,7 +357,7 @@ func TestBrokerRunReturnsEventSourceError(t *testing.T) {
 	t.Parallel()
 
 	wantErr := errors.New("source failed")
-	broker := New(newTestStore(t), component.NewRegistry(&fakeEventSource{err: wantErr}))
+	broker := New(newTestStore(t), component.NewRegistry(&fakeEventSource{err: wantErr}), nil, nil)
 
 	err := broker.Run(context.Background())
 	if !errors.Is(err, wantErr) {

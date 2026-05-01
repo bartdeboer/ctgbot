@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/messenger/telegramengine"
-	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	v2broker "github.com/bartdeboer/ctgbot/internal/v2/broker"
 	v2component "github.com/bartdeboer/ctgbot/internal/v2/component"
 	v2codex "github.com/bartdeboer/ctgbot/internal/v2/component/codex"
@@ -61,6 +60,7 @@ func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOption
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 	telegramComponent := v2telegram.New(api)
 	telegramComponent.PollTimeout = opts.PollTimeout
+	telegramComponent.RootUserIDs = opts.OperatorTelegramUserIDs
 	telegramComponent.Logf = logger.Printf
 	workspaceRoot := filepath.Join(rt.StateRoot, "v2", "workspaces")
 
@@ -81,6 +81,10 @@ func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOption
 		{ComponentType: v2codex.ComponentType, ProfileName: codexProfile, Enabled: true},
 		{ComponentType: v2runtimecomponent.ComponentType, Enabled: true},
 	}
+	telegramComponent.EventErrorHandler = func(eventCtx context.Context, event v2component.InboundEvent, err error) {
+		sendTelegramError(eventCtx, telegramComponent, event, err, logger)
+	}
+	broker := v2broker.New(rt.Storage, registry, defaultChatComponents, logger.Printf)
 
 	runCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -91,33 +95,7 @@ func RunTelegramCodex(ctx context.Context, rt *Runtime, opts TelegramCodexOption
 	fmt.Printf("image: %s\n", rt.Image)
 	fmt.Println("telegram: configured")
 	fmt.Printf("status: running telegram -> codex(%s) -> telegram\n", codexProfile)
-	return Run(runCtx, rt, registry, RunOptions{
-		DefaultChatComponents: defaultChatComponents,
-		RoleResolver:          telegramRoleResolver(opts.OperatorTelegramUserIDs),
-		EventErrorHandler: func(eventCtx context.Context, event v2component.InboundEvent, err error) {
-			sendTelegramError(eventCtx, telegramComponent, event, err, logger)
-		},
-		Logf: logger.Printf,
-	})
-}
-
-func telegramRoleResolver(rootUserIDs []int64) v2broker.RoleResolver {
-	rootUsers := map[string]struct{}{}
-	for _, userID := range rootUserIDs {
-		if userID == 0 {
-			continue
-		}
-		rootUsers[strconv.FormatInt(userID, 10)] = struct{}{}
-	}
-	return func(ctx context.Context, event v2component.InboundEvent, chat coremodel.Chat) []simplerbac.Role {
-		_ = ctx
-		_ = chat
-		roles := []simplerbac.Role{simplerbac.RoleUser}
-		if _, ok := rootUsers[strings.TrimSpace(event.Actor.ID)]; ok {
-			roles = append(roles, simplerbac.RoleRoot)
-		}
-		return roles
-	}
+	return broker.Run(runCtx)
 }
 
 func ensureRuntimeRows(ctx context.Context, rt *Runtime, codexProfile string) error {
