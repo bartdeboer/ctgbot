@@ -231,7 +231,26 @@ type Authenticator interface {
 // Agent processes canonical thread messages and may produce an outbound reply.
 type Agent interface {
 	Component
-	HandleMessage(ctx context.Context, message coremodel.ThreadMessage) (*coremodel.ThreadMessage, error)
+	HandleMessage(ctx context.Context, req AgentRequest) (*coremodel.ThreadMessage, error)
+}
+
+type AgentRequest struct {
+	Message  coremodel.ThreadMessage
+	Commands commandengine.CommandExecutor
+}
+
+// AgentRuntime is the runtime environment an agent uses while processing a
+// thread message.
+//
+// Implementations may be backed by a container, a local process, or another
+// execution environment. The agent command executor is the command surface
+// exposed to hostbridge inside that runtime.
+type AgentRuntime interface {
+	Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error
+	Stop(ctx context.Context) error
+
+	AgentCommands() commandengine.CommandExecutor
+	SetAgentCommands(commandengine.CommandExecutor)
 }
 
 // OutboundRelay projects canonical outbound messages to an external system.

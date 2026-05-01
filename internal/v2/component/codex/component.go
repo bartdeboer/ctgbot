@@ -21,7 +21,7 @@ type Config struct {
 	ProfileContainerPath string
 	WorkspaceRoot        string
 	Image                string
-	SandboxManager       sandboxengine.Manager
+	SandboxManager       sandboxengine.RuntimeManager
 	StateStore           repository.ThreadComponentStateRepository
 }
 

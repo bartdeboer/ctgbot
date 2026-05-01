@@ -103,6 +103,9 @@ func TestBrokerHandleEventRunsAgentStoresOutboundAndRelays(t *testing.T) {
 	if len(relay.sent) != 1 || relay.sent[0].Text != "agent reply" {
 		t.Fatalf("unexpected relayed messages: %#v", relay.sent)
 	}
+	if agent.commands == nil {
+		t.Fatal("expected agent request to include command executor")
+	}
 
 	messages, err := store.Messages().ListByThreadID(context.Background(), outcome.Inbound.ThreadID)
 	if err != nil {
@@ -510,9 +513,10 @@ func enableChatComponent(t *testing.T, store repository.Storage, chatID modeluui
 }
 
 type fakeAgent struct {
-	typ   string
-	reply string
-	calls int
+	typ      string
+	reply    string
+	calls    int
+	commands commandengine.CommandExecutor
 }
 
 var _ component.Agent = (*fakeAgent)(nil)
@@ -524,8 +528,9 @@ func (a *fakeAgent) Type() string {
 	return "fake-agent"
 }
 
-func (a *fakeAgent) HandleMessage(_ context.Context, message coremodel.ThreadMessage) (*coremodel.ThreadMessage, error) {
+func (a *fakeAgent) HandleMessage(_ context.Context, req component.AgentRequest) (*coremodel.ThreadMessage, error) {
 	a.calls++
+	a.commands = req.Commands
 	return &coremodel.ThreadMessage{
 		Kind:       coremodel.MessageKindAgent,
 		SourceType: a.Type(),

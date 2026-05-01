@@ -35,7 +35,7 @@ type Runtime struct {
 	Config     *clistate.Store
 	Storage    repository.Storage
 	Profiles   *profilemanager.Manager
-	Sandboxes  sandboxengine.Manager
+	Sandboxes  sandboxengine.RuntimeManager
 }
 
 type Options struct {

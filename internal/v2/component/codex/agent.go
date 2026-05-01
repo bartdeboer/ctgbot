@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+	"github.com/bartdeboer/ctgbot/internal/v2/component"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
@@ -18,7 +19,8 @@ const (
 	defaultWorkspaceRoot = ".ctgbot/v2/workspaces"
 )
 
-func (c *Component) HandleMessage(ctx context.Context, message coremodel.ThreadMessage) (*coremodel.ThreadMessage, error) {
+func (c *Component) HandleMessage(ctx context.Context, req component.AgentRequest) (*coremodel.ThreadMessage, error) {
+	message := req.Message
 	prompt := strings.TrimSpace(message.Text)
 	if prompt == "" {
 		return nil, nil
@@ -39,8 +41,11 @@ func (c *Component) HandleMessage(ctx context.Context, message coremodel.ThreadM
 		return nil, fmt.Errorf("load codex conversation profile=%s thread=%s: %w", c.Config.ProfileName, message.ThreadID, err)
 	}
 
-	sbx := c.Config.SandboxManager.CreateSandbox(spec)
-	defer func() { _ = sbx.Stop(context.Background()) }()
+	var runtime component.AgentRuntime = c.Config.SandboxManager.CreateRuntime(sandboxengine.RuntimeSpec{
+		Sandbox:       *spec,
+		AgentCommands: req.Commands,
+	})
+	defer func() { _ = runtime.Stop(context.Background()) }()
 
 	var stdout bytes.Buffer
 	var stderr io.Writer = os.Stderr
@@ -48,7 +53,7 @@ func (c *Component) HandleMessage(ctx context.Context, message coremodel.ThreadM
 		stderr = io.Discard
 	}
 	args := codexExecArgs(prompt, conversation)
-	if err := sbx.Exec(ctx, &stdout, stderr, "codex", args...); err != nil {
+	if err := runtime.Exec(ctx, &stdout, stderr, "codex", args...); err != nil {
 		return nil, fmt.Errorf("codex exec profile=%s thread=%s: %w", c.Config.ProfileName, message.ThreadID, err)
 	}
 	result, err := parseCodexJSONOutput(stdout.String())

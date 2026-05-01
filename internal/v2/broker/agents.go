@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/bartdeboer/ctgbot/internal/v2/component"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
@@ -15,7 +16,10 @@ func (b *Broker) runAgents(ctx context.Context, inbound coremodel.ThreadMessage,
 	var outbound []coremodel.ThreadMessage
 	for _, agent := range runtime.Agents {
 		b.logf("v2 agent invoking type=%s thread=%s", agent.Type(), inbound.ThreadID)
-		message, err := agent.HandleMessage(ctx, inbound)
+		message, err := agent.HandleMessage(ctx, component.AgentRequest{
+			Message:  inbound,
+			Commands: runtime.AgentCommands,
+		})
 		if err != nil {
 			return outbound, fmt.Errorf("agent %s: %w", agent.Type(), err)
 		}

@@ -21,8 +21,8 @@ func TestCreateRuntimeAttachesSandboxAndCommands(t *testing.T) {
 	mgr := NewSandboxManager(nil)
 	commands := &fakeCommandExecutor{}
 	runtime := mgr.CreateRuntime(RuntimeSpec{
-		Sandbox:  SandboxSpec{Name: "ctgbot-runtime-test", Workdir: "/workspace"},
-		Commands: commands,
+		Sandbox:       SandboxSpec{Name: "ctgbot-runtime-test", Workdir: "/workspace"},
+		AgentCommands: commands,
 	})
 
 	if runtime == nil {
@@ -31,13 +31,13 @@ func TestCreateRuntimeAttachesSandboxAndCommands(t *testing.T) {
 	if runtime.Sandbox() == nil || runtime.Sandbox().Name != "ctgbot-runtime-test" {
 		t.Fatalf("unexpected runtime sandbox: %#v", runtime.Sandbox())
 	}
-	if runtime.Commands() != commands {
-		t.Fatalf("runtime commands = %#v, want %#v", runtime.Commands(), commands)
+	if runtime.AgentCommands() != commands {
+		t.Fatalf("runtime agent commands = %#v, want %#v", runtime.AgentCommands(), commands)
 	}
 
 	again := mgr.CreateRuntime(RuntimeSpec{
-		Sandbox:  SandboxSpec{Name: "ctgbot-runtime-test", Workdir: "/repo"},
-		Commands: commands,
+		Sandbox:       SandboxSpec{Name: "ctgbot-runtime-test", Workdir: "/repo"},
+		AgentCommands: commands,
 	})
 	if again.Sandbox() != runtime.Sandbox() {
 		t.Fatal("expected runtime to reuse sandbox by name")
@@ -50,11 +50,24 @@ func TestCreateRuntimeAttachesSandboxAndCommands(t *testing.T) {
 func TestNilRuntimeAccessors(t *testing.T) {
 	t.Parallel()
 
-	var runtime *Runtime
+	var runtime *SandboxRuntime
 	if runtime.Sandbox() != nil {
 		t.Fatal("nil runtime sandbox should be nil")
 	}
-	if runtime.Commands() != nil {
-		t.Fatal("nil runtime commands should be nil")
+	if runtime.AgentCommands() != nil {
+		t.Fatal("nil runtime agent commands should be nil")
+	}
+	runtime.SetAgentCommands(&fakeCommandExecutor{})
+}
+
+func TestRuntimeAgentCommandSetter(t *testing.T) {
+	t.Parallel()
+
+	runtime := &SandboxRuntime{}
+	commands := &fakeCommandExecutor{}
+	runtime.SetAgentCommands(commands)
+
+	if runtime.AgentCommands() != commands {
+		t.Fatalf("runtime agent commands = %#v, want %#v", runtime.AgentCommands(), commands)
 	}
 }
