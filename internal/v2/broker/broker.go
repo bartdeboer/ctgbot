@@ -3,7 +3,9 @@ package broker
 
 import (
 	"fmt"
+	"sync"
 
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/v2/component"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v2/repository"
@@ -13,6 +15,9 @@ type Broker struct {
 	storage    repository.Storage
 	components *component.Registry
 	logfFunc   func(format string, args ...any)
+
+	runtimeMu sync.Mutex
+	runtimes  map[modeluuid.UUID]*ChatRuntime
 }
 
 type EventOutcome struct {
@@ -27,6 +32,7 @@ func New(storage repository.Storage, components *component.Registry, logf func(f
 		storage:    storage,
 		components: components,
 		logfFunc:   logf,
+		runtimes:   map[modeluuid.UUID]*ChatRuntime{},
 	}
 }
 

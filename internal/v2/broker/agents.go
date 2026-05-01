@@ -7,16 +7,13 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
-func (b *Broker) runAgents(ctx context.Context, inbound coremodel.ThreadMessage, bindings []coremodel.ChatComponent) ([]coremodel.ThreadMessage, error) {
-	if b.components == nil {
+func (b *Broker) runAgents(ctx context.Context, inbound coremodel.ThreadMessage, runtime *ChatRuntime) ([]coremodel.ThreadMessage, error) {
+	if runtime == nil || len(runtime.Agents) == 0 {
 		return nil, nil
 	}
 
 	var outbound []coremodel.ThreadMessage
-	for _, agent := range b.components.Agents() {
-		if !matchesAnyBinding(agent, bindings) {
-			continue
-		}
+	for _, agent := range runtime.Agents {
 		b.logf("v2 agent invoking type=%s thread=%s", agent.Type(), inbound.ThreadID)
 		message, err := agent.HandleMessage(ctx, inbound)
 		if err != nil {

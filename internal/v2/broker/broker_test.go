@@ -7,12 +7,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v2/component"
 	runtimecomponent "github.com/bartdeboer/ctgbot/internal/v2/component/runtime"
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v2/repository"
+	"github.com/bartdeboer/go-clir"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -335,6 +337,46 @@ func TestBrokerDoesNotSendUnknownSlashCommandToAgent(t *testing.T) {
 	}
 }
 
+func TestBrokerReusesChatRuntimeUntilBindingsChange(t *testing.T) {
+	t.Parallel()
+
+	store := newTestStore(t)
+	chat := enableProviderChat(t, store, "telegram", "-1003759705932")
+	surface := &fakeCommandSurface{typ: "fake-commands"}
+	enableChatComponent(t, store, chat.ID, surface.Type(), "default")
+	broker := New(store, component.NewRegistry(surface), nil)
+
+	first, err := broker.runtimeForChat(context.Background(), chat.ID)
+	if err != nil {
+		t.Fatalf("first runtime: %v", err)
+	}
+	if surface.registers != 2 {
+		t.Fatalf("initial command engine builds = %d, want 2", surface.registers)
+	}
+	second, err := broker.runtimeForChat(context.Background(), chat.ID)
+	if err != nil {
+		t.Fatalf("second runtime: %v", err)
+	}
+	if second != first {
+		t.Fatal("expected cached runtime")
+	}
+	if surface.registers != 2 {
+		t.Fatalf("cached runtime rebuilt command engines: registers=%d", surface.registers)
+	}
+
+	enableChatComponent(t, store, chat.ID, "new-component", "default")
+	third, err := broker.runtimeForChat(context.Background(), chat.ID)
+	if err != nil {
+		t.Fatalf("third runtime: %v", err)
+	}
+	if third == first {
+		t.Fatal("expected runtime rebuild after binding change")
+	}
+	if surface.registers != 4 {
+		t.Fatalf("runtime rebuild command registrations = %d, want 4", surface.registers)
+	}
+}
+
 func TestCommandArgvNormalizesTelegramCommandText(t *testing.T) {
 	t.Parallel()
 
@@ -474,6 +516,43 @@ func (r *fakeRelay) Type() string {
 func (r *fakeRelay) SendMessage(_ context.Context, message coremodel.ThreadMessage) error {
 	r.sent = append(r.sent, message)
 	return nil
+}
+
+type fakeCommand struct{}
+
+type fakeCommandSurface struct {
+	typ       string
+	registers int
+}
+
+var _ component.CommandSurface = (*fakeCommandSurface)(nil)
+
+func (s *fakeCommandSurface) Type() string {
+	if s.typ != "" {
+		return s.typ
+	}
+	return "fake-commands"
+}
+
+func (s *fakeCommandSurface) CommandDefinitions() []commandengine.Definition {
+	return []commandengine.Definition{{
+		ID:      s.Type() + ".ping",
+		Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+		Policy:  simplerbac.Public(),
+		Routes: []commandengine.Route{{
+			Pattern: s.Type() + " ping",
+			Build: func(req *clir.Request) (any, error) {
+				return fakeCommand{}, nil
+			},
+		}},
+	}}
+}
+
+func (s *fakeCommandSurface) RegisterCommandHandlers(registry *commandengine.Registry) error {
+	s.registers++
+	return commandengine.Register[fakeCommand](registry, func(ctx context.Context, req commandengine.Request, cmd fakeCommand) (commandengine.Result, error) {
+		return commandengine.Result{Text: "pong"}, nil
+	})
 }
 
 type fakeEventSource struct {

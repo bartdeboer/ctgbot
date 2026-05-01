@@ -7,7 +7,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
-func (b *Broker) appendAndRelayOutbound(ctx context.Context, message *coremodel.ThreadMessage, inbound coremodel.ThreadMessage, bindings []coremodel.ChatComponent) error {
+func (b *Broker) appendAndRelayOutbound(ctx context.Context, message *coremodel.ThreadMessage, inbound coremodel.ThreadMessage, runtime *ChatRuntime) error {
 	message.ChatID = inbound.ChatID
 	message.ThreadID = inbound.ThreadID
 	message.Direction = coremodel.DirectionOutbound
@@ -21,17 +21,14 @@ func (b *Broker) appendAndRelayOutbound(ctx context.Context, message *coremodel.
 		return err
 	}
 	b.logf("v2 outbound stored message=%s source=%s chars=%d", message.ID, message.SourceType, len(message.Text))
-	return b.relayOutbound(ctx, *message, bindings)
+	return b.relayOutbound(ctx, *message, runtime)
 }
 
-func (b *Broker) relayOutbound(ctx context.Context, message coremodel.ThreadMessage, bindings []coremodel.ChatComponent) error {
-	if b.components == nil {
+func (b *Broker) relayOutbound(ctx context.Context, message coremodel.ThreadMessage, runtime *ChatRuntime) error {
+	if runtime == nil || len(runtime.Relays) == 0 {
 		return nil
 	}
-	for _, relay := range b.components.OutboundRelays() {
-		if !matchesAnyBinding(relay, bindings) {
-			continue
-		}
+	for _, relay := range runtime.Relays {
 		b.logf("v2 relay sending type=%s message=%s", relay.Type(), message.ID)
 		if err := relay.SendMessage(ctx, message); err != nil {
 			return fmt.Errorf("relay %s: %w", relay.Type(), err)

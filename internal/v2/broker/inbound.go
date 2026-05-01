@@ -42,13 +42,13 @@ func (b *Broker) HandleEvent(ctx context.Context, event component.InboundEvent) 
 		return EventOutcome{}, err
 	}
 	b.logf("v2 thread resolved chat=%s thread=%s", chat.ID, thread.ID)
-	bindings, err := b.enabledChatComponents(ctx, chat.ID)
+	runtime, err := b.runtimeForChat(ctx, chat.ID)
 	if err != nil {
 		return EventOutcome{}, err
 	}
-	b.logf("v2 chat components chat=%s enabled=%d", chat.ID, len(bindings))
+	b.logf("v2 chat runtime chat=%s components=%d agents=%d relays=%d", chat.ID, len(runtime.Components), len(runtime.Agents), len(runtime.Relays))
 
-	if handled, outcome, err := b.tryHandleCommand(ctx, event, *chat, *thread, bindings); handled || err != nil {
+	if handled, outcome, err := b.tryHandleCommand(ctx, event, *chat, *thread, runtime); handled || err != nil {
 		return outcome, err
 	}
 
@@ -58,12 +58,12 @@ func (b *Broker) HandleEvent(ctx context.Context, event component.InboundEvent) 
 	}
 	b.logf("v2 inbound stored message=%s", inbound.ID)
 
-	outbound, err := b.runAgents(ctx, *inbound, bindings)
+	outbound, err := b.runAgents(ctx, *inbound, runtime)
 	if err != nil {
 		return EventOutcome{Inbound: inbound}, err
 	}
 	for i := range outbound {
-		if err := b.appendAndRelayOutbound(ctx, &outbound[i], *inbound, bindings); err != nil {
+		if err := b.appendAndRelayOutbound(ctx, &outbound[i], *inbound, runtime); err != nil {
 			return EventOutcome{Inbound: inbound, Outbound: outbound[:i]}, err
 		}
 	}

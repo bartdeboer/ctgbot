@@ -10,18 +10,16 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v2/coremodel"
 )
 
-func (b *Broker) tryHandleCommand(ctx context.Context, event component.InboundEvent, chat coremodel.Chat, thread coremodel.Thread, bindings []coremodel.ChatComponent) (bool, EventOutcome, error) {
+func (b *Broker) tryHandleCommand(ctx context.Context, event component.InboundEvent, chat coremodel.Chat, thread coremodel.Thread, runtime *ChatRuntime) (bool, EventOutcome, error) {
 	argv, ok := commandArgv(event.Text)
 	if !ok {
 		return false, EventOutcome{}, nil
 	}
-
-	engine, err := b.components.CommandEngineForBindings(bindings, commandengine.SourceMessage)
-	if err != nil {
-		return true, EventOutcome{Command: true}, err
+	if runtime == nil || runtime.MessageCommands == nil {
+		return true, EventOutcome{Command: true}, nil
 	}
 
-	result, runErr := engine.Run(ctx, commandengine.Request{
+	result, runErr := runtime.MessageCommands.Run(ctx, commandengine.Request{
 		Context: commandengine.Context{
 			Source:   commandengine.SourceMessage,
 			Actor:    commandengine.Actor{ID: strings.TrimSpace(event.Actor.ID), Roles: effectiveActorRoles(event.Actor.Roles)},
@@ -51,7 +49,7 @@ func (b *Broker) tryHandleCommand(ctx context.Context, event component.InboundEv
 		return true, EventOutcome{Command: true}, err
 	}
 	b.logf("v2 command handled chat=%s thread=%s argv=%q result_chars=%d", chat.ID, thread.ID, strings.Join(argv, " "), len(message.Text))
-	if err := b.relayOutbound(ctx, message, bindings); err != nil {
+	if err := b.relayOutbound(ctx, message, runtime); err != nil {
 		return true, EventOutcome{Command: true, Outbound: []coremodel.ThreadMessage{message}}, err
 	}
 	return true, EventOutcome{Command: true, Outbound: []coremodel.ThreadMessage{message}}, nil
