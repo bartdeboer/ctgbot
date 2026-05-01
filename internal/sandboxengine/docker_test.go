@@ -29,7 +29,7 @@ func TestBuilderSetsImageBuilder(t *testing.T) {
 	}
 }
 
-func TestDockerManagerExecEnsuresImageFirst(t *testing.T) {
+func TestSandboxManagerExecEnsuresImageFirst(t *testing.T) {
 	t.Parallel()
 	img := &fakeImageBuilder{ensureErr: fmt.Errorf("boom")}
 	mgr := NewSandboxManager(nil)
@@ -126,7 +126,7 @@ func TestSandboxContainerSpecMapsFields(t *testing.T) {
 func TestSandboxEnsureContainerStoresResolvedInstance(t *testing.T) {
 	t.Parallel()
 	docker := NewSandboxManager(nil)
-	sbx := &Sandbox{SandboxSpec: SandboxSpec{Name: "ctgbot-test", Image: "ctgbot:latest"}, docker: docker}
+	sbx := &Sandbox{SandboxSpec: SandboxSpec{Name: "ctgbot-test", Image: "ctgbot:latest"}, manager: docker}
 	first := sbx.ensureContainer()
 	second := sbx.ensureContainer()
 	if first == nil || second == nil {
@@ -140,10 +140,10 @@ func TestSandboxEnsureContainerStoresResolvedInstance(t *testing.T) {
 	}
 }
 
-func TestSandboxEnsureContainerUsesDockerManagerContainerRegistry(t *testing.T) {
+func TestSandboxEnsureContainerUsesSandboxManagerContainerRegistry(t *testing.T) {
 	t.Parallel()
 	docker := NewSandboxManager(nil)
-	sbx := &Sandbox{SandboxSpec: SandboxSpec{Name: "ctgbot-test", Image: "ctgbot:latest"}, docker: docker}
+	sbx := &Sandbox{SandboxSpec: SandboxSpec{Name: "ctgbot-test", Image: "ctgbot:latest"}, manager: docker}
 	container := sbx.ensureContainer()
 	if container != docker.containerManager().Container("ctgbot-test") {
 		t.Fatalf("expected sandbox container to come from docker manager registry")

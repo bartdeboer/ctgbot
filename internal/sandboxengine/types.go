@@ -65,7 +65,7 @@ type SandboxSpec struct {
 type Sandbox struct {
 	SandboxSpec
 
-	docker *DockerManager
+	manager *SandboxManager
 
 	mu                 sync.Mutex
 	activeCommand      *SandboxCommand
@@ -115,13 +115,13 @@ func (s *Sandbox) ContainerSpec() containerengine.ContainerSpec {
 }
 
 func (s *Sandbox) ensureContainer() *containerengine.Container {
-	if s == nil || s.docker == nil {
+	if s == nil || s.manager == nil {
 		return nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.container == nil || s.container.Name != s.Name {
-		s.container = s.docker.containerManager().Container(s.Name)
+		s.container = s.manager.containerManager().Container(s.Name)
 	}
 	s.container.ApplySpec(s.ContainerSpec())
 	return s.container
@@ -200,38 +200,38 @@ func (s *Sandbox) ActiveCommand() (SandboxCommand, bool) {
 }
 
 func (s *Sandbox) Ensure(ctx context.Context) (EnsureAction, error) {
-	if s == nil || s.docker == nil {
+	if s == nil || s.manager == nil {
 		return EnsureNoop, nil
 	}
-	return s.docker.ensure(ctx, s)
+	return s.manager.ensure(ctx, s)
 }
 
 func (s *Sandbox) Stop(ctx context.Context) error {
-	if s == nil || s.docker == nil {
+	if s == nil || s.manager == nil {
 		return nil
 	}
-	return s.docker.stop(ctx, s)
+	return s.manager.stop(ctx, s)
 }
 
 func (s *Sandbox) Remove(ctx context.Context) error {
-	if s == nil || s.docker == nil {
+	if s == nil || s.manager == nil {
 		return nil
 	}
-	return s.docker.remove(ctx, s)
+	return s.manager.remove(ctx, s)
 }
 
 func (s *Sandbox) Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
-	if s == nil || s.docker == nil {
+	if s == nil || s.manager == nil {
 		return nil
 	}
-	return s.docker.exec(ctx, s, stdout, stderr, name, args...)
+	return s.manager.exec(ctx, s, stdout, stderr, name, args...)
 }
 
 func (s *Sandbox) CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
-	if s == nil || s.docker == nil {
+	if s == nil || s.manager == nil {
 		return nil, nil
 	}
-	return s.docker.combinedOutput(ctx, s, name, args...)
+	return s.manager.combinedOutput(ctx, s, name, args...)
 }
 
 func (s *Sandbox) Interrupt() error {

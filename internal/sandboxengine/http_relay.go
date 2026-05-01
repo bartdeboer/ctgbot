@@ -55,8 +55,8 @@ func (s *Sandbox) OpenHTTPRelayPort(ctx context.Context, port int, timeout time.
 	}
 
 	var logger *log.Logger
-	if s.docker != nil {
-		logger = s.docker.Logger
+	if s.manager != nil {
+		logger = s.manager.Logger
 	}
 	return startHTTPRelay(ctx, httpRelayConfig{
 		Addr:          fmt.Sprintf("127.0.0.1:%d", port),

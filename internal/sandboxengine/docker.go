@@ -11,13 +11,16 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 )
 
-type DockerManager struct {
+type SandboxManager struct {
 	mu         sync.Mutex
 	Containers *containerengine.Manager
 	Logger     *log.Logger
 	locks      *sandboxLocks
 	sandboxes  map[string]*Sandbox
 }
+
+// DockerManager is a compatibility alias. Prefer SandboxManager.
+type DockerManager = SandboxManager
 
 type sandboxLocks struct {
 	mu    sync.Mutex
@@ -29,8 +32,8 @@ type sandboxLock struct {
 	refCount int
 }
 
-func NewSandboxManager(logger *log.Logger) *DockerManager {
-	return &DockerManager{
+func NewSandboxManager(logger *log.Logger) *SandboxManager {
+	return &SandboxManager{
 		Logger:     logger,
 		Containers: containerengine.NewManager(logger),
 		locks:      &sandboxLocks{locks: map[string]*sandboxLock{}},
@@ -38,11 +41,11 @@ func NewSandboxManager(logger *log.Logger) *DockerManager {
 	}
 }
 
-func (m *DockerManager) ensureLocks() *sandboxLocks {
+func (m *SandboxManager) ensureLocks() *sandboxLocks {
 	return m.locks
 }
 
-func (m *DockerManager) withLock(name string, fn func() error) error {
+func (m *SandboxManager) withLock(name string, fn func() error) error {
 	if strings.TrimSpace(name) == "" {
 		if fn == nil {
 			return nil
@@ -88,7 +91,7 @@ func (l *sandboxLocks) release(name string, lock *sandboxLock) {
 	}
 }
 
-func (m *DockerManager) CreateSandbox(spec *SandboxSpec) *Sandbox {
+func (m *SandboxManager) CreateSandbox(spec *SandboxSpec) *Sandbox {
 	if spec == nil {
 		spec = &SandboxSpec{}
 	}
@@ -103,16 +106,16 @@ func (m *DockerManager) CreateSandbox(spec *SandboxSpec) *Sandbox {
 	}
 	if sbx := m.sandboxes[copySpec.Name]; sbx != nil {
 		sbx.ApplySpec(&copySpec)
-		sbx.docker = m
+		sbx.manager = m
 		return sbx
 	}
-	sbx := &Sandbox{docker: m}
+	sbx := &Sandbox{manager: m}
 	sbx.ApplySpec(&copySpec)
 	m.sandboxes[copySpec.Name] = sbx
 	return sbx
 }
 
-func (m *DockerManager) ensure(ctx context.Context, sbx *Sandbox) (EnsureAction, error) {
+func (m *SandboxManager) ensure(ctx context.Context, sbx *Sandbox) (EnsureAction, error) {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
 		return EnsureNoop, fmt.Errorf("missing sandbox name")
 	}
@@ -151,7 +154,7 @@ func (s *Sandbox) ensureReady(ctx context.Context) (EnsureAction, error) {
 	case StateCreated, StateExited:
 		return EnsureStarted, container.Start(ctx)
 	case StateMissing:
-		container, err := s.docker.containerManager().Create(ctx, s.ContainerSpec())
+		container, err := s.manager.containerManager().Create(ctx, s.ContainerSpec())
 		if err != nil {
 			return EnsureNoop, err
 		}
@@ -165,7 +168,7 @@ func (s *Sandbox) ensureReady(ctx context.Context) (EnsureAction, error) {
 	}
 }
 
-func (m *DockerManager) stop(ctx context.Context, sbx *Sandbox) error {
+func (m *SandboxManager) stop(ctx context.Context, sbx *Sandbox) error {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
 		return nil
 	}
@@ -174,7 +177,7 @@ func (m *DockerManager) stop(ctx context.Context, sbx *Sandbox) error {
 	})
 }
 
-func (m *DockerManager) remove(ctx context.Context, sbx *Sandbox) error {
+func (m *SandboxManager) remove(ctx context.Context, sbx *Sandbox) error {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
 		return nil
 	}
@@ -183,7 +186,7 @@ func (m *DockerManager) remove(ctx context.Context, sbx *Sandbox) error {
 	})
 }
 
-func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+func (m *SandboxManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
 		return fmt.Errorf("missing sandbox name")
 	}
@@ -205,7 +208,7 @@ func (m *DockerManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer
 	})
 }
 
-func (m *DockerManager) combinedOutput(ctx context.Context, sbx *Sandbox, name string, args ...string) ([]byte, error) {
+func (m *SandboxManager) combinedOutput(ctx context.Context, sbx *Sandbox, name string, args ...string) ([]byte, error) {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
 		return nil, fmt.Errorf("missing sandbox name")
 	}
@@ -228,6 +231,6 @@ func (m *DockerManager) combinedOutput(ctx context.Context, sbx *Sandbox, name s
 	return out, err
 }
 
-func (m *DockerManager) containerManager() *containerengine.Manager {
+func (m *SandboxManager) containerManager() *containerengine.Manager {
 	return m.Containers
 }
