@@ -30,6 +30,7 @@ func main() {
 	registerHostbridgeRoutes(r, store)
 	registerSessionRoutes(r, store)
 	registerV2Routes(r)
+	registerV3Routes(r, store)
 
 	if err := r.Run(context.Background(), os.Args[1:]); err != nil {
 		fmt.Println("error:", err)
