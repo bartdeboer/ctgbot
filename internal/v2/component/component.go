@@ -231,12 +231,12 @@ type Authenticator interface {
 // Agent processes canonical thread messages and may produce an outbound reply.
 type Agent interface {
 	Component
-	HandleMessage(ctx context.Context, req AgentRequest) (*coremodel.ThreadMessage, error)
+	HandleTurn(ctx context.Context, turn AgentTurn) (*coremodel.ThreadMessage, error)
 }
 
-type AgentRequest struct {
-	Message  coremodel.ThreadMessage
-	Commands commandengine.CommandExecutor
+type AgentTurn struct {
+	Message       coremodel.ThreadMessage
+	AgentCommands commandengine.CommandExecutor
 }
 
 // AgentRuntime is the runtime environment an agent uses while processing a

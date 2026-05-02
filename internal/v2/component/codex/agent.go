@@ -19,8 +19,8 @@ const (
 	defaultWorkspaceRoot = ".ctgbot/v2/workspaces"
 )
 
-func (c *Component) HandleMessage(ctx context.Context, req component.AgentRequest) (*coremodel.ThreadMessage, error) {
-	message := req.Message
+func (c *Component) HandleTurn(ctx context.Context, turn component.AgentTurn) (*coremodel.ThreadMessage, error) {
+	message := turn.Message
 	prompt := strings.TrimSpace(message.Text)
 	if prompt == "" {
 		return nil, nil
@@ -43,7 +43,7 @@ func (c *Component) HandleMessage(ctx context.Context, req component.AgentReques
 
 	var runtime component.AgentRuntime = c.Config.SandboxManager.CreateRuntime(sandboxengine.RuntimeSpec{
 		Sandbox:       *spec,
-		AgentCommands: req.Commands,
+		AgentCommands: turn.AgentCommands,
 	})
 	defer func() { _ = runtime.Stop(context.Background()) }()
 

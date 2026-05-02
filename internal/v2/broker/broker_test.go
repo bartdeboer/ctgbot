@@ -528,9 +528,9 @@ func (a *fakeAgent) Type() string {
 	return "fake-agent"
 }
 
-func (a *fakeAgent) HandleMessage(_ context.Context, req component.AgentRequest) (*coremodel.ThreadMessage, error) {
+func (a *fakeAgent) HandleTurn(_ context.Context, turn component.AgentTurn) (*coremodel.ThreadMessage, error) {
 	a.calls++
-	a.commands = req.Commands
+	a.commands = turn.AgentCommands
 	return &coremodel.ThreadMessage{
 		Kind:       coremodel.MessageKindAgent,
 		SourceType: a.Type(),

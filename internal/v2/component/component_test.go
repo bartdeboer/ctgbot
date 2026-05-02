@@ -47,7 +47,7 @@ func (fullComponent) ManagedFiles() []ManagedFile                               
 
 type agentComponent struct{ baseComponent }
 
-func (agentComponent) HandleMessage(ctx context.Context, req AgentRequest) (*coremodel.ThreadMessage, error) {
+func (agentComponent) HandleTurn(ctx context.Context, turn AgentTurn) (*coremodel.ThreadMessage, error) {
 	return nil, nil
 }
 

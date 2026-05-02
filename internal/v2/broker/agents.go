@@ -16,9 +16,9 @@ func (b *Broker) runAgents(ctx context.Context, inbound coremodel.ThreadMessage,
 	var outbound []coremodel.ThreadMessage
 	for _, agent := range runtime.Agents {
 		b.logf("v2 agent invoking type=%s thread=%s", agent.Type(), inbound.ThreadID)
-		message, err := agent.HandleMessage(ctx, component.AgentRequest{
-			Message:  inbound,
-			Commands: runtime.AgentCommands,
+		message, err := agent.HandleTurn(ctx, component.AgentTurn{
+			Message:       inbound,
+			AgentCommands: runtime.AgentCommands,
 		})
 		if err != nil {
 			return outbound, fmt.Errorf("agent %s: %w", agent.Type(), err)
