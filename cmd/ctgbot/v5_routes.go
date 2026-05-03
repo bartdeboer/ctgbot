@@ -199,7 +199,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			if err := system.AuthComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*profileName), *image, *callbackPort, *callbackTimeout, os.Stdout, os.Stderr); err != nil {
+			if err := system.AuthComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*profileName), *callbackPort, *callbackTimeout, os.Stdout, os.Stderr); err != nil {
 				return err
 			}
 			fmt.Println("component auth completed")

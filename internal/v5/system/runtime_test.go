@@ -195,7 +195,7 @@ func TestAuthComponentUsesResolvedHomeAndRegistration(t *testing.T) {
 	if _, err := system.EnsureComponent(context.Background(), "gmail/work", "work"); err != nil {
 		t.Fatalf("EnsureComponent() error = %v", err)
 	}
-	if err := system.AuthComponent(context.Background(), "gmail/work", "", "busybox", 9090, 2*time.Minute, io.Discard, io.Discard); err != nil {
+	if err := system.AuthComponent(context.Background(), "gmail/work", "", 9090, 2*time.Minute, io.Discard, io.Discard); err != nil {
 		t.Fatalf("AuthComponent() error = %v", err)
 	}
 

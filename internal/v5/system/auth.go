@@ -9,8 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 )
 
-func (s *System) AuthComponent(ctx context.Context, ref string, profileName string, image string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
-	_ = image
+func (s *System) AuthComponent(ctx context.Context, ref string, profileName string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	registration, err := s.EnsureComponent(ctx, ref, profileName)
 	if err != nil {
 		return err

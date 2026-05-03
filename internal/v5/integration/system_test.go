@@ -102,7 +102,7 @@ func TestV5MockComponentsEndToEnd(t *testing.T) {
 			t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 		}
 
-		if err := system.AuthComponent(ctx, "mockagent", "", "", 0, 0, io.Discard, io.Discard); err != nil {
+		if err := system.AuthComponent(ctx, "mockagent", "", 0, 0, io.Discard, io.Discard); err != nil {
 			t.Fatalf("AuthComponent() error = %v", err)
 		}
 
