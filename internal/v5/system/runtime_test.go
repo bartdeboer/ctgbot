@@ -17,37 +17,55 @@ import (
 )
 
 type fakeRuntime struct {
+	home    v5runtime.Home
 	profile v5runtime.Profile
 	rootDir string
 }
 
 func (r fakeRuntime) Kind() string               { return r.profile.Runtime }
 func (r fakeRuntime) Profile() v5runtime.Profile { return r.profile }
-func (r fakeRuntime) ComponentHome(registration coremodel.Component) v5runtime.Home {
-	return v5runtime.Home{
-		HostPath:      filepath.Join(r.profile.Root, "components", registration.Type, registration.Name),
-		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
-	}
+func (r fakeRuntime) ComponentHome() v5runtime.Home {
+	return r.home
 }
 func (r fakeRuntime) ThreadWorkspace(threadID modeluuid.UUID) (string, string, error) {
 	return filepath.Join(r.rootDir, ".ctgbot", "threads", threadID.String(), "workspace"), "/workspace", nil
 }
 
-func (r fakeRuntime) Exec(ctx context.Context, registration coremodel.Component, threadID modeluuid.UUID, home v5runtime.Home, image string, workdir string, env []string, developerInstructions string, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
-	_, _, _, _, _, _, _, _, _, _, _, _ = ctx, registration, threadID, home, image, workdir, env, developerInstructions, commands, stdout, stderr, name
-	_ = args
+func (r fakeRuntime) Exec(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	_, _, _, _, _, _, _ = ctx, threadID, commands, stdout, stderr, name, args
 	return fmt.Errorf("not implemented")
 }
 
-func (r fakeRuntime) CombinedOutput(ctx context.Context, registration coremodel.Component, threadID modeluuid.UUID, home v5runtime.Home, image string, workdir string, env []string, developerInstructions string, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
-	_, _, _, _, _, _, _, _, _, _ = ctx, registration, threadID, home, image, workdir, env, developerInstructions, commands, name
-	_ = args
+func (r fakeRuntime) CombinedOutput(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
+	_, _, _, _, _ = ctx, threadID, commands, name, args
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (r fakeRuntime) OpenHTTPRelayPort(ctx context.Context, registration coremodel.Component, threadID modeluuid.UUID, home v5runtime.Home, image string, workdir string, env []string, developerInstructions string, commands commandengine.CommandExecutor, callbackPort int, callbackTimeout time.Duration) (func(context.Context) error, error) {
-	_, _, _, _, _, _, _, _, _, _, _ = ctx, registration, threadID, home, image, workdir, env, developerInstructions, commands, callbackPort, callbackTimeout
+func (r fakeRuntime) OpenHTTPRelayPort(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, callbackPort int, callbackTimeout time.Duration) (func(context.Context) error, error) {
+	_, _, _, _, _ = ctx, threadID, commands, callbackPort, callbackTimeout
 	return nil, fmt.Errorf("not implemented")
+}
+
+type fakeFactory struct {
+	profile v5runtime.Profile
+	rootDir string
+}
+
+func (f fakeFactory) Kind() string               { return f.profile.Runtime }
+func (f fakeFactory) Profile() v5runtime.Profile { return f.profile }
+func (f fakeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+	return v5runtime.Home{
+		HostPath:      filepath.Join(f.profile.Root, "components", registration.Type, registration.Name),
+		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
+	}
+}
+func (f fakeFactory) Bind(registration coremodel.Component, home v5runtime.Home, image string, env []string) v5runtime.Runtime {
+	_, _, _ = registration, image, env
+	return fakeRuntime{
+		home:    home,
+		profile: f.profile,
+		rootDir: f.rootDir,
+	}
 }
 
 type fakeResolved struct {
@@ -63,19 +81,15 @@ type fakeAuthenticator struct {
 	last  struct {
 		registration coremodel.Component
 		home         v5runtime.Home
-		image        string
 		callbackPort int
 		timeout      time.Duration
 	}
 }
 
 func (f *fakeAuthenticator) Type() string { return "gmail" }
-func (f *fakeAuthenticator) Auth(ctx context.Context, registration coremodel.Component, home v5runtime.Home, image string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
+func (f *fakeAuthenticator) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	_, _, _ = ctx, stdout, stderr
 	f.calls++
-	f.last.registration = registration
-	f.last.home = home
-	f.last.image = image
 	f.last.callbackPort = callbackPort
 	f.last.timeout = callbackTimeout
 	return nil
@@ -85,15 +99,17 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage) *Syste
 	t.Helper()
 
 	registry := component.NewRegistry()
-	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, profile v5runtime.Profile, runtime v5runtime.Runtime, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _ = ctx, home, runtime, storage
-		return fakeResolved{componentType: registration.Type, profileName: profile.Name, runtimeKind: runtime.Kind()}, nil
+	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		_, _, _ = ctx, home, storage
+		return fakeResolved{componentType: registration.Type, profileName: runtime.Profile().Name, runtimeKind: runtime.Kind()}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 	auth := &fakeAuthenticator{}
-	if err := registry.Add("gmail", func(ctx context.Context, registration coremodel.Component, profile v5runtime.Profile, runtime v5runtime.Runtime, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _, _, _ = ctx, registration, profile, runtime, home, storage
+	if err := registry.Add("gmail", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		_, _, _, _ = ctx, runtime, home, storage
+		auth.last.registration = registration
+		auth.last.home = home
 		return auth, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -103,9 +119,9 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage) *Syste
 		"default": {Name: "default", Runtime: "local", Root: filepath.Join(root, ".ctgbot", "profiles", "default")},
 		"work":    {Name: "work", Runtime: "local", Root: filepath.Join(root, ".ctgbot", "profiles", "work")},
 	}
-	runtimes := map[string]v5runtime.Runtime{
-		"default": fakeRuntime{profile: profiles["default"], rootDir: root},
-		"work":    fakeRuntime{profile: profiles["work"], rootDir: root},
+	runtimes := map[string]v5runtime.Factory{
+		"default": fakeFactory{profile: profiles["default"], rootDir: root},
+		"work":    fakeFactory{profile: profiles["work"], rootDir: root},
 	}
 	system := New(storage, profiles, runtimes, registry)
 	system.loaded = map[string]*component.Loaded{}

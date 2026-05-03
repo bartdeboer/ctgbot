@@ -22,8 +22,7 @@ const Type = "telegram"
 func New(
 	ctx context.Context,
 	registration coremodel.Component,
-	profile v5runtime.Profile,
-	runtime v5runtime.Runtime,
+	runtime v5runtime.Factory,
 	home v5runtime.Home,
 	storage repository.Storage,
 	token string,
@@ -31,7 +30,7 @@ func New(
 	updates dbstorage.TelegramUpdateStorage,
 	logger *log.Logger,
 ) (component.Component, error) {
-	_, _, _, _, _ = ctx, profile, runtime, home, storage
+	_, _, _, _, _ = ctx, runtime, home, storage, cfg
 
 	token = strings.TrimSpace(token)
 	if token == "" {

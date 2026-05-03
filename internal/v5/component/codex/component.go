@@ -29,21 +29,37 @@ const (
 	DefaultContainerHome = "/profile"
 )
 
-func New(ctx context.Context, registration coremodel.Component, profile v5runtime.Profile, runtime v5runtime.Runtime, home v5runtime.Home, storage repository.Storage, cfg *appstate.Config, logger *log.Logger, image string) (component.Component, error) {
-	_, _, _, _ = ctx, profile, home, storage
+func New(
+	ctx context.Context,
+	registration coremodel.Component,
+	runtimeFactory v5runtime.Factory,
+	home v5runtime.Home,
+	storage repository.Storage,
+	cfg *appstate.Config,
+	logger *log.Logger,
+	image string,
+) (component.Component, error) {
+	_, _ = ctx, storage
 	if cfg == nil {
 		return nil, fmt.Errorf("missing config")
 	}
-	if runtime == nil {
-		return nil, fmt.Errorf("missing component runtime")
+	if runtimeFactory == nil {
+		return nil, fmt.Errorf("missing runtime factory")
 	}
+	containerHome := resolveContainerHome(home.ContainerPath)
+	runtime := runtimeFactory.Bind(
+		registration,
+		home,
+		componentImage(image),
+		[]string{
+			"HOME=" + containerHome,
+			"CODEX_HOME=" + containerHome,
+		},
+	)
 	return &Component{
 		registration: registration,
 		runtime:      runtime,
-		home:         home,
 		config:       cfg,
-		logger:       logger,
-		image:        componentImage(image),
 		executor:     codexengine.NewSessionExecutor(cfg, logger),
 	}, nil
 }
@@ -51,10 +67,7 @@ func New(ctx context.Context, registration coremodel.Component, profile v5runtim
 type Component struct {
 	registration coremodel.Component
 	runtime      v5runtime.Runtime
-	home         v5runtime.Home
 	config       *appstate.Config
-	logger       *log.Logger
-	image        string
 	executor     *codexengine.SessionExecutor
 }
 
@@ -69,26 +82,18 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 	}
 }
 
-func (c *Component) Auth(ctx context.Context, registration coremodel.Component, home v5runtime.Home, image string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
+func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	if c == nil || c.runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
+	home := c.runtime.ComponentHome()
 	containerHome := resolveContainerHome(home.ContainerPath)
 	if err := codexengine.PrepareConversationHome(c.config, home.HostPath, containerHome, containerHome, ""); err != nil {
 		return err
 	}
 	closeRelay, err := c.runtime.OpenHTTPRelayPort(
 		ctx,
-		registration,
 		modeluuid.UUID{},
-		home,
-		componentImage(image),
-		containerHome,
-		[]string{
-			"HOME=" + containerHome,
-			"CODEX_HOME=" + containerHome,
-		},
-		"",
 		nil,
 		callbackPortOrDefault(callbackPort),
 		callbackTimeoutOrDefault(callbackTimeout),
@@ -99,16 +104,7 @@ func (c *Component) Auth(ctx context.Context, registration coremodel.Component, 
 	defer func() { _ = closeRelay(context.Background()) }()
 	return c.runtime.Exec(
 		ctx,
-		registration,
 		modeluuid.UUID{},
-		home,
-		componentImage(image),
-		containerHome,
-		[]string{
-			"HOME=" + containerHome,
-			"CODEX_HOME=" + containerHome,
-		},
-		"",
 		nil,
 		writerOrDiscard(stdout),
 		writerOrDiscard(stderr),
@@ -129,7 +125,8 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		return nil, nil
 	}
 
-	containerHome := resolveContainerHome(c.home.ContainerPath)
+	home := c.runtime.ComponentHome()
+	containerHome := resolveContainerHome(home.ContainerPath)
 	_, containerWorkspace, err := c.runtime.ThreadWorkspace(turn.Thread.ID)
 	if err != nil {
 		return nil, err
@@ -138,7 +135,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if err != nil {
 		return nil, err
 	}
-	if err := codexengine.PrepareConversationHome(c.config, c.home.HostPath, containerHome, containerWorkspace, bootstrapText); err != nil {
+	if err := codexengine.PrepareConversationHome(c.config, home.HostPath, containerHome, containerWorkspace, bootstrapText); err != nil {
 		return nil, err
 	}
 
@@ -157,15 +154,10 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}
 
 	run := commandRuntime{
-		runtime:               c.runtime,
-		registration:          c.registration,
-		threadID:              turn.Thread.ID,
-		home:                  c.home,
-		image:                 c.image,
-		workdir:               containerWorkspace,
-		env:                   []string{"HOME=" + containerHome, "CODEX_HOME=" + containerHome},
-		developerInstructions: bootstrapText,
-		commands:              turn.Runtime.Commands(),
+		runtime:   c.runtime,
+		threadID:  turn.Thread.ID,
+		workspace: containerWorkspace,
+		commands:  turn.Runtime.Commands(),
 	}
 	result, err := c.executor.HandleRuntimeTurn(ctx, run, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, agentcore.TurnOptions{})
 	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && err == nil {
@@ -205,31 +197,20 @@ type outputHandler struct {
 }
 
 type commandRuntime struct {
-	runtime               v5runtime.Runtime
-	registration          coremodel.Component
-	threadID              modeluuid.UUID
-	home                  v5runtime.Home
-	image                 string
-	workdir               string
-	env                   []string
-	developerInstructions string
-	commands              commandengine.CommandExecutor
+	runtime   v5runtime.Runtime
+	threadID  modeluuid.UUID
+	workspace string
+	commands  commandengine.CommandExecutor
 }
 
 func (r commandRuntime) Workspace() string {
-	return r.workdir
+	return r.workspace
 }
 
 func (r commandRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	return r.runtime.Exec(
 		ctx,
-		r.registration,
 		r.threadID,
-		r.home,
-		r.image,
-		r.workdir,
-		r.env,
-		r.developerInstructions,
 		r.commands,
 		stdout,
 		stderr,
@@ -241,13 +222,7 @@ func (r commandRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.Wr
 func (r commandRuntime) CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return r.runtime.CombinedOutput(
 		ctx,
-		r.registration,
 		r.threadID,
-		r.home,
-		r.image,
-		r.workdir,
-		r.env,
-		r.developerInstructions,
 		r.commands,
 		name,
 		args...,

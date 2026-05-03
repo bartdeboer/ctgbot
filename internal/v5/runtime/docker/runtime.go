@@ -18,37 +18,76 @@ import (
 
 const dockerDefaultImage = "ctgbot-codex:latest"
 
-type DockerRuntime struct {
+type Factory struct {
 	rootDir   string
 	profile   v5runtime.Profile
 	sandboxes sandboxengine.RuntimeManager
 }
 
-func New(rootDir string, sandboxes sandboxengine.RuntimeManager, profile v5runtime.Profile) *DockerRuntime {
-	return &DockerRuntime{
+func New(rootDir string, sandboxes sandboxengine.RuntimeManager, profile v5runtime.Profile) *Factory {
+	return &Factory{
 		rootDir:   strings.TrimSpace(rootDir),
 		profile:   profile,
 		sandboxes: sandboxes,
 	}
 }
 
-func (r *DockerRuntime) Kind() string {
+func (f *Factory) Kind() string {
 	return "docker"
 }
 
-func (r *DockerRuntime) Profile() v5runtime.Profile {
-	return r.profile
+func (f *Factory) Profile() v5runtime.Profile {
+	return f.profile
 }
 
-func (r *DockerRuntime) ComponentHome(registration coremodel.Component) v5runtime.Home {
-	hostPath := filepath.Join(r.profile.Root, "components", registration.Type, registration.Name)
+func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+	hostPath := filepath.Join(f.profile.Root, "components", registration.Type, registration.Name)
 	return v5runtime.Home{
 		HostPath:      hostPath,
 		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
 	}
 }
 
-func (r *DockerRuntime) ThreadWorkspace(threadID modeluuid.UUID) (string, string, error) {
+func (f *Factory) Bind(
+	registration coremodel.Component,
+	home v5runtime.Home,
+	image string,
+	env []string,
+) v5runtime.Runtime {
+	return &Runtime{
+		rootDir:      f.rootDir,
+		profile:      f.profile,
+		sandboxes:    f.sandboxes,
+		registration: registration,
+		home:         home,
+		image:        resolveImage(image),
+		env:          append([]string{}, env...),
+	}
+}
+
+type Runtime struct {
+	rootDir      string
+	profile      v5runtime.Profile
+	sandboxes    sandboxengine.RuntimeManager
+	registration coremodel.Component
+	home         v5runtime.Home
+	image        string
+	env          []string
+}
+
+func (r *Runtime) Kind() string {
+	return "docker"
+}
+
+func (r *Runtime) Profile() v5runtime.Profile {
+	return r.profile
+}
+
+func (r *Runtime) ComponentHome() v5runtime.Home {
+	return r.home
+}
+
+func (r *Runtime) ThreadWorkspace(threadID modeluuid.UUID) (string, string, error) {
 	if threadID.IsNull() {
 		return "", "", fmt.Errorf("missing thread id")
 	}
@@ -59,22 +98,16 @@ func (r *DockerRuntime) ThreadWorkspace(threadID modeluuid.UUID) (string, string
 	return hostPath, "/workspace", nil
 }
 
-func (r *DockerRuntime) Exec(
+func (r *Runtime) Exec(
 	ctx context.Context,
-	registration coremodel.Component,
 	threadID modeluuid.UUID,
-	home v5runtime.Home,
-	image string,
-	workdir string,
-	env []string,
-	developerInstructions string,
 	commands commandengine.CommandExecutor,
 	stdout io.Writer,
 	stderr io.Writer,
 	name string,
 	args ...string,
 ) error {
-	sbx, err := r.sandbox(registration, threadID, home, image, workdir, env, developerInstructions, commands)
+	sbx, err := r.sandbox(threadID, commands)
 	if err != nil {
 		return err
 	}
@@ -85,20 +118,14 @@ func (r *DockerRuntime) Exec(
 	return err
 }
 
-func (r *DockerRuntime) CombinedOutput(
+func (r *Runtime) CombinedOutput(
 	ctx context.Context,
-	registration coremodel.Component,
 	threadID modeluuid.UUID,
-	home v5runtime.Home,
-	image string,
-	workdir string,
-	env []string,
-	developerInstructions string,
 	commands commandengine.CommandExecutor,
 	name string,
 	args ...string,
 ) ([]byte, error) {
-	sbx, err := r.sandbox(registration, threadID, home, image, workdir, env, developerInstructions, commands)
+	sbx, err := r.sandbox(threadID, commands)
 	if err != nil {
 		return nil, err
 	}
@@ -109,20 +136,14 @@ func (r *DockerRuntime) CombinedOutput(
 	return out, err
 }
 
-func (r *DockerRuntime) OpenHTTPRelayPort(
+func (r *Runtime) OpenHTTPRelayPort(
 	ctx context.Context,
-	registration coremodel.Component,
 	threadID modeluuid.UUID,
-	home v5runtime.Home,
-	image string,
-	workdir string,
-	env []string,
-	developerInstructions string,
 	commands commandengine.CommandExecutor,
 	callbackPort int,
 	callbackTimeout time.Duration,
 ) (func(context.Context) error, error) {
-	sbx, err := r.sandbox(registration, threadID, home, image, workdir, env, developerInstructions, commands)
+	sbx, err := r.sandbox(threadID, commands)
 	if err != nil {
 		return nil, err
 	}
@@ -136,25 +157,19 @@ func (r *DockerRuntime) OpenHTTPRelayPort(
 	return relay.Close, nil
 }
 
-func (r *DockerRuntime) sandbox(
-	registration coremodel.Component,
+func (r *Runtime) sandbox(
 	threadID modeluuid.UUID,
-	home v5runtime.Home,
-	image string,
-	workdir string,
-	env []string,
-	developerInstructions string,
 	commands commandengine.CommandExecutor,
 ) (*sandboxengine.Sandbox, error) {
 	if r == nil || r.sandboxes == nil {
 		return nil, fmt.Errorf("missing docker runtime")
 	}
 	if threadID.IsNull() {
-		spec := sandboxengine.NewBuilder(authSandboxName(registration, r.profile.Name)).
-			Image(resolveImage(image)).
-			Workdir(resolveWorkdir(workdir, home.ContainerPath)).
-			Env(append([]string{}, env...)).
-			Mounts([]sandboxengine.Mount{{Source: home.HostPath, Target: home.ContainerPath}}).
+		spec := sandboxengine.NewBuilder(authSandboxName(r.registration, r.profile.Name)).
+			Image(r.image).
+			Workdir(r.home.ContainerPath).
+			Env(append([]string{}, r.env...)).
+			Mounts([]sandboxengine.Mount{{Source: r.home.HostPath, Target: r.home.ContainerPath}}).
 			SecurityOpts([]string{"seccomp=unconfined"}).
 			Cmd([]string{"tail", "-f", "/dev/null"}).
 			Build()
@@ -165,18 +180,17 @@ func (r *DockerRuntime) sandbox(
 	if err != nil {
 		return nil, err
 	}
-	spec := sandboxengine.NewBuilder(turnSandboxName(registration, threadID)).
+	spec := sandboxengine.NewBuilder(turnSandboxName(r.registration, threadID)).
 		WorkspaceDir(workspaceHost).
-		ProfileDir(home.HostPath).
+		ProfileDir(r.home.HostPath).
 		ContainerWorkspace(workspaceContainer).
-		ContainerHome(home.ContainerPath).
-		DeveloperInstructions(strings.TrimSpace(developerInstructions)).
-		Hostname(turnSandboxName(registration, threadID)).
-		Image(resolveImage(image)).
-		Workdir(resolveWorkdir(workdir, workspaceContainer)).
-		Env(append([]string{}, env...)).
+		ContainerHome(r.home.ContainerPath).
+		Hostname(turnSandboxName(r.registration, threadID)).
+		Image(r.image).
+		Workdir(workspaceContainer).
+		Env(append([]string{}, r.env...)).
 		Mounts([]sandboxengine.Mount{
-			{Source: home.HostPath, Target: home.ContainerPath},
+			{Source: r.home.HostPath, Target: r.home.ContainerPath},
 			{Source: workspaceHost, Target: workspaceContainer},
 		}).
 		SecurityOpts([]string{"seccomp=unconfined"}).
@@ -203,14 +217,6 @@ func resolveImage(value string) string {
 		return dockerDefaultImage
 	}
 	return value
-}
-
-func resolveWorkdir(value string, fallback string) string {
-	value = strings.TrimSpace(value)
-	if value != "" {
-		return value
-	}
-	return strings.TrimSpace(fallback)
 }
 
 func safeName(value string, fallback string) string {

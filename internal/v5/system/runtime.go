@@ -45,7 +45,7 @@ func (s *System) ResolveComponent(ctx context.Context, componentID modeluuid.UUI
 		return nil, err
 	}
 
-	loaded, err := s.Registry.Build(ctx, *registration, profile, runtime, home, s.Storage)
+	loaded, err := s.Registry.Build(ctx, *registration, runtime, home, s.Storage)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (s *System) Profile(name string) (v5runtime.Profile, error) {
 	return profile, nil
 }
 
-func (s *System) Runtime(profileName string) (v5runtime.Runtime, error) {
+func (s *System) Runtime(profileName string) (v5runtime.Factory, error) {
 	if s == nil {
 		return nil, fmt.Errorf("missing system")
 	}
@@ -79,11 +79,11 @@ func (s *System) Runtime(profileName string) (v5runtime.Runtime, error) {
 	if profileName == "" {
 		profileName = "default"
 	}
-	runtime, ok := s.Runtimes[profileName]
+	factory, ok := s.Runtimes[profileName]
 	if !ok {
 		return nil, fmt.Errorf("runtime not found for profile: %s", profileName)
 	}
-	return runtime, nil
+	return factory, nil
 }
 
 func (s *System) EnsureComponent(ctx context.Context, ref string, profileName string) (*coremodel.Component, error) {

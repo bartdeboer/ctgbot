@@ -10,6 +10,7 @@ import (
 )
 
 func (s *System) AuthComponent(ctx context.Context, ref string, profileName string, image string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
+	_ = image
 	registration, err := s.EnsureComponent(ctx, ref, profileName)
 	if err != nil {
 		return err
@@ -28,5 +29,5 @@ func (s *System) AuthComponent(ctx context.Context, ref string, profileName stri
 	if stderr == nil {
 		stderr = io.Discard
 	}
-	return auth.Auth(ctx, loaded.Registration, loaded.Home, image, callbackPort, callbackTimeout, stdout, stderr)
+	return auth.Auth(ctx, callbackPort, callbackTimeout, stdout, stderr)
 }

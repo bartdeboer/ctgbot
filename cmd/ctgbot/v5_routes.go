@@ -407,13 +407,13 @@ func newV5Registry(ctx context.Context, system *v5system.System, telegramToken s
 		return nil, err
 	}
 
-	if err := registry.Add(v5telegram.Type, func(ctx context.Context, registration coremodel.Component, profile v5runtime.Profile, runtime v5runtime.Runtime, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5telegram.New(ctx, registration, profile, runtime, home, storage, telegramToken, system.Config, auxStorage.TelegramUpdates(), system.Logger)
+	if err := registry.Add(v5telegram.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		return v5telegram.New(ctx, registration, runtime, home, storage, telegramToken, system.Config, auxStorage.TelegramUpdates(), system.Logger)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, profile v5runtime.Profile, runtime v5runtime.Runtime, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5codex.New(ctx, registration, profile, runtime, home, storage, system.Config, system.Logger, codexImage)
+	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.Logger, codexImage)
 	}); err != nil {
 		return nil, err
 	}

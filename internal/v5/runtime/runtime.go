@@ -21,21 +21,27 @@ type Home struct {
 	ContainerPath string
 }
 
-type Runtime interface {
+type Factory interface {
 	Kind() string
 	Profile() Profile
 	ComponentHome(registration coremodel.Component) Home
+	Bind(
+		registration coremodel.Component,
+		home Home,
+		image string,
+		env []string,
+	) Runtime
+}
+
+type Runtime interface {
+	Kind() string
+	Profile() Profile
+	ComponentHome() Home
 	ThreadWorkspace(threadID modeluuid.UUID) (string, string, error)
 
 	Exec(
 		ctx context.Context,
-		registration coremodel.Component,
 		threadID modeluuid.UUID,
-		home Home,
-		image string,
-		workdir string,
-		env []string,
-		developerInstructions string,
 		commands commandengine.CommandExecutor,
 		stdout io.Writer,
 		stderr io.Writer,
@@ -45,13 +51,7 @@ type Runtime interface {
 
 	CombinedOutput(
 		ctx context.Context,
-		registration coremodel.Component,
 		threadID modeluuid.UUID,
-		home Home,
-		image string,
-		workdir string,
-		env []string,
-		developerInstructions string,
 		commands commandengine.CommandExecutor,
 		name string,
 		args ...string,
@@ -59,13 +59,7 @@ type Runtime interface {
 
 	OpenHTTPRelayPort(
 		ctx context.Context,
-		registration coremodel.Component,
 		threadID modeluuid.UUID,
-		home Home,
-		image string,
-		workdir string,
-		env []string,
-		developerInstructions string,
 		commands commandengine.CommandExecutor,
 		callbackPort int,
 		callbackTimeout time.Duration,

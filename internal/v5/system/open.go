@@ -26,7 +26,7 @@ type System struct {
 	Storage  repository.Storage
 	Registry *component.Registry
 	Profiles map[string]v5runtime.Profile
-	Runtimes map[string]v5runtime.Runtime
+	Runtimes map[string]v5runtime.Factory
 
 	RootDir   string
 	StateRoot string
@@ -93,7 +93,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 	}, nil
 }
 
-func New(storage repository.Storage, profiles map[string]v5runtime.Profile, runtimes map[string]v5runtime.Runtime, registry *component.Registry) *System {
+func New(storage repository.Storage, profiles map[string]v5runtime.Profile, runtimes map[string]v5runtime.Factory, registry *component.Registry) *System {
 	return &System{
 		Storage:  storage,
 		Profiles: profiles,
@@ -124,10 +124,10 @@ func resolveDBPath(rootDir string, stateRoot string, dbPath string) string {
 	return filepath.Clean(filepath.Join(rootDir, dbPath))
 }
 
-func buildRuntimes(rootDir string, sandboxes sandboxengine.RuntimeManager, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Runtime, error) {
-	runtimes := map[string]v5runtime.Runtime{}
+func buildRuntimes(rootDir string, sandboxes sandboxengine.RuntimeManager, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Factory, error) {
+	runtimes := map[string]v5runtime.Factory{}
 	for name, profile := range profiles {
-		var runtime v5runtime.Runtime
+		var runtime v5runtime.Factory
 		switch profile.Runtime {
 		case "docker":
 			runtime = v5docker.New(rootDir, sandboxes, profile)

@@ -19,12 +19,16 @@ type Component interface {
 	Type() string
 }
 
-type Constructor func(ctx context.Context, registration coremodel.Component, profile v5runtime.Profile, runtime v5runtime.Runtime, home v5runtime.Home, storage repository.Storage) (Component, error)
+type Constructor func(
+	ctx context.Context,
+	registration coremodel.Component,
+	runtime v5runtime.Factory,
+	home v5runtime.Home,
+	storage repository.Storage,
+) (Component, error)
 
 type Loaded struct {
 	Registration coremodel.Component
-	Profile      v5runtime.Profile
-	Runtime      v5runtime.Runtime
 	Home         v5runtime.Home
 	Component    Component
 }
@@ -69,8 +73,7 @@ func (r *Registry) Has(componentType string) bool {
 func (r *Registry) Build(
 	ctx context.Context,
 	registration coremodel.Component,
-	profile v5runtime.Profile,
-	runtime v5runtime.Runtime,
+	runtime v5runtime.Factory,
 	home v5runtime.Home,
 	storage repository.Storage,
 ) (*Loaded, error) {
@@ -85,14 +88,12 @@ func (r *Registry) Build(
 	if !ok {
 		return nil, fmt.Errorf("component constructor not registered: %s", componentType)
 	}
-	value, err := constructor(ctx, registration, profile, runtime, home, storage)
+	value, err := constructor(ctx, registration, runtime, home, storage)
 	if err != nil {
 		return nil, err
 	}
 	return &Loaded{
 		Registration: registration,
-		Profile:      profile,
-		Runtime:      runtime,
 		Home:         home,
 		Component:    value,
 	}, nil
@@ -161,5 +162,5 @@ type ProfileOwner interface {
 
 type Authenticator interface {
 	Component
-	Auth(ctx context.Context, registration coremodel.Component, home v5runtime.Home, image string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error
+	Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error
 }
