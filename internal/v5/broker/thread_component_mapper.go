@@ -125,7 +125,13 @@ func (m *threadComponentMapper) RelayTarget(ctx context.Context, threadID modelu
 		return nil, false, err
 	}
 	if !ok {
-		return nil, false, nil
+		externalChatID := strings.TrimSpace(binding.ExternalChatID)
+		if externalChatID == "" {
+			return nil, false, nil
+		}
+		return &messenger.ChatTarget{
+			ProviderChatID: externalChatID,
+		}, true, nil
 	}
 	return &messenger.ChatTarget{
 		ProviderChatID:   strings.TrimSpace(binding.ExternalChatID),

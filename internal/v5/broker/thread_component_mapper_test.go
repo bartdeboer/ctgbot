@@ -97,3 +97,44 @@ func TestThreadComponentMapperScopesInboundThreadIDsPerChat(t *testing.T) {
 		t.Fatalf("RelayTarget(alpha) = %#v, ok=%t", target, ok)
 	}
 }
+
+func TestThreadComponentMapperRelayTargetFallsBackToExternalChatID(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	mapper := broker.NewThreadComponentMapper(storage)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	thread := &coremodel.Thread{ChatID: modeluuid.New()}
+	component := &coremodel.Component{Type: "telegram", Name: "relay", Enabled: true}
+
+	if err := storage.Chats().Save(ctx, chat); err != nil {
+		t.Fatal(err)
+	}
+	thread.ChatID = chat.ID
+	if err := storage.Threads().Save(ctx, thread); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Components().Save(ctx, component); err != nil {
+		t.Fatal(err)
+	}
+
+	target, ok, err := mapper.RelayTarget(ctx, thread.ID, coremodel.ChatComponent{
+		ChatID:         chat.ID,
+		ComponentID:    component.ID,
+		Role:           coremodel.ChatComponentRoleRelay,
+		ExternalChatID: "telegram-chat-1",
+		Enabled:        true,
+	})
+	if err != nil {
+		t.Fatalf("RelayTarget() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("RelayTarget() = not found, want fallback target")
+	}
+	if target.ProviderChatID != "telegram-chat-1" {
+		t.Fatalf("ProviderChatID = %q, want telegram-chat-1", target.ProviderChatID)
+	}
+	if target.ProviderThreadID != "" {
+		t.Fatalf("ProviderThreadID = %q, want empty", target.ProviderThreadID)
+	}
+}
