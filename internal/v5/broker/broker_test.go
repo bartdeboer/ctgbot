@@ -312,14 +312,24 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 	if got, want := messengerRecorder.payloads[0].Text.Text, "pong"; got != want {
 		t.Fatalf("relay text = %q, want %q", got, want)
 	}
-	if outcome.Inbound == nil {
-		t.Fatal("expected inbound message to be stored")
+	if outcome.Inbound != nil {
+		t.Fatalf("expected command to stay out of history, got inbound %#v", outcome.Inbound)
 	}
 	if got, want := len(outcome.Outbound), 1; got != want {
 		t.Fatalf("outbound count = %d, want %d", got, want)
 	}
 	if got, want := outcome.Outbound[0].Kind, coremodel.MessageKindSystem; got != want {
 		t.Fatalf("outbound kind = %q, want %q", got, want)
+	}
+	messages, err := storage.Messages().ListByThreadID(context.Background(), outcome.Outbound[0].ThreadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(messages), 1; got != want {
+		t.Fatalf("stored messages = %d, want %d", got, want)
+	}
+	if got, want := messages[0].Text, "pong"; got != want {
+		t.Fatalf("stored message text = %q, want %q", got, want)
 	}
 }
 
@@ -399,6 +409,20 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 		if !strings.Contains(payload.Text.Text, "command error:") {
 			t.Fatalf("expected command error relay, got %#v", payload)
 		}
+	}
+	threads, err := storage.Threads().ListByChatID(context.Background(), chat.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(threads), 1; got != want {
+		t.Fatalf("thread count = %d, want %d", got, want)
+	}
+	messages, err := storage.Messages().ListByThreadID(context.Background(), threads[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(messages), 2; got != want {
+		t.Fatalf("stored messages = %d, want %d", got, want)
 	}
 }
 

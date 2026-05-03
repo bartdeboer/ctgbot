@@ -94,6 +94,23 @@ func TestV5MessageCommandRunsAndSkipsAgent(t *testing.T) {
 		if got, want := messengerState.relayPayloads[0].Text.Text, "pong"; got != want {
 			t.Fatalf("relay text = %q, want %q", got, want)
 		}
+		threads, err := storage.Threads().ListByChatID(ctx, chat.ID)
+		if err != nil {
+			t.Fatalf("Threads().ListByChatID() error = %v", err)
+		}
+		if got, want := len(threads), 1; got != want {
+			t.Fatalf("thread count = %d, want %d", got, want)
+		}
+		messages, err := storage.Messages().ListByThreadID(ctx, threads[0].ID)
+		if err != nil {
+			t.Fatalf("Messages().ListByThreadID() error = %v", err)
+		}
+		if got, want := len(messages), 1; got != want {
+			t.Fatalf("stored messages = %d, want %d", got, want)
+		}
+		if got, want := messages[0].Text, "pong"; got != want {
+			t.Fatalf("stored message text = %q, want %q", got, want)
+		}
 	})
 }
 
@@ -168,6 +185,20 @@ func TestV5UnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 		}
 		if got := messengerState.relayPayloads[0].Text.Text; !strings.HasPrefix(got, "command error:") {
 			t.Fatalf("relay text = %q, want command error", got)
+		}
+		threads, err := storage.Threads().ListByChatID(ctx, chat.ID)
+		if err != nil {
+			t.Fatalf("Threads().ListByChatID() error = %v", err)
+		}
+		if got, want := len(threads), 1; got != want {
+			t.Fatalf("thread count = %d, want %d", got, want)
+		}
+		messages, err := storage.Messages().ListByThreadID(ctx, threads[0].ID)
+		if err != nil {
+			t.Fatalf("Messages().ListByThreadID() error = %v", err)
+		}
+		if got, want := len(messages), 1; got != want {
+			t.Fatalf("stored messages = %d, want %d", got, want)
 		}
 	})
 }
@@ -244,6 +275,20 @@ func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 			}
 			if got := messengerState.relayPayloads[0].Text.Text; !strings.HasPrefix(got, "command error:") {
 				t.Fatalf("relay text for %q = %q, want command error", text, got)
+			}
+			threads, err := storage.Threads().ListByChatID(ctx, chat.ID)
+			if err != nil {
+				t.Fatalf("Threads().ListByChatID(%q) error = %v", text, err)
+			}
+			if got, want := len(threads), 1; got != want {
+				t.Fatalf("thread count for %q = %d, want %d", text, got, want)
+			}
+			messages, err := storage.Messages().ListByThreadID(ctx, threads[0].ID)
+			if err != nil {
+				t.Fatalf("Messages().ListByThreadID(%q) error = %v", text, err)
+			}
+			if got, want := len(messages), 1; got != want {
+				t.Fatalf("stored messages for %q = %d, want %d", text, got, want)
 			}
 		}
 	})

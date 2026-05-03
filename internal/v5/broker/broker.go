@@ -89,28 +89,38 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	if err != nil {
 		return EventOutcome{}, err
 	}
+
+	var runtime *ChatRuntime
+	if _, ok := commandArgv(event.Payload.Text.Text); ok {
+		runtime, err = b.runtimeForChat(ctx, *chat)
+		if err != nil {
+			return EventOutcome{}, err
+		}
+		handled, commandOutbound, err := b.tryHandleMessageCommand(
+			ctx,
+			event,
+			*chat,
+			*thread,
+			runtime,
+		)
+		if err != nil {
+			return EventOutcome{Outbound: commandOutbound}, err
+		}
+		if handled {
+			return EventOutcome{Outbound: commandOutbound}, nil
+		}
+	}
+
 	inbound, err := b.appendInbound(ctx, *chat, *thread, event)
 	if err != nil {
 		return EventOutcome{}, err
 	}
 
-	runtime, err := b.runtimeForChat(ctx, *chat)
-	if err != nil {
-		return EventOutcome{Inbound: inbound}, err
-	}
-
-	handled, commandOutbound, err := b.tryHandleMessageCommand(
-		ctx,
-		event,
-		*chat,
-		*thread,
-		runtime,
-	)
-	if err != nil {
-		return EventOutcome{Inbound: inbound, Outbound: commandOutbound}, err
-	}
-	if handled {
-		return EventOutcome{Inbound: inbound, Outbound: commandOutbound}, nil
+	if runtime == nil {
+		runtime, err = b.runtimeForChat(ctx, *chat)
+		if err != nil {
+			return EventOutcome{Inbound: inbound}, err
+		}
 	}
 
 	turnRuntime := &agentTurnRuntime{
