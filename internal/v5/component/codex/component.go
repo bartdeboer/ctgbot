@@ -13,10 +13,13 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
+	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
 
 const (
@@ -26,7 +29,7 @@ const (
 	DefaultContainerHome = "/profile"
 )
 
-func New(ctx context.Context, registration coremodel.Component, profile component.Profile, runtime component.Runtime, home component.Home, storage repository.Storage, cfg *appstate.Config, logger *log.Logger, image string) (component.Component, error) {
+func New(ctx context.Context, registration coremodel.Component, profile v5runtime.Profile, runtime v5runtime.Runtime, home v5runtime.Home, storage repository.Storage, cfg *appstate.Config, logger *log.Logger, image string) (component.Component, error) {
 	_, _, _, _ = ctx, profile, home, storage
 	if cfg == nil {
 		return nil, fmt.Errorf("missing config")
@@ -47,8 +50,8 @@ func New(ctx context.Context, registration coremodel.Component, profile componen
 
 type Component struct {
 	registration coremodel.Component
-	runtime      component.Runtime
-	home         component.Home
+	runtime      v5runtime.Runtime
+	home         v5runtime.Home
 	config       *appstate.Config
 	logger       *log.Logger
 	image        string
@@ -66,27 +69,52 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 	}
 }
 
-func (c *Component) Auth(ctx context.Context, registration coremodel.Component, home component.Home, image string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
+func (c *Component) Auth(ctx context.Context, registration coremodel.Component, home v5runtime.Home, image string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	if c == nil || c.runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
 	containerHome := resolveContainerHome(home.ContainerPath)
-	sandbox, err := c.runtime.StartAuth(ctx, registration, home, componentImage(image), containerHome, []string{
-		"HOME=" + containerHome,
-		"CODEX_HOME=" + containerHome,
-	})
+	if err := codexengine.PrepareConversationHome(c.config, home.HostPath, containerHome, containerHome, ""); err != nil {
+		return err
+	}
+	closeRelay, err := c.runtime.OpenHTTPRelayPort(
+		ctx,
+		registration,
+		modeluuid.UUID{},
+		home,
+		componentImage(image),
+		containerHome,
+		[]string{
+			"HOME=" + containerHome,
+			"CODEX_HOME=" + containerHome,
+		},
+		"",
+		nil,
+		callbackPortOrDefault(callbackPort),
+		callbackTimeoutOrDefault(callbackTimeout),
+	)
 	if err != nil {
 		return err
 	}
-	if _, err := sandbox.Ensure(ctx); err != nil {
-		return err
-	}
-	relay, err := sandbox.OpenHTTPRelayPort(ctx, callbackPortOrDefault(callbackPort), callbackTimeoutOrDefault(callbackTimeout))
-	if err != nil {
-		return err
-	}
-	defer relay.Close(context.Background())
-	return sandbox.Exec(ctx, writerOrDiscard(stdout), writerOrDiscard(stderr), "codex", "login")
+	defer func() { _ = closeRelay(context.Background()) }()
+	return c.runtime.Exec(
+		ctx,
+		registration,
+		modeluuid.UUID{},
+		home,
+		componentImage(image),
+		containerHome,
+		[]string{
+			"HOME=" + containerHome,
+			"CODEX_HOME=" + containerHome,
+		},
+		"",
+		nil,
+		writerOrDiscard(stdout),
+		writerOrDiscard(stderr),
+		"codex",
+		"login",
+	)
 }
 
 func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
@@ -110,28 +138,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if err != nil {
 		return nil, err
 	}
-
-	runtime, err := c.runtime.StartTurn(
-		ctx,
-		c.registration,
-		turn.Thread,
-		c.home,
-		c.image,
-		containerWorkspace,
-		[]string{
-			"HOME=" + containerHome,
-			"CODEX_HOME=" + containerHome,
-		},
-		bootstrapText,
-		turn.Runtime.Commands(),
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = runtime.Stop(context.Background()) }()
-
-	sandbox := runtime.Sandbox()
-	if err := c.executor.SetupEnvironment(ctx, sandbox); err != nil {
+	if err := codexengine.PrepareConversationHome(c.config, c.home.HostPath, containerHome, containerWorkspace, bootstrapText); err != nil {
 		return nil, err
 	}
 
@@ -149,7 +156,18 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		providerThreadID = strings.TrimSpace(componentThreadID)
 	}
 
-	result, err := c.executor.HandleTurn(ctx, sandbox, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, agentcore.TurnOptions{})
+	run := commandRuntime{
+		runtime:               c.runtime,
+		registration:          c.registration,
+		threadID:              turn.Thread.ID,
+		home:                  c.home,
+		image:                 c.image,
+		workdir:               containerWorkspace,
+		env:                   []string{"HOME=" + containerHome, "CODEX_HOME=" + containerHome},
+		developerInstructions: bootstrapText,
+		commands:              turn.Runtime.Commands(),
+	}
+	result, err := c.executor.HandleRuntimeTurn(ctx, run, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, agentcore.TurnOptions{})
 	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && err == nil {
 		err = saveErr
 	}
@@ -184,6 +202,56 @@ func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, pro
 
 type outputHandler struct {
 	runtime component.TurnRuntime
+}
+
+type commandRuntime struct {
+	runtime               v5runtime.Runtime
+	registration          coremodel.Component
+	threadID              modeluuid.UUID
+	home                  v5runtime.Home
+	image                 string
+	workdir               string
+	env                   []string
+	developerInstructions string
+	commands              commandengine.CommandExecutor
+}
+
+func (r commandRuntime) Workspace() string {
+	return r.workdir
+}
+
+func (r commandRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	return r.runtime.Exec(
+		ctx,
+		r.registration,
+		r.threadID,
+		r.home,
+		r.image,
+		r.workdir,
+		r.env,
+		r.developerInstructions,
+		r.commands,
+		stdout,
+		stderr,
+		name,
+		args...,
+	)
+}
+
+func (r commandRuntime) CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return r.runtime.CombinedOutput(
+		ctx,
+		r.registration,
+		r.threadID,
+		r.home,
+		r.image,
+		r.workdir,
+		r.env,
+		r.developerInstructions,
+		r.commands,
+		name,
+		args...,
+	)
 }
 
 func (h outputHandler) Send(ctx context.Context, payload messenger.OutboundPayload) error {

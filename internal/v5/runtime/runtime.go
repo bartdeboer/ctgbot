@@ -2,228 +2,72 @@ package runtime
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"strings"
+	"io"
+	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 )
 
-func (s *System) ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error) {
-	if s == nil || s.Storage == nil {
-		return nil, fmt.Errorf("missing system storage")
-	}
-	if s.Registry == nil {
-		return nil, fmt.Errorf("missing component registry")
-	}
-	cacheKey := componentID.String()
-	if loaded := s.loaded[cacheKey]; loaded != nil {
-		return loaded, nil
-	}
-
-	registration, err := s.Storage.Components().GetByID(ctx, componentID)
-	if err != nil {
-		return nil, err
-	}
-	if registration == nil {
-		return nil, fmt.Errorf("component not found: %s", componentID)
-	}
-
-	profile, err := s.Profile(registration.Profile)
-	if err != nil {
-		return nil, err
-	}
-	runtime, err := s.Runtime(profile.Name)
-	if err != nil {
-		return nil, err
-	}
-	home := runtime.ComponentHome(*registration)
-	if err := os.MkdirAll(home.HostPath, 0o755); err != nil {
-		return nil, err
-	}
-
-	loaded, err := s.Registry.Build(ctx, *registration, profile, runtime, home, s.Storage)
-	if err != nil {
-		return nil, err
-	}
-	if s.loaded == nil {
-		s.loaded = map[string]*component.Loaded{}
-	}
-	s.loaded[cacheKey] = loaded
-	return loaded, nil
+type Profile struct {
+	Name    string
+	Runtime string
+	Root    string
 }
 
-func (s *System) Profile(name string) (component.Profile, error) {
-	if s == nil {
-		return component.Profile{}, fmt.Errorf("missing system")
-	}
-	name = strings.TrimSpace(name)
-	if name == "" {
-		name = "default"
-	}
-	profile, ok := s.Profiles[name]
-	if !ok {
-		return component.Profile{}, fmt.Errorf("profile not found: %s", name)
-	}
-	return profile, nil
+type Home struct {
+	HostPath      string
+	ContainerPath string
 }
 
-func (s *System) Runtime(profileName string) (component.Runtime, error) {
-	if s == nil {
-		return nil, fmt.Errorf("missing system")
-	}
-	profileName = strings.TrimSpace(profileName)
-	if profileName == "" {
-		profileName = "default"
-	}
-	runtime, ok := s.Runtimes[profileName]
-	if !ok {
-		return nil, fmt.Errorf("runtime not found for profile: %s", profileName)
-	}
-	return runtime, nil
-}
+type Runtime interface {
+	Kind() string
+	Profile() Profile
+	ComponentHome(registration coremodel.Component) Home
+	ThreadWorkspace(threadID modeluuid.UUID) (string, string, error)
 
-func (s *System) EnsureComponent(ctx context.Context, ref string, profileName string) (*coremodel.Component, error) {
-	if s == nil || s.Storage == nil {
-		return nil, fmt.Errorf("missing system storage")
-	}
-	if s.Registry == nil {
-		return nil, fmt.Errorf("missing component registry")
-	}
+	Exec(
+		ctx context.Context,
+		registration coremodel.Component,
+		threadID modeluuid.UUID,
+		home Home,
+		image string,
+		workdir string,
+		env []string,
+		developerInstructions string,
+		commands commandengine.CommandExecutor,
+		stdout io.Writer,
+		stderr io.Writer,
+		name string,
+		args ...string,
+	) error
 
-	parsed, err := coremodel.ParseComponentRef(ref)
-	if err != nil {
-		return nil, err
-	}
-	if !s.Registry.Has(parsed.Type) {
-		return nil, fmt.Errorf("component type not registered in code: %s", parsed.Type)
-	}
+	CombinedOutput(
+		ctx context.Context,
+		registration coremodel.Component,
+		threadID modeluuid.UUID,
+		home Home,
+		image string,
+		workdir string,
+		env []string,
+		developerInstructions string,
+		commands commandengine.CommandExecutor,
+		name string,
+		args ...string,
+	) ([]byte, error)
 
-	registration, err := s.Storage.Components().GetByTypeAndName(ctx, parsed.Type, parsed.ResolvedName())
-	if err != nil {
-		return nil, err
-	}
-	if registration == nil {
-		if strings.TrimSpace(profileName) == "" {
-			profileName = "default"
-		}
-		profile, err := s.Profile(profileName)
-		if err != nil {
-			return nil, err
-		}
-		registration = &coremodel.Component{
-			Type:      parsed.Type,
-			Name:      parsed.ResolvedName(),
-			Profile:   profile.Name,
-			Enabled:   true,
-			IsDefault: !parsed.ExplicitName || parsed.ResolvedName() == coremodel.DefaultComponentName(parsed.Type),
-		}
-	} else {
-		registration.Enabled = true
-		if strings.TrimSpace(profileName) != "" {
-			profile, err := s.Profile(profileName)
-			if err != nil {
-				return nil, err
-			}
-			registration.Profile = profile.Name
-		} else if strings.TrimSpace(registration.Profile) == "" {
-			registration.Profile = "default"
-		}
-	}
-
-	if err := s.Storage.Components().Save(ctx, registration); err != nil {
-		return nil, err
-	}
-	runtime, err := s.Runtime(registration.Profile)
-	if err != nil {
-		return nil, err
-	}
-	home := runtime.ComponentHome(*registration)
-	if err := os.MkdirAll(home.HostPath, 0o755); err != nil {
-		return nil, err
-	}
-	delete(s.loaded, registration.ID.String())
-	return registration, nil
-}
-
-func (s *System) BindChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, ref string, externalChatID string) (*coremodel.ChatComponent, error) {
-	if s == nil || s.Storage == nil {
-		return nil, fmt.Errorf("missing system storage")
-	}
-	if chatID.IsNull() {
-		return nil, fmt.Errorf("missing chat id")
-	}
-	if !role.Valid() {
-		return nil, fmt.Errorf("invalid chat component role: %q", role)
-	}
-
-	chat, err := s.Storage.Chats().GetByID(ctx, chatID)
-	if err != nil {
-		return nil, err
-	}
-	if chat == nil {
-		return nil, fmt.Errorf("chat not found: %s", chatID)
-	}
-
-	registration, err := s.ResolveComponentRef(ctx, ref)
-	if err != nil {
-		return nil, err
-	}
-
-	externalChatID = strings.TrimSpace(externalChatID)
-	switch role {
-	case coremodel.ChatComponentRoleSource, coremodel.ChatComponentRoleRelay:
-		if externalChatID == "" {
-			return nil, fmt.Errorf("missing external chat id for role %q", role)
-		}
-	default:
-		externalChatID = ""
-	}
-
-	binding, err := s.Storage.ChatComponents().GetByChatComponentRole(ctx, chatID, registration.ID, role)
-	if err != nil {
-		return nil, err
-	}
-	if binding == nil {
-		binding = &coremodel.ChatComponent{
-			ChatID:      chatID,
-			ComponentID: registration.ID,
-			Role:        role,
-		}
-	}
-	binding.ExternalChatID = externalChatID
-	binding.Enabled = true
-	if err := s.Storage.ChatComponents().Save(ctx, binding); err != nil {
-		return nil, err
-	}
-	return binding, nil
-}
-
-func (s *System) ResolveComponentRef(ctx context.Context, ref string) (*coremodel.Component, error) {
-	if s == nil || s.Storage == nil {
-		return nil, fmt.Errorf("missing system storage")
-	}
-	parsed, err := coremodel.ParseComponentRef(ref)
-	if err != nil {
-		return nil, err
-	}
-	if !parsed.ExplicitName {
-		registration, err := s.Storage.Components().GetDefaultByType(ctx, parsed.Type)
-		if err != nil {
-			return nil, err
-		}
-		if registration != nil {
-			return registration, nil
-		}
-	}
-	registration, err := s.Storage.Components().GetByTypeAndName(ctx, parsed.Type, parsed.ResolvedName())
-	if err != nil {
-		return nil, err
-	}
-	if registration == nil {
-		return nil, fmt.Errorf("component not registered: %s", parsed.Ref())
-	}
-	return registration, nil
+	OpenHTTPRelayPort(
+		ctx context.Context,
+		registration coremodel.Component,
+		threadID modeluuid.UUID,
+		home Home,
+		image string,
+		workdir string,
+		env []string,
+		developerInstructions string,
+		commands commandengine.CommandExecutor,
+		callbackPort int,
+		callbackTimeout time.Duration,
+	) (func(context.Context) error, error)
 }

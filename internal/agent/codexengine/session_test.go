@@ -38,7 +38,7 @@ func TestEnsureConversationCodexHomeWritesPosixModelInstructionsPath(t *testing.
 	}
 
 	homeDir := filepath.Join(root, "chat", ".codex")
-	if err := ensureConversationCodexHome(cfg, homeDir, "/codex-home", "/workspace", "bootstrap"); err != nil {
+	if err := PrepareConversationHome(cfg, homeDir, "/codex-home", "/workspace", "bootstrap"); err != nil {
 		t.Fatalf("ensure conversation codex home: %v", err)
 	}
 

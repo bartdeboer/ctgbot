@@ -1,11 +1,11 @@
-package runtime
+package system
 
 import (
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/v5/component"
+	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -28,13 +28,13 @@ func ConfiguredProfiles(store *clistate.Store) map[string]ProfileSettings {
 	return out
 }
 
-func LoadProfiles(rootDir string, store *clistate.Store) (map[string]component.Profile, error) {
+func LoadProfiles(rootDir string, store *clistate.Store) (map[string]v5runtime.Profile, error) {
 	rootDir = strings.TrimSpace(rootDir)
 	if rootDir == "" {
 		return nil, fmt.Errorf("missing root dir")
 	}
 	configured := ConfiguredProfiles(store)
-	profiles := map[string]component.Profile{}
+	profiles := map[string]v5runtime.Profile{}
 	for name, settings := range configured {
 		profile, err := resolveProfile(rootDir, name, settings)
 		if err != nil {
@@ -52,13 +52,13 @@ func LoadProfiles(rootDir string, store *clistate.Store) (map[string]component.P
 	return profiles, nil
 }
 
-func SaveProfile(rootDir string, store *clistate.Store, name string, runtimeKind string, homePath string) (component.Profile, error) {
+func SaveProfile(rootDir string, store *clistate.Store, name string, runtimeKind string, homePath string) (v5runtime.Profile, error) {
 	if store == nil {
-		return component.Profile{}, fmt.Errorf("missing profile store")
+		return v5runtime.Profile{}, fmt.Errorf("missing profile store")
 	}
 	name = strings.TrimSpace(name)
 	if err := validateProfileName(name); err != nil {
-		return component.Profile{}, err
+		return v5runtime.Profile{}, err
 	}
 	runtimeKind = strings.TrimSpace(runtimeKind)
 	homePath = strings.TrimSpace(homePath)
@@ -71,14 +71,14 @@ func SaveProfile(rootDir string, store *clistate.Store, name string, runtimeKind
 	settings.HomePath = homePath
 	configured[name] = settings
 	if err := store.PersistStruct(profileConfigKey, configured); err != nil {
-		return component.Profile{}, err
+		return v5runtime.Profile{}, err
 	}
 	return resolveProfile(rootDir, name, settings)
 }
 
-func resolveProfile(rootDir string, name string, settings ProfileSettings) (component.Profile, error) {
+func resolveProfile(rootDir string, name string, settings ProfileSettings) (v5runtime.Profile, error) {
 	if err := validateProfileName(name); err != nil {
-		return component.Profile{}, err
+		return v5runtime.Profile{}, err
 	}
 	runtimeKind := strings.TrimSpace(settings.Runtime)
 	if runtimeKind == "" {
@@ -86,9 +86,9 @@ func resolveProfile(rootDir string, name string, settings ProfileSettings) (comp
 	}
 	root, err := resolveProfileRoot(rootDir, name, strings.TrimSpace(settings.HomePath))
 	if err != nil {
-		return component.Profile{}, err
+		return v5runtime.Profile{}, err
 	}
-	return component.Profile{
+	return v5runtime.Profile{
 		Name:    name,
 		Runtime: runtimeKind,
 		Root:    root,

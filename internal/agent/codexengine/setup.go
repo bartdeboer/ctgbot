@@ -28,10 +28,10 @@ func (e *SessionExecutor) SetupEnvironment(ctx context.Context, sbx *sandboxengi
 		return err
 	}
 	sbx.ImageBuilder = &ImageBuilder{Config: e.Config, Logger: e.Logger}
-	return ensureConversationCodexHome(e.Config, sbx.ProfileDir, sbx.ContainerHome, sbx.ContainerWorkspace, sbx.DeveloperInstructions)
+	return PrepareConversationHome(e.Config, sbx.ProfileDir, sbx.ContainerHome, sbx.ContainerWorkspace, sbx.DeveloperInstructions)
 }
 
-func ensureConversationCodexHome(cfg *appstate.Config, homeDir string, containerHome string, containerWorkspace string, bootstrapText string) error {
+func PrepareConversationHome(cfg *appstate.Config, homeDir string, containerHome string, containerWorkspace string, bootstrapText string) error {
 	if cfg == nil {
 		return fmt.Errorf("missing config")
 	}

@@ -16,12 +16,13 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/dbstorage/gormstorage"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	v5broker "github.com/bartdeboer/ctgbot/internal/v5/broker"
-	v5codex "github.com/bartdeboer/ctgbot/internal/v5/codex"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
+	v5codex "github.com/bartdeboer/ctgbot/internal/v5/component/codex"
+	v5telegram "github.com/bartdeboer/ctgbot/internal/v5/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
-	v5telegram "github.com/bartdeboer/ctgbot/internal/v5/telegram"
+	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -86,7 +87,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			}
 
 			name := strings.TrimSpace(req.Params["profile"])
-			configured := v5runtime.ConfiguredProfiles(store)
+			configured := v5system.ConfiguredProfiles(store)
 			settings := configured[name]
 			if runtimeSet {
 				value := strings.TrimSpace(*runtimeKind)
@@ -99,7 +100,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				settings.HomePath = strings.TrimSpace(*homePath)
 			}
 
-			profile, err := v5runtime.SaveProfile(rootDir, store, name, settings.Runtime, settings.HomePath)
+			profile, err := v5system.SaveProfile(rootDir, store, name, settings.Runtime, settings.HomePath)
 			if err != nil {
 				return err
 			}
@@ -116,11 +117,11 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			profiles, err := v5runtime.LoadProfiles(rootDir, store)
+			profiles, err := v5system.LoadProfiles(rootDir, store)
 			if err != nil {
 				return err
 			}
-			configured := v5runtime.ConfiguredProfiles(store)
+			configured := v5system.ConfiguredProfiles(store)
 			names := make([]string, 0, len(profiles))
 			for name := range profiles {
 				names = append(names, name)
@@ -385,9 +386,9 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 	})
 }
 
-func openV5SystemForRoutes(req *clir.Request, store *clistate.Store, stateRoot string, dbPath string, telegramToken string, codexImage string) (*v5runtime.System, error) {
+func openV5SystemForRoutes(req *clir.Request, store *clistate.Store, stateRoot string, dbPath string, telegramToken string, codexImage string) (*v5system.System, error) {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
-	system, err := v5runtime.Open(req.Context(), stateRoot, dbPath, store, logger)
+	system, err := v5system.Open(req.Context(), stateRoot, dbPath, store, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +399,7 @@ func openV5SystemForRoutes(req *clir.Request, store *clistate.Store, stateRoot s
 	return system, nil
 }
 
-func newV5Registry(ctx context.Context, system *v5runtime.System, telegramToken string, codexImage string) (*component.Registry, error) {
+func newV5Registry(ctx context.Context, system *v5system.System, telegramToken string, codexImage string) (*component.Registry, error) {
 	registry := component.NewRegistry()
 
 	auxStorage := gormstorage.New(system.DB)
@@ -406,12 +407,12 @@ func newV5Registry(ctx context.Context, system *v5runtime.System, telegramToken 
 		return nil, err
 	}
 
-	if err := registry.Add(v5telegram.Type, func(ctx context.Context, registration coremodel.Component, profile component.Profile, runtime component.Runtime, home component.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add(v5telegram.Type, func(ctx context.Context, registration coremodel.Component, profile v5runtime.Profile, runtime v5runtime.Runtime, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
 		return v5telegram.New(ctx, registration, profile, runtime, home, storage, telegramToken, system.Config, auxStorage.TelegramUpdates(), system.Logger)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, profile component.Profile, runtime component.Runtime, home component.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, profile v5runtime.Profile, runtime v5runtime.Runtime, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
 		return v5codex.New(ctx, registration, profile, runtime, home, storage, system.Config, system.Logger, codexImage)
 	}); err != nil {
 		return nil, err

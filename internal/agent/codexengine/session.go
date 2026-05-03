@@ -22,6 +22,12 @@ type SessionExecutor struct {
 	Logger *log.Logger
 }
 
+type ExecRuntime interface {
+	Workspace() string
+	Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error
+	CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error)
+}
+
 func NewSessionExecutor(cfg *appstate.Config, logger *log.Logger) *SessionExecutor {
 	return &SessionExecutor{Config: cfg, Logger: logger}
 }
@@ -64,6 +70,101 @@ func (e *SessionExecutor) InstallSkill(ctx context.Context, sbx *sandboxengine.S
 		return fmt.Errorf("install skill %s: %w", skillDir, err)
 	}
 	return nil
+}
+
+func (e *SessionExecutor) HandleRuntimeTurn(ctx context.Context, runtime ExecRuntime, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
+	if e.Config == nil {
+		return agent.TurnResult{}, fmt.Errorf("missing config")
+	}
+	if runtime == nil {
+		return agent.TurnResult{}, fmt.Errorf("missing runtime")
+	}
+	if strings.TrimSpace(prompt) == "" {
+		return agent.TurnResult{}, fmt.Errorf("missing prompt")
+	}
+
+	timeout := e.Config.Codex().SessionTimeout()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	outputPath := "/tmp/ctgbot-last-message.txt"
+	innerArgs := []string{
+		"codex",
+		"-a", "never",
+		"-s", "workspace-write",
+		"exec",
+		"--json",
+		"--skip-git-repo-check",
+		"--add-dir", runtime.Workspace(),
+		"--output-last-message", outputPath,
+		"-C", runtime.Workspace(),
+	}
+
+	model := strings.TrimSpace(options.Model)
+	if model == "" {
+		model = e.Config.Codex().Model()
+	}
+	if model != "" {
+		innerArgs = append(innerArgs, "-m", model)
+	}
+	if effort := strings.TrimSpace(options.ReasoningEffort); effort != "" {
+		innerArgs = append(innerArgs, "-c", fmt.Sprintf("model_reasoning_effort=%q", effort))
+	}
+	if strings.TrimSpace(providerThreadID) != "" {
+		innerArgs = append(innerArgs, "resume", providerThreadID, prompt)
+	} else {
+		innerArgs = append(innerArgs, strings.TrimSpace(prompt))
+	}
+	args := wrapWithPIDFile(innerArgs)
+
+	var stdoutBuf bytes.Buffer
+	var stderrBuf bytes.Buffer
+	stdout := newCodexJSONWriter(&stdoutBuf, e.logf, func(text string) {
+		if output == nil {
+			return
+		}
+		if err := output.Send(ctx, messenger.OutboundPayload{
+			Text: messenger.TextMessage{Text: text},
+		}); err != nil {
+			e.logf("send codex agent message failed: %v", err)
+		}
+	})
+	err := runtime.Exec(ctx, stdout, io.MultiWriter(os.Stderr, &stderrBuf), args[0], args[1:]...)
+	stdout.Flush()
+
+	nextProviderThreadID := strings.TrimSpace(providerThreadID)
+	if nextProviderThreadID == "" {
+		nextProviderThreadID = stdout.ThreadID()
+	}
+	if nextProviderThreadID == "" {
+		nextProviderThreadID = extractCodexThreadID(stdoutBuf.String())
+	}
+	if stdout.InputTokens() > 0 || stdout.OutputTokens() > 0 || stdout.CachedInputTokens() > 0 {
+		e.logf("codex turn completed thread_id=%s input_tokens=%d cached_input_tokens=%d output_tokens=%d", nextProviderThreadID, stdout.InputTokens(), stdout.CachedInputTokens(), stdout.OutputTokens())
+	}
+
+	lastMessageBytes, readErr := runtime.CombinedOutput(ctx, "cat", outputPath)
+	lastMessage := strings.TrimSpace(string(lastMessageBytes))
+
+	if err != nil {
+		if readErr == nil && lastMessage != "" {
+			return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
+		}
+		if detail := trimCodexErrorDetail(stderrBuf.String()); detail != "" {
+			return agent.TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
+		}
+		return agent.TurnResult{}, fmt.Errorf("codex exec: %w", err)
+	}
+	if readErr != nil {
+		return agent.TurnResult{}, fmt.Errorf("read last message: %w", readErr)
+	}
+	if lastMessage == "" {
+		return agent.TurnResult{}, fmt.Errorf("codex returned an empty response")
+	}
+	return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, nil
 }
 
 func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {

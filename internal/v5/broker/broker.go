@@ -11,6 +11,7 @@ import (
 	component "github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
+	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
 
 type InstanceResolver interface {
@@ -37,7 +38,7 @@ type ChatRuntime struct {
 	Agents     []AgentBinding
 	Relays     []component.OutboundRelay
 	Commands   *commandengine.Engine
-	Homes      map[modeluuid.UUID]component.Home
+	Homes      map[modeluuid.UUID]v5runtime.Home
 }
 
 type AgentBinding struct {

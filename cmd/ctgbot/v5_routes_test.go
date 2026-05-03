@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
+	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -44,7 +44,7 @@ func TestV5ProfileSetAndComponentRegister(t *testing.T) {
 		expectedHome := filepath.Join(root, "profiles", "work-root", "components", "codex", "work")
 		assertDirExists(t, expectedHome)
 
-		system, err := v5runtime.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
+		system, err := v5system.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
 		if err != nil {
 			t.Fatalf("open v5 runtime: %v", err)
 		}
@@ -79,7 +79,7 @@ func TestV5ChatComponentAddBindsExternalChatID(t *testing.T) {
 			t.Fatalf("chat create: %v", err)
 		}
 
-		system, err := v5runtime.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
+		system, err := v5system.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
 		if err != nil {
 			t.Fatalf("open v5 runtime: %v", err)
 		}

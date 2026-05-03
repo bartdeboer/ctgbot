@@ -9,6 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	component "github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
+	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
 
 func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*ChatRuntime, error) {
@@ -18,7 +19,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 
 	resolved := map[modeluuid.UUID]*component.Loaded{}
-	homes := map[modeluuid.UUID]component.Home{}
+	homes := map[modeluuid.UUID]v5runtime.Home{}
 	var (
 		components []*component.Loaded
 		agents     []AgentBinding
@@ -152,9 +153,9 @@ func (r *agentTurnRuntime) StartChatAction(ctx context.Context, action messenger
 	}, nil
 }
 
-func (r *agentTurnRuntime) ComponentHome(componentID modeluuid.UUID) (component.Home, bool) {
+func (r *agentTurnRuntime) ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool) {
 	if r == nil || r.runtime == nil {
-		return component.Home{}, false
+		return v5runtime.Home{}, false
 	}
 	home, ok := r.runtime.Homes[componentID]
 	return home, ok

@@ -1,4 +1,4 @@
-package runtime
+package system
 
 import (
 	"context"
@@ -13,6 +13,9 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
+	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
+	v5docker "github.com/bartdeboer/ctgbot/internal/v5/runtime/docker"
+	v5local "github.com/bartdeboer/ctgbot/internal/v5/runtime/local"
 	"github.com/bartdeboer/go-clistate"
 	"gorm.io/gorm"
 )
@@ -22,8 +25,8 @@ const dbName = "ctgbot-v5.db"
 type System struct {
 	Storage  repository.Storage
 	Registry *component.Registry
-	Profiles map[string]component.Profile
-	Runtimes map[string]component.Runtime
+	Profiles map[string]v5runtime.Profile
+	Runtimes map[string]v5runtime.Runtime
 
 	RootDir   string
 	StateRoot string
@@ -90,7 +93,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 	}, nil
 }
 
-func New(storage repository.Storage, profiles map[string]component.Profile, runtimes map[string]component.Runtime, registry *component.Registry) *System {
+func New(storage repository.Storage, profiles map[string]v5runtime.Profile, runtimes map[string]v5runtime.Runtime, registry *component.Registry) *System {
 	return &System{
 		Storage:  storage,
 		Profiles: profiles,
@@ -121,15 +124,15 @@ func resolveDBPath(rootDir string, stateRoot string, dbPath string) string {
 	return filepath.Clean(filepath.Join(rootDir, dbPath))
 }
 
-func buildRuntimes(rootDir string, sandboxes sandboxengine.RuntimeManager, profiles map[string]component.Profile) (map[string]component.Runtime, error) {
-	runtimes := map[string]component.Runtime{}
+func buildRuntimes(rootDir string, sandboxes sandboxengine.RuntimeManager, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Runtime, error) {
+	runtimes := map[string]v5runtime.Runtime{}
 	for name, profile := range profiles {
-		var runtime component.Runtime
+		var runtime v5runtime.Runtime
 		switch profile.Runtime {
 		case "docker":
-			runtime = newDockerRuntime(rootDir, sandboxes, profile)
+			runtime = v5docker.New(rootDir, sandboxes, profile)
 		case "local":
-			runtime = newLocalRuntime(rootDir, profile)
+			runtime = v5local.New(rootDir, profile)
 		default:
 			return nil, fmt.Errorf("unsupported runtime %q for profile %s", profile.Runtime, name)
 		}

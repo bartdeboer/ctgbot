@@ -14,11 +14,23 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
+	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
 
 const Type = "telegram"
 
-func New(ctx context.Context, registration coremodel.Component, profile component.Profile, runtime component.Runtime, home component.Home, storage repository.Storage, token string, cfg *appstate.Config, updates dbstorage.TelegramUpdateStorage, logger *log.Logger) (component.Component, error) {
+func New(
+	ctx context.Context,
+	registration coremodel.Component,
+	profile v5runtime.Profile,
+	runtime v5runtime.Runtime,
+	home v5runtime.Home,
+	storage repository.Storage,
+	token string,
+	cfg *appstate.Config,
+	updates dbstorage.TelegramUpdateStorage,
+	logger *log.Logger,
+) (component.Component, error) {
 	_, _, _, _, _ = ctx, profile, runtime, home, storage
 
 	token = strings.TrimSpace(token)
