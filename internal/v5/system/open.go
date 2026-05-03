@@ -77,7 +77,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 	if err != nil {
 		return nil, err
 	}
-	runtimes, err := buildRuntimes(rootDir, sandboxengine.NewSandboxManager(logger), profiles)
+	runtimes, err := buildRuntimes(rootDir, storage, sandboxengine.NewSandboxManager(logger), logger, profiles)
 	if err != nil {
 		return nil, err
 	}
@@ -126,13 +126,14 @@ func resolveDBPath(rootDir string, stateRoot string, dbPath string) string {
 	return filepath.Clean(filepath.Join(rootDir, dbPath))
 }
 
-func buildRuntimes(rootDir string, sandboxes sandboxengine.RuntimeManager, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Factory, error) {
+func buildRuntimes(rootDir string, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Factory, error) {
 	runtimes := map[string]v5runtime.Factory{}
+	bridge := v5runtime.NewHostbridge(rootDir, storage, logger)
 	for name, profile := range profiles {
 		var runtime v5runtime.Factory
 		switch profile.Runtime {
 		case "docker":
-			runtime = v5docker.New(rootDir, sandboxes, profile)
+			runtime = v5docker.New(rootDir, sandboxes, bridge, profile)
 		case "local":
 			runtime = v5local.New(rootDir, profile)
 		default:

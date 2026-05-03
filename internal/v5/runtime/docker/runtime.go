@@ -22,13 +22,15 @@ type Factory struct {
 	rootDir   string
 	profile   v5runtime.Profile
 	sandboxes sandboxengine.RuntimeManager
+	bridge    *v5runtime.Hostbridge
 }
 
-func New(rootDir string, sandboxes sandboxengine.RuntimeManager, profile v5runtime.Profile) *Factory {
+func New(rootDir string, sandboxes sandboxengine.RuntimeManager, bridge *v5runtime.Hostbridge, profile v5runtime.Profile) *Factory {
 	return &Factory{
 		rootDir:   strings.TrimSpace(rootDir),
 		profile:   profile,
 		sandboxes: sandboxes,
+		bridge:    bridge,
 	}
 }
 
@@ -58,6 +60,7 @@ func (f *Factory) Bind(
 		rootDir:      f.rootDir,
 		profile:      f.profile,
 		sandboxes:    f.sandboxes,
+		bridge:       f.bridge,
 		registration: registration,
 		home:         home,
 		image:        resolveImage(image),
@@ -69,6 +72,7 @@ type Runtime struct {
 	rootDir      string
 	profile      v5runtime.Profile
 	sandboxes    sandboxengine.RuntimeManager
+	bridge       *v5runtime.Hostbridge
 	registration coremodel.Component
 	home         v5runtime.Home
 	image        string
@@ -107,10 +111,11 @@ func (r *Runtime) Exec(
 	name string,
 	args ...string,
 ) error {
-	sbx, err := r.sandbox(threadID, commands)
+	sbx, cleanup, err := r.sandbox(threadID, commands)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 	err = sbx.Exec(ctx, stdout, stderr, name, args...)
 	if err != nil && sbx.Interrupted() {
 		return context.Canceled
@@ -125,10 +130,11 @@ func (r *Runtime) CombinedOutput(
 	name string,
 	args ...string,
 ) ([]byte, error) {
-	sbx, err := r.sandbox(threadID, commands)
+	sbx, cleanup, err := r.sandbox(threadID, commands)
 	if err != nil {
 		return nil, err
 	}
+	defer cleanup()
 	out, err := sbx.CombinedOutput(ctx, name, args...)
 	if err != nil && sbx.Interrupted() {
 		return nil, context.Canceled
@@ -143,26 +149,31 @@ func (r *Runtime) OpenHTTPRelayPort(
 	callbackPort int,
 	callbackTimeout time.Duration,
 ) (func(context.Context) error, error) {
-	sbx, err := r.sandbox(threadID, commands)
+	sbx, cleanup, err := r.sandbox(threadID, commands)
 	if err != nil {
 		return nil, err
 	}
 	if _, err := sbx.Ensure(ctx); err != nil {
+		cleanup()
 		return nil, err
 	}
 	relay, err := sbx.OpenHTTPRelayPort(ctx, callbackPort, callbackTimeout)
 	if err != nil {
+		cleanup()
 		return nil, err
 	}
-	return relay.Close, nil
+	return func(closeCtx context.Context) error {
+		defer cleanup()
+		return relay.Close(closeCtx)
+	}, nil
 }
 
 func (r *Runtime) sandbox(
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
-) (*sandboxengine.Sandbox, error) {
+) (*sandboxengine.Sandbox, func(), error) {
 	if r == nil || r.sandboxes == nil {
-		return nil, fmt.Errorf("missing docker runtime")
+		return nil, nil, fmt.Errorf("missing docker runtime")
 	}
 	if threadID.IsNull() {
 		spec := sandboxengine.NewBuilder(authSandboxName(r.registration, r.profile.Name)).
@@ -171,14 +182,30 @@ func (r *Runtime) sandbox(
 			Env(append([]string{}, r.env...)).
 			Mounts([]sandboxengine.Mount{{Source: r.home.HostPath, Target: r.home.ContainerPath}}).
 			SecurityOpts([]string{"seccomp=unconfined"}).
+			AddHosts([]string{"host.docker.internal:host-gateway"}).
 			Cmd([]string{"tail", "-f", "/dev/null"}).
 			Build()
-		return r.sandboxes.CreateSandbox(spec), nil
+		return r.sandboxes.CreateSandbox(spec), func() {}, nil
 	}
 
 	workspaceHost, workspaceContainer, err := r.ThreadWorkspace(threadID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	env := append([]string{}, r.env...)
+	mounts := []sandboxengine.Mount{
+		{Source: r.home.HostPath, Target: r.home.ContainerPath},
+		{Source: workspaceHost, Target: workspaceContainer},
+	}
+	cleanup := func() {}
+	if r.bridge != nil {
+		bridgeEnv, bridgeMount, unregister, err := r.bridge.BindThread(threadID, commands)
+		if err != nil {
+			return nil, nil, err
+		}
+		env = append(env, bridgeEnv...)
+		mounts = append(mounts, bridgeMount)
+		cleanup = unregister
 	}
 	spec := sandboxengine.NewBuilder(turnSandboxName(r.registration, threadID)).
 		WorkspaceDir(workspaceHost).
@@ -188,19 +215,13 @@ func (r *Runtime) sandbox(
 		Hostname(turnSandboxName(r.registration, threadID)).
 		Image(r.image).
 		Workdir(workspaceContainer).
-		Env(append([]string{}, r.env...)).
-		Mounts([]sandboxengine.Mount{
-			{Source: r.home.HostPath, Target: r.home.ContainerPath},
-			{Source: workspaceHost, Target: workspaceContainer},
-		}).
+		Env(env).
+		Mounts(mounts).
 		SecurityOpts([]string{"seccomp=unconfined"}).
+		AddHosts([]string{"host.docker.internal:host-gateway"}).
 		Cmd([]string{"tail", "-f", "/dev/null"}).
 		Build()
-	runtime := r.sandboxes.CreateRuntime(sandboxengine.RuntimeSpec{
-		Sandbox:       *spec,
-		AgentCommands: commands,
-	})
-	return runtime.Sandbox(), nil
+	return r.sandboxes.CreateSandbox(spec), cleanup, nil
 }
 
 func authSandboxName(registration coremodel.Component, profileName string) string {
