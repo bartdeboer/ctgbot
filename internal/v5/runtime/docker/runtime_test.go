@@ -6,12 +6,13 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
+	v5hostbridgeserver "github.com/bartdeboer/ctgbot/internal/v5/hostbridge/server"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
 
 func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	root := t.TempDir()
-	bridge := v5runtime.NewHostbridge(root, nil, nil)
+	bridge := v5hostbridgeserver.NewBridge(root, nil, nil)
 	t.Cleanup(func() {
 		_ = bridge.Close()
 	})

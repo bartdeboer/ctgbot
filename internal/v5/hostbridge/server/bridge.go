@@ -1,4 +1,4 @@
-package runtime
+package server
 
 import (
 	"context"
@@ -21,15 +21,15 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 )
 
-const hostbridgeTLSDir = "/ctgbot/hostbridge-tls"
+const TLSDir = "/ctgbot/hostbridge-tls"
 
-type Hostbridge struct {
+type Bridge struct {
 	rootDir string
 	storage repository.Storage
 	logger  *log.Logger
 
 	mu               sync.Mutex
-	entries          map[modeluuid.UUID]*hostbridgeEntry
+	entries          map[modeluuid.UUID]*threadEntry
 	started          bool
 	closed           bool
 	hostAddress      string
@@ -37,21 +37,21 @@ type Hostbridge struct {
 	cancel           context.CancelFunc
 }
 
-type hostbridgeEntry struct {
+type threadEntry struct {
 	commands commandengine.CommandExecutor
 	refs     int
 }
 
-func NewHostbridge(rootDir string, storage repository.Storage, logger *log.Logger) *Hostbridge {
-	return &Hostbridge{
+func NewBridge(rootDir string, storage repository.Storage, logger *log.Logger) *Bridge {
+	return &Bridge{
 		rootDir: strings.TrimSpace(rootDir),
 		storage: storage,
 		logger:  logger,
-		entries: map[modeluuid.UUID]*hostbridgeEntry{},
+		entries: map[modeluuid.UUID]*threadEntry{},
 	}
 }
 
-func (b *Hostbridge) BindThread(
+func (b *Bridge) BindThread(
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 ) ([]string, sandboxengine.Mount, func(), error) {
@@ -61,18 +61,18 @@ func (b *Hostbridge) BindThread(
 	}
 	env := []string{
 		"HOSTBRIDGE_ADDR=" + address,
-		"HOSTBRIDGE_TLS_DIR=" + hostbridgeTLSDir,
+		"HOSTBRIDGE_TLS_DIR=" + TLSDir,
 		"CTGBOT_SANDBOX_ID=" + threadID.String(),
 	}
 	mount := sandboxengine.Mount{
 		Source:   tlsDir,
-		Target:   hostbridgeTLSDir,
+		Target:   TLSDir,
 		ReadOnly: true,
 	}
 	return env, mount, unregister, nil
 }
 
-func (b *Hostbridge) DoCommand(
+func (b *Bridge) DoCommand(
 	ctx context.Context,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
@@ -94,7 +94,7 @@ func (b *Hostbridge) DoCommand(
 	return resp.Result, nil
 }
 
-func (b *Hostbridge) Close() error {
+func (b *Bridge) Close() error {
 	if b == nil {
 		return nil
 	}
@@ -104,7 +104,7 @@ func (b *Hostbridge) Close() error {
 	b.cancel = nil
 	b.started = false
 	b.closed = true
-	b.entries = map[modeluuid.UUID]*hostbridgeEntry{}
+	b.entries = map[modeluuid.UUID]*threadEntry{}
 	b.mu.Unlock()
 
 	if cancel != nil {
@@ -113,7 +113,7 @@ func (b *Hostbridge) Close() error {
 	return nil
 }
 
-func (b *Hostbridge) Execute(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+func (b *Bridge) Execute(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	if b == nil {
 		return commandengine.Result{}, fmt.Errorf("missing hostbridge")
 	}
@@ -134,7 +134,7 @@ func (b *Hostbridge) Execute(ctx context.Context, req commandengine.Request) (co
 	return entry.commands.Execute(ctx, req)
 }
 
-func (b *Hostbridge) prepareRequest(
+func (b *Bridge) prepareRequest(
 	ctx context.Context,
 	clientIdentity string,
 	req commandengine.Request,
@@ -172,7 +172,7 @@ func (b *Hostbridge) prepareRequest(
 	return req, nil
 }
 
-func (b *Hostbridge) bindThread(
+func (b *Bridge) bindThread(
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 ) (containerAddress string, hostAddress string, tlsDir string, unregister func(), err error) {
@@ -195,7 +195,7 @@ func (b *Hostbridge) bindThread(
 	return containerAddress, hostAddress, tlsDir, unregister, nil
 }
 
-func (b *Hostbridge) ensureStarted() (containerAddress string, hostAddress string, err error) {
+func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, err error) {
 	if b == nil {
 		return "", "", fmt.Errorf("missing hostbridge")
 	}
@@ -264,7 +264,7 @@ func (b *Hostbridge) ensureStarted() (containerAddress string, hostAddress strin
 	return containerAddress, hostAddress, nil
 }
 
-func (b *Hostbridge) ensureClientTLSDir(threadID modeluuid.UUID) (string, error) {
+func (b *Bridge) ensureClientTLSDir(threadID modeluuid.UUID) (string, error) {
 	if b == nil {
 		return "", fmt.Errorf("missing hostbridge")
 	}
@@ -275,11 +275,11 @@ func (b *Hostbridge) ensureClientTLSDir(threadID modeluuid.UUID) (string, error)
 	return dir, nil
 }
 
-func (b *Hostbridge) register(threadID modeluuid.UUID, commands commandengine.CommandExecutor) func() {
+func (b *Bridge) register(threadID modeluuid.UUID, commands commandengine.CommandExecutor) func() {
 	b.mu.Lock()
 	entry := b.entries[threadID]
 	if entry == nil {
-		entry = &hostbridgeEntry{}
+		entry = &threadEntry{}
 		b.entries[threadID] = entry
 	}
 	entry.commands = commands
@@ -300,7 +300,7 @@ func (b *Hostbridge) register(threadID modeluuid.UUID, commands commandengine.Co
 	}
 }
 
-func (b *Hostbridge) serverRoot() string {
+func (b *Bridge) serverRoot() string {
 	rootDir := strings.TrimSpace(b.rootDir)
 	if rootDir == "" {
 		rootDir = "."
@@ -308,7 +308,7 @@ func (b *Hostbridge) serverRoot() string {
 	return filepath.Join(rootDir, ".ctgbot", "v5", "hostbridge")
 }
 
-func (b *Hostbridge) logf(format string, args ...any) {
+func (b *Bridge) logf(format string, args ...any) {
 	if b != nil && b.logger != nil {
 		b.logger.Printf(format, args...)
 	}

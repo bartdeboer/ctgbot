@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
+	v5hostbridgeserver "github.com/bartdeboer/ctgbot/internal/v5/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	v5docker "github.com/bartdeboer/ctgbot/internal/v5/runtime/docker"
@@ -128,7 +129,7 @@ func resolveDBPath(rootDir string, stateRoot string, dbPath string) string {
 
 func buildRuntimes(rootDir string, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Factory, error) {
 	runtimes := map[string]v5runtime.Factory{}
-	bridge := v5runtime.NewHostbridge(rootDir, storage, logger)
+	bridge := v5hostbridgeserver.NewBridge(rootDir, storage, logger)
 	for name, profile := range profiles {
 		var runtime v5runtime.Factory
 		switch profile.Runtime {

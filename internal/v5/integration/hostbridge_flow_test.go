@@ -17,6 +17,7 @@ import (
 	v5broker "github.com/bartdeboer/ctgbot/internal/v5/broker"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
+	v5hostbridgeserver "github.com/bartdeboer/ctgbot/internal/v5/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
@@ -45,7 +46,7 @@ func TestV5HostbridgeFlow(t *testing.T) {
 		}
 
 		storage := newSQLiteStorage(t)
-		bridge := v5runtime.NewHostbridge(root, storage, nil)
+		bridge := v5hostbridgeserver.NewBridge(root, storage, nil)
 		t.Cleanup(func() {
 			_ = bridge.Close()
 		})
@@ -235,7 +236,7 @@ func (c *mockCommandComponent) RegisterCommandHandlers(registry *commandengine.R
 type hostbridgeAgent struct {
 	componentID modeluuid.UUID
 	runtime     v5runtime.Runtime
-	bridge      *v5runtime.Hostbridge
+	bridge      *v5hostbridgeserver.Bridge
 	state       *agentState
 }
 

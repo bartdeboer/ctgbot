@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
+	v5hostbridgeserver "github.com/bartdeboer/ctgbot/internal/v5/hostbridge/server"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
 
@@ -22,10 +23,10 @@ type Factory struct {
 	rootDir   string
 	profile   v5runtime.Profile
 	sandboxes sandboxengine.RuntimeManager
-	bridge    *v5runtime.Hostbridge
+	bridge    *v5hostbridgeserver.Bridge
 }
 
-func New(rootDir string, sandboxes sandboxengine.RuntimeManager, bridge *v5runtime.Hostbridge, profile v5runtime.Profile) *Factory {
+func New(rootDir string, sandboxes sandboxengine.RuntimeManager, bridge *v5hostbridgeserver.Bridge, profile v5runtime.Profile) *Factory {
 	return &Factory{
 		rootDir:   strings.TrimSpace(rootDir),
 		profile:   profile,
@@ -72,7 +73,7 @@ type Runtime struct {
 	rootDir      string
 	profile      v5runtime.Profile
 	sandboxes    sandboxengine.RuntimeManager
-	bridge       *v5runtime.Hostbridge
+	bridge       *v5hostbridgeserver.Bridge
 	registration coremodel.Component
 	home         v5runtime.Home
 	image        string
