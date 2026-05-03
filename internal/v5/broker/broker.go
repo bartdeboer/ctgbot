@@ -32,13 +32,14 @@ type EventOutcome struct {
 }
 
 type ChatRuntime struct {
-	Chat       coremodel.Chat
-	Bindings   []coremodel.ChatComponent
-	Components []*component.Loaded
-	Agents     []AgentBinding
-	Relays     []component.OutboundRelay
-	Commands   *commandengine.Engine
-	Homes      map[modeluuid.UUID]v5runtime.Home
+	Chat            coremodel.Chat
+	Bindings        []coremodel.ChatComponent
+	Components      []*component.Loaded
+	Agents          []AgentBinding
+	Relays          []component.OutboundRelay
+	MessageCommands *commandengine.Engine
+	AgentCommands   *commandengine.Engine
+	Homes           map[modeluuid.UUID]v5runtime.Home
 }
 
 type AgentBinding struct {
@@ -96,6 +97,20 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	runtime, err := b.runtimeForChat(ctx, *chat)
 	if err != nil {
 		return EventOutcome{Inbound: inbound}, err
+	}
+
+	handled, commandOutbound, err := b.tryHandleMessageCommand(
+		ctx,
+		event,
+		*chat,
+		*thread,
+		runtime,
+	)
+	if err != nil {
+		return EventOutcome{Inbound: inbound, Outbound: commandOutbound}, err
+	}
+	if handled {
+		return EventOutcome{Inbound: inbound, Outbound: commandOutbound}, nil
 	}
 
 	turnRuntime := &agentTurnRuntime{

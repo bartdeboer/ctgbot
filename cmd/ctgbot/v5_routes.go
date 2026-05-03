@@ -18,6 +18,7 @@ import (
 	v5broker "github.com/bartdeboer/ctgbot/internal/v5/broker"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	v5codex "github.com/bartdeboer/ctgbot/internal/v5/component/codex"
+	v5process "github.com/bartdeboer/ctgbot/internal/v5/component/process"
 	v5telegram "github.com/bartdeboer/ctgbot/internal/v5/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
@@ -40,7 +41,18 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage)
+			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+
+			system, err := openV5SystemForRoutes(
+				req,
+				store,
+				*stateRoot,
+				*dbPath,
+				resolveTelegramToken(*telegramToken, store),
+				*codexImage,
+				&runtimeProcessActions{stop: stop},
+			)
 			if err != nil {
 				return err
 			}
@@ -49,8 +61,6 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			fmt.Printf("state_root: %s\n", system.StateRoot)
 			fmt.Printf("database: %s\n", system.DBPath)
 
-			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
 			logf := func(format string, args ...any) {}
 			if system.Logger != nil {
 				logf = system.Logger.Printf
@@ -153,7 +163,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
 			if err != nil {
 				return err
 			}
@@ -195,7 +205,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, nil)
 			if err != nil {
 				return err
 			}
@@ -215,7 +225,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
 			if err != nil {
 				return err
 			}
@@ -252,7 +262,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
 			if err != nil {
 				return err
 			}
@@ -281,7 +291,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
 			if err != nil {
 				return err
 			}
@@ -311,7 +321,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
 			if err != nil {
 				return err
 			}
@@ -352,7 +362,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
 			if err != nil {
 				return err
 			}
@@ -386,20 +396,20 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 	})
 }
 
-func openV5SystemForRoutes(req *clir.Request, store *clistate.Store, stateRoot string, dbPath string, telegramToken string, codexImage string) (*v5system.System, error) {
+func openV5SystemForRoutes(req *clir.Request, store *clistate.Store, stateRoot string, dbPath string, telegramToken string, codexImage string, processActions v5process.Actions) (*v5system.System, error) {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 	system, err := v5system.Open(req.Context(), stateRoot, dbPath, store, logger)
 	if err != nil {
 		return nil, err
 	}
-	system.Registry, err = newV5Registry(req.Context(), system, telegramToken, codexImage)
+	system.Registry, err = newV5Registry(req.Context(), system, telegramToken, codexImage, processActions)
 	if err != nil {
 		return nil, err
 	}
 	return system, nil
 }
 
-func newV5Registry(ctx context.Context, system *v5system.System, telegramToken string, codexImage string) (*component.Registry, error) {
+func newV5Registry(ctx context.Context, system *v5system.System, telegramToken string, codexImage string, processActions v5process.Actions) (*component.Registry, error) {
 	registry := component.NewRegistry()
 
 	auxStorage := gormstorage.New(system.DB)
@@ -414,6 +424,12 @@ func newV5Registry(ctx context.Context, system *v5system.System, telegramToken s
 	}
 	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
 		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.Logger, codexImage)
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(v5process.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		_, _, _, _, _ = ctx, registration, runtime, home, storage
+		return v5process.New(processActions), nil
 	}); err != nil {
 		return nil, err
 	}

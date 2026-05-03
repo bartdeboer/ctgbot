@@ -57,23 +57,28 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		}
 	}
 
-	commands, err := buildCommandEngine(surfaces)
+	messageCommands, err := buildCommandEngine(surfaces, commandengine.SourceMessage)
+	if err != nil {
+		return nil, err
+	}
+	agentCommands, err := buildCommandEngine(surfaces, commandengine.SourceHostbridge)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ChatRuntime{
-		Chat:       chat,
-		Bindings:   bindings,
-		Components: components,
-		Agents:     agents,
-		Relays:     relays,
-		Commands:   commands,
-		Homes:      homes,
+		Chat:            chat,
+		Bindings:        bindings,
+		Components:      components,
+		Agents:          agents,
+		Relays:          relays,
+		MessageCommands: messageCommands,
+		AgentCommands:   agentCommands,
+		Homes:           homes,
 	}, nil
 }
 
-func buildCommandEngine(surfaces []component.CommandSurface) (*commandengine.Engine, error) {
+func buildCommandEngine(surfaces []component.CommandSurface, source commandengine.Source) (*commandengine.Engine, error) {
 	if len(surfaces) == 0 {
 		return nil, nil
 	}
@@ -88,7 +93,7 @@ func buildCommandEngine(surfaces []component.CommandSurface) (*commandengine.Eng
 			return nil, err
 		}
 	}
-	router, err := commandengine.NewRouter(definitions, commandengine.SourceHostbridge)
+	router, err := commandengine.NewRouter(definitions, source)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +114,7 @@ func (r *agentTurnRuntime) Commands() commandengine.CommandExecutor {
 	if r == nil || r.runtime == nil {
 		return nil
 	}
-	return r.runtime.Commands
+	return r.runtime.AgentCommands
 }
 
 func (r *agentTurnRuntime) Send(ctx context.Context, payload messenger.OutboundPayload) error {
