@@ -20,6 +20,7 @@ type InstanceResolver interface {
 type Broker struct {
 	Storage  repository.Storage
 	Resolver InstanceResolver
+	Mapper   ThreadComponentMapper
 	Logf     func(format string, args ...any)
 }
 
@@ -45,7 +46,12 @@ type AgentBinding struct {
 }
 
 func New(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any)) *Broker {
-	return &Broker{Storage: storage, Resolver: resolver, Logf: logf}
+	return &Broker{
+		Storage:  storage,
+		Resolver: resolver,
+		Mapper:   NewThreadComponentMapper(storage),
+		Logf:     logf,
+	}
 }
 
 func (b *Broker) HandleInbound(ctx context.Context, event v3component.InboundEvent) (EventOutcome, error) {
@@ -77,7 +83,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event v3component.InboundEve
 		return EventOutcome{Dropped: true}, nil
 	}
 
-	thread, _, err := b.resolveThread(ctx, *sourceBinding, strings.TrimSpace(event.Payload.ProviderThreadID))
+	thread, err := b.Mapper.EnsureThread(ctx, *sourceBinding, strings.TrimSpace(event.Payload.ProviderThreadID))
 	if err != nil {
 		return EventOutcome{}, err
 	}
@@ -131,6 +137,9 @@ func (b *Broker) ensureReady() error {
 	}
 	if b.Resolver == nil {
 		return fmt.Errorf("missing component resolver")
+	}
+	if b.Mapper == nil {
+		return fmt.Errorf("missing thread component mapper")
 	}
 	return nil
 }

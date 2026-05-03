@@ -134,35 +134,6 @@ func (b *Broker) deliverPayload(ctx context.Context, runtime *ChatRuntime, chat 
 	return []coremodel.ThreadMessage{message}, nil
 }
 
-func (b *Broker) resolveThread(ctx context.Context, sourceBinding coremodel.ChatComponent, externalThreadID string) (*coremodel.Thread, *coremodel.ThreadComponentState, error) {
-	state, err := b.Storage.ThreadComponentStates().FindByComponentAndExternalThreadID(ctx, sourceBinding.ComponentID, strings.TrimSpace(externalThreadID))
-	if err != nil {
-		return nil, nil, err
-	}
-	if state != nil {
-		thread, err := b.Storage.Threads().GetByID(ctx, state.ThreadID)
-		return thread, state, err
-	}
-	thread := &coremodel.Thread{
-		ChatID: sourceBinding.ChatID,
-	}
-	if strings.TrimSpace(externalThreadID) != "" {
-		thread.Label = "thread " + strings.TrimSpace(externalThreadID)
-	}
-	if err := b.Storage.Threads().Save(ctx, thread); err != nil {
-		return nil, nil, err
-	}
-	state = &coremodel.ThreadComponentState{
-		ThreadID:         thread.ID,
-		ComponentID:      sourceBinding.ComponentID,
-		ExternalThreadID: strings.TrimSpace(externalThreadID),
-	}
-	if err := b.Storage.ThreadComponentStates().Save(ctx, state); err != nil {
-		return nil, nil, err
-	}
-	return thread, state, nil
-}
-
 func inboundMetadataJSON(payload messenger.InboundPayload) string {
 	var metadata []string
 	if payload.ProviderType != "" {
@@ -192,17 +163,14 @@ func (b *Broker) relayTargetsForRuntime(ctx context.Context, runtime *ChatRuntim
 		if binding.Role != coremodel.ChatComponentRoleRelay {
 			continue
 		}
-		state, err := b.Storage.ThreadComponentStates().GetByThreadAndComponent(ctx, thread.ID, binding.ComponentID)
+		target, ok, err := b.Mapper.RelayTarget(ctx, thread.ID, binding)
 		if err != nil {
 			return nil, err
 		}
-		if state == nil {
+		if !ok {
 			continue
 		}
-		out = append(out, messenger.ChatTarget{
-			ProviderChatID:   strings.TrimSpace(binding.ExternalChatID),
-			ProviderThreadID: strings.TrimSpace(state.ExternalThreadID),
-		})
+		out = append(out, *target)
 	}
 	return out, nil
 }

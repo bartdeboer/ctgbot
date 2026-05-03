@@ -159,3 +159,17 @@ func (r *agentTurnRuntime) ComponentHome(componentID modeluuid.UUID) (v3componen
 	home, ok := r.runtime.Homes[componentID]
 	return home, ok
 }
+
+func (r *agentTurnRuntime) ComponentThreadID(componentID modeluuid.UUID) (string, bool, error) {
+	if r == nil || r.broker == nil {
+		return "", false, fmt.Errorf("missing turn runtime")
+	}
+	return r.broker.Mapper.ComponentThreadID(context.Background(), r.thread.ID, componentID)
+}
+
+func (r *agentTurnRuntime) BindComponentThreadID(componentID modeluuid.UUID, componentThreadID string) error {
+	if r == nil || r.broker == nil {
+		return fmt.Errorf("missing turn runtime")
+	}
+	return r.broker.Mapper.BindComponentThreadID(context.Background(), r.thread.ID, componentID, componentThreadID)
+}

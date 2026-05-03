@@ -98,12 +98,12 @@ type ChatComponent struct {
 	UpdatedAt time.Time
 }
 
-type ThreadComponentState struct {
-	ID               modeluuid.UUID `gorm:"primaryKey"`
-	ThreadID         modeluuid.UUID `gorm:"index;uniqueIndex:idx_v3_thread_component_state"`
-	ComponentID      modeluuid.UUID `gorm:"uniqueIndex:idx_v3_thread_component_state"`
-	ExternalThreadID string         `gorm:"index"`
-	StateJSON        string
+type ThreadComponentMapping struct {
+	ID                modeluuid.UUID `gorm:"primaryKey"`
+	ThreadID          modeluuid.UUID `gorm:"index;uniqueIndex:idx_v3_thread_component_binding"`
+	ChatID            modeluuid.UUID `gorm:"index;uniqueIndex:idx_v3_component_thread_mapping"`
+	ComponentID       modeluuid.UUID `gorm:"uniqueIndex:idx_v3_thread_component_binding;uniqueIndex:idx_v3_component_thread_mapping"`
+	ComponentThreadID string         `gorm:"index;uniqueIndex:idx_v3_component_thread_mapping"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

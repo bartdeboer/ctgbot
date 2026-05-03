@@ -14,11 +14,9 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
-	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	v3component "github.com/bartdeboer/ctgbot/internal/v3/component"
 	"github.com/bartdeboer/ctgbot/internal/v3/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/v3/repository"
 	"github.com/bartdeboer/ctgbot/internal/v3/workspaces"
 )
 
@@ -66,7 +64,6 @@ func (f *Factory) Create(ctx context.Context, req v3component.CreateRequest) (v3
 	return &Component{
 		registration: req.Registration,
 		home:         req.Home,
-		storage:      req.Storage,
 		sandboxes:    f.Sandboxes,
 		workspaces:   f.Workspaces,
 		config:       f.Config,
@@ -79,7 +76,6 @@ func (f *Factory) Create(ctx context.Context, req v3component.CreateRequest) (v3
 type Component struct {
 	registration coremodel.Component
 	home         v3component.Home
-	storage      repository.Storage
 	sandboxes    sandboxengine.RuntimeManager
 	workspaces   *workspaces.Manager
 	config       *appstate.Config
@@ -142,9 +138,6 @@ func (c *Component) HandleTurn(ctx context.Context, turn v3component.Turn) (*v3c
 	if prompt == "" {
 		return nil, nil
 	}
-	if c.storage == nil {
-		return nil, fmt.Errorf("missing storage")
-	}
 
 	workspaceHost, err := c.workspaces.Ensure(turn.Thread.ID)
 	if err != nil {
@@ -170,17 +163,17 @@ func (c *Component) HandleTurn(ctx context.Context, turn v3component.Turn) (*v3c
 		defer stopAction()
 	}
 
-	threadState, err := c.storage.ThreadComponentStates().GetByThreadAndComponent(ctx, turn.Thread.ID, c.registration.ID)
+	componentThreadID, ok, err := turn.Runtime.ComponentThreadID(c.registration.ID)
 	if err != nil {
 		return nil, err
 	}
 	providerThreadID := ""
-	if threadState != nil {
-		providerThreadID = strings.TrimSpace(threadState.ExternalThreadID)
+	if ok {
+		providerThreadID = strings.TrimSpace(componentThreadID)
 	}
 
 	result, err := c.executor.HandleTurn(ctx, sbx, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, agentcore.TurnOptions{})
-	if saveErr := c.saveThreadState(ctx, turn.Thread.ID, result.ProviderThreadID); saveErr != nil && err == nil {
+	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && err == nil {
 		err = saveErr
 	}
 	if err != nil {
@@ -233,28 +226,15 @@ func (c *Component) runtimeSandboxSpec(turn v3component.Turn, workspaceHost stri
 		Build(), nil
 }
 
-func (c *Component) saveThreadState(ctx context.Context, threadID modeluuid.UUID, providerThreadID string) error {
+func (c *Component) bindComponentThreadID(runtime v3component.TurnRuntime, providerThreadID string) error {
 	providerThreadID = strings.TrimSpace(providerThreadID)
-	if threadID.IsNull() || c.storage == nil {
+	if providerThreadID == "" {
 		return nil
 	}
-	existing, err := c.storage.ThreadComponentStates().GetByThreadAndComponent(ctx, threadID, c.registration.ID)
-	if err != nil {
-		return err
+	if runtime == nil {
+		return fmt.Errorf("missing turn runtime")
 	}
-	if providerThreadID == "" && existing == nil {
-		return nil
-	}
-	state := &coremodel.ThreadComponentState{
-		ThreadID:    threadID,
-		ComponentID: c.registration.ID,
-	}
-	if existing != nil {
-		state.ID = existing.ID
-		state.StateJSON = existing.StateJSON
-	}
-	state.ExternalThreadID = providerThreadID
-	return c.storage.ThreadComponentStates().Save(ctx, state)
+	return runtime.BindComponentThreadID(c.registration.ID, providerThreadID)
 }
 
 type outputHandler struct {

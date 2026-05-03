@@ -11,17 +11,21 @@ import (
 
 func TestOpenResolvesRuntimePaths(t *testing.T) {
 	withTempCwd(t, func(root string) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("get cwd: %v", err)
+		}
 		rt, err := Open(context.Background(), Options{DBPath: "custom/ctgbot.db"})
 		if err != nil {
 			t.Fatalf("Open() error = %v", err)
 		}
-		if rt.StateRoot != filepath.Join(root, ".ctgbot") {
-			t.Fatalf("StateRoot = %q, want %q", rt.StateRoot, filepath.Join(root, ".ctgbot"))
+		if rt.StateRoot != filepath.Join(cwd, ".ctgbot") {
+			t.Fatalf("StateRoot = %q, want %q", rt.StateRoot, filepath.Join(cwd, ".ctgbot"))
 		}
-		if rt.ConfigPath != filepath.Join(root, ".ctgbot", "config.json") {
+		if rt.ConfigPath != filepath.Join(cwd, ".ctgbot", "config.json") {
 			t.Fatalf("ConfigPath = %q", rt.ConfigPath)
 		}
-		if rt.DBPath != filepath.Join(root, "custom", "ctgbot.db") {
+		if rt.DBPath != filepath.Join(cwd, "custom", "ctgbot.db") {
 			t.Fatalf("DBPath = %q", rt.DBPath)
 		}
 		if rt.Profiles.ContainerPath() != "/profile" {

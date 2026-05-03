@@ -13,24 +13,24 @@ import (
 type MemoryStorage struct {
 	mu sync.Mutex
 
-	chats                map[modeluuid.UUID]coremodel.Chat
-	threads              map[modeluuid.UUID]coremodel.Thread
-	components           map[modeluuid.UUID]coremodel.Component
-	chatComponents       map[modeluuid.UUID]coremodel.ChatComponent
-	threadComponentState map[modeluuid.UUID]coremodel.ThreadComponentState
-	messages             map[modeluuid.UUID]coremodel.ThreadMessage
-	artifacts            map[modeluuid.UUID]coremodel.Artifact
+	chats               map[modeluuid.UUID]coremodel.Chat
+	threads             map[modeluuid.UUID]coremodel.Thread
+	components          map[modeluuid.UUID]coremodel.Component
+	chatComponents      map[modeluuid.UUID]coremodel.ChatComponent
+	threadComponentMaps map[modeluuid.UUID]coremodel.ThreadComponentMapping
+	messages            map[modeluuid.UUID]coremodel.ThreadMessage
+	artifacts           map[modeluuid.UUID]coremodel.Artifact
 }
 
 func NewMemory() *MemoryStorage {
 	return &MemoryStorage{
-		chats:                map[modeluuid.UUID]coremodel.Chat{},
-		threads:              map[modeluuid.UUID]coremodel.Thread{},
-		components:           map[modeluuid.UUID]coremodel.Component{},
-		chatComponents:       map[modeluuid.UUID]coremodel.ChatComponent{},
-		threadComponentState: map[modeluuid.UUID]coremodel.ThreadComponentState{},
-		messages:             map[modeluuid.UUID]coremodel.ThreadMessage{},
-		artifacts:            map[modeluuid.UUID]coremodel.Artifact{},
+		chats:               map[modeluuid.UUID]coremodel.Chat{},
+		threads:             map[modeluuid.UUID]coremodel.Thread{},
+		components:          map[modeluuid.UUID]coremodel.Component{},
+		chatComponents:      map[modeluuid.UUID]coremodel.ChatComponent{},
+		threadComponentMaps: map[modeluuid.UUID]coremodel.ThreadComponentMapping{},
+		messages:            map[modeluuid.UUID]coremodel.ThreadMessage{},
+		artifacts:           map[modeluuid.UUID]coremodel.Artifact{},
 	}
 }
 
@@ -38,8 +38,8 @@ func (s *MemoryStorage) Chats() ChatRepository                   { return memory
 func (s *MemoryStorage) Threads() ThreadRepository               { return memoryThreads{s} }
 func (s *MemoryStorage) Components() ComponentRepository         { return memoryComponents{s} }
 func (s *MemoryStorage) ChatComponents() ChatComponentRepository { return memoryChatComponents{s} }
-func (s *MemoryStorage) ThreadComponentStates() ThreadComponentStateRepository {
-	return memoryThreadStates{s}
+func (s *MemoryStorage) ThreadComponentMappings() ThreadComponentMappingRepository {
+	return memoryThreadMappings{s}
 }
 func (s *MemoryStorage) Messages() MessageRepository   { return memoryMessages{s} }
 func (s *MemoryStorage) Artifacts() ArtifactRepository { return memoryArtifacts{s} }
@@ -270,48 +270,48 @@ func (r memoryChatComponents) FindByComponentRoleAndExternalChatID(ctx context.C
 	return nil, nil
 }
 
-type memoryThreadStates struct{ s *MemoryStorage }
+type memoryThreadMappings struct{ s *MemoryStorage }
 
-func (r memoryThreadStates) Save(ctx context.Context, state *coremodel.ThreadComponentState) error {
+func (r memoryThreadMappings) Save(ctx context.Context, mapping *coremodel.ThreadComponentMapping) error {
 	_ = ctx
-	if state == nil {
+	if mapping == nil {
 		return nil
 	}
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
 	now := time.Now()
-	if state.ID.IsNull() {
-		state.ID = modeluuid.New()
-		state.CreatedAt = now
-	} else if existing, ok := r.s.threadComponentState[state.ID]; ok && state.CreatedAt.IsZero() {
-		state.CreatedAt = existing.CreatedAt
+	if mapping.ID.IsNull() {
+		mapping.ID = modeluuid.New()
+		mapping.CreatedAt = now
+	} else if existing, ok := r.s.threadComponentMaps[mapping.ID]; ok && mapping.CreatedAt.IsZero() {
+		mapping.CreatedAt = existing.CreatedAt
 	}
-	state.UpdatedAt = now
-	r.s.threadComponentState[state.ID] = *state
+	mapping.UpdatedAt = now
+	r.s.threadComponentMaps[mapping.ID] = *mapping
 	return nil
 }
 
-func (r memoryThreadStates) GetByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (*coremodel.ThreadComponentState, error) {
+func (r memoryThreadMappings) GetByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (*coremodel.ThreadComponentMapping, error) {
 	_ = ctx
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
-	for _, state := range r.s.threadComponentState {
-		if state.ThreadID == threadID && state.ComponentID == componentID {
-			copy := state
+	for _, mapping := range r.s.threadComponentMaps {
+		if mapping.ThreadID == threadID && mapping.ComponentID == componentID {
+			copy := mapping
 			return &copy, nil
 		}
 	}
 	return nil, nil
 }
 
-func (r memoryThreadStates) FindByComponentAndExternalThreadID(ctx context.Context, componentID modeluuid.UUID, externalThreadID string) (*coremodel.ThreadComponentState, error) {
+func (r memoryThreadMappings) FindByChatComponentAndThreadID(ctx context.Context, chatID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) (*coremodel.ThreadComponentMapping, error) {
 	_ = ctx
-	externalThreadID = strings.TrimSpace(externalThreadID)
+	componentThreadID = strings.TrimSpace(componentThreadID)
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
-	for _, state := range r.s.threadComponentState {
-		if state.ComponentID == componentID && strings.TrimSpace(state.ExternalThreadID) == externalThreadID {
-			copy := state
+	for _, mapping := range r.s.threadComponentMaps {
+		if mapping.ChatID == chatID && mapping.ComponentID == componentID && strings.TrimSpace(mapping.ComponentThreadID) == componentThreadID {
+			copy := mapping
 			return &copy, nil
 		}
 	}

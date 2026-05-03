@@ -146,6 +146,8 @@ type TurnRuntime interface {
 	Send(ctx context.Context, payload messenger.OutboundPayload) error
 	StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error)
 	ComponentHome(componentID modeluuid.UUID) (Home, bool)
+	ComponentThreadID(componentID modeluuid.UUID) (string, bool, error)
+	BindComponentThreadID(componentID modeluuid.UUID, componentThreadID string) error
 }
 
 type CommandSurface interface {

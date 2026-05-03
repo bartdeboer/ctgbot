@@ -34,7 +34,8 @@ This is the configured instance of a component type:
 - `gmail/work`
 
 The default registered component for a type uses the type name as the
-registration name, so `telegram` resolves to `telegram/telegram` internally.
+registration name, so `telegram` resolves to the default registered
+`telegram/telegram` component internally.
 
 ### Component home
 Every registered component gets a conventional home:
@@ -58,18 +59,30 @@ A chat binds registered components by role:
 This keeps capability decisions out of the broker's storage model while still
 letting the broker route by role at runtime.
 
-### Thread component state
-Persisted in `coremodel.ThreadComponentState`.
+### Thread component mapping
+Persisted in `coremodel.ThreadComponentMapping`.
 
-This stores provider-facing thread state for a component within a thread.
+This stores the canonical mapping between:
 
-The important design choice in `v3` is that external provider IDs do not live
-on `Chat` or `Thread` globally. They live on:
+- a ctgbot `ThreadID`
+- a registered `ComponentID`
+- that component's own thread/session identifier
+
+The important design choice in `v3` is that provider-facing IDs do not live on
+`Chat` or `Thread` globally. They live on:
 
 - `ChatComponent.ExternalChatID`
-- `ThreadComponentState.ExternalThreadID`
+- `ThreadComponentMapping.ComponentThreadID`
 
-That allows one chat to have multiple inbound/outbound providers.
+This is now a first-class broker seam through `ThreadComponentMapper`, which:
+
+- resolves or creates ctgbot threads for inbound component events
+- looks up component thread/session ids for outbound relay or agent resume
+- binds new component thread/session ids after first use
+
+That allows one chat to have multiple inbound/outbound providers, and lets
+agent components like Codex map their own provider session ids through the same
+system seam.
 
 ## Broker flow
 
@@ -78,7 +91,7 @@ The broker flow is:
 1. start enabled inbound sources
 2. receive an inbound event from a registered source component
 3. resolve the bound chat from `(component, external chat id)`
-4. resolve or create the thread from `(component, external thread id)`
+4. resolve or create the thread from `(chat binding, component thread id)`
 5. persist inbound message + artifacts
 6. resolve the chat runtime:
    - agent components
@@ -99,8 +112,8 @@ Those belong to the runtime/control seams around it.
 
 ## Current runtime seam
 
-`runtime.Runtime` currently owns the system-level helpers that are useful before
-we build CLI routes:
+`runtime.Runtime` currently owns the system-level helpers around registration
+and binding:
 
 - resolve component refs
 - ensure registered components exist
@@ -110,13 +123,19 @@ we build CLI routes:
 This is meant as a practical control seam, not as a place to smuggle broker
 policy back in.
 
-## What is intentionally not built yet
+## Current status
 
-- CLI routes for `v3`
-- GORM-backed `v3` storage
+`v3` now already has:
+
+- CLI routes in `cmd/ctgbot/v3_routes.go`
+- GORM-backed storage and runtime open helpers
+- first Telegram and Codex component adapters
+- thread-scoped workspaces and component homes
+- broker-owned inbound/outbound routing through component roles
+
+The main intentionally unfinished areas are now:
+
+- hostbridge/command-surface execution inside the `v3` agent sandbox
+- richer thread/agent selection policy
 - migration from `v2`
-- real Telegram/Codex `v3` components
-- thread-level agent selection policy
-- richer relay targeting policy beyond the current binding/state model
-
-The goal of this folder is to stabilize the model and the seams first.
+- broader component coverage beyond the first Telegram/Codex slice

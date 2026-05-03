@@ -16,7 +16,7 @@ type GORMStorage struct {
 	threads        *gormThreads
 	components     *gormComponents
 	chatComponents *gormChatComponents
-	threadStates   *gormThreadComponentStates
+	threadMappings *gormThreadComponentMappings
 	messages       *gormMessages
 	artifacts      *gormArtifacts
 }
@@ -28,7 +28,7 @@ func NewGORM(db *gorm.DB) *GORMStorage {
 		threads:        &gormThreads{db: db},
 		components:     &gormComponents{db: db},
 		chatComponents: &gormChatComponents{db: db},
-		threadStates:   &gormThreadComponentStates{db: db},
+		threadMappings: &gormThreadComponentMappings{db: db},
 		messages:       &gormMessages{db: db},
 		artifacts:      &gormArtifacts{db: db},
 	}
@@ -40,7 +40,7 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.Thread{},
 		&coremodel.Component{},
 		&coremodel.ChatComponent{},
-		&coremodel.ThreadComponentState{},
+		&coremodel.ThreadComponentMapping{},
 		&coremodel.ThreadMessage{},
 		&coremodel.Artifact{},
 	)
@@ -50,8 +50,8 @@ func (s *GORMStorage) Chats() ChatRepository                   { return s.chats 
 func (s *GORMStorage) Threads() ThreadRepository               { return s.threads }
 func (s *GORMStorage) Components() ComponentRepository         { return s.components }
 func (s *GORMStorage) ChatComponents() ChatComponentRepository { return s.chatComponents }
-func (s *GORMStorage) ThreadComponentStates() ThreadComponentStateRepository {
-	return s.threadStates
+func (s *GORMStorage) ThreadComponentMappings() ThreadComponentMappingRepository {
+	return s.threadMappings
 }
 func (s *GORMStorage) Messages() MessageRepository   { return s.messages }
 func (s *GORMStorage) Artifacts() ArtifactRepository { return s.artifacts }
@@ -218,47 +218,47 @@ func (r *gormChatComponents) FindByComponentRoleAndExternalChatID(ctx context.Co
 	return &binding, nil
 }
 
-type gormThreadComponentStates struct{ db *gorm.DB }
+type gormThreadComponentMappings struct{ db *gorm.DB }
 
-func (r *gormThreadComponentStates) Save(ctx context.Context, state *coremodel.ThreadComponentState) error {
-	state.ExternalThreadID = clean(state.ExternalThreadID)
-	if state.ID.IsNull() {
-		existing, err := r.GetByThreadAndComponent(ctx, state.ThreadID, state.ComponentID)
+func (r *gormThreadComponentMappings) Save(ctx context.Context, mapping *coremodel.ThreadComponentMapping) error {
+	mapping.ComponentThreadID = clean(mapping.ComponentThreadID)
+	if mapping.ID.IsNull() {
+		existing, err := r.GetByThreadAndComponent(ctx, mapping.ThreadID, mapping.ComponentID)
 		if err != nil {
 			return err
 		}
 		if existing != nil {
-			state.ID = existing.ID
+			mapping.ID = existing.ID
 		}
 	}
-	ensureID(&state.ID)
-	return r.db.WithContext(ctx).Save(state).Error
+	ensureID(&mapping.ID)
+	return r.db.WithContext(ctx).Save(mapping).Error
 }
 
-func (r *gormThreadComponentStates) GetByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (*coremodel.ThreadComponentState, error) {
-	var state coremodel.ThreadComponentState
+func (r *gormThreadComponentMappings) GetByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (*coremodel.ThreadComponentMapping, error) {
+	var mapping coremodel.ThreadComponentMapping
 	if err := first(r.db.WithContext(ctx).
 		Where("thread_id = ? AND component_id = ?", threadID, componentID).
-		First(&state)); err != nil {
+		First(&mapping)); err != nil {
 		return nil, err
 	}
-	if state.ID.IsNull() {
+	if mapping.ID.IsNull() {
 		return nil, nil
 	}
-	return &state, nil
+	return &mapping, nil
 }
 
-func (r *gormThreadComponentStates) FindByComponentAndExternalThreadID(ctx context.Context, componentID modeluuid.UUID, externalThreadID string) (*coremodel.ThreadComponentState, error) {
-	var state coremodel.ThreadComponentState
+func (r *gormThreadComponentMappings) FindByChatComponentAndThreadID(ctx context.Context, chatID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) (*coremodel.ThreadComponentMapping, error) {
+	var mapping coremodel.ThreadComponentMapping
 	if err := first(r.db.WithContext(ctx).
-		Where("component_id = ? AND external_thread_id = ?", componentID, clean(externalThreadID)).
-		First(&state)); err != nil {
+		Where("chat_id = ? AND component_id = ? AND component_thread_id = ?", chatID, componentID, clean(componentThreadID)).
+		First(&mapping)); err != nil {
 		return nil, err
 	}
-	if state.ID.IsNull() {
+	if mapping.ID.IsNull() {
 		return nil, nil
 	}
-	return &state, nil
+	return &mapping, nil
 }
 
 type gormMessages struct{ db *gorm.DB }

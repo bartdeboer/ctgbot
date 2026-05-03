@@ -12,7 +12,7 @@ type Storage interface {
 	Threads() ThreadRepository
 	Components() ComponentRepository
 	ChatComponents() ChatComponentRepository
-	ThreadComponentStates() ThreadComponentStateRepository
+	ThreadComponentMappings() ThreadComponentMappingRepository
 	Messages() MessageRepository
 	Artifacts() ArtifactRepository
 }
@@ -44,10 +44,10 @@ type ChatComponentRepository interface {
 	FindByComponentRoleAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChatID string) (*coremodel.ChatComponent, error)
 }
 
-type ThreadComponentStateRepository interface {
-	Save(ctx context.Context, state *coremodel.ThreadComponentState) error
-	GetByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (*coremodel.ThreadComponentState, error)
-	FindByComponentAndExternalThreadID(ctx context.Context, componentID modeluuid.UUID, externalThreadID string) (*coremodel.ThreadComponentState, error)
+type ThreadComponentMappingRepository interface {
+	Save(ctx context.Context, mapping *coremodel.ThreadComponentMapping) error
+	GetByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (*coremodel.ThreadComponentMapping, error)
+	FindByChatComponentAndThreadID(ctx context.Context, chatID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) (*coremodel.ThreadComponentMapping, error)
 }
 
 type MessageRepository interface {
