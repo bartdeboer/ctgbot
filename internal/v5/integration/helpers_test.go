@@ -28,6 +28,15 @@ type runtimeState struct {
 	lastThreadID modeluuid.UUID
 	lastName     string
 	lastArgs     []string
+	execs        []execRecord
+}
+
+type execRecord struct {
+	ThreadID     modeluuid.UUID
+	Name         string
+	Args         []string
+	HomeHostPath string
+	ProfileName  string
 }
 
 type fakeRuntimeFactory struct {
@@ -99,6 +108,13 @@ func (r *fakeRuntime) Exec(ctx context.Context, threadID modeluuid.UUID, command
 	r.state.lastThreadID = threadID
 	r.state.lastName = name
 	r.state.lastArgs = append([]string(nil), args...)
+	r.state.execs = append(r.state.execs, execRecord{
+		ThreadID:     threadID,
+		Name:         name,
+		Args:         append([]string(nil), args...),
+		HomeHostPath: r.home.HostPath,
+		ProfileName:  r.profile.Name,
+	})
 	return nil
 }
 
@@ -161,11 +177,17 @@ type agentState struct {
 func newSQLiteStorage(t *testing.T) repository.Storage {
 	t.Helper()
 	name := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
-	dsn := fmt.Sprintf("file:%s-%s?mode=memory&cache=shared", name, modeluuid.New().String())
+	dsn := fmt.Sprintf("file:%s-%s?mode=memory&cache=shared&_busy_timeout=5000", name, modeluuid.New().String())
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db.DB() error = %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
 	storage := repository.NewGORM(db)
 	if err := storage.AutoMigrate(context.Background()); err != nil {
 		t.Fatalf("AutoMigrate() error = %v", err)
