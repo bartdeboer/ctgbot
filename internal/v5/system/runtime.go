@@ -20,7 +20,10 @@ func (s *System) ResolveComponent(ctx context.Context, componentID modeluuid.UUI
 		return nil, fmt.Errorf("missing component registry")
 	}
 	cacheKey := componentID.String()
-	if loaded := s.loaded[cacheKey]; loaded != nil {
+	s.loadedMu.RLock()
+	loaded := s.loaded[cacheKey]
+	s.loadedMu.RUnlock()
+	if loaded != nil {
 		return loaded, nil
 	}
 
@@ -45,10 +48,12 @@ func (s *System) ResolveComponent(ctx context.Context, componentID modeluuid.UUI
 		return nil, err
 	}
 
-	loaded, err := s.Registry.Build(ctx, *registration, runtime, home, s.Storage)
+	loaded, err = s.Registry.Build(ctx, *registration, runtime, home, s.Storage)
 	if err != nil {
 		return nil, err
 	}
+	s.loadedMu.Lock()
+	defer s.loadedMu.Unlock()
 	if s.loaded == nil {
 		s.loaded = map[string]*component.Loaded{}
 	}
@@ -145,7 +150,9 @@ func (s *System) EnsureComponent(ctx context.Context, ref string, profileName st
 	if err := os.MkdirAll(home.HostPath, 0o755); err != nil {
 		return nil, err
 	}
+	s.loadedMu.Lock()
 	delete(s.loaded, registration.ID.String())
+	s.loadedMu.Unlock()
 	return registration, nil
 }
 

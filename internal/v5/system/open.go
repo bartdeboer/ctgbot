@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
@@ -35,7 +36,8 @@ type System struct {
 	Logger    *log.Logger
 	DB        *gorm.DB
 
-	loaded map[string]*component.Loaded
+	loadedMu sync.RWMutex
+	loaded   map[string]*component.Loaded
 }
 
 func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.Store, logger *log.Logger) (*System, error) {

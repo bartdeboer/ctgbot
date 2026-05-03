@@ -96,6 +96,7 @@ func buildCommandEngine(surfaces []component.CommandSurface) (*commandengine.Eng
 }
 
 type agentTurnRuntime struct {
+	ctx         context.Context
 	broker      *Broker
 	runtime     *ChatRuntime
 	chat        coremodel.Chat
@@ -165,12 +166,19 @@ func (r *agentTurnRuntime) ComponentThreadID(componentID modeluuid.UUID) (string
 	if r == nil || r.broker == nil {
 		return "", false, fmt.Errorf("missing turn runtime")
 	}
-	return r.broker.Mapper.ComponentThreadID(context.Background(), r.thread.ID, componentID)
+	return r.broker.Mapper.ComponentThreadID(r.context(), r.thread.ID, componentID)
 }
 
 func (r *agentTurnRuntime) BindComponentThreadID(componentID modeluuid.UUID, componentThreadID string) error {
 	if r == nil || r.broker == nil {
 		return fmt.Errorf("missing turn runtime")
 	}
-	return r.broker.Mapper.BindComponentThreadID(context.Background(), r.thread.ID, componentID, componentThreadID)
+	return r.broker.Mapper.BindComponentThreadID(r.context(), r.thread.ID, componentID, componentThreadID)
+}
+
+func (r *agentTurnRuntime) context() context.Context {
+	if r != nil && r.ctx != nil {
+		return r.ctx
+	}
+	return context.Background()
 }

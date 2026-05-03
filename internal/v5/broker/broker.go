@@ -99,6 +99,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	}
 
 	turnRuntime := &agentTurnRuntime{
+		ctx:     ctx,
 		broker:  b,
 		runtime: runtime,
 		chat:    *chat,

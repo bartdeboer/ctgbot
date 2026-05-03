@@ -375,7 +375,9 @@ func (a *mockAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 
 func newSQLiteStorage(t *testing.T) repository.Storage {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:ctgbot-v5-integration?mode=memory&cache=shared"), &gorm.Config{})
+	name := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
+	dsn := fmt.Sprintf("file:%s-%s?mode=memory&cache=shared", name, modeluuid.New().String())
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
