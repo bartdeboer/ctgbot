@@ -14,6 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
@@ -29,6 +30,25 @@ type runtimeState struct {
 	lastName     string
 	lastArgs     []string
 	execs        []execRecord
+}
+
+func actorWithRoles(id string, label string, roles ...simplerbac.Role) messenger.Actor {
+	id = strings.TrimSpace(id)
+	label = strings.TrimSpace(label)
+	if id == "" {
+		id = label
+	}
+	if label == "" {
+		label = id
+	}
+	if len(roles) == 0 {
+		roles = []simplerbac.Role{simplerbac.RoleUser}
+	}
+	return messenger.Actor{
+		ID:    id,
+		Label: label,
+		Roles: append([]simplerbac.Role(nil), roles...),
+	}
 }
 
 type execRecord struct {

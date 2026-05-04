@@ -18,6 +18,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clistate"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -250,7 +251,7 @@ func TestHandleInboundPayloadConfigSetUsesElevatedChatRole(t *testing.T) {
 		ProviderThreadID: "7",
 		Text:             messenger.TextMessage{Text: "/config set chat.enabled false"},
 		ChatLabel:        "Test Chat",
-		UserLabel:        "member",
+		Actor:            messenger.Actor{ID: "member", Label: "member", Roles: []simplerbac.Role{simplerbac.RoleUser, simplerbac.RoleElevated}},
 	})
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)
@@ -295,7 +296,7 @@ func TestHandleInboundPayloadRejectsHostbridgeScaffoldCommand(t *testing.T) {
 		ProviderThreadID: "7",
 		Text:             messenger.TextMessage{Text: "/config hostbridge scaffold deploy"},
 		ChatLabel:        "Test Chat",
-		UserLabel:        "member",
+		Actor:            messenger.Actor{ID: "member", Label: "member", Roles: []simplerbac.Role{simplerbac.RoleUser, simplerbac.RoleElevated}},
 	})
 	if err != nil {
 		t.Fatalf("handle incoming message: %v", err)

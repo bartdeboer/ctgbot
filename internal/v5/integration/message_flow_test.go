@@ -47,7 +47,7 @@ func TestV5MockComponentsEndToEnd(t *testing.T) {
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
-					UserLabel:         "bart",
+					Actor:             actorWithRoles("", "bart"),
 					Text:              messenger.TextMessage{Text: "hello"},
 				},
 			},

@@ -244,9 +244,6 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u dbmodel.Tel
 			Label: u.UserLabel(),
 			Roles: telegramActorRoles(operator),
 		},
-		UserLabel:         u.UserLabel(),
-		UserID:            u.UserID,
-		IsAdmin:           operator,
 		ProviderMessageID: fmt.Sprintf("%d", u.MessageID),
 		Text:              messenger.TextMessage{Text: text},
 	}

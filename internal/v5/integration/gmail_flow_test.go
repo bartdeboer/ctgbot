@@ -42,7 +42,7 @@ func TestV5GmailSourceRelaysOutboundElsewhere(t *testing.T) {
 					ProviderChatID:    "gmail-inbox-1",
 					ProviderThreadID:  "gmail-thread-1",
 					ProviderMessageID: "gmail-msg-1",
-					UserLabel:         "bart@example.com",
+					Actor:             actorWithRoles("", "bart@example.com"),
 					Text:              messenger.TextMessage{Text: "hello from gmail"},
 				},
 			},

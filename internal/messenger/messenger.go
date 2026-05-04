@@ -2,7 +2,6 @@ package messenger
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -57,9 +56,6 @@ type InboundPayload struct {
 	ProviderMessageID string
 	ChatLabel         string
 	Actor             Actor
-	UserLabel         string
-	UserID            int64
-	IsAdmin           bool
 	Text              TextMessage
 	Attachments       []Media
 }
@@ -67,20 +63,13 @@ type InboundPayload struct {
 func (p InboundPayload) ResolvedActor() Actor {
 	actor := p.Actor
 	if strings.TrimSpace(actor.ID) == "" {
-		if p.UserID != 0 {
-			actor.ID = fmt.Sprintf("%d", p.UserID)
-		} else {
-			actor.ID = strings.TrimSpace(p.UserLabel)
-		}
+		actor.ID = strings.TrimSpace(actor.Label)
 	}
 	if strings.TrimSpace(actor.Label) == "" {
-		actor.Label = strings.TrimSpace(p.UserLabel)
+		actor.Label = strings.TrimSpace(actor.ID)
 	}
 	if len(actor.Roles) == 0 {
 		actor.Roles = []simplerbac.Role{simplerbac.RoleUser}
-		if p.IsAdmin {
-			actor.Roles = append(actor.Roles, simplerbac.RoleRoot)
-		}
 	}
 	return actor
 }

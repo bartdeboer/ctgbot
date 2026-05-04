@@ -213,8 +213,12 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 			ProviderChatID:    "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
-			UserLabel:         "bart",
-			Text:              messenger.TextMessage{Text: "hello"},
+			Actor: messenger.Actor{
+				ID:    "bart",
+				Label: "bart",
+				Roles: []simplerbac.Role{simplerbac.RoleUser},
+			},
+			Text: messenger.TextMessage{Text: "hello"},
 		},
 	})
 	if err != nil {
@@ -286,8 +290,12 @@ func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T)
 			ProviderChatID:    "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
-			UserLabel:         "bart",
-			Text:              messenger.TextMessage{Text: "hello"},
+			Actor: messenger.Actor{
+				ID:    "bart",
+				Label: "bart",
+				Roles: []simplerbac.Role{simplerbac.RoleUser},
+			},
+			Text: messenger.TextMessage{Text: "hello"},
 		},
 	})
 	if err != nil {
@@ -365,8 +373,12 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 			ProviderChatID:    "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
-			UserLabel:         "bart",
-			Text:              messenger.TextMessage{Text: "/tools ping"},
+			Actor: messenger.Actor{
+				ID:    "bart",
+				Label: "bart",
+				Roles: []simplerbac.Role{simplerbac.RoleUser},
+			},
+			Text: messenger.TextMessage{Text: "/tools ping"},
 		},
 	})
 	if err != nil {
@@ -462,8 +474,12 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 				ProviderChatID:    "chat-1",
 				ProviderThreadID:  "thread-7",
 				ProviderMessageID: "msg-" + strings.ReplaceAll(text, " ", "-"),
-				UserLabel:         "bart",
-				Text:              messenger.TextMessage{Text: text},
+				Actor: messenger.Actor{
+					ID:    "bart",
+					Label: "bart",
+					Roles: []simplerbac.Role{simplerbac.RoleUser},
+				},
+				Text: messenger.TextMessage{Text: text},
 			},
 		})
 		if err != nil {
@@ -513,8 +529,12 @@ func TestRunStartsEnabledInboundSources(t *testing.T) {
 			ProviderChatID:    "chat-2",
 			ProviderThreadID:  "thread-9",
 			ProviderMessageID: "msg-2",
-			UserLabel:         "bart",
-			Text:              messenger.TextMessage{Text: "ping"},
+			Actor: messenger.Actor{
+				ID:    "bart",
+				Label: "bart",
+				Roles: []simplerbac.Role{simplerbac.RoleUser},
+			},
+			Text: messenger.TextMessage{Text: "ping"},
 		},
 	}})
 	b := broker.New(storage, system, nil)

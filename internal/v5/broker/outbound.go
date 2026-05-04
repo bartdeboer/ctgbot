@@ -2,7 +2,6 @@ package broker
 
 import (
 	"context"
-	"strconv"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/messenger"
@@ -154,9 +153,6 @@ func inboundMetadataJSON(payload messenger.InboundPayload) string {
 	}
 	if strings.TrimSpace(actor.Label) != "" {
 		metadata = append(metadata, "actor_label="+strings.TrimSpace(actor.Label))
-	}
-	if payload.UserID != 0 {
-		metadata = append(metadata, "user_id="+strconv.FormatInt(payload.UserID, 10))
 	}
 	if len(actor.Roles) > 0 {
 		roles := make([]string, 0, len(actor.Roles))

@@ -533,12 +533,6 @@ func TestHandleUpdateSerializedMarksConfiguredOperatorAsAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleUpdateSerialized returned error: %v", err)
 	}
-	if !payload.IsAdmin {
-		t.Fatalf("payload.IsAdmin = false, want true")
-	}
-	if got, want := payload.UserID, int64(13145044); got != want {
-		t.Fatalf("payload.UserID = %d, want %d", got, want)
-	}
 	if got, want := payload.Actor.ID, "13145044"; got != want {
 		t.Fatalf("payload.Actor.ID = %q, want %q", got, want)
 	}

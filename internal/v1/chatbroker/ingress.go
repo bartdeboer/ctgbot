@@ -120,14 +120,19 @@ func (b *Broker) messageCommandEngine() (*commandengine.Engine, error) {
 }
 
 func (b *Broker) messageActor(chatID modeluuid.UUID, msg messenger.InboundPayload) commandengine.Actor {
-	if msg.IsAdmin {
-		return commandengine.Actor{ID: strings.TrimSpace(msg.UserLabel), Roles: []simplerbac.Role{simplerbac.RoleRoot}}
+	actor := msg.ResolvedActor()
+	roles := append([]simplerbac.Role(nil), actor.Roles...)
+	if len(roles) == 0 {
+		roles = []simplerbac.Role{simplerbac.RoleUser}
 	}
-	roles := []simplerbac.Role{simplerbac.RoleUser}
-	if b != nil && b.Config != nil && !chatID.IsNull() && b.Config.Chat(chatID).ProcessToolsEnabled() {
+	if b != nil && b.Config != nil && !chatID.IsNull() && b.Config.Chat(chatID).ProcessToolsEnabled() && !actor.HasRole(simplerbac.RoleRoot) {
 		roles = append(roles, simplerbac.RoleElevated)
 	}
-	return commandengine.Actor{ID: strings.TrimSpace(msg.UserLabel), Roles: roles}
+	actorID := strings.TrimSpace(actor.ID)
+	if actorID == "" {
+		actorID = "user"
+	}
+	return commandengine.Actor{ID: actorID, Roles: roles}
 }
 
 func commandHelp(definitions []commandengine.Definition) string {
@@ -176,7 +181,7 @@ func (b *Broker) resolveIncomingThread(ctx context.Context, msg messenger.Inboun
 
 	chatLabel := strings.TrimSpace(msg.ChatLabel)
 	if chatLabel == "" {
-		chatLabel = strings.TrimSpace(msg.UserLabel)
+		chatLabel = strings.TrimSpace(msg.ResolvedActor().Label)
 	}
 
 	var (
