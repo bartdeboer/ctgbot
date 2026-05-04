@@ -134,6 +134,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	var outbound []coremodel.ThreadMessage
 	for _, agentBinding := range runtime.Agents {
 		turnRuntime.componentID = agentBinding.ComponentID
+		turnRuntime.lastText = ""
 		result, err := agentBinding.Agent.HandleTurn(ctx, component.Turn{
 			Chat:    *chat,
 			Thread:  *thread,
@@ -146,6 +147,9 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 			return EventOutcome{Inbound: inbound, Outbound: outbound}, err
 		}
 		if result == nil || result.Final == nil || strings.TrimSpace(result.Final.Text) == "" {
+			continue
+		}
+		if strings.TrimSpace(result.Final.Text) == turnRuntime.LastText() {
 			continue
 		}
 		message, err := b.appendAndRelayMessage(ctx, runtime, *chat, *thread, *result.Final, agentBinding.Agent.Type())

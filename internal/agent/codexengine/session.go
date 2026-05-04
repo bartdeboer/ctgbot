@@ -22,15 +22,6 @@ type SessionExecutor struct {
 	Logger *log.Logger
 }
 
-type ReplyMode int
-
-const (
-	ReplyFromLastMessage ReplyMode = iota
-	ReplyFromEventStream
-)
-
-const defaultReplyMode = ReplyFromLastMessage
-
 type ExecRuntime interface {
 	Workspace() string
 	Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error
@@ -132,7 +123,7 @@ func (e *SessionExecutor) HandleRuntimeTurn(ctx context.Context, runtime ExecRun
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
 	stdout := newCodexJSONWriter(&stdoutBuf, e.logf, func(text string) {
-		if defaultReplyMode != ReplyFromEventStream || output == nil {
+		if output == nil {
 			return
 		}
 		if err := output.Send(ctx, messenger.OutboundPayload{
@@ -155,22 +146,12 @@ func (e *SessionExecutor) HandleRuntimeTurn(ctx context.Context, runtime ExecRun
 		e.logf("codex turn completed thread_id=%s input_tokens=%d cached_input_tokens=%d output_tokens=%d", nextProviderThreadID, stdout.InputTokens(), stdout.CachedInputTokens(), stdout.OutputTokens())
 	}
 
-	reply := ""
-	var readErr error
-	switch defaultReplyMode {
-	case ReplyFromLastMessage:
-		var body []byte
-		body, readErr = runtime.CombinedOutput(ctx, "cat", outputPath)
-		reply = strings.TrimSpace(string(body))
-	case ReplyFromEventStream:
-		// Reply already sent through the event stream callback path.
-	default:
-		return agent.TurnResult{}, fmt.Errorf("unsupported codex reply mode: %d", defaultReplyMode)
-	}
+	lastMessageBytes, readErr := runtime.CombinedOutput(ctx, "cat", outputPath)
+	lastMessage := strings.TrimSpace(string(lastMessageBytes))
 
 	if err != nil {
-		if readErr == nil && reply != "" {
-			return agent.TurnResult{Reply: reply, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
+		if readErr == nil && lastMessage != "" {
+			return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
 		}
 		if detail := trimCodexErrorDetail(stderrBuf.String()); detail != "" {
 			return agent.TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
@@ -178,12 +159,12 @@ func (e *SessionExecutor) HandleRuntimeTurn(ctx context.Context, runtime ExecRun
 		return agent.TurnResult{}, fmt.Errorf("codex exec: %w", err)
 	}
 	if readErr != nil {
-		return agent.TurnResult{}, fmt.Errorf("read codex reply: %w", readErr)
+		return agent.TurnResult{}, fmt.Errorf("read last message: %w", readErr)
 	}
-	if reply == "" {
+	if lastMessage == "" {
 		return agent.TurnResult{}, fmt.Errorf("codex returned an empty response")
 	}
-	return agent.TurnResult{Reply: reply, ProviderThreadID: nextProviderThreadID}, nil
+	return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, nil
 }
 
 func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.Sandbox, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
@@ -237,7 +218,7 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
 	stdout := newCodexJSONWriter(&stdoutBuf, e.logf, func(text string) {
-		if defaultReplyMode != ReplyFromEventStream || output == nil {
+		if output == nil {
 			return
 		}
 		if err := output.Send(ctx, messenger.OutboundPayload{
@@ -262,22 +243,12 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 	if err != nil && sbx.Interrupted() {
 		return agent.TurnResult{ProviderThreadID: nextProviderThreadID}, context.Canceled
 	}
-	reply := ""
-	var readErr error
-	switch defaultReplyMode {
-	case ReplyFromLastMessage:
-		var body []byte
-		body, readErr = sbx.CombinedOutput(ctx, "cat", outputPath)
-		reply = strings.TrimSpace(string(body))
-	case ReplyFromEventStream:
-		// Reply already sent through the event stream callback path.
-	default:
-		return agent.TurnResult{}, fmt.Errorf("unsupported codex reply mode: %d", defaultReplyMode)
-	}
+	lastMessageBytes, readErr := sbx.CombinedOutput(ctx, "cat", outputPath)
+	lastMessage := strings.TrimSpace(string(lastMessageBytes))
 
 	if err != nil {
-		if readErr == nil && reply != "" {
-			return agent.TurnResult{Reply: reply, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
+		if readErr == nil && lastMessage != "" {
+			return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
 		}
 		if detail := trimCodexErrorDetail(stderrBuf.String()); detail != "" {
 			return agent.TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
@@ -285,12 +256,12 @@ func (e *SessionExecutor) HandleTurn(ctx context.Context, sbx *sandboxengine.San
 		return agent.TurnResult{}, fmt.Errorf("codex exec: %w", err)
 	}
 	if readErr != nil {
-		return agent.TurnResult{}, fmt.Errorf("read codex reply: %w", readErr)
+		return agent.TurnResult{}, fmt.Errorf("read last message: %w", readErr)
 	}
-	if reply == "" {
+	if lastMessage == "" {
 		return agent.TurnResult{}, fmt.Errorf("codex returned an empty response")
 	}
-	return agent.TurnResult{Reply: reply, ProviderThreadID: nextProviderThreadID}, nil
+	return agent.TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, nil
 }
 
 func wrapWithPIDFile(args []string) []string {

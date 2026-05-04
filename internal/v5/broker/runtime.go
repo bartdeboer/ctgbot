@@ -3,6 +3,7 @@ package broker
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
@@ -111,6 +112,7 @@ type agentTurnRuntime struct {
 	thread      coremodel.Thread
 	componentID modeluuid.UUID
 	outputs     []coremodel.ThreadMessage
+	lastText    string
 }
 
 func (r *agentTurnRuntime) Commands() commandengine.CommandExecutor {
@@ -129,7 +131,17 @@ func (r *agentTurnRuntime) Send(ctx context.Context, payload messenger.OutboundP
 		return err
 	}
 	r.outputs = append(r.outputs, messages...)
+	if text := strings.TrimSpace(payload.Text.Text); text != "" {
+		r.lastText = text
+	}
 	return nil
+}
+
+func (r *agentTurnRuntime) LastText() string {
+	if r == nil {
+		return ""
+	}
+	return r.lastText
 }
 
 func (r *agentTurnRuntime) StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error) {

@@ -106,8 +106,10 @@ func (c *fakeMessenger) StartChatAction(ctx context.Context, target messenger.Ch
 }
 
 type fakeAgentRecorder struct {
-	prompts []string
-	homes   []v5runtime.Home
+	prompts    []string
+	homes      []v5runtime.Home
+	streamText string
+	finalText  string
 }
 
 type fakeAgent struct {
@@ -122,13 +124,21 @@ func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if home, ok := turn.Runtime.ComponentHome(c.componentID); ok {
 		c.recorder.homes = append(c.recorder.homes, home)
 	}
+	streamText := strings.TrimSpace(c.recorder.streamText)
+	if streamText == "" {
+		streamText = "working..."
+	}
 	if err := turn.Runtime.Send(context.Background(), messenger.OutboundPayload{
-		Text: messenger.TextMessage{Text: "working..."},
+		Text: messenger.TextMessage{Text: streamText},
 	}); err != nil {
 		return nil, err
 	}
+	finalText := strings.TrimSpace(c.recorder.finalText)
+	if finalText == "" {
+		finalText = "done"
+	}
 	return &component.TurnResult{
-		Final: &coremodel.ThreadMessage{Text: "done"},
+		Final: &coremodel.ThreadMessage{Text: finalText},
 	}, nil
 }
 
@@ -232,6 +242,70 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, want := len(messages), 3; got != want {
+		t.Fatalf("stored messages = %d, want %d", got, want)
+	}
+}
+
+func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentRecorder := &fakeAgentRecorder{streamText: "done", finalText: "done"}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := broker.New(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Profile: "default", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Profile: "default", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Components().Save(context.Background(), codex); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
+		ComponentID: telegram.ID,
+		ExternalID:  "msg-1",
+		Payload: messenger.InboundPayload{
+			ProviderType:      "telegram",
+			ProviderChatID:    "chat-1",
+			ProviderThreadID:  "thread-7",
+			ProviderMessageID: "msg-1",
+			UserLabel:         "bart",
+			Text:              messenger.TextMessage{Text: "hello"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("HandleInbound() error = %v", err)
+	}
+	if got, want := len(messengerRecorder.payloads), 1; got != want {
+		t.Fatalf("relay payloads = %d, want %d", got, want)
+	}
+	if messengerRecorder.payloads[0].Text.Text != "done" {
+		t.Fatalf("relay texts = %#v", messengerRecorder.payloads)
+	}
+	if got, want := len(outcome.Outbound), 1; got != want {
+		t.Fatalf("outbound messages = %d, want %d", got, want)
+	}
+	messages, err := storage.Messages().ListByThreadID(context.Background(), outcome.Inbound.ThreadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(messages), 2; got != want {
 		t.Fatalf("stored messages = %d, want %d", got, want)
 	}
 }
