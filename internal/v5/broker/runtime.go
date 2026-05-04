@@ -8,6 +8,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	component "github.com/bartdeboer/ctgbot/internal/v5/component"
+	brokercomponent "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
@@ -56,6 +57,8 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 			}
 		}
 	}
+
+	surfaces = append(surfaces, brokercomponent.New(b))
 
 	messageCommands, err := buildCommandEngine(surfaces, commandengine.SourceMessage)
 	if err != nil {
