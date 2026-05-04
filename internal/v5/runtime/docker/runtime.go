@@ -20,18 +20,20 @@ import (
 const dockerDefaultImage = "ctgbot-codex:latest"
 
 type Factory struct {
-	rootDir   string
-	profile   v5runtime.Profile
-	sandboxes sandboxengine.RuntimeManager
-	bridge    *v5hostbridgeserver.Bridge
+	rootDir        string
+	componentsRoot string
+	profile        v5runtime.Profile
+	sandboxes      sandboxengine.RuntimeManager
+	bridge         *v5hostbridgeserver.Bridge
 }
 
-func New(rootDir string, sandboxes sandboxengine.RuntimeManager, bridge *v5hostbridgeserver.Bridge, profile v5runtime.Profile) *Factory {
+func New(rootDir string, componentsRoot string, sandboxes sandboxengine.RuntimeManager, bridge *v5hostbridgeserver.Bridge, profile v5runtime.Profile) *Factory {
 	return &Factory{
-		rootDir:   strings.TrimSpace(rootDir),
-		profile:   profile,
-		sandboxes: sandboxes,
-		bridge:    bridge,
+		rootDir:        strings.TrimSpace(rootDir),
+		componentsRoot: strings.TrimSpace(componentsRoot),
+		profile:        profile,
+		sandboxes:      sandboxes,
+		bridge:         bridge,
 	}
 }
 
@@ -44,7 +46,7 @@ func (f *Factory) Profile() v5runtime.Profile {
 }
 
 func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
-	hostPath := filepath.Join(f.profile.Root, "components", registration.Type, registration.Name)
+	hostPath := filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	return v5runtime.Home{
 		HostPath:      hostPath,
 		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,

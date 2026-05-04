@@ -127,16 +127,21 @@ func resolveDBPath(rootDir string, stateRoot string, dbPath string) string {
 	return filepath.Clean(filepath.Join(rootDir, dbPath))
 }
 
+func resolveComponentsRoot(stateRoot string) string {
+	return filepath.Join(strings.TrimSpace(stateRoot), "components")
+}
+
 func buildRuntimes(rootDir string, stateRoot string, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Factory, error) {
 	runtimes := map[string]v5runtime.Factory{}
 	bridge := v5hostbridgeserver.NewBridge(stateRoot, storage, logger)
+	componentsRoot := resolveComponentsRoot(stateRoot)
 	for name, profile := range profiles {
 		var runtime v5runtime.Factory
 		switch profile.Runtime {
 		case "docker":
-			runtime = v5docker.New(rootDir, sandboxes, bridge, profile)
+			runtime = v5docker.New(rootDir, componentsRoot, sandboxes, bridge, profile)
 		case "local":
-			runtime = v5local.New(rootDir, profile)
+			runtime = v5local.New(rootDir, componentsRoot, profile)
 		default:
 			return nil, fmt.Errorf("unsupported runtime %q for profile %s", profile.Runtime, name)
 		}

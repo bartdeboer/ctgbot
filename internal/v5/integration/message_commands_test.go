@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -348,9 +349,10 @@ func newMessageCommandTestSystem(
 	runtimes := map[string]v5runtime.Factory{}
 	for name, profile := range profiles {
 		runtimes[name] = fakeRuntimeFactory{
-			profile: profile,
-			rootDir: root,
-			state:   runtimeState,
+			profile:        profile,
+			rootDir:        root,
+			componentsRoot: filepath.Join(root, ".ctgbot", "components"),
+			state:          runtimeState,
 		}
 	}
 

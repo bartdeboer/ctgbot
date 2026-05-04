@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -17,7 +18,7 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 		_ = bridge.Close()
 	})
 
-	factory := New(root, fakeSandboxManager{}, bridge, v5runtime.Profile{
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, bridge, v5runtime.Profile{
 		Name:    "test",
 		Runtime: "docker",
 		Root:    root,

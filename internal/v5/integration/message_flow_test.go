@@ -36,10 +36,6 @@ func TestV5MockComponentsEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("LoadProfiles() error = %v", err)
 		}
-		testProfile, ok := profiles["test"]
-		if !ok {
-			t.Fatal("missing test profile")
-		}
 
 		storage := newSQLiteStorage(t)
 		runtimeState := &runtimeState{}
@@ -82,9 +78,10 @@ func TestV5MockComponentsEndToEnd(t *testing.T) {
 		runtimes := map[string]v5runtime.Factory{}
 		for name, profile := range profiles {
 			runtimes[name] = fakeRuntimeFactory{
-				profile: profile,
-				rootDir: root,
-				state:   runtimeState,
+				profile:        profile,
+				rootDir:        root,
+				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
+				state:          runtimeState,
 			}
 		}
 		system := v5system.New(storage, profiles, runtimes, registry)
@@ -102,7 +99,7 @@ func TestV5MockComponentsEndToEnd(t *testing.T) {
 			t.Fatalf("AuthComponent() error = %v", err)
 		}
 
-		authPath := filepath.Join(testProfile.Root, "components", "mockagent", "mockagent", "auth.json")
+		authPath := filepath.Join(root, ".ctgbot", "components", "mockagent", "mockagent", "auth.json")
 		if _, err := os.Stat(authPath); err != nil {
 			t.Fatalf("auth.json not created at %s: %v", authPath, err)
 		}

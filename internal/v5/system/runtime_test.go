@@ -47,15 +47,16 @@ func (r fakeRuntime) OpenHTTPRelayPort(ctx context.Context, threadID modeluuid.U
 }
 
 type fakeFactory struct {
-	profile v5runtime.Profile
-	rootDir string
+	profile        v5runtime.Profile
+	rootDir        string
+	componentsRoot string
 }
 
 func (f fakeFactory) Kind() string               { return f.profile.Runtime }
 func (f fakeFactory) Profile() v5runtime.Profile { return f.profile }
 func (f fakeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
 	return v5runtime.Home{
-		HostPath:      filepath.Join(f.profile.Root, "components", registration.Type, registration.Name),
+		HostPath:      filepath.Join(f.componentsRoot, registration.Type, registration.Name),
 		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
 	}
 }
@@ -120,8 +121,8 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage) *Syste
 		"work":    {Name: "work", Runtime: "local", Root: filepath.Join(root, ".ctgbot", "profiles", "work")},
 	}
 	runtimes := map[string]v5runtime.Factory{
-		"default": fakeFactory{profile: profiles["default"], rootDir: root},
-		"work":    fakeFactory{profile: profiles["work"], rootDir: root},
+		"default": fakeFactory{profile: profiles["default"], rootDir: root, componentsRoot: filepath.Join(root, ".ctgbot", "components")},
+		"work":    fakeFactory{profile: profiles["work"], rootDir: root, componentsRoot: filepath.Join(root, ".ctgbot", "components")},
 	}
 	system := New(storage, profiles, runtimes, registry)
 	system.loaded = map[string]*component.Loaded{}
@@ -158,7 +159,7 @@ func TestResolveComponentUsesProfileRuntimeAndHome(t *testing.T) {
 	if resolved.runtimeKind != "local" {
 		t.Fatalf("runtime kind = %q, want local", resolved.runtimeKind)
 	}
-	if got, want := loaded.Home.HostPath, filepath.Join(root, ".ctgbot", "profiles", "default", "components", "telegram", "telegram"); got != want {
+	if got, want := loaded.Home.HostPath, filepath.Join(root, ".ctgbot", "components", "telegram", "telegram"); got != want {
 		t.Fatalf("HostPath = %q, want %q", got, want)
 	}
 }
@@ -213,7 +214,7 @@ func TestAuthComponentUsesResolvedHomeAndRegistration(t *testing.T) {
 	if auth.last.registration.Ref() != "gmail/work" {
 		t.Fatalf("auth registration = %q", auth.last.registration.Ref())
 	}
-	if got, want := auth.last.home.HostPath, filepath.Join(root, ".ctgbot", "profiles", "work", "components", "gmail", "work"); got != want {
+	if got, want := auth.last.home.HostPath, filepath.Join(root, ".ctgbot", "components", "gmail", "work"); got != want {
 		t.Fatalf("auth home = %q, want %q", got, want)
 	}
 }

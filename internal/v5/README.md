@@ -39,6 +39,11 @@ The resolved profile gives:
 - runtime kind
 - profile root on disk
 
+Component homes are not derived from the profile root. They live separately
+under the shared state root:
+
+- `.ctgbot/components/<type>/<name>`
+
 ## Runtime flow
 
 At startup we build one runtime instance per profile.

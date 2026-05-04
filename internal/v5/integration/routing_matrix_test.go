@@ -146,9 +146,10 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		runtimes := map[string]v5runtime.Factory{}
 		for name, profile := range profiles {
 			runtimes[name] = fakeRuntimeFactory{
-				profile: profile,
-				rootDir: root,
-				state:   runtimeState,
+				profile:        profile,
+				rootDir:        root,
+				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
+				state:          runtimeState,
 			}
 		}
 		system := v5system.New(storage, profiles, runtimes, registry)
@@ -239,8 +240,8 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 			t.Fatalf("beta distinct provider threads collapsed to one internal thread: %s", recordBetaOne.ThreadID)
 		}
 
-		workHome := filepath.Join(profiles["work"].Root, "components", "mockagent", "work")
-		personalHome := filepath.Join(profiles["personal"].Root, "components", "mockagent", "personal")
+		workHome := filepath.Join(root, ".ctgbot", "components", "mockagent", "work")
+		personalHome := filepath.Join(root, ".ctgbot", "components", "mockagent", "personal")
 		if _, err := os.Stat(filepath.Join(workHome, "auth.json")); err != nil {
 			t.Fatalf("missing work auth file: %v", err)
 		}

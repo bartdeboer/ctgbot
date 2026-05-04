@@ -100,9 +100,10 @@ func TestV5HostbridgeFlow(t *testing.T) {
 		runtimes := map[string]v5runtime.Factory{}
 		for name, profile := range profiles {
 			runtimes[name] = fakeRuntimeFactory{
-				profile: profile,
-				rootDir: root,
-				state:   runtimeState,
+				profile:        profile,
+				rootDir:        root,
+				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
+				state:          runtimeState,
 			}
 		}
 		system := v5system.New(storage, profiles, runtimes, registry)
@@ -249,9 +250,10 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 		runtimes := map[string]v5runtime.Factory{}
 		for name, profile := range profiles {
 			runtimes[name] = fakeRuntimeFactory{
-				profile: profile,
-				rootDir: root,
-				state:   runtimeState,
+				profile:        profile,
+				rootDir:        root,
+				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
+				state:          runtimeState,
 			}
 		}
 		system := v5system.New(storage, profiles, runtimes, registry)

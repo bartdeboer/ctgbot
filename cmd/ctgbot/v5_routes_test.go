@@ -41,7 +41,7 @@ func TestV5ProfileSetAndComponentRegister(t *testing.T) {
 			t.Fatalf("unexpected register output: %q", registerOutput)
 		}
 
-		expectedHome := filepath.Join(root, "profiles", "work-root", "components", "codex", "work")
+		expectedHome := filepath.Join(root, ".ctgbot", "components", "codex", "work")
 		assertDirExists(t, expectedHome)
 
 		system, err := v5system.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))

@@ -23,6 +23,7 @@ existing `v1` deploy.
 - state root default: `.ctgbot`
 - default database path: `.ctgbot/ctgbot.db`
 - profile roots default under: `.ctgbot/profiles/<profile>`
+- component homes default under: `.ctgbot/components/<type>/<name>`
 - hostbridge TLS/server root default under: `.ctgbot/hostbridge`
 
 The config store key for profiles is now:

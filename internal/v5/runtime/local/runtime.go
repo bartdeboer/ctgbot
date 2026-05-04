@@ -16,14 +16,16 @@ import (
 )
 
 type Factory struct {
-	rootDir string
-	profile v5runtime.Profile
+	rootDir        string
+	componentsRoot string
+	profile        v5runtime.Profile
 }
 
-func New(rootDir string, profile v5runtime.Profile) *Factory {
+func New(rootDir string, componentsRoot string, profile v5runtime.Profile) *Factory {
 	return &Factory{
-		rootDir: strings.TrimSpace(rootDir),
-		profile: profile,
+		rootDir:        strings.TrimSpace(rootDir),
+		componentsRoot: strings.TrimSpace(componentsRoot),
+		profile:        profile,
 	}
 }
 
@@ -36,7 +38,7 @@ func (f *Factory) Profile() v5runtime.Profile {
 }
 
 func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
-	hostPath := filepath.Join(f.profile.Root, "components", registration.Type, registration.Name)
+	hostPath := filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	return v5runtime.Home{
 		HostPath:      hostPath,
 		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,

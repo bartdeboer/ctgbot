@@ -40,9 +40,10 @@ type execRecord struct {
 }
 
 type fakeRuntimeFactory struct {
-	profile v5runtime.Profile
-	rootDir string
-	state   *runtimeState
+	profile        v5runtime.Profile
+	rootDir        string
+	componentsRoot string
+	state          *runtimeState
 }
 
 func (f fakeRuntimeFactory) Kind() string {
@@ -55,7 +56,7 @@ func (f fakeRuntimeFactory) Profile() v5runtime.Profile {
 
 func (f fakeRuntimeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
 	return v5runtime.Home{
-		HostPath:      filepath.Join(f.profile.Root, "components", registration.Type, registration.Name),
+		HostPath:      filepath.Join(f.componentsRoot, registration.Type, registration.Name),
 		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
 	}
 }

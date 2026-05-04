@@ -54,15 +54,16 @@ func (r fakeRuntime) OpenHTTPRelayPort(ctx context.Context, threadID modeluuid.U
 }
 
 type fakeFactory struct {
-	profile v5runtime.Profile
-	rootDir string
+	profile        v5runtime.Profile
+	rootDir        string
+	componentsRoot string
 }
 
 func (f fakeFactory) Kind() string               { return f.profile.Runtime }
 func (f fakeFactory) Profile() v5runtime.Profile { return f.profile }
 func (f fakeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
 	return v5runtime.Home{
-		HostPath:      filepath.Join(f.profile.Root, "components", registration.Type, registration.Name),
+		HostPath:      filepath.Join(f.componentsRoot, registration.Type, registration.Name),
 		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
 	}
 }
@@ -168,7 +169,7 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage, record
 	return v5system.New(
 		storage,
 		map[string]v5runtime.Profile{"default": profile},
-		map[string]v5runtime.Factory{"default": fakeFactory{profile: profile, rootDir: root}},
+		map[string]v5runtime.Factory{"default": fakeFactory{profile: profile, rootDir: root, componentsRoot: filepath.Join(root, ".ctgbot", "components")}},
 		registry,
 	)
 }
@@ -234,7 +235,7 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	if messengerRecorder.payloads[0].Text.Text != "working..." || messengerRecorder.payloads[1].Text.Text != "done" {
 		t.Fatalf("relay texts = %#v", messengerRecorder.payloads)
 	}
-	if agentRecorder.homes[0].HostPath == "" || !strings.Contains(agentRecorder.homes[0].HostPath, filepath.Join(".ctgbot", "profiles", "default", "components", "codex", "codex")) {
+	if agentRecorder.homes[0].HostPath == "" || !strings.Contains(agentRecorder.homes[0].HostPath, filepath.Join(".ctgbot", "components", "codex", "codex")) {
 		t.Fatalf("agent home = %#v", agentRecorder.homes[0])
 	}
 	messages, err := storage.Messages().ListByThreadID(context.Background(), outcome.Inbound.ThreadID)
