@@ -2,7 +2,6 @@ package broker
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -79,20 +78,14 @@ func (b *Broker) tryHandleMessageCommand(
 }
 
 func messageCommandActor(payload messenger.InboundPayload) commandengine.Actor {
-	actorID := strings.TrimSpace(payload.UserLabel)
-	if payload.UserID != 0 {
-		actorID = fmt.Sprintf("%d", payload.UserID)
-	}
+	actor := payload.ResolvedActor()
+	actorID := strings.TrimSpace(actor.ID)
 	if actorID == "" {
 		actorID = "user"
 	}
-	roles := []simplerbac.Role{simplerbac.RoleUser}
-	if payload.IsAdmin {
-		roles = append(roles, simplerbac.RoleRoot)
-	}
 	return commandengine.Actor{
 		ID:    actorID,
-		Roles: roles,
+		Roles: append([]simplerbac.Role(nil), actor.Roles...),
 	}
 }
 

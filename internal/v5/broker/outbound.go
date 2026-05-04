@@ -2,7 +2,6 @@ package broker
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 )
 
 func (b *Broker) appendInbound(ctx context.Context, chat coremodel.Chat, thread coremodel.Thread, event component.InboundEvent) (*coremodel.ThreadMessage, error) {
+	actor := event.Payload.ResolvedActor()
 	message := &coremodel.ThreadMessage{
 		ChatID:       chat.ID,
 		ThreadID:     thread.ID,
@@ -20,12 +20,12 @@ func (b *Broker) appendInbound(ctx context.Context, chat coremodel.Chat, thread 
 		Kind:         inboundKind(event),
 		ComponentID:  event.ComponentID,
 		ExternalID:   strings.TrimSpace(event.ExternalID),
-		ActorLabel:   strings.TrimSpace(event.Payload.UserLabel),
+		ActorLabel:   strings.TrimSpace(actor.Label),
 		Text:         strings.TrimSpace(event.Payload.Text.Text),
 		MetadataJSON: inboundMetadataJSON(event.Payload),
 	}
-	if event.Payload.UserID != 0 {
-		message.ActorID = fmt.Sprintf("%d", event.Payload.UserID)
+	if strings.TrimSpace(actor.ID) != "" {
+		message.ActorID = strings.TrimSpace(actor.ID)
 	}
 	if err := b.Storage.Messages().Append(ctx, message); err != nil {
 		return nil, err
@@ -135,6 +135,7 @@ func (b *Broker) deliverPayload(ctx context.Context, runtime *ChatRuntime, chat 
 }
 
 func inboundMetadataJSON(payload messenger.InboundPayload) string {
+	actor := payload.ResolvedActor()
 	var metadata []string
 	if payload.ProviderType != "" {
 		metadata = append(metadata, "provider="+strings.TrimSpace(payload.ProviderType))
@@ -148,8 +149,26 @@ func inboundMetadataJSON(payload messenger.InboundPayload) string {
 	if payload.ProviderMessageID != "" {
 		metadata = append(metadata, "message="+strings.TrimSpace(payload.ProviderMessageID))
 	}
+	if strings.TrimSpace(actor.ID) != "" {
+		metadata = append(metadata, "actor_id="+strings.TrimSpace(actor.ID))
+	}
+	if strings.TrimSpace(actor.Label) != "" {
+		metadata = append(metadata, "actor_label="+strings.TrimSpace(actor.Label))
+	}
 	if payload.UserID != 0 {
 		metadata = append(metadata, "user_id="+strconv.FormatInt(payload.UserID, 10))
+	}
+	if len(actor.Roles) > 0 {
+		roles := make([]string, 0, len(actor.Roles))
+		for _, role := range actor.Roles {
+			if strings.TrimSpace(string(role)) == "" {
+				continue
+			}
+			roles = append(roles, strings.TrimSpace(string(role)))
+		}
+		if len(roles) > 0 {
+			metadata = append(metadata, "actor_roles="+strings.Join(roles, ","))
+		}
 	}
 	return strings.Join(metadata, "\n")
 }

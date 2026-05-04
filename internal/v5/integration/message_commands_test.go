@@ -309,10 +309,14 @@ func TestV5ProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 						ProviderChatID:    "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "operator-" + text,
-						UserLabel:         "bart",
-						UserID:            13145044,
-						IsAdmin:           true,
-						Text:              messenger.TextMessage{Text: text},
+						Actor: messenger.Actor{
+							ID:    "13145044",
+							Label: "bart",
+							Roles: []simplerbac.Role{simplerbac.RoleUser, simplerbac.RoleRoot},
+						},
+						UserLabel: "bart",
+						UserID:    13145044,
+						Text:      messenger.TextMessage{Text: text},
 					},
 				},
 				func(registry *component.Registry) error {

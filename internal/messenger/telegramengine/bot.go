@@ -15,6 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/dbstorage"
 	markdown "github.com/bartdeboer/ctgbot/internal/markdown"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 type tgEventKey struct{}
@@ -234,10 +235,15 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u dbmodel.Tel
 		}
 	}
 	update := messenger.InboundPayload{
-		ProviderType:      "telegram",
-		ProviderChatID:    fmt.Sprintf("%d", u.ChatID),
-		ProviderThreadID:  fmt.Sprintf("%d", u.ThreadID),
-		ChatLabel:         strings.TrimSpace(u.ChatTitle),
+		ProviderType:     "telegram",
+		ProviderChatID:   fmt.Sprintf("%d", u.ChatID),
+		ProviderThreadID: fmt.Sprintf("%d", u.ThreadID),
+		ChatLabel:        strings.TrimSpace(u.ChatTitle),
+		Actor: messenger.Actor{
+			ID:    strconv.FormatInt(u.UserID, 10),
+			Label: u.UserLabel(),
+			Roles: telegramActorRoles(operator),
+		},
 		UserLabel:         u.UserLabel(),
 		UserID:            u.UserID,
 		IsAdmin:           operator,
@@ -276,6 +282,14 @@ func (tb *TelegramBot) replyPayload(ctx context.Context, u dbmodel.TelegramUpdat
 		tb.appendEventResponse(ctx, text)
 	}
 	return tb.Send(ctx, payload)
+}
+
+func telegramActorRoles(operator bool) []simplerbac.Role {
+	roles := []simplerbac.Role{simplerbac.RoleUser}
+	if operator {
+		roles = append(roles, simplerbac.RoleRoot)
+	}
+	return roles
 }
 
 func (tb *TelegramBot) loadIncomingAttachments(ctx context.Context, attachments []dbmodel.TelegramAttachment) ([]messenger.Media, error) {

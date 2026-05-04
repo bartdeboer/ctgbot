@@ -18,6 +18,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v1/chatbroker"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -537,6 +538,15 @@ func TestHandleUpdateSerializedMarksConfiguredOperatorAsAdmin(t *testing.T) {
 	}
 	if got, want := payload.UserID, int64(13145044); got != want {
 		t.Fatalf("payload.UserID = %d, want %d", got, want)
+	}
+	if got, want := payload.Actor.ID, "13145044"; got != want {
+		t.Fatalf("payload.Actor.ID = %q, want %q", got, want)
+	}
+	if got, want := payload.Actor.Label, "@bartdeboer"; got != want {
+		t.Fatalf("payload.Actor.Label = %q, want %q", got, want)
+	}
+	if len(payload.Actor.Roles) != 2 || payload.Actor.Roles[0] != simplerbac.RoleUser || payload.Actor.Roles[1] != simplerbac.RoleRoot {
+		t.Fatalf("payload.Actor.Roles = %#v, want [user root]", payload.Actor.Roles)
 	}
 }
 
