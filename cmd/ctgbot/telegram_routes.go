@@ -13,7 +13,6 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	appstate "github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/configengine"
 	"github.com/bartdeboer/ctgbot/internal/dbstorage/gormstorage"
@@ -23,6 +22,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	configschema "github.com/bartdeboer/ctgbot/internal/schema/config"
 	"github.com/bartdeboer/ctgbot/internal/schema/routers"
+	"github.com/bartdeboer/ctgbot/internal/v1/chatbroker"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )

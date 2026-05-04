@@ -8,8 +8,8 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	appstate "github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/v1/chatbroker"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
