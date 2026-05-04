@@ -137,7 +137,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		"docker.image",
 		"docker.workspace-host-path",
 		"hostbridge.tcp-listen-addr",
-		"telegram.admin-user-id",
 		"telegram.debounce-window",
 		"telegram.poll-timeout",
 		"telegram.render-format",
@@ -159,7 +158,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		wantReply string
 	}{
 		{key: "telegram.render-format", value: "markdown", wantReply: "telegram.render-format=markdown_v2"},
-		{key: "telegram.admin-user-id", value: "12345", wantReply: "telegram.admin-user-id=12345"},
 		{key: "codex.model", value: "gpt-test", wantReply: "codex.model=gpt-test"},
 		{key: "docker.cli-container-name", value: "ctgbot-dev", wantReply: "docker.cli-container-name=ctgbot-dev"},
 		{key: "hostbridge.tcp-listen-addr", value: "127.0.0.1:9999", wantReply: "hostbridge.tcp-listen-addr=127.0.0.1:9999"},
