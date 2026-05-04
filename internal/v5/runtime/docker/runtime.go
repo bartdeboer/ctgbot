@@ -180,6 +180,8 @@ func (r *Runtime) sandbox(
 		spec := sandboxengine.NewBuilder(authSandboxName(r.registration, r.profile.Name)).
 			Image(r.image).
 			Workdir(r.home.ContainerPath).
+			// Keep mounted profile files writable by the host ctgbot process.
+			UserMode("host").
 			Env(append([]string{}, r.env...)).
 			Mounts([]sandboxengine.Mount{{Source: r.home.HostPath, Target: r.home.ContainerPath}}).
 			SecurityOpts([]string{"seccomp=unconfined"}).
@@ -216,6 +218,8 @@ func (r *Runtime) sandbox(
 		Hostname(turnSandboxName(r.registration, threadID)).
 		Image(r.image).
 		Workdir(workspaceContainer).
+		// Keep mounted profile/workspace files writable by the host ctgbot process.
+		UserMode("host").
 		Env(env).
 		Mounts(mounts).
 		SecurityOpts([]string{"seccomp=unconfined"}).

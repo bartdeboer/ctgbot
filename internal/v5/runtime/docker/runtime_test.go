@@ -40,6 +40,9 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_ADDR"), "host.docker.internal:"; len(got) < len(want) || got[:len(want)] != want {
 		t.Fatalf("HOSTBRIDGE_ADDR = %q, want prefix %q", got, want)
 	}
+	if got, want := sandbox.UserMode, "host"; got != want {
+		t.Fatalf("UserMode = %q, want %q", got, want)
+	}
 	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_TLS_DIR"), "/ctgbot/hostbridge-tls"; got != want {
 		t.Fatalf("HOSTBRIDGE_TLS_DIR = %q, want %q", got, want)
 	}
