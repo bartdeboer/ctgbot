@@ -1,7 +1,6 @@
 package appstate
 
 import (
-	"strconv"
 	"strings"
 	"time"
 )
@@ -19,10 +18,6 @@ type telegramConfigValue struct {
 	Operators []int64 `json:"operators"`
 }
 
-type legacyOperatorConfigValue struct {
-	TelegramUserIDs []int64 `json:"telegram_user_ids"`
-}
-
 func (t TelegramConfig) Token() string {
 	if token := t.cfg.string("telegram.token", ""); token != "" {
 		return token
@@ -38,22 +33,6 @@ func (t TelegramConfig) SetToken(token string) error {
 	return t.cfg.persistString("telegram.token", token)
 }
 
-func (t TelegramConfig) AdminUserID() int64 {
-	raw := t.cfg.string("telegram.admin_user_id", "")
-	if raw == "" {
-		return 0
-	}
-	id, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil {
-		return 0
-	}
-	return id
-}
-
-func (t TelegramConfig) SetAdminUserID(userID int64) error {
-	return t.cfg.persistString("telegram.admin_user_id", strconv.FormatInt(userID, 10))
-}
-
 func (t TelegramConfig) OperatorUserIDs() []int64 {
 	var telegramValue telegramConfigValue
 	if t.cfg.structValue("telegram", &telegramValue) {
@@ -61,18 +40,6 @@ func (t TelegramConfig) OperatorUserIDs() []int64 {
 		if len(ids) > 0 {
 			return ids
 		}
-	}
-
-	var legacyOperators legacyOperatorConfigValue
-	if t.cfg.structValue("operators", &legacyOperators) {
-		ids := sanitizeTelegramUserIDs(legacyOperators.TelegramUserIDs)
-		if len(ids) > 0 {
-			return ids
-		}
-	}
-
-	if adminID := t.AdminUserID(); adminID != 0 {
-		return []int64{adminID}
 	}
 	return nil
 }

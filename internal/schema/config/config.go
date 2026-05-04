@@ -32,7 +32,6 @@ func Items(cfg *appstate.Config) []configengine.Item {
 		DockerImage(cfg),
 		DockerWorkspaceHostPath(cfg),
 		HostbridgeTCPListenAddr(cfg),
-		TelegramAdminUserID(cfg),
 		TelegramDebounceWindow(cfg),
 		TelegramPollTimeout(cfg),
 		TelegramRenderFormat(cfg),

@@ -74,6 +74,23 @@ func TestTelegramConfigReadsGroupedOperatorsAndToken(t *testing.T) {
 	}
 }
 
+func TestTelegramConfigIgnoresLegacyOperatorSettings(t *testing.T) {
+	cfg, store := newTestConfig(t)
+
+	if err := store.PersistStruct("operators", map[string]any{
+		"telegram_user_ids": []int64{13145044},
+	}); err != nil {
+		t.Fatalf("persist legacy operators: %v", err)
+	}
+	if err := store.PersistInt("telegram.admin_user_id", 13145044); err != nil {
+		t.Fatalf("persist legacy telegram admin user id: %v", err)
+	}
+
+	if got := cfg.Telegram().OperatorUserIDs(); got != nil {
+		t.Fatalf("OperatorUserIDs() = %#v, want nil", got)
+	}
+}
+
 func TestDockerfileConfigDefaultsAndValidation(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 

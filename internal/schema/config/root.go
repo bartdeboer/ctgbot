@@ -13,14 +13,6 @@ func TelegramToken(cfg *appstate.Config) configengine.Item {
 	)
 }
 
-func TelegramAdminUserID(cfg *appstate.Config) configengine.Item {
-	return rootInt64("telegram.admin-user-id", "Telegram admin user id", cfg,
-		func(cfg *appstate.Config) int64 { return cfg.Telegram().AdminUserID() },
-		func(cfg *appstate.Config, value int64) error { return cfg.Telegram().SetAdminUserID(value) },
-		rootOnly(), rootOnly(),
-	)
-}
-
 func TelegramPollTimeout(cfg *appstate.Config) configengine.Item {
 	return rootString("telegram.poll-timeout", "Telegram long-poll timeout", configengine.ValueDuration, cfg,
 		func(cfg *appstate.Config) string { return cfg.Telegram().PollTimeout().String() },
