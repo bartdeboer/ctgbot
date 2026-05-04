@@ -24,9 +24,9 @@ import (
 const TLSDir = "/ctgbot/hostbridge-tls"
 
 type Bridge struct {
-	rootDir string
-	storage repository.Storage
-	logger  *log.Logger
+	stateRoot string
+	storage   repository.Storage
+	logger    *log.Logger
 
 	mu               sync.Mutex
 	entries          map[modeluuid.UUID]*threadEntry
@@ -42,12 +42,12 @@ type threadEntry struct {
 	refs     int
 }
 
-func NewBridge(rootDir string, storage repository.Storage, logger *log.Logger) *Bridge {
+func NewBridge(stateRoot string, storage repository.Storage, logger *log.Logger) *Bridge {
 	return &Bridge{
-		rootDir: strings.TrimSpace(rootDir),
-		storage: storage,
-		logger:  logger,
-		entries: map[modeluuid.UUID]*threadEntry{},
+		stateRoot: strings.TrimSpace(stateRoot),
+		storage:   storage,
+		logger:    logger,
+		entries:   map[modeluuid.UUID]*threadEntry{},
 	}
 }
 
@@ -301,11 +301,11 @@ func (b *Bridge) register(threadID modeluuid.UUID, commands commandengine.Comman
 }
 
 func (b *Bridge) serverRoot() string {
-	rootDir := strings.TrimSpace(b.rootDir)
-	if rootDir == "" {
-		rootDir = "."
+	stateRoot := strings.TrimSpace(b.stateRoot)
+	if stateRoot == "" {
+		stateRoot = filepath.Join(".", ".ctgbot")
 	}
-	return filepath.Join(rootDir, ".ctgbot", "v5", "hostbridge")
+	return filepath.Join(stateRoot, "hostbridge")
 }
 
 func (b *Bridge) logf(format string, args ...any) {

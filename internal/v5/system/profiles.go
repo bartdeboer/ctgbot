@@ -9,7 +9,8 @@ import (
 	"github.com/bartdeboer/go-clistate"
 )
 
-const profileConfigKey = "v5.profiles"
+const profileConfigKey = "profiles"
+const legacyProfileConfigKey = "v5.profiles"
 
 type ProfileSettings struct {
 	Runtime  string `json:"runtime"`
@@ -22,6 +23,9 @@ func ConfiguredProfiles(store *clistate.Store) map[string]ProfileSettings {
 	}
 	var out map[string]ProfileSettings
 	store.GetStruct(profileConfigKey, &out)
+	if out == nil {
+		store.GetStruct(legacyProfileConfigKey, &out)
+	}
 	if out == nil {
 		return map[string]ProfileSettings{}
 	}

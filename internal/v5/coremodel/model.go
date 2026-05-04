@@ -56,8 +56,8 @@ type Thread struct {
 // registration of that plugin in the current ctgbot runtime.
 type Component struct {
 	ID        modeluuid.UUID `gorm:"primaryKey"`
-	Type      string         `gorm:"index;uniqueIndex:idx_v5_component_type_name"`
-	Name      string         `gorm:"uniqueIndex:idx_v5_component_type_name"`
+	Type      string         `gorm:"index;uniqueIndex:idx_component_type_name"`
+	Name      string         `gorm:"uniqueIndex:idx_component_type_name"`
 	Profile   string
 	Label     string
 	Enabled   bool
@@ -89,9 +89,9 @@ func (c Component) Ref() string {
 
 type ChatComponent struct {
 	ID             modeluuid.UUID    `gorm:"primaryKey"`
-	ChatID         modeluuid.UUID    `gorm:"index;uniqueIndex:idx_v5_chat_component_role"`
-	ComponentID    modeluuid.UUID    `gorm:"uniqueIndex:idx_v5_chat_component_role"`
-	Role           ChatComponentRole `gorm:"uniqueIndex:idx_v5_chat_component_role"`
+	ChatID         modeluuid.UUID    `gorm:"index;uniqueIndex:idx_chat_component_role"`
+	ComponentID    modeluuid.UUID    `gorm:"uniqueIndex:idx_chat_component_role"`
+	Role           ChatComponentRole `gorm:"uniqueIndex:idx_chat_component_role"`
 	ExternalChatID string
 	Enabled        bool
 
@@ -101,10 +101,10 @@ type ChatComponent struct {
 
 type ThreadComponentMapping struct {
 	ID                modeluuid.UUID `gorm:"primaryKey"`
-	ThreadID          modeluuid.UUID `gorm:"index;uniqueIndex:idx_v5_thread_component_binding"`
-	ChatID            modeluuid.UUID `gorm:"index;uniqueIndex:idx_v5_component_thread_mapping"`
-	ComponentID       modeluuid.UUID `gorm:"uniqueIndex:idx_v5_thread_component_binding;uniqueIndex:idx_v5_component_thread_mapping"`
-	ComponentThreadID string         `gorm:"index;uniqueIndex:idx_v5_component_thread_mapping"`
+	ThreadID          modeluuid.UUID `gorm:"index;uniqueIndex:idx_thread_component_binding"`
+	ChatID            modeluuid.UUID `gorm:"index;uniqueIndex:idx_component_thread_mapping"`
+	ComponentID       modeluuid.UUID `gorm:"uniqueIndex:idx_thread_component_binding;uniqueIndex:idx_component_thread_mapping"`
+	ComponentThreadID string         `gorm:"index;uniqueIndex:idx_component_thread_mapping"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

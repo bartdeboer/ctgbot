@@ -105,7 +105,6 @@ Broker does not own:
 
 What is intentionally unfinished:
 
-- `v5` CLI routes
 - real `local` runtime execution
-- moving hostbridge behind the runtime implementation
-- porting the full Telegram/Codex runtime path onto `v5`
+- privileged message-command actor resolution for operator-only commands like `/quit`
+- production rollout and migration from the older live runtime

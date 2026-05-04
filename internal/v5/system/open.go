@@ -22,7 +22,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const dbName = "ctgbot-v5.db"
+const dbName = "ctgbot.db"
 
 type System struct {
 	Storage  repository.Storage
@@ -78,7 +78,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 	if err != nil {
 		return nil, err
 	}
-	runtimes, err := buildRuntimes(rootDir, storage, sandboxengine.NewSandboxManager(logger), logger, profiles)
+	runtimes, err := buildRuntimes(rootDir, stateRoot, storage, sandboxengine.NewSandboxManager(logger), logger, profiles)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,7 @@ func New(storage repository.Storage, profiles map[string]v5runtime.Profile, runt
 func resolveStateRoot(rootDir string, stateRoot string) string {
 	stateRoot = strings.TrimSpace(stateRoot)
 	if stateRoot == "" {
-		return filepath.Join(rootDir, ".ctgbot", "v5")
+		return filepath.Join(rootDir, ".ctgbot")
 	}
 	if filepath.IsAbs(stateRoot) {
 		return filepath.Clean(stateRoot)
@@ -127,9 +127,9 @@ func resolveDBPath(rootDir string, stateRoot string, dbPath string) string {
 	return filepath.Clean(filepath.Join(rootDir, dbPath))
 }
 
-func buildRuntimes(rootDir string, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Factory, error) {
+func buildRuntimes(rootDir string, stateRoot string, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Factory, error) {
 	runtimes := map[string]v5runtime.Factory{}
-	bridge := v5hostbridgeserver.NewBridge(rootDir, storage, logger)
+	bridge := v5hostbridgeserver.NewBridge(stateRoot, storage, logger)
 	for name, profile := range profiles {
 		var runtime v5runtime.Factory
 		switch profile.Runtime {

@@ -33,7 +33,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 		b.Handle("v5 run", "Run the v5 ctgbot runtime", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 run", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "v5 state root (default: <cwd>/.ctgbot/v5)")
+			stateRoot := fs.String("state-root", "", "ctgbot state root (default: <cwd>/.ctgbot)")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
 			codexImage := fs.String("codex-image", v5codex.DefaultImage, "Codex runtime image")
@@ -154,7 +154,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 		b.Handle("v5 component register <component>", "Register a v5 component instance", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 component register", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "v5 state root")
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
 			codexImage := fs.String("codex-image", v5codex.DefaultImage, "Codex runtime image")
@@ -194,7 +194,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 		b.Handle("v5 component auth <component>", "Authenticate a v5 component instance", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 component auth", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "v5 state root")
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
 			image := fs.String("image", v5codex.DefaultImage, "auth runtime image")
@@ -219,7 +219,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 		b.Handle("v5 component list", "List registered v5 components", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 component list", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "v5 state root")
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
@@ -256,7 +256,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 		b.Handle("v5 chat create <label>", "Create a v5 chat", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 chat create", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "v5 state root")
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
@@ -285,7 +285,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 		b.Handle("v5 chat list", "List v5 chats", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 chat list", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "v5 state root")
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
@@ -312,7 +312,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 		b.Handle("v5 chat <chatID> component add <role> <component>", "Bind a registered component to a chat by role", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 chat component add", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "v5 state root")
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			externalChatID := fs.String("external-chat-id", "", "External provider chat id for source/relay bindings")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
@@ -356,7 +356,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 		b.Handle("v5 chat <chatID> component list", "List component bindings for a v5 chat", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 chat component list", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "v5 state root")
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
