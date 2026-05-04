@@ -86,9 +86,13 @@ func messageCommandActor(payload messenger.InboundPayload) commandengine.Actor {
 	if actorID == "" {
 		actorID = "user"
 	}
+	roles := []simplerbac.Role{simplerbac.RoleUser}
+	if payload.IsAdmin {
+		roles = append(roles, simplerbac.RoleRoot)
+	}
 	return commandengine.Actor{
 		ID:    actorID,
-		Roles: []simplerbac.Role{simplerbac.RoleUser},
+		Roles: roles,
 	}
 }
 

@@ -55,6 +55,25 @@ func TestGroupedRootConfigReadsRealShapedTelegramConfig(t *testing.T) {
 	}
 }
 
+func TestTelegramConfigReadsGroupedOperatorsAndToken(t *testing.T) {
+	cfg, store := newTestConfig(t)
+
+	if err := store.PersistStruct("telegram", map[string]any{
+		"token":     "grouped-secret",
+		"operators": []int64{13145044, 6789, 13145044, 0},
+	}); err != nil {
+		t.Fatalf("persist grouped telegram config: %v", err)
+	}
+
+	telegram := cfg.Telegram()
+	if got := telegram.Token(); got != "grouped-secret" {
+		t.Fatalf("Token() = %q, want grouped-secret", got)
+	}
+	if got := telegram.OperatorUserIDs(); len(got) != 2 || got[0] != 13145044 || got[1] != 6789 {
+		t.Fatalf("OperatorUserIDs() = %#v", got)
+	}
+}
+
 func TestDockerfileConfigDefaultsAndValidation(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 

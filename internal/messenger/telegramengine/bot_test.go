@@ -486,6 +486,60 @@ func TestHandleUpdateSerializedSavesDocumentUpload(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateSerializedMarksConfiguredOperatorAsAdmin(t *testing.T) {
+	root := t.TempDir()
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("chdir temp root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWD)
+	})
+
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	if err := store.PersistStruct("telegram", map[string]any{
+		"operators": []int64{13145044},
+	}); err != nil {
+		t.Fatalf("persist grouped telegram config: %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("new config: %v", err)
+	}
+
+	tb := &TelegramBot{Config: cfg}
+	var payload messenger.InboundPayload
+	u := dbmodel.TelegramUpdate{
+		ChatID:    42,
+		ThreadID:  7,
+		MessageID: 99,
+		UserID:    13145044,
+		Username:  "bartdeboer",
+		Text:      "/quit",
+	}
+
+	err = tb.handleUpdateSerialized(context.Background(), u, "/quit", func(ctx context.Context, update messenger.InboundPayload) (messenger.OutboundPayload, error) {
+		_ = ctx
+		payload = update
+		return messenger.OutboundPayload{}, nil
+	})
+	if err != nil {
+		t.Fatalf("handleUpdateSerialized returned error: %v", err)
+	}
+	if !payload.IsAdmin {
+		t.Fatalf("payload.IsAdmin = false, want true")
+	}
+	if got, want := payload.UserID, int64(13145044); got != want {
+		t.Fatalf("payload.UserID = %d, want %d", got, want)
+	}
+}
+
 func TestHandleUpdateSerializedDisabledChatSendsNoReply(t *testing.T) {
 	root := t.TempDir()
 	prevWD, err := os.Getwd()

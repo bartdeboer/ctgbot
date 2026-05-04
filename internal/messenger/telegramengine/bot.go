@@ -224,6 +224,15 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u dbmodel.Tel
 	if onUpdate == nil {
 		return fmt.Errorf("missing update callback")
 	}
+	operator := false
+	if tb.Config != nil && u.UserID != 0 {
+		for _, userID := range tb.Config.Telegram().OperatorUserIDs() {
+			if userID == u.UserID {
+				operator = true
+				break
+			}
+		}
+	}
 	update := messenger.InboundPayload{
 		ProviderType:      "telegram",
 		ProviderChatID:    fmt.Sprintf("%d", u.ChatID),
@@ -231,7 +240,7 @@ func (tb *TelegramBot) handleUpdateSerialized(ctx context.Context, u dbmodel.Tel
 		ChatLabel:         strings.TrimSpace(u.ChatTitle),
 		UserLabel:         u.UserLabel(),
 		UserID:            u.UserID,
-		IsAdmin:           tb.Config != nil && u.UserID != 0 && u.UserID == tb.Config.Telegram().AdminUserID(),
+		IsAdmin:           operator,
 		ProviderMessageID: fmt.Sprintf("%d", u.MessageID),
 		Text:              messenger.TextMessage{Text: text},
 	}

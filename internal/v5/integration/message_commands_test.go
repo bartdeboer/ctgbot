@@ -295,6 +295,102 @@ func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 	})
 }
 
+func TestV5ProcessQuitMessageAliasesAllowOperators(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		for _, text := range []string{"/quit", "/process quit"} {
+			system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
+				t,
+				root,
+				component.InboundEvent{
+					ExternalID: "operator-" + text,
+					Payload: messenger.InboundPayload{
+						ProviderType:      "mockmsg",
+						ProviderChatID:    "chat-1",
+						ProviderThreadID:  "provider-thread-1",
+						ProviderMessageID: "operator-" + text,
+						UserLabel:         "bart",
+						UserID:            13145044,
+						IsAdmin:           true,
+						Text:              messenger.TextMessage{Text: text},
+					},
+				},
+				func(registry *component.Registry) error {
+					return registry.Add(v5process.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+						_, _, _, _, _ = ctx, registration, runtime, home, storage
+						return v5process.New(&noopProcessActions{}), nil
+					})
+				},
+			)
+
+			messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "test")
+			if err != nil {
+				t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
+			}
+			agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "test")
+			if err != nil {
+				t.Fatalf("EnsureComponent(mockagent) error = %v", err)
+			}
+			commandRegistration, err := system.EnsureComponent(ctx, v5process.Type, "test")
+			if err != nil {
+				t.Fatalf("EnsureComponent(process) error = %v", err)
+			}
+
+			chat := &coremodel.Chat{Label: "team", Enabled: true}
+			if err := storage.Chats().Save(ctx, chat); err != nil {
+				t.Fatalf("Chats().Save() error = %v", err)
+			}
+			if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleSource, messengerRegistration.Ref(), "chat-1"); err != nil {
+				t.Fatalf("BindChatComponent(source) error = %v", err)
+			}
+			if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleRelay, messengerRegistration.Ref(), "chat-1"); err != nil {
+				t.Fatalf("BindChatComponent(relay) error = %v", err)
+			}
+			if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleAgent, agentRegistration.Ref(), ""); err != nil {
+				t.Fatalf("BindChatComponent(agent) error = %v", err)
+			}
+			if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleCommand, commandRegistration.Ref(), ""); err != nil {
+				t.Fatalf("BindChatComponent(command) error = %v", err)
+			}
+
+			b := v5broker.New(storage, system, nil)
+			if err := b.Run(ctx); err != nil {
+				t.Fatalf("Run(%q) error = %v", text, err)
+			}
+
+			if agentState.turnCalls != 0 {
+				t.Fatalf("agent turn calls for %q = %d, want 0", text, agentState.turnCalls)
+			}
+			if runtimeState.execCalls != 0 {
+				t.Fatalf("runtime exec calls for %q = %d, want 0", text, runtimeState.execCalls)
+			}
+			if got, want := len(messengerState.relayPayloads), 1; got != want {
+				t.Fatalf("relay payload count for %q = %d, want %d", text, got, want)
+			}
+			if got, want := messengerState.relayPayloads[0].Text.Text, "quit requested"; got != want {
+				t.Fatalf("relay text for %q = %q, want %q", text, got, want)
+			}
+			threads, err := storage.Threads().ListByChatID(ctx, chat.ID)
+			if err != nil {
+				t.Fatalf("Threads().ListByChatID(%q) error = %v", text, err)
+			}
+			if got, want := len(threads), 1; got != want {
+				t.Fatalf("thread count for %q = %d, want %d", text, got, want)
+			}
+			messages, err := storage.Messages().ListByThreadID(ctx, threads[0].ID)
+			if err != nil {
+				t.Fatalf("Messages().ListByThreadID(%q) error = %v", text, err)
+			}
+			if got, want := len(messages), 1; got != want {
+				t.Fatalf("stored messages for %q = %d, want %d", text, got, want)
+			}
+			if got, want := messages[0].Text, "quit requested"; got != want {
+				t.Fatalf("stored message text for %q = %q, want %q", text, got, want)
+			}
+		}
+	})
+}
+
 func newMessageCommandTestSystem(
 	t *testing.T,
 	root string,
