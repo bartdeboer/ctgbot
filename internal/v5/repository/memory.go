@@ -34,6 +34,24 @@ func NewMemory() *MemoryStorage {
 	}
 }
 
+func (s *MemoryStorage) Transaction(ctx context.Context, fn func(Storage) error) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	tx := s.cloneLocked()
+	s.mu.Unlock()
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.replaceLocked(tx)
+	return nil
+}
+
 func (s *MemoryStorage) Chats() ChatRepository                   { return memoryChats{s} }
 func (s *MemoryStorage) Threads() ThreadRepository               { return memoryThreads{s} }
 func (s *MemoryStorage) Components() ComponentRepository         { return memoryComponents{s} }
@@ -43,6 +61,45 @@ func (s *MemoryStorage) ThreadComponentMappings() ThreadComponentMappingReposito
 }
 func (s *MemoryStorage) Messages() MessageRepository   { return memoryMessages{s} }
 func (s *MemoryStorage) Artifacts() ArtifactRepository { return memoryArtifacts{s} }
+
+func (s *MemoryStorage) cloneLocked() *MemoryStorage {
+	clone := NewMemory()
+	for k, v := range s.chats {
+		clone.chats[k] = v
+	}
+	for k, v := range s.threads {
+		clone.threads[k] = v
+	}
+	for k, v := range s.components {
+		clone.components[k] = v
+	}
+	for k, v := range s.chatComponents {
+		clone.chatComponents[k] = v
+	}
+	for k, v := range s.threadComponentMaps {
+		clone.threadComponentMaps[k] = v
+	}
+	for k, v := range s.messages {
+		clone.messages[k] = v
+	}
+	for k, v := range s.artifacts {
+		clone.artifacts[k] = v
+	}
+	return clone
+}
+
+func (s *MemoryStorage) replaceLocked(next *MemoryStorage) {
+	if s == nil || next == nil {
+		return
+	}
+	s.chats = next.chats
+	s.threads = next.threads
+	s.components = next.components
+	s.chatComponents = next.chatComponents
+	s.threadComponentMaps = next.threadComponentMaps
+	s.messages = next.messages
+	s.artifacts = next.artifacts
+}
 
 type memoryChats struct{ s *MemoryStorage }
 

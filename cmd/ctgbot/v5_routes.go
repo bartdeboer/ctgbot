@@ -18,6 +18,7 @@ import (
 	v5broker "github.com/bartdeboer/ctgbot/internal/v5/broker"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	v5codex "github.com/bartdeboer/ctgbot/internal/v5/component/codex"
+	v5gmail "github.com/bartdeboer/ctgbot/internal/v5/component/gmail"
 	v5process "github.com/bartdeboer/ctgbot/internal/v5/component/process"
 	v5telegram "github.com/bartdeboer/ctgbot/internal/v5/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
@@ -449,6 +450,11 @@ func newV5Registry(ctx context.Context, system *v5system.System, telegramToken s
 	}
 	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
 		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.Logger, codexImage)
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(v5gmail.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		return v5gmail.New(ctx, registration, runtime, home, storage, nil)
 	}); err != nil {
 		return nil, err
 	}

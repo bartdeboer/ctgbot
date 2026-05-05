@@ -8,6 +8,7 @@ import (
 )
 
 type Storage interface {
+	Transaction(ctx context.Context, fn func(Storage) error) error
 	Chats() ChatRepository
 	Threads() ThreadRepository
 	Components() ComponentRepository
