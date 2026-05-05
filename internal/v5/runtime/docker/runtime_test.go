@@ -27,7 +27,7 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	runtime := factory.Bind(registration, home, "", nil).(*Runtime)
 
 	threadID := modeluuid.New()
-	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, nil)
+	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, nil, true)
 	if err != nil {
 		t.Fatalf("sandbox() error = %v", err)
 	}

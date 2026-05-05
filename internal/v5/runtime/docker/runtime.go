@@ -108,9 +108,8 @@ func (r *Runtime) Refresh(
 	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
-	commands commandengine.CommandExecutor,
 ) error {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, false)
 	if err != nil {
 		return err
 	}
@@ -122,9 +121,8 @@ func (r *Runtime) Start(
 	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
-	commands commandengine.CommandExecutor,
 ) (v5runtime.Status, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, true)
 	if err != nil {
 		return v5runtime.Status{}, err
 	}
@@ -139,9 +137,8 @@ func (r *Runtime) Stop(
 	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
-	commands commandengine.CommandExecutor,
 ) error {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, false)
 	if err != nil {
 		return err
 	}
@@ -153,9 +150,8 @@ func (r *Runtime) Interrupt(
 	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
-	commands commandengine.CommandExecutor,
 ) (bool, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, false)
 	if err != nil {
 		return false, err
 	}
@@ -170,9 +166,8 @@ func (r *Runtime) Status(
 	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
-	commands commandengine.CommandExecutor,
 ) (v5runtime.Status, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, false)
 	if err != nil {
 		return v5runtime.Status{}, err
 	}
@@ -190,7 +185,7 @@ func (r *Runtime) Exec(
 	name string,
 	args ...string,
 ) error {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands, true)
 	if err != nil {
 		return err
 	}
@@ -210,7 +205,7 @@ func (r *Runtime) CombinedOutput(
 	name string,
 	args ...string,
 ) ([]byte, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands, true)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +225,7 @@ func (r *Runtime) OpenHTTPRelayPort(
 	callbackPort int,
 	callbackTimeout time.Duration,
 ) (func(context.Context) error, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands, true)
 	if err != nil {
 		return nil, err
 	}
@@ -253,6 +248,7 @@ func (r *Runtime) sandbox(
 	workspacePath string,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
+	prepareBridge bool,
 ) (*sandboxengine.Sandbox, func(), error) {
 	if r == nil || r.sandboxes == nil {
 		return nil, nil, fmt.Errorf("missing docker runtime")
@@ -284,7 +280,7 @@ func (r *Runtime) sandbox(
 		{Source: workspaceHost, Target: workspaceRuntime},
 	}
 	cleanup := func() {}
-	if r.bridge != nil {
+	if prepareBridge && r.bridge != nil {
 		bridgeEnv, bridgeMount, unregister, err := r.bridge.BindThread(threadID, commands)
 		if err != nil {
 			return nil, nil, err

@@ -29,11 +29,10 @@ func (b *Broker) tryHandleMessageCommand(
 			ctx,
 			commandengine.Request{
 				Context: commandengine.Context{
-					Source:        commandengine.SourceMessage,
-					Actor:         messageCommandActor(event.Payload),
-					ChatID:        chat.ID,
-					ThreadID:      thread.ID,
-					AgentCommands: runtime.AgentCommands,
+					Source:   commandengine.SourceMessage,
+					Actor:    messageCommandActor(event.Payload),
+					ChatID:   chat.ID,
+					ThreadID: thread.ID,
 				},
 			},
 			argv,

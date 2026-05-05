@@ -28,7 +28,6 @@ type Context struct {
 	ChatID    modeluuid.UUID
 	ThreadID  modeluuid.UUID
 	SandboxID modeluuid.UUID
-	AgentCommands CommandExecutor
 }
 
 type Request struct {

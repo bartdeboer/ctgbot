@@ -127,12 +127,12 @@ func (r *fakeRuntime) RuntimeComponentHomePath() string {
 func (r *fakeRuntime) RuntimeWorkspacePath(workspacePath string) string {
 	return strings.TrimSpace(workspacePath)
 }
-func (r *fakeRuntime) Refresh(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *fakeRuntime) Refresh(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
+	_, _, _ = ctx, workspacePath, threadID
 	return nil
 }
-func (r *fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (v5runtime.Status, error) {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+	_, _, _ = ctx, workspacePath, threadID
 	return v5runtime.Status{
 		Name:                 "fake-runtime",
 		State:                "running",
@@ -140,16 +140,16 @@ func (r *fakeRuntime) Start(ctx context.Context, workspacePath string, threadID 
 		RuntimeWorkspacePath: strings.TrimSpace(workspacePath),
 	}, nil
 }
-func (r *fakeRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *fakeRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
+	_, _, _ = ctx, workspacePath, threadID
 	return nil
 }
-func (r *fakeRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (bool, error) {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *fakeRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (bool, error) {
+	_, _, _ = ctx, workspacePath, threadID
 	return false, nil
 }
-func (r *fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (v5runtime.Status, error) {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+	_, _, _ = ctx, workspacePath, threadID
 	return v5runtime.Status{
 		Name:                 "fake-runtime",
 		State:                "missing",

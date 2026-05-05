@@ -185,7 +185,7 @@ func (c *Component) refresh(ctx context.Context, req commandengine.Request) (com
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID, req.Context.AgentCommands); err != nil {
+	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "conversation runtime refreshed"}, nil
@@ -196,7 +196,7 @@ func (c *Component) start(ctx context.Context, req commandengine.Request) (comma
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	status, err := c.runtime.Start(ctx, workspacePath, thread.ID, req.Context.AgentCommands)
+	status, err := c.runtime.Start(ctx, workspacePath, thread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -208,7 +208,7 @@ func (c *Component) stop(ctx context.Context, req commandengine.Request) (comman
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.runtime.Stop(ctx, workspacePath, thread.ID, req.Context.AgentCommands); err != nil {
+	if err := c.runtime.Stop(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "container stopped"}, nil
@@ -219,7 +219,7 @@ func (c *Component) purge(ctx context.Context, req commandengine.Request) (comma
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID, req.Context.AgentCommands); err != nil {
+	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
 	if err := c.storage.ThreadComponentMappings().DeleteByThreadAndComponent(ctx, thread.ID, c.registration.ID); err != nil {
@@ -233,7 +233,7 @@ func (c *Component) interrupt(ctx context.Context, req commandengine.Request) (c
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	ok, err := c.runtime.Interrupt(ctx, workspacePath, thread.ID, req.Context.AgentCommands)
+	ok, err := c.runtime.Interrupt(ctx, workspacePath, thread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -248,7 +248,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	status, err := c.runtime.Status(ctx, workspacePath, thread.ID, req.Context.AgentCommands)
+	status, err := c.runtime.Status(ctx, workspacePath, thread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}

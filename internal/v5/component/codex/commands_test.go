@@ -35,25 +35,25 @@ func (r *testRuntime) RuntimeWorkspacePath(workspacePath string) string {
 	_ = workspacePath
 	return "/workspace"
 }
-func (r *testRuntime) Refresh(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *testRuntime) Refresh(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
+	_, _, _ = ctx, workspacePath, threadID
 	r.refreshCalls++
 	return nil
 }
-func (r *testRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (v5runtime.Status, error) {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *testRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+	_, _, _ = ctx, workspacePath, threadID
 	return r.status, nil
 }
-func (r *testRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *testRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
+	_, _, _ = ctx, workspacePath, threadID
 	return nil
 }
-func (r *testRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (bool, error) {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *testRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (bool, error) {
+	_, _, _ = ctx, workspacePath, threadID
 	return false, nil
 }
-func (r *testRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (v5runtime.Status, error) {
-	_, _, _, _ = ctx, workspacePath, threadID, commands
+func (r *testRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+	_, _, _ = ctx, workspacePath, threadID
 	return r.status, nil
 }
 func (r *testRuntime) Exec(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
