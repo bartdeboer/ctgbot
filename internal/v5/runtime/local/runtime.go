@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -18,14 +17,12 @@ import (
 type Factory struct {
 	rootDir        string
 	componentsRoot string
-	profile        v5runtime.Profile
 }
 
-func New(rootDir string, componentsRoot string, profile v5runtime.Profile) *Factory {
+func New(rootDir string, componentsRoot string) *Factory {
 	return &Factory{
 		rootDir:        strings.TrimSpace(rootDir),
 		componentsRoot: strings.TrimSpace(componentsRoot),
-		profile:        profile,
 	}
 }
 
@@ -33,16 +30,21 @@ func (f *Factory) Kind() string {
 	return "local"
 }
 
-func (f *Factory) Profile() v5runtime.Profile {
-	return f.profile
+func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+	hostPath := strings.TrimSpace(registration.HomePath)
+	if hostPath == "" {
+		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
+	}
+	return v5runtime.Home{Path: hostPath}
 }
 
-func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
-	hostPath := filepath.Join(f.componentsRoot, registration.Type, registration.Name)
-	return v5runtime.Home{
-		HostPath:      hostPath,
-		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
-	}
+func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+	_, _ = registration, home
+	return home.Path
+}
+
+func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
+	return strings.TrimSpace(workspacePath)
 }
 
 func (f *Factory) Bind(
@@ -54,7 +56,6 @@ func (f *Factory) Bind(
 	_ = registration
 	return &Runtime{
 		rootDir: f.rootDir,
-		profile: f.profile,
 		home:    home,
 		image:   strings.TrimSpace(image),
 		env:     append([]string{}, env...),
@@ -63,7 +64,6 @@ func (f *Factory) Bind(
 
 type Runtime struct {
 	rootDir string
-	profile v5runtime.Profile
 	home    v5runtime.Home
 	image   string
 	env     []string
@@ -73,27 +73,24 @@ func (r *Runtime) Kind() string {
 	return "local"
 }
 
-func (r *Runtime) Profile() v5runtime.Profile {
-	return r.profile
-}
-
 func (r *Runtime) ComponentHome() v5runtime.Home {
 	return r.home
 }
 
-func (r *Runtime) ThreadWorkspace(threadID modeluuid.UUID) (string, string, error) {
-	if threadID.IsNull() {
-		return "", "", fmt.Errorf("missing thread id")
+func (r *Runtime) RuntimeComponentHomePath() string {
+	if r == nil {
+		return ""
 	}
-	hostPath := filepath.Join(r.rootDir, ".ctgbot", "threads", threadID.String(), "workspace")
-	if err := os.MkdirAll(filepath.Join(hostPath, "inbox"), 0o755); err != nil {
-		return "", "", err
-	}
-	return hostPath, "/workspace", nil
+	return strings.TrimSpace(r.home.Path)
+}
+
+func (r *Runtime) RuntimeWorkspacePath(workspacePath string) string {
+	return strings.TrimSpace(workspacePath)
 }
 
 func (r *Runtime) Exec(
 	ctx context.Context,
+	workspacePath string,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 	stdout io.Writer,
@@ -101,31 +98,33 @@ func (r *Runtime) Exec(
 	name string,
 	args ...string,
 ) error {
-	_, _, _, _, _, _, _, _ = ctx, threadID, commands, stdout, stderr, name, args, r.image
+	_, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.image
 	_ = r.env
 	return fmt.Errorf("local runtime is not implemented yet")
 }
 
 func (r *Runtime) CombinedOutput(
 	ctx context.Context,
+	workspacePath string,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 	name string,
 	args ...string,
 ) ([]byte, error) {
-	_, _, _, _, _, _ = ctx, threadID, commands, name, args, r.image
+	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, name, args, r.image
 	_ = r.env
 	return nil, fmt.Errorf("local runtime is not implemented yet")
 }
 
 func (r *Runtime) OpenHTTPRelayPort(
 	ctx context.Context,
+	workspacePath string,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 	callbackPort int,
 	callbackTimeout time.Duration,
 ) (func(context.Context) error, error) {
-	_, _, _, _, _, _ = ctx, threadID, commands, callbackPort, callbackTimeout, r.image
+	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, callbackPort, callbackTimeout, r.image
 	_ = r.env
 	return nil, fmt.Errorf("local runtime is not implemented yet")
 }

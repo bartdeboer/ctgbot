@@ -24,55 +24,61 @@ import (
 )
 
 type fakeRuntime struct {
-	home    v5runtime.Home
-	profile v5runtime.Profile
-	rootDir string
+	home v5runtime.Home
+	kind string
 }
 
-func (r fakeRuntime) Kind() string               { return r.profile.Runtime }
-func (r fakeRuntime) Profile() v5runtime.Profile { return r.profile }
+func (r fakeRuntime) Kind() string { return r.kind }
 func (r fakeRuntime) ComponentHome() v5runtime.Home {
 	return r.home
 }
-func (r fakeRuntime) ThreadWorkspace(threadID modeluuid.UUID) (string, string, error) {
-	return filepath.Join(r.rootDir, ".ctgbot", "threads", threadID.String(), "workspace"), "/workspace", nil
+func (r fakeRuntime) RuntimeComponentHomePath() string {
+	return r.home.Path
 }
-
-func (r fakeRuntime) Exec(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
-	_, _, _, _, _, _, _ = ctx, threadID, commands, stdout, stderr, name, args
+func (r fakeRuntime) RuntimeWorkspacePath(workspacePath string) string {
+	return workspacePath
+}
+func (r fakeRuntime) Exec(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	_, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.kind
 	return fmt.Errorf("not implemented")
 }
 
-func (r fakeRuntime) CombinedOutput(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
-	_, _, _, _, _ = ctx, threadID, commands, name, args
+func (r fakeRuntime) CombinedOutput(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
+	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, name, args, r.kind
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (r fakeRuntime) OpenHTTPRelayPort(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, callbackPort int, callbackTimeout time.Duration) (func(context.Context) error, error) {
-	_, _, _, _, _ = ctx, threadID, commands, callbackPort, callbackTimeout
+func (r fakeRuntime) OpenHTTPRelayPort(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, callbackPort int, callbackTimeout time.Duration) (func(context.Context) error, error) {
+	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, callbackPort, callbackTimeout, r.kind
 	return nil, fmt.Errorf("not implemented")
 }
 
 type fakeFactory struct {
-	profile        v5runtime.Profile
+	kind           string
 	rootDir        string
 	componentsRoot string
 }
 
-func (f fakeFactory) Kind() string               { return f.profile.Runtime }
-func (f fakeFactory) Profile() v5runtime.Profile { return f.profile }
+func (f fakeFactory) Kind() string { return f.kind }
 func (f fakeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
-	return v5runtime.Home{
-		HostPath:      filepath.Join(f.componentsRoot, registration.Type, registration.Name),
-		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
+	hostPath := registration.HomePath
+	if hostPath == "" {
+		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
+	return v5runtime.Home{Path: hostPath}
+}
+func (f fakeFactory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+	_, _ = registration, home
+	return home.Path
+}
+func (f fakeFactory) RuntimeWorkspacePath(workspacePath string) string {
+	return workspacePath
 }
 func (f fakeFactory) Bind(registration coremodel.Component, home v5runtime.Home, image string, env []string) v5runtime.Runtime {
 	_, _, _ = registration, image, env
 	return fakeRuntime{
-		home:    home,
-		profile: f.profile,
-		rootDir: f.rootDir,
+		home: home,
+		kind: f.kind,
 	}
 }
 
@@ -165,13 +171,14 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage, record
 		}
 	}
 
-	profile := v5runtime.Profile{Name: "default", Runtime: "local", Root: filepath.Join(root, ".ctgbot", "profiles", "default")}
-	return v5system.New(
+	system := v5system.New(
 		storage,
-		map[string]v5runtime.Profile{"default": profile},
-		map[string]v5runtime.Factory{"default": fakeFactory{profile: profile, rootDir: root, componentsRoot: filepath.Join(root, ".ctgbot", "components")}},
+		map[string]v5system.Workspace{},
+		map[string]v5runtime.Factory{"local": fakeFactory{kind: "local", rootDir: root, componentsRoot: filepath.Join(root, ".ctgbot", "components")}},
 		registry,
 	)
+	system.StateRoot = filepath.Join(root, ".ctgbot")
+	return system
 }
 
 func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
@@ -186,8 +193,8 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
 		t.Fatal(err)
 	}
-	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Profile: "default", Enabled: true, IsDefault: true}
-	codex := &coremodel.Component{Type: "codex", Name: "codex", Profile: "default", Enabled: true, IsDefault: true}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
 	if err := storage.Components().Save(context.Background(), telegram); err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +246,7 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	if messengerRecorder.payloads[0].Text.Text != "working..." || messengerRecorder.payloads[1].Text.Text != "done" {
 		t.Fatalf("relay texts = %#v", messengerRecorder.payloads)
 	}
-	if agentRecorder.homes[0].HostPath == "" || !strings.Contains(agentRecorder.homes[0].HostPath, filepath.Join(".ctgbot", "components", "codex", "codex")) {
+	if agentRecorder.homes[0].Path == "" || !strings.Contains(agentRecorder.homes[0].Path, filepath.Join(".ctgbot", "components", "codex", "codex")) {
 		t.Fatalf("agent home = %#v", agentRecorder.homes[0])
 	}
 	messages, err := storage.Messages().ListByThreadID(context.Background(), outcome.Inbound.ThreadID)
@@ -263,8 +270,8 @@ func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T)
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
 		t.Fatal(err)
 	}
-	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Profile: "default", Enabled: true, IsDefault: true}
-	codex := &coremodel.Component{Type: "codex", Name: "codex", Profile: "default", Enabled: true, IsDefault: true}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
 	if err := storage.Components().Save(context.Background(), telegram); err != nil {
 		t.Fatal(err)
 	}
@@ -345,9 +352,9 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
 		t.Fatal(err)
 	}
-	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Profile: "default", Enabled: true, IsDefault: true}
-	codex := &coremodel.Component{Type: "codex", Name: "codex", Profile: "default", Enabled: true, IsDefault: true}
-	tools := &coremodel.Component{Type: "tools", Name: "tools", Profile: "default", Enabled: true, IsDefault: true}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	tools := &coremodel.Component{Type: "tools", Name: "tools", Runtime: "local", Enabled: true, IsDefault: true}
 	for _, registration := range []*coremodel.Component{telegram, codex, tools} {
 		if err := storage.Components().Save(context.Background(), registration); err != nil {
 			t.Fatal(err)
@@ -445,9 +452,9 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
 		t.Fatal(err)
 	}
-	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Profile: "default", Enabled: true, IsDefault: true}
-	codex := &coremodel.Component{Type: "codex", Name: "codex", Profile: "default", Enabled: true, IsDefault: true}
-	process := &coremodel.Component{Type: v5process.Type, Name: v5process.Type, Profile: "default", Enabled: true, IsDefault: true}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	process := &coremodel.Component{Type: v5process.Type, Name: v5process.Type, Runtime: "local", Enabled: true, IsDefault: true}
 	for _, registration := range []*coremodel.Component{telegram, codex, process} {
 		if err := storage.Components().Save(context.Background(), registration); err != nil {
 			t.Fatal(err)
@@ -543,8 +550,8 @@ func TestRunStartsEnabledInboundSources(t *testing.T) {
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
 		t.Fatal(err)
 	}
-	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Profile: "default", Enabled: true, IsDefault: true}
-	codex := &coremodel.Component{Type: "codex", Name: "codex", Profile: "default", Enabled: true, IsDefault: true}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
 	if err := storage.Components().Save(context.Background(), telegram); err != nil {
 		t.Fatal(err)
 	}

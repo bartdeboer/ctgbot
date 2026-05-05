@@ -8,7 +8,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	v5hostbridgeserver "github.com/bartdeboer/ctgbot/internal/v5/hostbridge/server"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
 
 func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
@@ -18,21 +17,17 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 		_ = bridge.Close()
 	})
 
-	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, bridge, v5runtime.Profile{
-		Name:    "test",
-		Runtime: "docker",
-		Root:    root,
-	})
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, bridge)
 	registration := coremodel.Component{
 		Type:    "mockagent",
 		Name:    "default",
-		Profile: "test",
+		Runtime: "docker",
 	}
 	home := factory.ComponentHome(registration)
 	runtime := factory.Bind(registration, home, "", nil).(*Runtime)
 
 	threadID := modeluuid.New()
-	sandbox, cleanup, err := runtime.sandbox(threadID, nil)
+	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, nil)
 	if err != nil {
 		t.Fatalf("sandbox() error = %v", err)
 	}

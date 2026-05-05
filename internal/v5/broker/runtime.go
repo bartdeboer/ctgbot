@@ -15,6 +15,11 @@ import (
 )
 
 func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*ChatRuntime, error) {
+	workspace, err := b.Resolver.ResolveChatWorkspace(ctx, chat)
+	if err != nil {
+		return nil, err
+	}
+
 	bindings, err := b.Storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
 	if err != nil {
 		return nil, err
@@ -72,6 +77,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 
 	return &ChatRuntime{
 		Chat:            chat,
+		Workspace:       workspace,
 		Bindings:        bindings,
 		Components:      components,
 		Agents:          agents,
@@ -172,6 +178,13 @@ func (r *agentTurnRuntime) StartChatAction(ctx context.Context, action messenger
 			stop()
 		}
 	}, nil
+}
+
+func (r *agentTurnRuntime) WorkspacePath() string {
+	if r == nil || r.runtime == nil {
+		return ""
+	}
+	return r.runtime.Workspace
 }
 
 func (r *agentTurnRuntime) ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool) {

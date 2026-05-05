@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -35,16 +36,12 @@ func (s *System) ResolveComponent(ctx context.Context, componentID modeluuid.UUI
 		return nil, fmt.Errorf("component not found: %s", componentID)
 	}
 
-	profile, err := s.Profile(registration.Profile)
-	if err != nil {
-		return nil, err
-	}
-	runtime, err := s.Runtime(profile.Name)
+	runtime, err := s.Runtime(registration.Runtime)
 	if err != nil {
 		return nil, err
 	}
 	home := runtime.ComponentHome(*registration)
-	if err := os.MkdirAll(home.HostPath, 0o755); err != nil {
+	if err := os.MkdirAll(home.Path, 0o755); err != nil {
 		return nil, err
 	}
 
@@ -61,37 +58,60 @@ func (s *System) ResolveComponent(ctx context.Context, componentID modeluuid.UUI
 	return loaded, nil
 }
 
-func (s *System) Profile(name string) (v5runtime.Profile, error) {
+func (s *System) Workspace(name string) (Workspace, error) {
 	if s == nil {
-		return v5runtime.Profile{}, fmt.Errorf("missing system")
+		return Workspace{}, fmt.Errorf("missing system")
 	}
 	name = strings.TrimSpace(name)
-	if name == "" {
-		name = "default"
-	}
-	profile, ok := s.Profiles[name]
+	workspace, ok := s.Workspaces[name]
 	if !ok {
-		return v5runtime.Profile{}, fmt.Errorf("profile not found: %s", name)
+		return Workspace{}, fmt.Errorf("workspace not found: %s", name)
 	}
-	return profile, nil
+	return workspace, nil
 }
 
-func (s *System) Runtime(profileName string) (v5runtime.Factory, error) {
+func (s *System) Runtime(runtimeKind string) (v5runtime.Factory, error) {
 	if s == nil {
 		return nil, fmt.Errorf("missing system")
 	}
-	profileName = strings.TrimSpace(profileName)
-	if profileName == "" {
-		profileName = "default"
+	runtimeKind = strings.TrimSpace(runtimeKind)
+	if runtimeKind == "" {
+		runtimeKind = "docker"
 	}
-	factory, ok := s.Runtimes[profileName]
+	factory, ok := s.Runtimes[runtimeKind]
 	if !ok {
-		return nil, fmt.Errorf("runtime not found for profile: %s", profileName)
+		return nil, fmt.Errorf("runtime not found: %s", runtimeKind)
 	}
 	return factory, nil
 }
 
-func (s *System) EnsureComponent(ctx context.Context, ref string, profileName string) (*coremodel.Component, error) {
+func (s *System) ResolveChatWorkspace(_ context.Context, chat coremodel.Chat) (string, error) {
+	if s == nil {
+		return "", fmt.Errorf("missing system")
+	}
+	workspaceName := strings.TrimSpace(chat.Workspace)
+	if workspaceName != "" {
+		workspace, err := s.Workspace(workspaceName)
+		if err != nil {
+			return "", err
+		}
+		hostPath := workspace.Path
+		if err := os.MkdirAll(filepath.Join(hostPath, "inbox"), 0o755); err != nil {
+			return "", err
+		}
+		return hostPath, nil
+	}
+	if chat.ID.IsNull() {
+		return "", fmt.Errorf("missing chat id")
+	}
+	hostPath := filepath.Join(s.StateRoot, "chats", chat.ID.String(), "workspace")
+	if err := os.MkdirAll(filepath.Join(hostPath, "inbox"), 0o755); err != nil {
+		return "", err
+	}
+	return hostPath, nil
+}
+
+func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind string, homePath string) (*coremodel.Component, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing system storage")
 	}
@@ -112,48 +132,80 @@ func (s *System) EnsureComponent(ctx context.Context, ref string, profileName st
 		return nil, err
 	}
 	if registration == nil {
-		if strings.TrimSpace(profileName) == "" {
-			profileName = "default"
+		runtimeKind = strings.TrimSpace(runtimeKind)
+		if runtimeKind == "" {
+			runtimeKind = "docker"
 		}
-		profile, err := s.Profile(profileName)
+		runtime, err := s.Runtime(runtimeKind)
 		if err != nil {
 			return nil, err
 		}
 		registration = &coremodel.Component{
 			Type:      parsed.Type,
 			Name:      parsed.ResolvedName(),
-			Profile:   profile.Name,
+			Runtime:   runtime.Kind(),
+			HomePath:  strings.TrimSpace(homePath),
 			Enabled:   true,
 			IsDefault: !parsed.ExplicitName || parsed.ResolvedName() == coremodel.DefaultComponentName(parsed.Type),
 		}
 	} else {
 		registration.Enabled = true
-		if strings.TrimSpace(profileName) != "" {
-			profile, err := s.Profile(profileName)
+		if strings.TrimSpace(runtimeKind) != "" {
+			runtime, err := s.Runtime(runtimeKind)
 			if err != nil {
 				return nil, err
 			}
-			registration.Profile = profile.Name
-		} else if strings.TrimSpace(registration.Profile) == "" {
-			registration.Profile = "default"
+			registration.Runtime = runtime.Kind()
+		} else if strings.TrimSpace(registration.Runtime) == "" {
+			registration.Runtime = "docker"
+		}
+		if strings.TrimSpace(homePath) != "" {
+			registration.HomePath = strings.TrimSpace(homePath)
 		}
 	}
 
 	if err := s.Storage.Components().Save(ctx, registration); err != nil {
 		return nil, err
 	}
-	runtime, err := s.Runtime(registration.Profile)
+	runtime, err := s.Runtime(registration.Runtime)
 	if err != nil {
 		return nil, err
 	}
 	home := runtime.ComponentHome(*registration)
-	if err := os.MkdirAll(home.HostPath, 0o755); err != nil {
+	if err := os.MkdirAll(home.Path, 0o755); err != nil {
 		return nil, err
 	}
 	s.loadedMu.Lock()
 	delete(s.loaded, registration.ID.String())
 	s.loadedMu.Unlock()
 	return registration, nil
+}
+
+func (s *System) SetChatWorkspace(ctx context.Context, chatID modeluuid.UUID, workspaceName string) (*coremodel.Chat, error) {
+	if s == nil || s.Storage == nil {
+		return nil, fmt.Errorf("missing system storage")
+	}
+	if chatID.IsNull() {
+		return nil, fmt.Errorf("missing chat id")
+	}
+	chat, err := s.Storage.Chats().GetByID(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	if chat == nil {
+		return nil, fmt.Errorf("chat not found: %s", chatID)
+	}
+	workspaceName = strings.TrimSpace(workspaceName)
+	if workspaceName != "" {
+		if _, err := s.Workspace(workspaceName); err != nil {
+			return nil, err
+		}
+	}
+	chat.Workspace = workspaceName
+	if err := s.Storage.Chats().Save(ctx, chat); err != nil {
+		return nil, err
+	}
+	return chat, nil
 }
 
 func (s *System) BindChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, ref string, externalChatID string) (*coremodel.ChatComponent, error) {

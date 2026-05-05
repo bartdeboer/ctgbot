@@ -23,7 +23,6 @@ import (
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
 	"github.com/bartdeboer/go-clir"
-	"github.com/bartdeboer/go-clistate"
 )
 
 func init() {
@@ -33,18 +32,6 @@ func init() {
 func TestV5HostbridgeFlow(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
-
-		store, err := clistate.NewCwd("ctgbot", "config")
-		if err != nil {
-			t.Fatalf("NewCwd() error = %v", err)
-		}
-		if _, err := v5system.SaveProfile(root, store, "test", "local", "profiles/test-root"); err != nil {
-			t.Fatalf("SaveProfile() error = %v", err)
-		}
-		profiles, err := v5system.LoadProfiles(root, store)
-		if err != nil {
-			t.Fatalf("LoadProfiles() error = %v", err)
-		}
 
 		storage := newSQLiteStorage(t)
 		bridge := v5hostbridgeserver.NewBridge(root, storage, nil)
@@ -97,31 +84,30 @@ func TestV5HostbridgeFlow(t *testing.T) {
 			t.Fatalf("register mockcmd: %v", err)
 		}
 
-		runtimes := map[string]v5runtime.Factory{}
-		for name, profile := range profiles {
-			runtimes[name] = fakeRuntimeFactory{
-				profile:        profile,
+		system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+			"local": fakeRuntimeFactory{
+				runtimeKind:    "local",
 				rootDir:        root,
 				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
 				state:          runtimeState,
-			}
-		}
-		system := v5system.New(storage, profiles, runtimes, registry)
+			},
+		}, registry)
+		system.StateRoot = filepath.Join(root, ".ctgbot")
 
-		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "test")
+		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
 		}
-		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "test")
+		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 		}
-		commandRegistration, err := system.EnsureComponent(ctx, "mockcmd", "test")
+		commandRegistration, err := system.EnsureComponent(ctx, "mockcmd", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockcmd) error = %v", err)
 		}
 
-		if err := system.AuthComponent(ctx, "mockagent", "", 0, 0, io.Discard, io.Discard); err != nil {
+		if err := system.AuthComponent(ctx, "mockagent", "", "", 0, 0, io.Discard, io.Discard); err != nil {
 			t.Fatalf("AuthComponent() error = %v", err)
 		}
 
@@ -191,18 +177,6 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 
-		store, err := clistate.NewCwd("ctgbot", "config")
-		if err != nil {
-			t.Fatalf("NewCwd() error = %v", err)
-		}
-		if _, err := v5system.SaveProfile(root, store, "test", "local", "profiles/test-root"); err != nil {
-			t.Fatalf("SaveProfile() error = %v", err)
-		}
-		profiles, err := v5system.LoadProfiles(root, store)
-		if err != nil {
-			t.Fatalf("LoadProfiles() error = %v", err)
-		}
-
 		storage := newSQLiteStorage(t)
 		bridge := v5hostbridgeserver.NewBridge(root, storage, nil)
 		t.Cleanup(func() {
@@ -247,27 +221,26 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 			t.Fatalf("register mockagent: %v", err)
 		}
 
-		runtimes := map[string]v5runtime.Factory{}
-		for name, profile := range profiles {
-			runtimes[name] = fakeRuntimeFactory{
-				profile:        profile,
+		system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+			"local": fakeRuntimeFactory{
+				runtimeKind:    "local",
 				rootDir:        root,
 				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
 				state:          runtimeState,
-			}
-		}
-		system := v5system.New(storage, profiles, runtimes, registry)
+			},
+		}, registry)
+		system.StateRoot = filepath.Join(root, ".ctgbot")
 
-		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "test")
+		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
 		}
-		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "test")
+		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 		}
 
-		if err := system.AuthComponent(ctx, "mockagent", "", 0, 0, io.Discard, io.Discard); err != nil {
+		if err := system.AuthComponent(ctx, "mockagent", "", "", 0, 0, io.Discard, io.Discard); err != nil {
 			t.Fatalf("AuthComponent() error = %v", err)
 		}
 
@@ -422,10 +395,10 @@ func (a *hostbridgeMediaAgent) Type() string {
 func (a *hostbridgeMediaAgent) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	_, _, _, _, _ = ctx, callbackPort, callbackTimeout, stdout, stderr
 	home := a.runtime.ComponentHome()
-	if err := os.MkdirAll(home.HostPath, 0o755); err != nil {
+	if err := os.MkdirAll(home.Path, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(home.HostPath, "auth.json"), []byte(`{"ok":true}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home.Path, "auth.json"), []byte(`{"ok":true}`), 0o600); err != nil {
 		return err
 	}
 	a.state.authCalls++
@@ -433,7 +406,7 @@ func (a *hostbridgeMediaAgent) Auth(ctx context.Context, callbackPort int, callb
 }
 
 func (a *hostbridgeMediaAgent) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
-	if _, err := os.Stat(filepath.Join(a.runtime.ComponentHome().HostPath, "auth.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(a.runtime.ComponentHome().Path, "auth.json")); err != nil {
 		return nil, fmt.Errorf("missing auth.json: %w", err)
 	}
 
@@ -467,10 +440,10 @@ func (a *hostbridgeAgent) Type() string {
 func (a *hostbridgeAgent) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	_, _, _, _, _ = ctx, callbackPort, callbackTimeout, stdout, stderr
 	home := a.runtime.ComponentHome()
-	if err := os.MkdirAll(home.HostPath, 0o755); err != nil {
+	if err := os.MkdirAll(home.Path, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(home.HostPath, "auth.json"), []byte(`{"ok":true}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home.Path, "auth.json"), []byte(`{"ok":true}`), 0o600); err != nil {
 		return err
 	}
 	a.state.authCalls++
@@ -478,7 +451,7 @@ func (a *hostbridgeAgent) Auth(ctx context.Context, callbackPort int, callbackTi
 }
 
 func (a *hostbridgeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
-	if _, err := os.Stat(filepath.Join(a.runtime.ComponentHome().HostPath, "auth.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(a.runtime.ComponentHome().Path, "auth.json")); err != nil {
 		return nil, fmt.Errorf("missing auth.json: %w", err)
 	}
 

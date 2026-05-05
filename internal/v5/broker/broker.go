@@ -16,6 +16,7 @@ import (
 
 type InstanceResolver interface {
 	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
+	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
 }
 
 type Broker struct {
@@ -33,6 +34,7 @@ type EventOutcome struct {
 
 type ChatRuntime struct {
 	Chat            coremodel.Chat
+	Workspace       string
 	Bindings        []coremodel.ChatComponent
 	Components      []*component.Loaded
 	Agents          []AgentBinding

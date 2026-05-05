@@ -25,10 +25,10 @@ import (
 const dbName = "ctgbot.db"
 
 type System struct {
-	Storage  repository.Storage
-	Registry *component.Registry
-	Profiles map[string]v5runtime.Profile
-	Runtimes map[string]v5runtime.Factory
+	Storage    repository.Storage
+	Registry   *component.Registry
+	Workspaces map[string]Workspace
+	Runtimes   map[string]v5runtime.Factory
 
 	RootDir   string
 	StateRoot string
@@ -74,34 +74,34 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 		return nil, err
 	}
 
-	profiles, err := LoadProfiles(rootDir, store)
+	workspaces, err := LoadWorkspaces(rootDir, store)
 	if err != nil {
 		return nil, err
 	}
-	runtimes, err := buildRuntimes(rootDir, stateRoot, storage, sandboxengine.NewSandboxManager(logger), logger, profiles)
+	runtimes, err := buildRuntimes(rootDir, stateRoot, storage, sandboxengine.NewSandboxManager(logger), logger)
 	if err != nil {
 		return nil, err
 	}
 
 	return &System{
-		Storage:   storage,
-		Profiles:  profiles,
-		Runtimes:  runtimes,
-		RootDir:   rootDir,
-		StateRoot: stateRoot,
-		DBPath:    dbPath,
-		Config:    cfg,
-		Logger:    logger,
-		DB:        db,
+		Storage:    storage,
+		Workspaces: workspaces,
+		Runtimes:   runtimes,
+		RootDir:    rootDir,
+		StateRoot:  stateRoot,
+		DBPath:     dbPath,
+		Config:     cfg,
+		Logger:     logger,
+		DB:         db,
 	}, nil
 }
 
-func New(storage repository.Storage, profiles map[string]v5runtime.Profile, runtimes map[string]v5runtime.Factory, registry *component.Registry) *System {
+func New(storage repository.Storage, workspaces map[string]Workspace, runtimes map[string]v5runtime.Factory, registry *component.Registry) *System {
 	return &System{
-		Storage:  storage,
-		Profiles: profiles,
-		Runtimes: runtimes,
-		Registry: registry,
+		Storage:    storage,
+		Workspaces: workspaces,
+		Runtimes:   runtimes,
+		Registry:   registry,
 	}
 }
 
@@ -131,21 +131,21 @@ func resolveComponentsRoot(stateRoot string) string {
 	return filepath.Join(strings.TrimSpace(stateRoot), "components")
 }
 
-func buildRuntimes(rootDir string, stateRoot string, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger, profiles map[string]v5runtime.Profile) (map[string]v5runtime.Factory, error) {
+func buildRuntimes(rootDir string, stateRoot string, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger) (map[string]v5runtime.Factory, error) {
 	runtimes := map[string]v5runtime.Factory{}
 	bridge := v5hostbridgeserver.NewBridge(stateRoot, storage, logger)
 	componentsRoot := resolveComponentsRoot(stateRoot)
-	for name, profile := range profiles {
+	for _, runtimeKind := range []string{"docker", "local"} {
 		var runtime v5runtime.Factory
-		switch profile.Runtime {
+		switch runtimeKind {
 		case "docker":
-			runtime = v5docker.New(rootDir, componentsRoot, sandboxes, bridge, profile)
+			runtime = v5docker.New(rootDir, componentsRoot, sandboxes, bridge)
 		case "local":
-			runtime = v5local.New(rootDir, componentsRoot, profile)
+			runtime = v5local.New(rootDir, componentsRoot)
 		default:
-			return nil, fmt.Errorf("unsupported runtime %q for profile %s", profile.Runtime, name)
+			return nil, fmt.Errorf("unsupported runtime %q", runtimeKind)
 		}
-		runtimes[name] = runtime
+		runtimes[runtimeKind] = runtime
 	}
 	return runtimes, nil
 }

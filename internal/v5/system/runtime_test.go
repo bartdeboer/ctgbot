@@ -17,61 +17,60 @@ import (
 )
 
 type fakeRuntime struct {
-	home    v5runtime.Home
-	profile v5runtime.Profile
-	rootDir string
+	home v5runtime.Home
+	kind string
 }
 
-func (r fakeRuntime) Kind() string               { return r.profile.Runtime }
-func (r fakeRuntime) Profile() v5runtime.Profile { return r.profile }
+func (r fakeRuntime) Kind() string { return r.kind }
 func (r fakeRuntime) ComponentHome() v5runtime.Home {
 	return r.home
 }
-func (r fakeRuntime) ThreadWorkspace(threadID modeluuid.UUID) (string, string, error) {
-	return filepath.Join(r.rootDir, ".ctgbot", "threads", threadID.String(), "workspace"), "/workspace", nil
+func (r fakeRuntime) RuntimeComponentHomePath() string {
+	return r.home.Path
 }
-
-func (r fakeRuntime) Exec(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
-	_, _, _, _, _, _, _ = ctx, threadID, commands, stdout, stderr, name, args
+func (r fakeRuntime) RuntimeWorkspacePath(workspacePath string) string {
+	return workspacePath
+}
+func (r fakeRuntime) Exec(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	_, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.kind
 	return fmt.Errorf("not implemented")
 }
-
-func (r fakeRuntime) CombinedOutput(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
-	_, _, _, _, _ = ctx, threadID, commands, name, args
+func (r fakeRuntime) CombinedOutput(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
+	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, name, args, r.kind
 	return nil, fmt.Errorf("not implemented")
 }
-
-func (r fakeRuntime) OpenHTTPRelayPort(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, callbackPort int, callbackTimeout time.Duration) (func(context.Context) error, error) {
-	_, _, _, _, _ = ctx, threadID, commands, callbackPort, callbackTimeout
+func (r fakeRuntime) OpenHTTPRelayPort(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, callbackPort int, callbackTimeout time.Duration) (func(context.Context) error, error) {
+	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, callbackPort, callbackTimeout, r.kind
 	return nil, fmt.Errorf("not implemented")
 }
 
 type fakeFactory struct {
-	profile        v5runtime.Profile
-	rootDir        string
+	kind           string
 	componentsRoot string
 }
 
-func (f fakeFactory) Kind() string               { return f.profile.Runtime }
-func (f fakeFactory) Profile() v5runtime.Profile { return f.profile }
+func (f fakeFactory) Kind() string { return f.kind }
 func (f fakeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
-	return v5runtime.Home{
-		HostPath:      filepath.Join(f.componentsRoot, registration.Type, registration.Name),
-		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
+	hostPath := registration.HomePath
+	if hostPath == "" {
+		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
+	return v5runtime.Home{Path: hostPath}
+}
+func (f fakeFactory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+	_, _ = registration, home
+	return home.Path
+}
+func (f fakeFactory) RuntimeWorkspacePath(workspacePath string) string {
+	return workspacePath
 }
 func (f fakeFactory) Bind(registration coremodel.Component, home v5runtime.Home, image string, env []string) v5runtime.Runtime {
 	_, _, _ = registration, image, env
-	return fakeRuntime{
-		home:    home,
-		profile: f.profile,
-		rootDir: f.rootDir,
-	}
+	return fakeRuntime{home: home, kind: f.kind}
 }
 
 type fakeResolved struct {
 	componentType string
-	profileName   string
 	runtimeKind   string
 }
 
@@ -102,7 +101,7 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage) *Syste
 	registry := component.NewRegistry()
 	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
 		_, _, _ = ctx, home, storage
-		return fakeResolved{componentType: registration.Type, profileName: runtime.Profile().Name, runtimeKind: runtime.Kind()}, nil
+		return fakeResolved{componentType: registration.Type, runtimeKind: runtime.Kind()}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -116,20 +115,20 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage) *Syste
 		t.Fatal(err)
 	}
 
-	profiles := map[string]v5runtime.Profile{
-		"default": {Name: "default", Runtime: "local", Root: filepath.Join(root, ".ctgbot", "profiles", "default")},
-		"work":    {Name: "work", Runtime: "local", Root: filepath.Join(root, ".ctgbot", "profiles", "work")},
+	workspaces := map[string]Workspace{
+		"work": {Name: "work", Path: filepath.Join(root, "worktree")},
 	}
 	runtimes := map[string]v5runtime.Factory{
-		"default": fakeFactory{profile: profiles["default"], rootDir: root, componentsRoot: filepath.Join(root, ".ctgbot", "components")},
-		"work":    fakeFactory{profile: profiles["work"], rootDir: root, componentsRoot: filepath.Join(root, ".ctgbot", "components")},
+		"docker": fakeFactory{kind: "docker", componentsRoot: filepath.Join(root, ".ctgbot", "components")},
+		"local":  fakeFactory{kind: "local", componentsRoot: filepath.Join(root, ".ctgbot", "components")},
 	}
-	system := New(storage, profiles, runtimes, registry)
+	system := New(storage, workspaces, runtimes, registry)
+	system.StateRoot = filepath.Join(root, ".ctgbot")
 	system.loaded = map[string]*component.Loaded{}
 	return system
 }
 
-func TestResolveComponentUsesProfileRuntimeAndHome(t *testing.T) {
+func TestResolveComponentUsesRuntimeAndHome(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	system := newTestSystem(t, root, storage)
@@ -137,7 +136,7 @@ func TestResolveComponentUsesProfileRuntimeAndHome(t *testing.T) {
 	registration := &coremodel.Component{
 		Type:      "telegram",
 		Name:      "telegram",
-		Profile:   "default",
+		Runtime:   "local",
 		Enabled:   true,
 		IsDefault: true,
 	}
@@ -153,18 +152,15 @@ func TestResolveComponentUsesProfileRuntimeAndHome(t *testing.T) {
 	if !ok {
 		t.Fatalf("resolved component = %#v", loaded.Component)
 	}
-	if resolved.profileName != "default" {
-		t.Fatalf("profile name = %q, want default", resolved.profileName)
-	}
 	if resolved.runtimeKind != "local" {
 		t.Fatalf("runtime kind = %q, want local", resolved.runtimeKind)
 	}
-	if got, want := loaded.Home.HostPath, filepath.Join(root, ".ctgbot", "components", "telegram", "telegram"); got != want {
-		t.Fatalf("HostPath = %q, want %q", got, want)
+	if got, want := loaded.Home.Path, filepath.Join(root, ".ctgbot", "components", "telegram", "telegram"); got != want {
+		t.Fatalf("Path = %q, want %q", got, want)
 	}
 }
 
-func TestEnsureComponentPreservesExistingProfileWhenBlank(t *testing.T) {
+func TestEnsureComponentPreservesExistingRuntimeWhenBlank(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	system := newTestSystem(t, root, storage)
@@ -172,19 +168,49 @@ func TestEnsureComponentPreservesExistingProfileWhenBlank(t *testing.T) {
 	registration := &coremodel.Component{
 		Type:    "telegram",
 		Name:    "telegram",
-		Profile: "work",
+		Runtime: "local",
 		Enabled: true,
 	}
 	if err := storage.Components().Save(context.Background(), registration); err != nil {
 		t.Fatal(err)
 	}
 
-	updated, err := system.EnsureComponent(context.Background(), "telegram", "")
+	updated, err := system.EnsureComponent(context.Background(), "telegram", "", "")
 	if err != nil {
 		t.Fatalf("EnsureComponent() error = %v", err)
 	}
-	if updated.Profile != "work" {
-		t.Fatalf("Profile = %q, want work", updated.Profile)
+	if updated.Runtime != "local" {
+		t.Fatalf("Runtime = %q, want local", updated.Runtime)
+	}
+}
+
+func TestResolveChatWorkspaceUsesConfiguredWorkspace(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	system := newTestSystem(t, root, storage)
+	chat := coremodel.Chat{ID: modeluuid.New(), Label: "work", Workspace: "work", Enabled: true}
+
+	workspace, err := system.ResolveChatWorkspace(context.Background(), chat)
+	if err != nil {
+		t.Fatalf("ResolveChatWorkspace() error = %v", err)
+	}
+	if got, want := workspace, filepath.Join(root, "worktree"); got != want {
+		t.Fatalf("workspace = %q, want %q", got, want)
+	}
+}
+
+func TestResolveChatWorkspaceFallsBackToChatLocalWorkspace(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	system := newTestSystem(t, root, storage)
+	chat := coremodel.Chat{ID: modeluuid.New(), Label: "scratch", Enabled: true}
+
+	workspace, err := system.ResolveChatWorkspace(context.Background(), chat)
+	if err != nil {
+		t.Fatalf("ResolveChatWorkspace() error = %v", err)
+	}
+	if got, want := workspace, filepath.Join(root, ".ctgbot", "chats", chat.ID.String(), "workspace"); got != want {
+		t.Fatalf("workspace = %q, want %q", got, want)
 	}
 }
 
@@ -193,10 +219,10 @@ func TestAuthComponentUsesResolvedHomeAndRegistration(t *testing.T) {
 	storage := repository.NewMemory()
 	system := newTestSystem(t, root, storage)
 
-	if _, err := system.EnsureComponent(context.Background(), "gmail/work", "work"); err != nil {
+	if _, err := system.EnsureComponent(context.Background(), "gmail/work", "local", ""); err != nil {
 		t.Fatalf("EnsureComponent() error = %v", err)
 	}
-	if err := system.AuthComponent(context.Background(), "gmail/work", "", 9090, 2*time.Minute, io.Discard, io.Discard); err != nil {
+	if err := system.AuthComponent(context.Background(), "gmail/work", "", "", 9090, 2*time.Minute, io.Discard, io.Discard); err != nil {
 		t.Fatalf("AuthComponent() error = %v", err)
 	}
 
@@ -214,7 +240,7 @@ func TestAuthComponentUsesResolvedHomeAndRegistration(t *testing.T) {
 	if auth.last.registration.Ref() != "gmail/work" {
 		t.Fatalf("auth registration = %q", auth.last.registration.Ref())
 	}
-	if got, want := auth.last.home.HostPath, filepath.Join(root, ".ctgbot", "components", "gmail", "work"); got != want {
+	if got, want := auth.last.home.Path, filepath.Join(root, ".ctgbot", "components", "gmail", "work"); got != want {
 		t.Fatalf("auth home = %q, want %q", got, want)
 	}
 }

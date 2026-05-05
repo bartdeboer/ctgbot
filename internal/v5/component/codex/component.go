@@ -23,10 +23,9 @@ import (
 )
 
 const (
-	Type                 = "codex"
-	DefaultImage         = "ctgbot-codex:latest"
-	DefaultCallbackPort  = 1455
-	DefaultContainerHome = "/profile"
+	Type                = "codex"
+	DefaultImage        = "ctgbot-codex:latest"
+	DefaultCallbackPort = 1455
 )
 
 func New(
@@ -46,14 +45,14 @@ func New(
 	if runtimeFactory == nil {
 		return nil, fmt.Errorf("missing runtime factory")
 	}
-	containerHome := resolveContainerHome(home.ContainerPath)
+	runtimeHomePath := runtimeFactory.RuntimeComponentHomePath(registration, home)
 	runtime := runtimeFactory.Bind(
 		registration,
 		home,
 		componentImage(image),
 		[]string{
-			"HOME=" + containerHome,
-			"CODEX_HOME=" + containerHome,
+			"HOME=" + runtimeHomePath,
+			"CODEX_HOME=" + runtimeHomePath,
 		},
 	)
 	return &Component{
@@ -87,12 +86,13 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 		return fmt.Errorf("missing component runtime")
 	}
 	home := c.runtime.ComponentHome()
-	containerHome := resolveContainerHome(home.ContainerPath)
-	if err := codexengine.PrepareConversationHome(c.config, home.HostPath, containerHome, containerHome, ""); err != nil {
+	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
+	if err := codexengine.PrepareConversationHome(c.config, home.Path, runtimeHomePath, runtimeHomePath, ""); err != nil {
 		return err
 	}
 	closeRelay, err := c.runtime.OpenHTTPRelayPort(
 		ctx,
+		"",
 		modeluuid.UUID{},
 		nil,
 		callbackPortOrDefault(callbackPort),
@@ -104,6 +104,7 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 	defer func() { _ = closeRelay(context.Background()) }()
 	return c.runtime.Exec(
 		ctx,
+		"",
 		modeluuid.UUID{},
 		nil,
 		writerOrDiscard(stdout),
@@ -126,16 +127,14 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}
 
 	home := c.runtime.ComponentHome()
-	containerHome := resolveContainerHome(home.ContainerPath)
-	_, containerWorkspace, err := c.runtime.ThreadWorkspace(turn.Thread.ID)
+	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
+	workspacePath := turn.Runtime.WorkspacePath()
+	runtimeWorkspacePath := c.runtime.RuntimeWorkspacePath(workspacePath)
+	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath)
 	if err != nil {
 		return nil, err
 	}
-	bootstrapText, err := codexBootstrap(containerWorkspace, containerHome)
-	if err != nil {
-		return nil, err
-	}
-	if err := codexengine.PrepareConversationHome(c.config, home.HostPath, containerHome, containerWorkspace, bootstrapText); err != nil {
+	if err := codexengine.PrepareConversationHome(c.config, home.Path, runtimeHomePath, runtimeWorkspacePath, bootstrapText); err != nil {
 		return nil, err
 	}
 
@@ -154,10 +153,10 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}
 
 	run := commandRuntime{
-		runtime:   c.runtime,
-		threadID:  turn.Thread.ID,
-		workspace: containerWorkspace,
-		commands:  turn.Runtime.Commands(),
+		runtime:       c.runtime,
+		threadID:      turn.Thread.ID,
+		workspacePath: workspacePath,
+		commands:      turn.Runtime.Commands(),
 	}
 	result, err := c.executor.HandleRuntimeTurn(ctx, run, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, agentcore.TurnOptions{})
 	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && err == nil {
@@ -197,19 +196,20 @@ type outputHandler struct {
 }
 
 type commandRuntime struct {
-	runtime   v5runtime.Runtime
-	threadID  modeluuid.UUID
-	workspace string
-	commands  commandengine.CommandExecutor
+	runtime       v5runtime.Runtime
+	threadID      modeluuid.UUID
+	workspacePath string
+	commands      commandengine.CommandExecutor
 }
 
 func (r commandRuntime) Workspace() string {
-	return r.workspace
+	return r.runtime.RuntimeWorkspacePath(r.workspacePath)
 }
 
 func (r commandRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	return r.runtime.Exec(
 		ctx,
+		r.workspacePath,
 		r.threadID,
 		r.commands,
 		stdout,
@@ -222,6 +222,7 @@ func (r commandRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.Wr
 func (r commandRuntime) CombinedOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return r.runtime.CombinedOutput(
 		ctx,
+		r.workspacePath,
 		r.threadID,
 		r.commands,
 		name,
@@ -261,14 +262,6 @@ func componentImage(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return DefaultImage
-	}
-	return value
-}
-
-func resolveContainerHome(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return DefaultContainerHome
 	}
 	return value
 }

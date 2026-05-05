@@ -13,7 +13,7 @@ import (
 	"github.com/bartdeboer/go-clistate"
 )
 
-func TestV5ProfileSetAndComponentRegister(t *testing.T) {
+func TestV5WorkspaceSetAndComponentRegister(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		store, err := clistate.NewCwd("ctgbot", "config")
 		if err != nil {
@@ -23,21 +23,21 @@ func TestV5ProfileSetAndComponentRegister(t *testing.T) {
 		router := clir.New()
 		registerV5Routes(router, store)
 
-		profileOutput := captureStdout(t, func() {
-			if err := router.Run(context.Background(), []string{"v5", "profile", "set", "work", "--runtime", "local", "--home-path", "profiles/work-root"}); err != nil {
-				t.Fatalf("profile set: %v", err)
+		workspaceOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"v5", "workspace", "set", "work", "--path", "workspaces/work-root"}); err != nil {
+				t.Fatalf("workspace set: %v", err)
 			}
 		})
-		if !strings.Contains(profileOutput, "profile saved") || !strings.Contains(profileOutput, "runtime: local") {
-			t.Fatalf("unexpected profile output: %q", profileOutput)
+		if !strings.Contains(workspaceOutput, "workspace saved") || !strings.Contains(workspaceOutput, "workspaces/work-root") {
+			t.Fatalf("unexpected workspace output: %q", workspaceOutput)
 		}
 
 		registerOutput := captureStdout(t, func() {
-			if err := router.Run(context.Background(), []string{"v5", "component", "register", "codex/work", "--profile", "work"}); err != nil {
+			if err := router.Run(context.Background(), []string{"v5", "component", "register", "codex/work", "--runtime", "local"}); err != nil {
 				t.Fatalf("component register: %v", err)
 			}
 		})
-		if !strings.Contains(registerOutput, "component registered") || !strings.Contains(registerOutput, "profile: work") || !strings.Contains(registerOutput, "runtime: local") {
+		if !strings.Contains(registerOutput, "component registered") || !strings.Contains(registerOutput, "runtime: local") {
 			t.Fatalf("unexpected register output: %q", registerOutput)
 		}
 
@@ -55,8 +55,8 @@ func TestV5ProfileSetAndComponentRegister(t *testing.T) {
 		if componentRow == nil {
 			t.Fatal("expected registered component")
 		}
-		if componentRow.Profile != "work" {
-			t.Fatalf("Profile = %q, want work", componentRow.Profile)
+		if componentRow.Runtime != "local" {
+			t.Fatalf("Runtime = %q, want local", componentRow.Runtime)
 		}
 	})
 }
@@ -72,7 +72,7 @@ func TestV5ChatComponentAddBindsExternalChatID(t *testing.T) {
 		router := clir.New()
 		registerV5Routes(router, store)
 
-		if err := router.Run(context.Background(), []string{"v5", "component", "register", "telegram", "--profile", "default"}); err != nil {
+		if err := router.Run(context.Background(), []string{"v5", "component", "register", "telegram", "--runtime", "local"}); err != nil {
 			t.Fatalf("component register: %v", err)
 		}
 		if err := router.Run(context.Background(), []string{"v5", "chat", "create", "team"}); err != nil {

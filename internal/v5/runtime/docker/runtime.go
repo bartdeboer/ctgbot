@@ -22,16 +22,14 @@ const dockerDefaultImage = "ctgbot-codex:latest"
 type Factory struct {
 	rootDir        string
 	componentsRoot string
-	profile        v5runtime.Profile
 	sandboxes      sandboxengine.RuntimeManager
 	bridge         *v5hostbridgeserver.Bridge
 }
 
-func New(rootDir string, componentsRoot string, sandboxes sandboxengine.RuntimeManager, bridge *v5hostbridgeserver.Bridge, profile v5runtime.Profile) *Factory {
+func New(rootDir string, componentsRoot string, sandboxes sandboxengine.RuntimeManager, bridge *v5hostbridgeserver.Bridge) *Factory {
 	return &Factory{
 		rootDir:        strings.TrimSpace(rootDir),
 		componentsRoot: strings.TrimSpace(componentsRoot),
-		profile:        profile,
 		sandboxes:      sandboxes,
 		bridge:         bridge,
 	}
@@ -41,16 +39,22 @@ func (f *Factory) Kind() string {
 	return "docker"
 }
 
-func (f *Factory) Profile() v5runtime.Profile {
-	return f.profile
+func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+	hostPath := strings.TrimSpace(registration.HomePath)
+	if hostPath == "" {
+		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
+	}
+	return v5runtime.Home{Path: hostPath}
 }
 
-func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
-	hostPath := filepath.Join(f.componentsRoot, registration.Type, registration.Name)
-	return v5runtime.Home{
-		HostPath:      hostPath,
-		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
-	}
+func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+	_ = home
+	return componentRuntimeHomePath(registration)
+}
+
+func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
+	_ = workspacePath
+	return v5runtime.DefaultWorkspaceRuntimePath
 }
 
 func (f *Factory) Bind(
@@ -61,7 +65,6 @@ func (f *Factory) Bind(
 ) v5runtime.Runtime {
 	return &Runtime{
 		rootDir:      f.rootDir,
-		profile:      f.profile,
 		sandboxes:    f.sandboxes,
 		bridge:       f.bridge,
 		registration: registration,
@@ -73,7 +76,6 @@ func (f *Factory) Bind(
 
 type Runtime struct {
 	rootDir      string
-	profile      v5runtime.Profile
 	sandboxes    sandboxengine.RuntimeManager
 	bridge       *v5hostbridgeserver.Bridge
 	registration coremodel.Component
@@ -86,27 +88,25 @@ func (r *Runtime) Kind() string {
 	return "docker"
 }
 
-func (r *Runtime) Profile() v5runtime.Profile {
-	return r.profile
-}
-
 func (r *Runtime) ComponentHome() v5runtime.Home {
 	return r.home
 }
 
-func (r *Runtime) ThreadWorkspace(threadID modeluuid.UUID) (string, string, error) {
-	if threadID.IsNull() {
-		return "", "", fmt.Errorf("missing thread id")
+func (r *Runtime) RuntimeComponentHomePath() string {
+	if r == nil {
+		return componentRuntimeHomePath(coremodel.Component{})
 	}
-	hostPath := filepath.Join(r.rootDir, ".ctgbot", "threads", threadID.String(), "workspace")
-	if err := os.MkdirAll(filepath.Join(hostPath, "inbox"), 0o755); err != nil {
-		return "", "", err
-	}
-	return hostPath, "/workspace", nil
+	return componentRuntimeHomePath(r.registration)
+}
+
+func (r *Runtime) RuntimeWorkspacePath(workspacePath string) string {
+	_ = workspacePath
+	return v5runtime.DefaultWorkspaceRuntimePath
 }
 
 func (r *Runtime) Exec(
 	ctx context.Context,
+	workspacePath string,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 	stdout io.Writer,
@@ -114,7 +114,7 @@ func (r *Runtime) Exec(
 	name string,
 	args ...string,
 ) error {
-	sbx, cleanup, err := r.sandbox(threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
 	if err != nil {
 		return err
 	}
@@ -128,12 +128,13 @@ func (r *Runtime) Exec(
 
 func (r *Runtime) CombinedOutput(
 	ctx context.Context,
+	workspacePath string,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 	name string,
 	args ...string,
 ) ([]byte, error) {
-	sbx, cleanup, err := r.sandbox(threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
 	if err != nil {
 		return nil, err
 	}
@@ -147,12 +148,13 @@ func (r *Runtime) CombinedOutput(
 
 func (r *Runtime) OpenHTTPRelayPort(
 	ctx context.Context,
+	workspacePath string,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 	callbackPort int,
 	callbackTimeout time.Duration,
 ) (func(context.Context) error, error) {
-	sbx, cleanup, err := r.sandbox(threadID, commands)
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +174,7 @@ func (r *Runtime) OpenHTTPRelayPort(
 }
 
 func (r *Runtime) sandbox(
+	workspacePath string,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 ) (*sandboxengine.Sandbox, func(), error) {
@@ -179,13 +182,14 @@ func (r *Runtime) sandbox(
 		return nil, nil, fmt.Errorf("missing docker runtime")
 	}
 	if threadID.IsNull() {
-		spec := sandboxengine.NewBuilder(authSandboxName(r.registration, r.profile.Name)).
+		runtimeHomePath := r.RuntimeComponentHomePath()
+		spec := sandboxengine.NewBuilder(authSandboxName(r.registration)).
 			Image(r.image).
-			Workdir(r.home.ContainerPath).
+			Workdir(runtimeHomePath).
 			// Keep mounted profile files writable by the host ctgbot process.
 			UserMode("host").
 			Env(append([]string{}, r.env...)).
-			Mounts([]sandboxengine.Mount{{Source: r.home.HostPath, Target: r.home.ContainerPath}}).
+			Mounts([]sandboxengine.Mount{{Source: r.home.Path, Target: runtimeHomePath}}).
 			SecurityOpts([]string{"seccomp=unconfined"}).
 			AddHosts([]string{"host.docker.internal:host-gateway"}).
 			Cmd([]string{"tail", "-f", "/dev/null"}).
@@ -193,14 +197,15 @@ func (r *Runtime) sandbox(
 		return r.sandboxes.CreateSandbox(spec), func() {}, nil
 	}
 
-	workspaceHost, workspaceContainer, err := r.ThreadWorkspace(threadID)
+	workspaceHost, workspaceRuntime, err := resolveWorkspace(workspacePath)
 	if err != nil {
 		return nil, nil, err
 	}
+	runtimeHomePath := r.RuntimeComponentHomePath()
 	env := append([]string{}, r.env...)
 	mounts := []sandboxengine.Mount{
-		{Source: r.home.HostPath, Target: r.home.ContainerPath},
-		{Source: workspaceHost, Target: workspaceContainer},
+		{Source: r.home.Path, Target: runtimeHomePath},
+		{Source: workspaceHost, Target: workspaceRuntime},
 	}
 	cleanup := func() {}
 	if r.bridge != nil {
@@ -214,12 +219,12 @@ func (r *Runtime) sandbox(
 	}
 	spec := sandboxengine.NewBuilder(turnSandboxName(r.registration, threadID)).
 		WorkspaceDir(workspaceHost).
-		ProfileDir(r.home.HostPath).
-		ContainerWorkspace(workspaceContainer).
-		ContainerHome(r.home.ContainerPath).
+		ProfileDir(r.home.Path).
+		ContainerWorkspace(workspaceRuntime).
+		ContainerHome(runtimeHomePath).
 		Hostname(turnSandboxName(r.registration, threadID)).
 		Image(r.image).
-		Workdir(workspaceContainer).
+		Workdir(workspaceRuntime).
 		// Keep mounted profile/workspace files writable by the host ctgbot process.
 		UserMode("host").
 		Env(env).
@@ -231,8 +236,8 @@ func (r *Runtime) sandbox(
 	return r.sandboxes.CreateSandbox(spec), cleanup, nil
 }
 
-func authSandboxName(registration coremodel.Component, profileName string) string {
-	return safeName("ctgbot-v5-auth-"+registration.Ref()+"-"+strings.TrimSpace(profileName), "ctgbot-v5-auth")
+func authSandboxName(registration coremodel.Component) string {
+	return safeName("ctgbot-v5-auth-"+registration.Ref(), "ctgbot-v5-auth")
 }
 
 func turnSandboxName(registration coremodel.Component, threadID modeluuid.UUID) string {
@@ -245,6 +250,21 @@ func resolveImage(value string) string {
 		return dockerDefaultImage
 	}
 	return value
+}
+
+func resolveWorkspace(workspacePath string) (string, string, error) {
+	hostPath := strings.TrimSpace(workspacePath)
+	if hostPath == "" {
+		return "", "", fmt.Errorf("missing workspace host path")
+	}
+	if err := os.MkdirAll(filepath.Join(hostPath, "inbox"), 0o755); err != nil {
+		return "", "", err
+	}
+	return hostPath, v5runtime.DefaultWorkspaceRuntimePath, nil
+}
+
+func componentRuntimeHomePath(registration coremodel.Component) string {
+	return "/profile/components/" + registration.Type + "/" + registration.Name
 }
 
 func safeName(value string, fallback string) string {

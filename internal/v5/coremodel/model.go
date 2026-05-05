@@ -33,9 +33,10 @@ const (
 )
 
 type Chat struct {
-	ID      modeluuid.UUID `gorm:"primaryKey"`
-	Label   string
-	Enabled bool
+	ID        modeluuid.UUID `gorm:"primaryKey"`
+	Label     string
+	Workspace string
+	Enabled   bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -58,7 +59,8 @@ type Component struct {
 	ID        modeluuid.UUID `gorm:"primaryKey"`
 	Type      string         `gorm:"index;uniqueIndex:idx_component_type_name"`
 	Name      string         `gorm:"uniqueIndex:idx_component_type_name"`
-	Profile   string
+	Runtime   string
+	HomePath  string
 	Label     string
 	Enabled   bool
 	IsDefault bool

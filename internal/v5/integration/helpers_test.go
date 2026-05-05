@@ -56,36 +56,46 @@ type execRecord struct {
 	Name         string
 	Args         []string
 	HomeHostPath string
-	ProfileName  string
+	RuntimeKind  string
+	Workspace    string
 }
 
 type fakeRuntimeFactory struct {
-	profile        v5runtime.Profile
+	runtimeKind    string
 	rootDir        string
 	componentsRoot string
 	state          *runtimeState
 }
 
 func (f fakeRuntimeFactory) Kind() string {
-	return f.profile.Runtime
-}
-
-func (f fakeRuntimeFactory) Profile() v5runtime.Profile {
-	return f.profile
+	if strings.TrimSpace(f.runtimeKind) == "" {
+		return "local"
+	}
+	return strings.TrimSpace(f.runtimeKind)
 }
 
 func (f fakeRuntimeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
-	return v5runtime.Home{
-		HostPath:      filepath.Join(f.componentsRoot, registration.Type, registration.Name),
-		ContainerPath: "/profile/components/" + registration.Type + "/" + registration.Name,
+	hostPath := strings.TrimSpace(registration.HomePath)
+	if hostPath == "" {
+		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
+	return v5runtime.Home{Path: hostPath}
+}
+
+func (f fakeRuntimeFactory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+	_, _ = registration, home
+	return home.Path
+}
+
+func (f fakeRuntimeFactory) RuntimeWorkspacePath(workspacePath string) string {
+	return strings.TrimSpace(workspacePath)
 }
 
 func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home v5runtime.Home, image string, env []string) v5runtime.Runtime {
 	_, _, _ = registration, image, env
 	return &fakeRuntime{
 		rootDir: f.rootDir,
-		profile: f.profile,
+		kind:    f.Kind(),
 		home:    home,
 		state:   f.state,
 	}
@@ -93,35 +103,31 @@ func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home v5runtim
 
 type fakeRuntime struct {
 	rootDir string
-	profile v5runtime.Profile
+	kind    string
 	home    v5runtime.Home
 	state   *runtimeState
 }
 
 func (r *fakeRuntime) Kind() string {
-	return r.profile.Runtime
-}
-
-func (r *fakeRuntime) Profile() v5runtime.Profile {
-	return r.profile
+	if strings.TrimSpace(r.kind) == "" {
+		return "local"
+	}
+	return strings.TrimSpace(r.kind)
 }
 
 func (r *fakeRuntime) ComponentHome() v5runtime.Home {
 	return r.home
 }
 
-func (r *fakeRuntime) ThreadWorkspace(threadID modeluuid.UUID) (string, string, error) {
-	if threadID.IsNull() {
-		return "", "", fmt.Errorf("missing thread id")
-	}
-	hostPath := filepath.Join(r.rootDir, ".ctgbot", "threads", threadID.String(), "workspace")
-	if err := os.MkdirAll(filepath.Join(hostPath, "inbox"), 0o755); err != nil {
-		return "", "", err
-	}
-	return hostPath, "/workspace", nil
+func (r *fakeRuntime) RuntimeComponentHomePath() string {
+	return r.home.Path
 }
 
-func (r *fakeRuntime) Exec(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+func (r *fakeRuntime) RuntimeWorkspacePath(workspacePath string) string {
+	return strings.TrimSpace(workspacePath)
+}
+
+func (r *fakeRuntime) Exec(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	_, _, _, _ = ctx, commands, stdout, stderr
 	r.state.mu.Lock()
 	defer r.state.mu.Unlock()
@@ -133,19 +139,20 @@ func (r *fakeRuntime) Exec(ctx context.Context, threadID modeluuid.UUID, command
 		ThreadID:     threadID,
 		Name:         name,
 		Args:         append([]string(nil), args...),
-		HomeHostPath: r.home.HostPath,
-		ProfileName:  r.profile.Name,
+		HomeHostPath: r.home.Path,
+		RuntimeKind:  r.Kind(),
+		Workspace:    workspacePath,
 	})
 	return nil
 }
 
-func (r *fakeRuntime) CombinedOutput(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
-	_, _, _, _, _ = ctx, threadID, commands, name, args
+func (r *fakeRuntime) CombinedOutput(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
+	_, _, _, _, _, _ = ctx, workspacePath, threadID, commands, name, args
 	return []byte("ok"), nil
 }
 
-func (r *fakeRuntime) OpenHTTPRelayPort(ctx context.Context, threadID modeluuid.UUID, commands commandengine.CommandExecutor, callbackPort int, callbackTimeout time.Duration) (func(context.Context) error, error) {
-	_, _, _, _, _ = ctx, threadID, commands, callbackPort, callbackTimeout
+func (r *fakeRuntime) OpenHTTPRelayPort(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, callbackPort int, callbackTimeout time.Duration) (func(context.Context) error, error) {
+	_, _, _, _, _, _ = ctx, workspacePath, threadID, commands, callbackPort, callbackTimeout
 	return func(context.Context) error { return nil }, nil
 }
 

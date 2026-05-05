@@ -10,21 +10,17 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 )
 
-type Profile struct {
-	Name    string
-	Runtime string
-	Root    string
+type Home struct {
+	Path string
 }
 
-type Home struct {
-	HostPath      string
-	ContainerPath string
-}
+const DefaultWorkspaceRuntimePath = "/workspace"
 
 type Factory interface {
 	Kind() string
-	Profile() Profile
 	ComponentHome(registration coremodel.Component) Home
+	RuntimeComponentHomePath(registration coremodel.Component, home Home) string
+	RuntimeWorkspacePath(workspacePath string) string
 	Bind(
 		registration coremodel.Component,
 		home Home,
@@ -35,12 +31,13 @@ type Factory interface {
 
 type Runtime interface {
 	Kind() string
-	Profile() Profile
 	ComponentHome() Home
-	ThreadWorkspace(threadID modeluuid.UUID) (string, string, error)
+	RuntimeComponentHomePath() string
+	RuntimeWorkspacePath(workspacePath string) string
 
 	Exec(
 		ctx context.Context,
+		workspacePath string,
 		threadID modeluuid.UUID,
 		commands commandengine.CommandExecutor,
 		stdout io.Writer,
@@ -51,6 +48,7 @@ type Runtime interface {
 
 	CombinedOutput(
 		ctx context.Context,
+		workspacePath string,
 		threadID modeluuid.UUID,
 		commands commandengine.CommandExecutor,
 		name string,
@@ -59,6 +57,7 @@ type Runtime interface {
 
 	OpenHTTPRelayPort(
 		ctx context.Context,
+		workspacePath string,
 		threadID modeluuid.UUID,
 		commands commandengine.CommandExecutor,
 		callbackPort int,

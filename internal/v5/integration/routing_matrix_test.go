@@ -16,27 +16,11 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
-	"github.com/bartdeboer/go-clistate"
 )
 
 func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
-
-		store, err := clistate.NewCwd("ctgbot", "config")
-		if err != nil {
-			t.Fatalf("NewCwd() error = %v", err)
-		}
-		if _, err := v5system.SaveProfile(root, store, "work", "local", "profiles/work-root"); err != nil {
-			t.Fatalf("SaveProfile(work) error = %v", err)
-		}
-		if _, err := v5system.SaveProfile(root, store, "personal", "local", "profiles/personal-root"); err != nil {
-			t.Fatalf("SaveProfile(personal) error = %v", err)
-		}
-		profiles, err := v5system.LoadProfiles(root, store)
-		if err != nil {
-			t.Fatalf("LoadProfiles() error = %v", err)
-		}
 
 		storage := newSQLiteStorage(t)
 		runtimeState := &runtimeState{}
@@ -143,51 +127,53 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 			t.Fatalf("register mockagent: %v", err)
 		}
 
-		runtimes := map[string]v5runtime.Factory{}
-		for name, profile := range profiles {
-			runtimes[name] = fakeRuntimeFactory{
-				profile:        profile,
+		system := v5system.New(storage, map[string]v5system.Workspace{
+			"work":     {Name: "work", Path: filepath.Join(root, "workspaces", "work-root")},
+			"personal": {Name: "personal", Path: filepath.Join(root, "workspaces", "personal-root")},
+		}, map[string]v5runtime.Factory{
+			"local": fakeRuntimeFactory{
+				runtimeKind:    "local",
 				rootDir:        root,
 				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
 				state:          runtimeState,
-			}
-		}
-		system := v5system.New(storage, profiles, runtimes, registry)
+			},
+		}, registry)
+		system.StateRoot = filepath.Join(root, ".ctgbot")
 
-		workGmail, err := system.EnsureComponent(ctx, "mockgmail/work", "work")
+		workGmail, err := system.EnsureComponent(ctx, "mockgmail/work", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockgmail/work) error = %v", err)
 		}
-		personalGmail, err := system.EnsureComponent(ctx, "mockgmail/personal", "personal")
+		personalGmail, err := system.EnsureComponent(ctx, "mockgmail/personal", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockgmail/personal) error = %v", err)
 		}
-		alphaRelay, err := system.EnsureComponent(ctx, "mockrelay/alpha", "work")
+		alphaRelay, err := system.EnsureComponent(ctx, "mockrelay/alpha", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockrelay/alpha) error = %v", err)
 		}
-		betaRelay, err := system.EnsureComponent(ctx, "mockrelay/beta", "personal")
+		betaRelay, err := system.EnsureComponent(ctx, "mockrelay/beta", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockrelay/beta) error = %v", err)
 		}
-		workAgent, err := system.EnsureComponent(ctx, "mockagent/work", "work")
+		workAgent, err := system.EnsureComponent(ctx, "mockagent/work", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockagent/work) error = %v", err)
 		}
-		personalAgent, err := system.EnsureComponent(ctx, "mockagent/personal", "personal")
+		personalAgent, err := system.EnsureComponent(ctx, "mockagent/personal", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockagent/personal) error = %v", err)
 		}
 
-		if err := system.AuthComponent(ctx, workAgent.Ref(), "", 0, 0, nil, nil); err != nil {
+		if err := system.AuthComponent(ctx, workAgent.Ref(), "", "", 0, 0, nil, nil); err != nil {
 			t.Fatalf("AuthComponent(work agent) error = %v", err)
 		}
-		if err := system.AuthComponent(ctx, personalAgent.Ref(), "", 0, 0, nil, nil); err != nil {
+		if err := system.AuthComponent(ctx, personalAgent.Ref(), "", "", 0, 0, nil, nil); err != nil {
 			t.Fatalf("AuthComponent(personal agent) error = %v", err)
 		}
 
-		alpha := &coremodel.Chat{Label: "alpha", Enabled: true}
-		beta := &coremodel.Chat{Label: "beta", Enabled: true}
+		alpha := &coremodel.Chat{Label: "alpha", Workspace: "work", Enabled: true}
+		beta := &coremodel.Chat{Label: "beta", Workspace: "personal", Enabled: true}
 		if err := storage.Chats().Save(ctx, alpha); err != nil {
 			t.Fatalf("Chats().Save(alpha) error = %v", err)
 		}
@@ -254,8 +240,11 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		if recordBetaOne.HomeHostPath != personalHome || recordBetaOther.HomeHostPath != personalHome {
 			t.Fatalf("personal agent home mismatch: beta one=%s beta other=%s want %s", recordBetaOne.HomeHostPath, recordBetaOther.HomeHostPath, personalHome)
 		}
-		if recordAlphaOne.ProfileName != "work" || recordBetaOne.ProfileName != "personal" {
-			t.Fatalf("profile mismatch: alpha=%s beta=%s", recordAlphaOne.ProfileName, recordBetaOne.ProfileName)
+		if got, want := recordAlphaOne.Workspace, filepath.Join(root, "workspaces", "work-root"); got != want {
+			t.Fatalf("alpha workspace = %s, want %s", got, want)
+		}
+		if got, want := recordBetaOne.Workspace, filepath.Join(root, "workspaces", "personal-root"); got != want {
+			t.Fatalf("beta workspace = %s, want %s", got, want)
 		}
 
 		if len(relayStates["mockrelay/alpha"].payloads) != 2 {

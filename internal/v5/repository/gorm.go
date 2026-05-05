@@ -59,6 +59,8 @@ func (s *GORMStorage) Artifacts() ArtifactRepository { return s.artifacts }
 type gormChats struct{ db *gorm.DB }
 
 func (r *gormChats) Save(ctx context.Context, chat *coremodel.Chat) error {
+	chat.Label = strings.TrimSpace(chat.Label)
+	chat.Workspace = clean(chat.Workspace)
 	ensureID(&chat.ID)
 	return r.db.WithContext(ctx).Save(chat).Error
 }
@@ -109,6 +111,8 @@ type gormComponents struct{ db *gorm.DB }
 func (r *gormComponents) Save(ctx context.Context, component *coremodel.Component) error {
 	component.Type = clean(component.Type)
 	component.Name = clean(component.Name)
+	component.Runtime = clean(component.Runtime)
+	component.HomePath = clean(component.HomePath)
 	component.Label = strings.TrimSpace(component.Label)
 	if component.ID.IsNull() {
 		existing, err := r.GetByTypeAndName(ctx, component.Type, component.Name)

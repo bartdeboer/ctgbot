@@ -13,24 +13,11 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
-	"github.com/bartdeboer/go-clistate"
 )
 
 func TestV5GmailSourceRelaysOutboundElsewhere(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
-
-		store, err := clistate.NewCwd("ctgbot", "config")
-		if err != nil {
-			t.Fatalf("NewCwd() error = %v", err)
-		}
-		if _, err := v5system.SaveProfile(root, store, "test", "local", "profiles/test-root"); err != nil {
-			t.Fatalf("SaveProfile() error = %v", err)
-		}
-		profiles, err := v5system.LoadProfiles(root, store)
-		if err != nil {
-			t.Fatalf("LoadProfiles() error = %v", err)
-		}
 
 		storage := newSQLiteStorage(t)
 		runtimeState := &runtimeState{}
@@ -79,31 +66,30 @@ func TestV5GmailSourceRelaysOutboundElsewhere(t *testing.T) {
 			t.Fatalf("register mockagent: %v", err)
 		}
 
-		runtimes := map[string]v5runtime.Factory{}
-		for name, profile := range profiles {
-			runtimes[name] = fakeRuntimeFactory{
-				profile:        profile,
+		system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+			"local": fakeRuntimeFactory{
+				runtimeKind:    "local",
 				rootDir:        root,
 				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
 				state:          runtimeState,
-			}
-		}
-		system := v5system.New(storage, profiles, runtimes, registry)
+			},
+		}, registry)
+		system.StateRoot = filepath.Join(root, ".ctgbot")
 
-		gmailRegistration, err := system.EnsureComponent(ctx, "mockgmail", "test")
+		gmailRegistration, err := system.EnsureComponent(ctx, "mockgmail", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockgmail) error = %v", err)
 		}
-		relayRegistration, err := system.EnsureComponent(ctx, "mockrelay", "test")
+		relayRegistration, err := system.EnsureComponent(ctx, "mockrelay", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockrelay) error = %v", err)
 		}
-		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "test")
+		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 		}
 
-		if err := system.AuthComponent(ctx, "mockagent", "", 0, 0, nil, nil); err != nil {
+		if err := system.AuthComponent(ctx, "mockagent", "", "", 0, 0, nil, nil); err != nil {
 			t.Fatalf("AuthComponent() error = %v", err)
 		}
 

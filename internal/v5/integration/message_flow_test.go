@@ -18,24 +18,11 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
-	"github.com/bartdeboer/go-clistate"
 )
 
 func TestV5MockComponentsEndToEnd(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
-
-		store, err := clistate.NewCwd("ctgbot", "config")
-		if err != nil {
-			t.Fatalf("NewCwd() error = %v", err)
-		}
-		if _, err := v5system.SaveProfile(root, store, "test", "local", "profiles/test-root"); err != nil {
-			t.Fatalf("SaveProfile() error = %v", err)
-		}
-		profiles, err := v5system.LoadProfiles(root, store)
-		if err != nil {
-			t.Fatalf("LoadProfiles() error = %v", err)
-		}
 
 		storage := newSQLiteStorage(t)
 		runtimeState := &runtimeState{}
@@ -75,27 +62,26 @@ func TestV5MockComponentsEndToEnd(t *testing.T) {
 			t.Fatalf("register mockagent: %v", err)
 		}
 
-		runtimes := map[string]v5runtime.Factory{}
-		for name, profile := range profiles {
-			runtimes[name] = fakeRuntimeFactory{
-				profile:        profile,
+		system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+			"local": fakeRuntimeFactory{
+				runtimeKind:    "local",
 				rootDir:        root,
 				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
 				state:          runtimeState,
-			}
-		}
-		system := v5system.New(storage, profiles, runtimes, registry)
+			},
+		}, registry)
+		system.StateRoot = filepath.Join(root, ".ctgbot")
 
-		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "test")
+		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
 		}
-		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "test")
+		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 		}
 
-		if err := system.AuthComponent(ctx, "mockagent", "", 0, 0, io.Discard, io.Discard); err != nil {
+		if err := system.AuthComponent(ctx, "mockagent", "", "", 0, 0, io.Discard, io.Discard); err != nil {
 			t.Fatalf("AuthComponent() error = %v", err)
 		}
 
@@ -188,10 +174,10 @@ func (a *mockAgent) Type() string {
 func (a *mockAgent) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	_, _, _, _, _ = ctx, callbackPort, callbackTimeout, stdout, stderr
 	home := a.runtime.ComponentHome()
-	if err := os.MkdirAll(home.HostPath, 0o755); err != nil {
+	if err := os.MkdirAll(home.Path, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(home.HostPath, "auth.json"), []byte(`{"ok":true}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home.Path, "auth.json"), []byte(`{"ok":true}`), 0o600); err != nil {
 		return err
 	}
 	a.state.mu.Lock()
@@ -206,13 +192,13 @@ func (a *mockAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if !ok {
 		return nil, fmt.Errorf("missing component home")
 	}
-	if homeFromRuntime.HostPath != homeFromTurn.HostPath {
-		return nil, fmt.Errorf("component home mismatch: %s != %s", homeFromRuntime.HostPath, homeFromTurn.HostPath)
+	if homeFromRuntime.Path != homeFromTurn.Path {
+		return nil, fmt.Errorf("component home mismatch: %s != %s", homeFromRuntime.Path, homeFromTurn.Path)
 	}
-	if _, err := os.Stat(filepath.Join(homeFromRuntime.HostPath, "auth.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(homeFromRuntime.Path, "auth.json")); err != nil {
 		return nil, fmt.Errorf("missing auth.json: %w", err)
 	}
-	if err := a.runtime.Exec(ctx, turn.Thread.ID, turn.Runtime.Commands(), io.Discard, io.Discard, "mock-agent", "reply", strings.TrimSpace(turn.Inbound.Text)); err != nil {
+	if err := a.runtime.Exec(ctx, turn.Runtime.WorkspacePath(), turn.Thread.ID, turn.Runtime.Commands(), io.Discard, io.Discard, "mock-agent", "reply", strings.TrimSpace(turn.Inbound.Text)); err != nil {
 		return nil, err
 	}
 	a.state.mu.Lock()

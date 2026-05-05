@@ -17,7 +17,6 @@ import (
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
 	"github.com/bartdeboer/go-clir"
-	"github.com/bartdeboer/go-clistate"
 )
 
 func TestV5MessageCommandRunsAndSkipsAgent(t *testing.T) {
@@ -45,15 +44,15 @@ func TestV5MessageCommandRunsAndSkipsAgent(t *testing.T) {
 			},
 		)
 
-		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "test")
+		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
 		}
-		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "test")
+		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 		}
-		commandRegistration, err := system.EnsureComponent(ctx, "tools", "test")
+		commandRegistration, err := system.EnsureComponent(ctx, "tools", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(tools) error = %v", err)
 		}
@@ -140,15 +139,15 @@ func TestV5UnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 			},
 		)
 
-		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "test")
+		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
 		}
-		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "test")
+		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 		}
-		commandRegistration, err := system.EnsureComponent(ctx, "tools", "test")
+		commandRegistration, err := system.EnsureComponent(ctx, "tools", "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(tools) error = %v", err)
 		}
@@ -230,15 +229,15 @@ func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 				},
 			)
 
-			messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "test")
+			messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
 			if err != nil {
 				t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
 			}
-			agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "test")
+			agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
 			if err != nil {
 				t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 			}
-			commandRegistration, err := system.EnsureComponent(ctx, v5process.Type, "test")
+			commandRegistration, err := system.EnsureComponent(ctx, v5process.Type, "local", "")
 			if err != nil {
 				t.Fatalf("EnsureComponent(process) error = %v", err)
 			}
@@ -321,15 +320,15 @@ func TestV5ProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 				},
 			)
 
-			messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "test")
+			messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
 			if err != nil {
 				t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
 			}
-			agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "test")
+			agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
 			if err != nil {
 				t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 			}
-			commandRegistration, err := system.EnsureComponent(ctx, v5process.Type, "test")
+			commandRegistration, err := system.EnsureComponent(ctx, v5process.Type, "local", "")
 			if err != nil {
 				t.Fatalf("EnsureComponent(process) error = %v", err)
 			}
@@ -397,18 +396,6 @@ func newMessageCommandTestSystem(
 ) (*v5system.System, repository.Storage, *messengerState, *agentState, *runtimeState) {
 	t.Helper()
 
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("NewCwd() error = %v", err)
-	}
-	if _, err := v5system.SaveProfile(root, store, "test", "local", "profiles/test-root"); err != nil {
-		t.Fatalf("SaveProfile() error = %v", err)
-	}
-	profiles, err := v5system.LoadProfiles(root, store)
-	if err != nil {
-		t.Fatalf("LoadProfiles() error = %v", err)
-	}
-
 	storage := newSQLiteStorage(t)
 	runtimeState := &runtimeState{}
 	messengerState := &messengerState{event: event}
@@ -440,17 +427,17 @@ func newMessageCommandTestSystem(
 		}
 	}
 
-	runtimes := map[string]v5runtime.Factory{}
-	for name, profile := range profiles {
-		runtimes[name] = fakeRuntimeFactory{
-			profile:        profile,
+	system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+		"local": fakeRuntimeFactory{
+			runtimeKind:    "local",
 			rootDir:        root,
 			componentsRoot: filepath.Join(root, ".ctgbot", "components"),
 			state:          runtimeState,
-		}
-	}
+		},
+	}, registry)
+	system.StateRoot = filepath.Join(root, ".ctgbot")
 
-	return v5system.New(storage, profiles, runtimes, registry), storage, messengerState, agentState, runtimeState
+	return system, storage, messengerState, agentState, runtimeState
 }
 
 type mockMessageCommandComponent struct{}

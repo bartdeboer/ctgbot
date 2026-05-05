@@ -68,11 +68,10 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			return v5broker.New(system.Storage, system, logf).Run(runCtx)
 		})
 
-		b.Handle("v5 profile set <profile>", "Configure a v5 profile", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 profile set", flag.ContinueOnError)
+		b.Handle("v5 workspace set <workspace>", "Configure a v5 workspace", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("v5 workspace set", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			runtimeKind := fs.String("runtime", "", "Runtime kind for this profile (docker or local)")
-			homePath := fs.String("home-path", "", "Optional host profile root override")
+			path := fs.String("path", "", "Host workspace path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
@@ -82,71 +81,43 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			runtimeSet := false
-			homePathSet := false
-			fs.Visit(func(f *flag.Flag) {
-				switch f.Name {
-				case "runtime":
-					runtimeSet = true
-				case "home-path":
-					homePathSet = true
-				}
-			})
-			if !runtimeSet && !homePathSet {
-				return fmt.Errorf("provide --runtime and/or --home-path")
+			if strings.TrimSpace(*path) == "" {
+				return fmt.Errorf("missing workspace path")
 			}
 
-			name := strings.TrimSpace(req.Params["profile"])
-			configured := v5system.ConfiguredProfiles(store)
-			settings := configured[name]
-			if runtimeSet {
-				value := strings.TrimSpace(*runtimeKind)
-				if value == "" {
-					return fmt.Errorf("missing runtime value")
-				}
-				settings.Runtime = value
-			}
-			if homePathSet {
-				settings.HomePath = strings.TrimSpace(*homePath)
-			}
-
-			profile, err := v5system.SaveProfile(rootDir, store, name, settings.Runtime, settings.HomePath)
+			workspace, err := v5system.SaveWorkspace(rootDir, store, strings.TrimSpace(req.Params["workspace"]), strings.TrimSpace(*path))
 			if err != nil {
 				return err
 			}
-			fmt.Println("profile saved")
-			fmt.Printf("name: %s\n", profile.Name)
-			fmt.Printf("runtime: %s\n", profile.Runtime)
-			fmt.Printf("root: %s\n", profile.Root)
-			fmt.Printf("home_path: %s\n", settings.HomePath)
+			fmt.Println("workspace saved")
+			fmt.Printf("name: %s\n", workspace.Name)
+			fmt.Printf("path: %s\n", workspace.Path)
 			return nil
 		})
 
-		b.Handle("v5 profile list", "List configured v5 profiles", func(req *clir.Request) error {
+		b.Handle("v5 workspace list", "List configured v5 workspaces", func(req *clir.Request) error {
 			rootDir, err := filepath.Abs(".")
 			if err != nil {
 				return err
 			}
-			profiles, err := v5system.LoadProfiles(rootDir, store)
+			workspaces, err := v5system.LoadWorkspaces(rootDir, store)
 			if err != nil {
 				return err
 			}
-			configured := v5system.ConfiguredProfiles(store)
-			names := make([]string, 0, len(profiles))
-			for name := range profiles {
+			configured := v5system.ConfiguredWorkspaces(store)
+			names := make([]string, 0, len(workspaces))
+			for name := range workspaces {
 				names = append(names, name)
 			}
 			slices.Sort(names)
+			if len(names) == 0 {
+				fmt.Println("no workspaces")
+				return nil
+			}
 			for _, name := range names {
-				profile := profiles[name]
-				settings, ok := configured[name]
-				fmt.Printf("%s\truntime=%s\troot=%s\thome_path=%s\tconfigured=%t\n",
-					profile.Name,
-					profile.Runtime,
-					profile.Root,
-					settings.HomePath,
-					ok,
-				)
+				workspace := workspaces[name]
+				_, ok := configured[name]
+				fmt.Printf("%s\tpath=%s\tconfigured=%t\n", workspace.Name, workspace.Path, ok)
 			}
 			return nil
 		})
@@ -158,7 +129,8 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
 			codexImage := fs.String("codex-image", v5codex.DefaultImage, "Codex runtime image")
-			profileName := fs.String("profile", "", "Profile for this registered component (default: preserve existing or default)")
+			runtimeKind := fs.String("runtime", "", "Runtime kind for this registered component (docker or local)")
+			homePath := fs.String("home", "", "Optional host component home override")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
@@ -167,15 +139,11 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			registration, err := system.EnsureComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*profileName))
+			registration, err := system.EnsureComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath))
 			if err != nil {
 				return err
 			}
-			profile, err := system.Profile(registration.Profile)
-			if err != nil {
-				return err
-			}
-			runtime, err := system.Runtime(profile.Name)
+			runtime, err := system.Runtime(registration.Runtime)
 			if err != nil {
 				return err
 			}
@@ -184,10 +152,10 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			fmt.Println("component registered")
 			fmt.Printf("id: %s\n", registration.ID)
 			fmt.Printf("ref: %s\n", registration.Ref())
-			fmt.Printf("profile: %s\n", registration.Profile)
-			fmt.Printf("runtime: %s\n", runtime.Kind())
-			fmt.Printf("host_home: %s\n", home.HostPath)
-			fmt.Printf("container_home: %s\n", home.ContainerPath)
+			fmt.Printf("runtime: %s\n", registration.Runtime)
+			fmt.Printf("home_path: %s\n", registration.HomePath)
+			fmt.Printf("host_home: %s\n", home.Path)
+			fmt.Printf("runtime_home: %s\n", runtime.RuntimeComponentHomePath(*registration, home))
 			return nil
 		})
 
@@ -200,7 +168,8 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			image := fs.String("image", v5codex.DefaultImage, "auth runtime image")
 			callbackPort := fs.Int("callback-port", v5codex.DefaultCallbackPort, "auth callback relay port")
 			callbackTimeout := fs.Duration("callback-timeout", 10*time.Minute, "auth callback relay timeout")
-			profileName := fs.String("profile", "", "Profile for this component registration (default: preserve existing or default)")
+			runtimeKind := fs.String("runtime", "", "Runtime kind for this component registration (default: preserve existing)")
+			homePath := fs.String("home", "", "Optional host component home override")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
@@ -209,7 +178,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			if err := system.AuthComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*profileName), *callbackPort, *callbackTimeout, os.Stdout, os.Stderr); err != nil {
+			if err := system.AuthComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath), *callbackPort, *callbackTimeout, os.Stdout, os.Stderr); err != nil {
 				return err
 			}
 			fmt.Println("component auth completed")
@@ -238,17 +207,18 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return nil
 			}
 			for _, registration := range components {
-				profile, err := system.Profile(registration.Profile)
+				runtime, err := system.Runtime(registration.Runtime)
 				if err != nil {
 					return err
 				}
-				fmt.Printf("%s\t%s\tprofile=%s\truntime=%s\tdefault=%t\n",
+				home := runtime.ComponentHome(registration)
+				fmt.Printf("%s\t%s\truntime=%s\tdefault=%t\n",
 					registration.ID,
 					registration.Ref(),
-					registration.Profile,
-					profile.Runtime,
+					runtime.Kind(),
 					registration.IsDefault,
 				)
+				fmt.Printf("\thost_home=%s\thome_path=%s\n", home.Path, registration.HomePath)
 			}
 			return nil
 		})
@@ -279,6 +249,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			fmt.Println("chat created")
 			fmt.Printf("id: %s\n", chat.ID)
 			fmt.Printf("label: %s\n", chat.Label)
+			fmt.Printf("workspace: %s\n", chat.Workspace)
 			return nil
 		})
 
@@ -304,8 +275,61 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return nil
 			}
 			for _, chat := range chats {
-				fmt.Printf("%s\t%s\tenabled=%t\n", chat.ID, chat.Label, chat.Enabled)
+				fmt.Printf("%s\t%s\tworkspace=%s\tenabled=%t\n", chat.ID, chat.Label, chat.Workspace, chat.Enabled)
 			}
+			return nil
+		})
+
+		b.Handle("v5 chat <chatID> workspace set <workspace>", "Assign a named workspace to a v5 chat", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("v5 chat workspace set", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
+			if err != nil {
+				return err
+			}
+			chatID, err := modeluuid.Parse(strings.TrimSpace(req.Params["chatID"]))
+			if err != nil {
+				return fmt.Errorf("parse chat id: %w", err)
+			}
+			chat, err := system.SetChatWorkspace(req.Context(), chatID, strings.TrimSpace(req.Params["workspace"]))
+			if err != nil {
+				return err
+			}
+			fmt.Println("chat workspace updated")
+			fmt.Printf("chat_id: %s\n", chat.ID)
+			fmt.Printf("workspace: %s\n", chat.Workspace)
+			return nil
+		})
+
+		b.Handle("v5 chat <chatID> workspace clear", "Clear the named workspace from a v5 chat", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("v5 chat workspace clear", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
+			if err != nil {
+				return err
+			}
+			chatID, err := modeluuid.Parse(strings.TrimSpace(req.Params["chatID"]))
+			if err != nil {
+				return fmt.Errorf("parse chat id: %w", err)
+			}
+			chat, err := system.SetChatWorkspace(req.Context(), chatID, "")
+			if err != nil {
+				return err
+			}
+			fmt.Println("chat workspace cleared")
+			fmt.Printf("chat_id: %s\n", chat.ID)
 			return nil
 		})
 
@@ -342,7 +366,8 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			fmt.Printf("chat_id: %s\n", binding.ChatID)
 			if registration != nil {
 				fmt.Printf("component: %s\n", registration.Ref())
-				fmt.Printf("profile: %s\n", registration.Profile)
+				fmt.Printf("runtime: %s\n", registration.Runtime)
+				fmt.Printf("home_path: %s\n", registration.HomePath)
 			} else {
 				fmt.Printf("component_id: %s\n", binding.ComponentID)
 			}
@@ -384,12 +409,12 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 					return err
 				}
 				ref := binding.ComponentID.String()
-				profileName := ""
+				runtimeKind := ""
 				if registration != nil {
 					ref = registration.Ref()
-					profileName = registration.Profile
+					runtimeKind = registration.Runtime
 				}
-				fmt.Printf("%s\tprofile=%s\trole=%s\texternal_chat_id=%s\n", ref, profileName, binding.Role, binding.ExternalChatID)
+				fmt.Printf("%s\truntime=%s\trole=%s\texternal_chat_id=%s\n", ref, runtimeKind, binding.Role, binding.ExternalChatID)
 			}
 			return nil
 		})

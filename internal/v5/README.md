@@ -2,21 +2,22 @@
 
 `v5` is a reset toward a flatter, more human-readable model.
 
-The goal is simple:
+The current direction is:
 
-- profiles come from config
-- runtimes are built from profiles
-- registered components come from the database
-- components are constructed with their runtime
-- broker wires inbound, agent, and outbound components per chat
+- workspaces come from config
+- components are global registrations
+- components carry runtime and optional home overrides
+- chats carry workspace context
+- broker wires source, relay, agent, and command roles per chat
 
 ## Core model
 
 The main concepts are:
 
-- `Profile`
+- `Workspace`
 - `Runtime`
 - `Component`
+- `Chat`
 - `ChatComponent`
 - `ThreadComponentMapping`
 - `Broker`
@@ -24,38 +25,41 @@ The main concepts are:
 Everything else should support those concepts directly instead of hiding them
 behind managers and option structs.
 
-## Profile flow
+## Workspace flow
 
-Profiles are loaded from config.
+Workspaces are loaded from config.
 
-Each profile defines:
+Each workspace defines:
 
-- `runtime`
-- optional `home_path`
+- `path`
 
-The resolved profile gives:
+A workspace is just a named host path.
 
-- profile name
-- runtime kind
-- profile root on disk
+Chats may point at a named workspace.
 
-Component homes are not derived from the profile root. They live separately
-under the shared state root:
+If a chat does not have a named workspace, `v5` falls back to a chat-local
+workspace:
 
-- `.ctgbot/components/<type>/<name>`
+- `.ctgbot/chats/<chatID>/workspace`
+
+This default is intentionally chat-scoped, not thread-scoped.
 
 ## Runtime flow
 
-At startup we build one runtime instance per profile.
+Runtime is configured per component registration.
 
 Examples:
 
-- `docker(default)`
-- `docker(work)`
-- `local(personal)`
+- `codex/work` with runtime `docker`
+- `codex/personal` with runtime `local`
 
-These runtime objects are wired and ready, but they do not start containers or
-processes yet.
+At startup we build runtime factories by kind:
+
+- `docker`
+- `local`
+
+These runtime factories are wired and ready, but they do not start containers
+or processes yet.
 
 Actual execution only starts when:
 
@@ -68,17 +72,24 @@ Registered components come from the database and carry:
 
 - `Type`
 - `Name`
-- `Profile`
+- `Runtime`
+- optional `HomePath`
+
+Component homes default to:
+
+- `.ctgbot/components/<type>/<name>`
+
+If `HomePath` is set on the registration, that explicit host path is used
+instead.
 
 When a component is resolved:
 
 1. load the registration row
-2. find its profile
-3. find the runtime for that profile
-4. derive the component home from that runtime
-5. call the constructor for that component type
+2. find the runtime for that component
+3. derive the component home from the registration
+4. call the constructor for that component type
 
-The constructor signature is intentionally direct and explicit.
+The constructor signature stays intentionally direct and explicit.
 
 ## Broker flow
 
@@ -90,26 +101,31 @@ Broker owns:
 - command surface aggregation
 - handing turns to agent components
 - relaying outbound payloads
+- resolving the effective workspace for a chat turn
 
 Broker does not own:
 
 - Docker internals
 - local process internals
-- component home conventions
-- auth implementation details
+- component auth implementation details
+- component home conventions beyond the explicit runtime/component seams
 
 ## Current status
 
 `v5` currently proves the flatter architecture:
 
-- direct component constructors
-- config-backed profiles
-- runtime instances per profile
+- config-backed workspaces
+- runtime chosen per component registration
+- explicit component home handling
 - component resolution with runtime injection
 - broker routing with thread-component mapping
+- hostbridge command support in the runtime path
 
 What is intentionally unfinished:
 
 - real `local` runtime execution
-- privileged message-command actor resolution for operator-only commands like `/quit`
-- production rollout and migration from the older live runtime
+- broader deploy polish after the first live `v5` rollout
+
+For the more opinionated target model and CLI examples, see:
+
+- [V5DESIGN.md](/Users/bart/src/go/ctgbot/V5DESIGN.md)

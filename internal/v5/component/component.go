@@ -144,6 +144,7 @@ type TurnRuntime interface {
 	Commands() commandengine.CommandExecutor
 	Send(ctx context.Context, payload messenger.OutboundPayload) error
 	StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error)
+	WorkspacePath() string
 	ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool)
 	ComponentThreadID(componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(componentID modeluuid.UUID, componentThreadID string) error
