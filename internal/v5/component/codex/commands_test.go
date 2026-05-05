@@ -23,6 +23,7 @@ type testRuntime struct {
 	status       v5runtime.Status
 	refreshCalls int
 	stopCalls    int
+	stopErr      error
 }
 
 func (r *testRuntime) Kind() string { return "docker" }
@@ -48,7 +49,7 @@ func (r *testRuntime) Start(ctx context.Context, workspacePath string, threadID 
 func (r *testRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
 	_, _, _ = ctx, workspacePath, threadID
 	r.stopCalls++
-	return nil
+	return r.stopErr
 }
 func (r *testRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (bool, error) {
 	_, _, _ = ctx, workspacePath, threadID

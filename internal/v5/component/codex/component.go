@@ -23,9 +23,10 @@ import (
 )
 
 const (
-	Type                = "codex"
-	DefaultImage        = "ctgbot-codex:latest"
-	DefaultCallbackPort = 1455
+	Type                 = "codex"
+	DefaultImage         = "ctgbot-codex:latest"
+	DefaultCallbackPort  = 1455
+	stopAfterTurnTimeout = 5 * time.Second
 )
 
 func New(
@@ -179,9 +180,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}
 	result, err := c.executor.HandleRuntimeTurn(ctx, run, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, options)
 	if !turn.Thread.KeepRunning {
-		if stopErr := c.runtime.Stop(ctx, workspacePath, turn.Thread.ID); stopErr != nil && err == nil {
-			err = stopErr
-		}
+		c.stopAfterTurn(workspacePath, turn.Thread.ID)
 	}
 	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && err == nil {
 		err = saveErr
@@ -202,6 +201,17 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 			Text:        reply,
 		},
 	}, nil
+}
+
+func (c *Component) stopAfterTurn(workspacePath string, threadID modeluuid.UUID) {
+	if c == nil || c.runtime == nil {
+		return
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), stopAfterTurnTimeout)
+	defer cancel()
+	if err := c.runtime.Stop(stopCtx, workspacePath, threadID); err != nil {
+		log.Printf("codex stop-after-turn failed thread=%s err=%v", threadID, err)
+	}
 }
 
 func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, providerThreadID string) error {

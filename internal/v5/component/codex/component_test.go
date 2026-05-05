@@ -2,6 +2,7 @@ package codex
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -145,6 +146,55 @@ func TestHandleTurnKeepsRuntimeRunningWhenEnabled(t *testing.T) {
 		}
 		if got := runtime.stopCalls; got != 0 {
 			t.Fatalf("stop calls = %d, want 0", got)
+		}
+	})
+}
+
+func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		cfg := newTestConfig(t, root)
+		storage := repository.NewMemory()
+		runtime := &testRuntime{
+			stopErr: fmt.Errorf("stop failed"),
+		}
+		executor := &stubExecutor{
+			result: agentcore.TurnResult{
+				Reply:            "done",
+				ProviderThreadID: "provider-thread-1",
+			},
+		}
+		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
+		c := &Component{
+			registration: registration,
+			runtime:      runtime,
+			storage:      storage,
+			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+				_ = chat
+				return filepath.Join(root, "workspace"), nil
+			},
+			config:   cfg,
+			executor: executor,
+		}
+
+		result, err := c.HandleTurn(ctx, component.Turn{
+			Chat: coremodel.Chat{ID: modeluuid.New(), Enabled: true},
+			Thread: coremodel.Thread{
+				ID:          modeluuid.New(),
+				ChatID:      modeluuid.New(),
+				KeepRunning: false,
+			},
+			Inbound: coremodel.ThreadMessage{ID: modeluuid.New(), Text: "hello"},
+			Runtime: stubTurnRuntime{},
+		})
+		if err != nil {
+			t.Fatalf("HandleTurn() error = %v", err)
+		}
+		if result == nil || result.Final == nil || result.Final.Text != "done" {
+			t.Fatalf("unexpected result = %#v", result)
+		}
+		if got, want := runtime.stopCalls, 1; got != want {
+			t.Fatalf("stop calls = %d, want %d", got, want)
 		}
 	})
 }
