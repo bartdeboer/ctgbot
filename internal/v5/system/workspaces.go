@@ -5,18 +5,25 @@ import (
 	"path/filepath"
 	"strings"
 
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/go-clistate"
 )
 
 const workspaceConfigKey = "workspaces"
 
 type WorkspaceSettings struct {
-	Path string `json:"path"`
+	Path       string                      `json:"path"`
+	Hostbridge WorkspaceHostbridgeSettings `json:"hostbridge"`
+}
+
+type WorkspaceHostbridgeSettings struct {
+	AllowedCommands map[string]hostbridgeserver.AllowedCommand `json:"allowed_commands"`
 }
 
 type Workspace struct {
-	Name string
-	Path string
+	Name                      string
+	Path                      string
+	HostbridgeAllowedCommands map[string]hostbridgeserver.AllowedCommand
 }
 
 func ConfiguredWorkspaces(store *clistate.Store) map[string]WorkspaceSettings {
@@ -62,7 +69,9 @@ func SaveWorkspace(rootDir string, store *clistate.Store, name string, path stri
 	}
 
 	configured := ConfiguredWorkspaces(store)
-	configured[name] = WorkspaceSettings{Path: path}
+	settings := configured[name]
+	settings.Path = path
+	configured[name] = settings
 	if err := store.PersistStruct(workspaceConfigKey, configured); err != nil {
 		return Workspace{}, err
 	}
@@ -77,7 +86,11 @@ func resolveWorkspace(rootDir string, name string, settings WorkspaceSettings) (
 	if err != nil {
 		return Workspace{}, err
 	}
-	return Workspace{Name: name, Path: path}, nil
+	return Workspace{
+		Name:                      name,
+		Path:                      path,
+		HostbridgeAllowedCommands: normalizeWorkspaceAllowedCommands(settings.Hostbridge.AllowedCommands),
+	}, nil
 }
 
 func resolveWorkspacePath(rootDir string, path string) (string, error) {
@@ -110,4 +123,31 @@ func validateWorkspaceName(name string) error {
 		return fmt.Errorf("invalid workspace name: %q", name)
 	}
 	return nil
+}
+
+func normalizeWorkspaceAllowedCommands(raw map[string]hostbridgeserver.AllowedCommand) map[string]hostbridgeserver.AllowedCommand {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string]hostbridgeserver.AllowedCommand, len(raw))
+	for name, spec := range raw {
+		name = strings.TrimSpace(name)
+		spec.Name = strings.TrimSpace(spec.Name)
+		spec.Dir = strings.TrimSpace(spec.Dir)
+		spec.Delay = strings.TrimSpace(spec.Delay)
+		if name == "" || spec.Name == "" {
+			continue
+		}
+		if len(spec.Args) == 0 {
+			spec.Args = nil
+		}
+		if len(spec.Env) == 0 {
+			spec.Env = nil
+		}
+		out[name] = spec
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

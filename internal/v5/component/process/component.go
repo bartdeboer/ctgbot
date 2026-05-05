@@ -47,13 +47,6 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			[]string{"process install", "install"},
 		),
 		processCommandDefinition(
-			"process.install.agent",
-			"Install ctgbot binaries from source",
-			buildInstallCommand,
-			commandengine.SourceHostbridge,
-			[]string{"process install", "install"},
-		),
-		processCommandDefinition(
 			"process.install.cli",
 			"Install ctgbot binaries from source",
 			buildInstallCommand,
@@ -68,13 +61,6 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			[]string{"process upgrade", "upgrade"},
 		),
 		processCommandDefinition(
-			"process.upgrade.agent",
-			"Upgrade ctgbot",
-			buildUpgradeCommand,
-			commandengine.SourceHostbridge,
-			[]string{"process upgrade", "upgrade"},
-		),
-		processCommandDefinition(
 			"process.upgrade.cli",
 			"Upgrade ctgbot",
 			buildUpgradeCommand,
@@ -86,13 +72,6 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			"Restart ctgbot",
 			buildQuitCommand,
 			commandengine.SourceMessage,
-			[]string{"process quit", "quit"},
-		),
-		processCommandDefinition(
-			"process.quit.agent",
-			"Restart ctgbot",
-			buildQuitCommand,
-			commandengine.SourceHostbridge,
 			[]string{"process quit", "quit"},
 		),
 		processCommandDefinition(

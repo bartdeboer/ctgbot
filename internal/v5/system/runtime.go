@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
@@ -109,6 +110,28 @@ func (s *System) ResolveChatWorkspace(_ context.Context, chat coremodel.Chat) (s
 		return "", err
 	}
 	return hostPath, nil
+}
+
+func (s *System) ResolveChatHostbridgeAllowedCommands(_ context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error) {
+	if s == nil {
+		return nil, fmt.Errorf("missing system")
+	}
+	workspaceName := strings.TrimSpace(chat.Workspace)
+	if workspaceName == "" {
+		return nil, nil
+	}
+	workspace, err := s.Workspace(workspaceName)
+	if err != nil {
+		return nil, err
+	}
+	if len(workspace.HostbridgeAllowedCommands) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]hostbridgeserver.AllowedCommand, len(workspace.HostbridgeAllowedCommands))
+	for name, spec := range workspace.HostbridgeAllowedCommands {
+		out[name] = spec
+	}
+	return out, nil
 }
 
 func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind string, homePath string) (*coremodel.Component, error) {

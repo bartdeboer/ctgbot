@@ -70,9 +70,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			if system.Logger != nil {
 				logf = system.Logger.Printf
 			}
-			broker := v5broker.New(system.Storage, system, logf)
-			broker.Config = system.Config
-			return broker.Run(runCtx)
+			return v5broker.New(system.Storage, system, logf).Run(runCtx)
 		})
 
 		b.Handle("v5 workspace set <workspace>", "Configure a v5 workspace", func(req *clir.Request) error {

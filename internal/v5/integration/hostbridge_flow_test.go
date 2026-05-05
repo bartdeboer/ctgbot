@@ -373,6 +373,7 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 				componentID: registration.ID,
 				runtime:     runtime.Bind(registration, home, "", nil),
 				bridge:      bridge,
+				command:     "pwd",
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -443,6 +444,122 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 	})
 }
 
+func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+
+		storage := newSQLiteStorage(t)
+		bridge := v5hostbridgeserver.NewBridge(root, storage, nil)
+		t.Cleanup(func() {
+			_ = bridge.Close()
+		})
+
+		runtimeState := &runtimeState{}
+		messengerState := &messengerState{
+			event: component.InboundEvent{
+				ExternalID: "msg-run-workspace",
+				Payload: messenger.InboundPayload{
+					ProviderType:      "mockmsg",
+					ProviderChatID:    "chat-1",
+					ProviderThreadID:  "provider-thread-1",
+					ProviderMessageID: "msg-run-workspace",
+					Actor:             actorWithRoles("", "bart"),
+					Text:              messenger.TextMessage{Text: "hello"},
+				},
+			},
+		}
+		agentState := &agentState{}
+
+		registry := component.NewRegistry()
+		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, home, storage, registration
+			return &mockMessenger{
+				componentID: registration.ID,
+				state:       messengerState,
+			}, nil
+		}); err != nil {
+			t.Fatalf("register mockmsg: %v", err)
+		}
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+			_, _, _ = ctx, home, storage
+			return &hostbridgeRunAgent{
+				componentID: registration.ID,
+				runtime:     runtime.Bind(registration, home, "", nil),
+				bridge:      bridge,
+				command:     "echo-workspace",
+				state:       agentState,
+			}, nil
+		}); err != nil {
+			t.Fatalf("register mockagent: %v", err)
+		}
+
+		system := v5system.New(storage, map[string]v5system.Workspace{
+			"work": {
+				Name: "work",
+				Path: filepath.Join(root, "workspaces", "work"),
+				HostbridgeAllowedCommands: map[string]hostbridgeserver.AllowedCommand{
+					"echo-workspace": {
+						Name: "/bin/echo",
+						Args: []string{"workspace-ok"},
+					},
+				},
+			},
+		}, map[string]v5runtime.Factory{
+			"local": fakeRuntimeFactory{
+				runtimeKind:    "local",
+				rootDir:        root,
+				componentsRoot: filepath.Join(root, ".ctgbot", "components"),
+				state:          runtimeState,
+			},
+		}, registry)
+		system.StateRoot = filepath.Join(root, ".ctgbot")
+
+		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
+		if err != nil {
+			t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
+		}
+		agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
+		if err != nil {
+			t.Fatalf("EnsureComponent(mockagent) error = %v", err)
+		}
+
+		if err := system.AuthComponent(ctx, "mockagent", "", "", 0, 0, io.Discard, io.Discard); err != nil {
+			t.Fatalf("AuthComponent() error = %v", err)
+		}
+
+		chat := &coremodel.Chat{
+			Label:     "team",
+			Enabled:   true,
+			Workspace: "work",
+		}
+		if err := storage.Chats().Save(ctx, chat); err != nil {
+			t.Fatalf("Chats().Save() error = %v", err)
+		}
+
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleSource, messengerRegistration.Ref(), "chat-1"); err != nil {
+			t.Fatalf("BindChatComponent(source) error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleRelay, messengerRegistration.Ref(), "chat-1"); err != nil {
+			t.Fatalf("BindChatComponent(relay) error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleAgent, agentRegistration.Ref(), ""); err != nil {
+			t.Fatalf("BindChatComponent(agent) error = %v", err)
+		}
+
+		b := v5broker.New(storage, system, nil)
+		if err := b.Run(ctx); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		if agentState.turnCalls != 1 {
+			t.Fatalf("turn calls = %d, want 1", agentState.turnCalls)
+		}
+		if got, want := strings.TrimSpace(messengerState.relayPayloads[0].Text.Text), "workspace-ok"; got != want {
+			t.Fatalf("relay text = %q, want %q", got, want)
+		}
+	})
+}
+
 type pingCommand struct{}
 
 type commandState struct {
@@ -509,6 +626,7 @@ type hostbridgeRunAgent struct {
 	componentID modeluuid.UUID
 	runtime     v5runtime.Runtime
 	bridge      *v5hostbridgeserver.Bridge
+	command     string
 	state       *agentState
 }
 
@@ -625,13 +743,17 @@ func (a *hostbridgeRunAgent) HandleTurn(ctx context.Context, turn component.Turn
 	if _, err := os.Stat(filepath.Join(a.runtime.ComponentHome().Path, "auth.json")); err != nil {
 		return nil, fmt.Errorf("missing auth.json: %w", err)
 	}
+	commandName := strings.TrimSpace(a.command)
+	if commandName == "" {
+		commandName = "pwd"
+	}
 
 	result, err := a.bridge.DoCommand(ctx, turn.Thread.ID, turn.Runtime.Commands(), commandengine.Request{
 		Context: commandengine.Context{
 			SandboxID: turn.Thread.ID,
 		},
 		Command: schemacommands.RunCommand{
-			Command: "pwd",
+			Command: commandName,
 		},
 		DefinitionID: "hostbridge.run",
 		Route:        "run <command>",

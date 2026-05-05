@@ -6,13 +6,12 @@ import (
 	"log"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	component "github.com/bartdeboer/ctgbot/internal/v5/component"
-	brokercomponent "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
+	componentbroker "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
@@ -21,13 +20,13 @@ import (
 type InstanceResolver interface {
 	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
+	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
 }
 
 type Broker struct {
 	Storage  repository.Storage
 	Resolver InstanceResolver
 	Mapper   ThreadComponentMapper
-	Config   *appstate.Config
 	Logf     func(format string, args ...any)
 }
 
@@ -192,8 +191,18 @@ func (b *Broker) logf(format string, args ...any) {
 
 func (b *Broker) RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
 	allowed := hostbridgeserver.DefaultAllowedCommands()
-	if b != nil && b.Config != nil && !req.Context.ChatID.IsNull() {
-		allowed = brokercomponent.DefaultAllowedCommands(b.Config.Chat(req.Context.ChatID).Hostbridge().AllowedCommands())
+	if b != nil && b.Storage != nil && b.Resolver != nil && !req.Context.ChatID.IsNull() {
+		chat, err := b.Storage.Chats().GetByID(ctx, req.Context.ChatID)
+		if err != nil {
+			return commandengine.Result{}, err
+		}
+		if chat != nil {
+			extra, err := b.Resolver.ResolveChatHostbridgeAllowedCommands(ctx, *chat)
+			if err != nil {
+				return commandengine.Result{}, err
+			}
+			allowed = hostbridgeserver.MergeNamedAllowedCommands(extra)
+		}
 	}
 	runner := &hostbridgeserver.RunCommandRunner{
 		ResolveAllowed:    hostbridgeserver.StaticAllowedCommandResolver(allowed),
@@ -221,7 +230,7 @@ func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string
 		return "", err
 	}
 	if runtime == nil || runtime.MessageCommands == nil {
-		return brokercomponent.FormatHelp(nil), nil
+		return componentbroker.FormatHelp(nil), nil
 	}
-	return brokercomponent.FormatHelp(runtime.MessageCommands.Definitions()), nil
+	return componentbroker.FormatHelp(runtime.MessageCommands.Definitions()), nil
 }

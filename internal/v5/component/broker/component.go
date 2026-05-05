@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
-	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
@@ -177,8 +176,4 @@ func FormatHelp(definitions []commandengine.Definition) string {
 		return "Commands:\n/help"
 	}
 	return "Commands:\n" + strings.Join(out, "\n")
-}
-
-func DefaultAllowedCommands(extra map[string]hostbridgeserver.AllowedCommand) map[string]hostbridgeserver.AllowedCommand {
-	return hostbridgeserver.MergeNamedAllowedCommands(extra)
 }
