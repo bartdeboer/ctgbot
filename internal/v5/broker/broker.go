@@ -6,9 +6,13 @@ import (
 	"log"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	component "github.com/bartdeboer/ctgbot/internal/v5/component"
+	brokercomponent "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
@@ -23,6 +27,7 @@ type Broker struct {
 	Storage  repository.Storage
 	Resolver InstanceResolver
 	Mapper   ThreadComponentMapper
+	Config   *appstate.Config
 	Logf     func(format string, args ...any)
 }
 
@@ -183,4 +188,40 @@ func (b *Broker) logf(format string, args ...any) {
 		return
 	}
 	log.Printf(format, args...)
+}
+
+func (b *Broker) RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
+	allowed := hostbridgeserver.DefaultAllowedCommands()
+	if b != nil && b.Config != nil && !req.Context.ChatID.IsNull() {
+		allowed = brokercomponent.DefaultAllowedCommands(b.Config.Chat(req.Context.ChatID).Hostbridge().AllowedCommands())
+	}
+	runner := &hostbridgeserver.RunCommandRunner{
+		ResolveAllowed:    hostbridgeserver.StaticAllowedCommandResolver(allowed),
+		DefaultTimeoutSec: 30,
+	}
+	return runner.RunCommand(ctx, req, cmd)
+}
+
+func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string, error) {
+	if b == nil {
+		return "", fmt.Errorf("missing broker")
+	}
+	if chatID.IsNull() {
+		return "", fmt.Errorf("missing chat id")
+	}
+	chat, err := b.Storage.Chats().GetByID(ctx, chatID)
+	if err != nil {
+		return "", err
+	}
+	if chat == nil {
+		return "", fmt.Errorf("chat not found: %s", chatID)
+	}
+	runtime, err := b.runtimeForChat(ctx, *chat)
+	if err != nil {
+		return "", err
+	}
+	if runtime == nil || runtime.MessageCommands == nil {
+		return brokercomponent.FormatHelp(nil), nil
+	}
+	return brokercomponent.FormatHelp(runtime.MessageCommands.Definitions()), nil
 }

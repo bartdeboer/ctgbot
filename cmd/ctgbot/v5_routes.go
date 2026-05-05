@@ -52,7 +52,11 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				*dbPath,
 				resolveTelegramToken(*telegramToken, store),
 				*codexImage,
-				&runtimeProcessActions{stop: stop},
+				&runtimeProcessActions{
+					stop:    stop,
+					install: func(ctx context.Context) error { return runInstalledCtgbotCommand(ctx, "install") },
+					upgrade: func(ctx context.Context) error { return runInstalledCtgbotCommand(ctx, "upgrade") },
+				},
 			)
 			if err != nil {
 				return err
@@ -66,7 +70,9 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			if system.Logger != nil {
 				logf = system.Logger.Printf
 			}
-			return v5broker.New(system.Storage, system, logf).Run(runCtx)
+			broker := v5broker.New(system.Storage, system, logf)
+			broker.Config = system.Config
+			return broker.Run(runCtx)
 		})
 
 		b.Handle("v5 workspace set <workspace>", "Configure a v5 workspace", func(req *clir.Request) error {

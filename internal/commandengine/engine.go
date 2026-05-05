@@ -43,3 +43,10 @@ func (e *Engine) Execute(ctx context.Context, req Request) (Result, error) {
 	}
 	return e.Registry.Execute(ctx, req)
 }
+
+func (e *Engine) Definitions() []Definition {
+	if e == nil || e.Router == nil {
+		return nil
+	}
+	return e.Router.Definitions()
+}

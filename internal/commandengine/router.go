@@ -130,3 +130,14 @@ func (r *Router) definitionFor(id string) (Definition, bool) {
 	definition, ok := r.definitions[id]
 	return definition, ok
 }
+
+func (r *Router) Definitions() []Definition {
+	if r == nil {
+		return nil
+	}
+	out := make([]Definition, 0, len(r.definitions))
+	for _, definition := range r.definitions {
+		out = append(out, definition)
+	}
+	return out
+}

@@ -635,6 +635,16 @@ func (c *fakeCommandComponent) RegisterCommandHandlers(registry *commandengine.R
 
 type fakeProcessActions struct{}
 
+func (f *fakeProcessActions) Install(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
+func (f *fakeProcessActions) Upgrade(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
 func (f *fakeProcessActions) Quit(ctx context.Context) error {
 	_ = ctx
 	return nil
