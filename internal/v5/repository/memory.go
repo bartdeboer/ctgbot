@@ -152,6 +152,9 @@ func (r memoryThreads) Save(ctx context.Context, thread *coremodel.Thread) error
 	if thread == nil {
 		return nil
 	}
+	thread.Label = strings.TrimSpace(thread.Label)
+	thread.CodexModel = strings.TrimSpace(thread.CodexModel)
+	thread.CodexReasoningEffort = strings.TrimSpace(thread.CodexReasoningEffort)
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
 	now := time.Now()
@@ -373,6 +376,18 @@ func (r memoryThreadMappings) FindByChatComponentAndThreadID(ctx context.Context
 		}
 	}
 	return nil, nil
+}
+
+func (r memoryThreadMappings) DeleteByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) error {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for id, mapping := range r.s.threadComponentMaps {
+		if mapping.ThreadID == threadID && mapping.ComponentID == componentID {
+			delete(r.s.threadComponentMaps, id)
+		}
+	}
+	return nil
 }
 
 type memoryMessages struct{ s *MemoryStorage }

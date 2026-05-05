@@ -206,6 +206,17 @@ func (s *Sandbox) Ensure(ctx context.Context) (EnsureAction, error) {
 	return s.manager.ensure(ctx, s)
 }
 
+func (s *Sandbox) InspectState(ctx context.Context) (State, error) {
+	if s == nil || s.manager == nil {
+		return StateMissing, nil
+	}
+	if s.Name == "" {
+		return StateMissing, nil
+	}
+	state, err := s.manager.containerManager().InspectState(ctx, s.Name)
+	return State(state), err
+}
+
 func (s *Sandbox) Stop(ctx context.Context) error {
 	if s == nil || s.manager == nil {
 		return nil

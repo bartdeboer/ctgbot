@@ -449,7 +449,7 @@ func newV5Registry(ctx context.Context, system *v5system.System, telegramToken s
 		return nil, err
 	}
 	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.Logger, codexImage)
+		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.ResolveChatWorkspace, system.Logger, codexImage)
 	}); err != nil {
 		return nil, err
 	}

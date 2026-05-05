@@ -95,6 +95,9 @@ func (r *gormChats) List(ctx context.Context) ([]coremodel.Chat, error) {
 type gormThreads struct{ db *gorm.DB }
 
 func (r *gormThreads) Save(ctx context.Context, thread *coremodel.Thread) error {
+	thread.Label = strings.TrimSpace(thread.Label)
+	thread.CodexModel = clean(thread.CodexModel)
+	thread.CodexReasoningEffort = clean(thread.CodexReasoningEffort)
 	ensureID(&thread.ID)
 	return r.db.WithContext(ctx).Save(thread).Error
 }
@@ -273,6 +276,13 @@ func (r *gormThreadComponentMappings) FindByChatComponentAndThreadID(ctx context
 		return nil, nil
 	}
 	return &mapping, nil
+}
+
+func (r *gormThreadComponentMappings) DeleteByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) error {
+	return r.db.WithContext(ctx).
+		Where("thread_id = ? AND component_id = ?", threadID, componentID).
+		Delete(&coremodel.ThreadComponentMapping{}).
+		Error
 }
 
 type gormMessages struct{ db *gorm.DB }

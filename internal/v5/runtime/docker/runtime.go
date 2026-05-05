@@ -104,6 +104,82 @@ func (r *Runtime) RuntimeWorkspacePath(workspacePath string) string {
 	return v5runtime.DefaultWorkspaceRuntimePath
 }
 
+func (r *Runtime) Refresh(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) error {
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	return sbx.Remove(ctx)
+}
+
+func (r *Runtime) Start(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) (v5runtime.Status, error) {
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	if err != nil {
+		return v5runtime.Status{}, err
+	}
+	defer cleanup()
+	if _, err := sbx.Ensure(ctx); err != nil {
+		return v5runtime.Status{}, err
+	}
+	return r.statusForSandbox(ctx, workspacePath, sbx)
+}
+
+func (r *Runtime) Stop(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) error {
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	return sbx.Stop(ctx)
+}
+
+func (r *Runtime) Interrupt(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) (bool, error) {
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	if err != nil {
+		return false, err
+	}
+	defer cleanup()
+	if _, ok := sbx.ActiveCommand(); !ok {
+		return false, nil
+	}
+	return true, sbx.Interrupt()
+}
+
+func (r *Runtime) Status(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) (v5runtime.Status, error) {
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands)
+	if err != nil {
+		return v5runtime.Status{}, err
+	}
+	defer cleanup()
+	return r.statusForSandbox(ctx, workspacePath, sbx)
+}
+
 func (r *Runtime) Exec(
 	ctx context.Context,
 	workspacePath string,
@@ -234,6 +310,27 @@ func (r *Runtime) sandbox(
 		Cmd([]string{"tail", "-f", "/dev/null"}).
 		Build()
 	return r.sandboxes.CreateSandbox(spec), cleanup, nil
+}
+
+func (r *Runtime) statusForSandbox(ctx context.Context, workspacePath string, sbx *sandboxengine.Sandbox) (v5runtime.Status, error) {
+	if sbx == nil {
+		return v5runtime.Status{}, fmt.Errorf("missing sandbox")
+	}
+	state, err := sbx.InspectState(ctx)
+	if err != nil {
+		return v5runtime.Status{}, err
+	}
+	status := v5runtime.Status{
+		Name:                 sbx.Name,
+		State:                string(state),
+		RuntimeHomePath:      r.RuntimeComponentHomePath(),
+		RuntimeWorkspacePath: r.RuntimeWorkspacePath(workspacePath),
+	}
+	if active, ok := sbx.ActiveCommand(); ok {
+		status.ActiveCommandName = active.Name
+		status.ActiveCommandArgs = append([]string(nil), active.Args...)
+	}
+	return status, nil
 }
 
 func authSandboxName(registration coremodel.Component) string {

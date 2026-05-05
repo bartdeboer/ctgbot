@@ -88,6 +88,56 @@ func (r *Runtime) RuntimeWorkspacePath(workspacePath string) string {
 	return strings.TrimSpace(workspacePath)
 }
 
+func (r *Runtime) Refresh(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) error {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return fmt.Errorf("local runtime is not implemented yet")
+}
+
+func (r *Runtime) Start(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) (v5runtime.Status, error) {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return v5runtime.Status{}, fmt.Errorf("local runtime is not implemented yet")
+}
+
+func (r *Runtime) Stop(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) error {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return fmt.Errorf("local runtime is not implemented yet")
+}
+
+func (r *Runtime) Interrupt(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) (bool, error) {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return false, fmt.Errorf("local runtime is not implemented yet")
+}
+
+func (r *Runtime) Status(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) (v5runtime.Status, error) {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return v5runtime.Status{}, fmt.Errorf("local runtime is not implemented yet")
+}
+
 func (r *Runtime) Exec(
 	ctx context.Context,
 	workspacePath string,

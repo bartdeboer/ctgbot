@@ -127,6 +127,36 @@ func (r *fakeRuntime) RuntimeComponentHomePath() string {
 func (r *fakeRuntime) RuntimeWorkspacePath(workspacePath string) string {
 	return strings.TrimSpace(workspacePath)
 }
+func (r *fakeRuntime) Refresh(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return nil
+}
+func (r *fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (v5runtime.Status, error) {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return v5runtime.Status{
+		Name:                 "fake-runtime",
+		State:                "running",
+		RuntimeHomePath:      r.home.Path,
+		RuntimeWorkspacePath: strings.TrimSpace(workspacePath),
+	}, nil
+}
+func (r *fakeRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return nil
+}
+func (r *fakeRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (bool, error) {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return false, nil
+}
+func (r *fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (v5runtime.Status, error) {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return v5runtime.Status{
+		Name:                 "fake-runtime",
+		State:                "missing",
+		RuntimeHomePath:      r.home.Path,
+		RuntimeWorkspacePath: strings.TrimSpace(workspacePath),
+	}, nil
+}
 
 func (r *fakeRuntime) Exec(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	_, _, _, _ = ctx, commands, stdout, stderr

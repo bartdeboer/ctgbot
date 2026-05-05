@@ -14,6 +14,15 @@ type Home struct {
 	Path string
 }
 
+type Status struct {
+	Name                string
+	State               string
+	RuntimeHomePath     string
+	RuntimeWorkspacePath string
+	ActiveCommandName   string
+	ActiveCommandArgs   []string
+}
+
 const DefaultWorkspaceRuntimePath = "/workspace"
 
 type Factory interface {
@@ -34,6 +43,11 @@ type Runtime interface {
 	ComponentHome() Home
 	RuntimeComponentHomePath() string
 	RuntimeWorkspacePath(workspacePath string) string
+	Refresh(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error
+	Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (Status, error)
+	Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error
+	Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (bool, error)
+	Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (Status, error)
 
 	Exec(
 		ctx context.Context,

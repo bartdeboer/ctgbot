@@ -38,6 +38,26 @@ func (r fakeRuntime) RuntimeComponentHomePath() string {
 func (r fakeRuntime) RuntimeWorkspacePath(workspacePath string) string {
 	return workspacePath
 }
+func (r fakeRuntime) Refresh(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return fmt.Errorf("not implemented")
+}
+func (r fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (v5runtime.Status, error) {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return v5runtime.Status{}, fmt.Errorf("not implemented")
+}
+func (r fakeRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) error {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return fmt.Errorf("not implemented")
+}
+func (r fakeRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (bool, error) {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return false, fmt.Errorf("not implemented")
+}
+func (r fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor) (v5runtime.Status, error) {
+	_, _, _, _ = ctx, workspacePath, threadID, commands
+	return v5runtime.Status{}, fmt.Errorf("not implemented")
+}
 func (r fakeRuntime) Exec(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	_, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.kind
 	return fmt.Errorf("not implemented")

@@ -35,15 +35,22 @@ func New(
 	home v5runtime.Home,
 	storage repository.Storage,
 	cfg *appstate.Config,
+	resolveWorkspace func(context.Context, coremodel.Chat) (string, error),
 	logger *log.Logger,
 	image string,
 ) (component.Component, error) {
-	_, _ = ctx, storage
+	_ = ctx
 	if cfg == nil {
 		return nil, fmt.Errorf("missing config")
 	}
 	if runtimeFactory == nil {
 		return nil, fmt.Errorf("missing runtime factory")
+	}
+	if storage == nil {
+		return nil, fmt.Errorf("missing storage")
+	}
+	if resolveWorkspace == nil {
+		return nil, fmt.Errorf("missing workspace resolver")
 	}
 	runtimeHomePath := runtimeFactory.RuntimeComponentHomePath(registration, home)
 	runtime := runtimeFactory.Bind(
@@ -56,18 +63,22 @@ func New(
 		},
 	)
 	return &Component{
-		registration: registration,
-		runtime:      runtime,
-		config:       cfg,
-		executor:     codexengine.NewSessionExecutor(cfg, logger),
+		registration:     registration,
+		runtime:          runtime,
+		storage:          storage,
+		resolveWorkspace: resolveWorkspace,
+		config:           cfg,
+		executor:         codexengine.NewSessionExecutor(cfg, logger),
 	}, nil
 }
 
 type Component struct {
-	registration coremodel.Component
-	runtime      v5runtime.Runtime
-	config       *appstate.Config
-	executor     *codexengine.SessionExecutor
+	registration     coremodel.Component
+	runtime          v5runtime.Runtime
+	storage          repository.Storage
+	resolveWorkspace func(context.Context, coremodel.Chat) (string, error)
+	config           *appstate.Config
+	executor         *codexengine.SessionExecutor
 }
 
 func (c *Component) Type() string {
@@ -158,7 +169,11 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		workspacePath: workspacePath,
 		commands:      turn.Runtime.Commands(),
 	}
-	result, err := c.executor.HandleRuntimeTurn(ctx, run, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, agentcore.TurnOptions{})
+	options := agentcore.TurnOptions{
+		Model:           strings.TrimSpace(turn.Thread.CodexModel),
+		ReasoningEffort: strings.TrimSpace(turn.Thread.CodexReasoningEffort),
+	}
+	result, err := c.executor.HandleRuntimeTurn(ctx, run, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, options)
 	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && err == nil {
 		err = saveErr
 	}

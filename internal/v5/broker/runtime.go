@@ -33,6 +33,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		relays     []component.OutboundRelay
 		surfaces   []component.CommandSurface
 	)
+	commandSurfaceIDs := map[modeluuid.UUID]struct{}{}
 
 	for _, binding := range bindings {
 		instance := resolved[binding.ComponentID]
@@ -53,13 +54,22 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 					Agent:       agentImpl,
 				})
 			}
+			if surface, ok := instance.Component.(component.CommandSurface); ok {
+				if _, seen := commandSurfaceIDs[binding.ComponentID]; !seen {
+					commandSurfaceIDs[binding.ComponentID] = struct{}{}
+					surfaces = append(surfaces, surface)
+				}
+			}
 		case coremodel.ChatComponentRoleRelay:
 			if relay, ok := instance.Component.(component.OutboundRelay); ok {
 				relays = append(relays, relay)
 			}
 		case coremodel.ChatComponentRoleCommand:
 			if surface, ok := instance.Component.(component.CommandSurface); ok {
-				surfaces = append(surfaces, surface)
+				if _, seen := commandSurfaceIDs[binding.ComponentID]; !seen {
+					commandSurfaceIDs[binding.ComponentID] = struct{}{}
+					surfaces = append(surfaces, surface)
+				}
 			}
 		}
 	}
