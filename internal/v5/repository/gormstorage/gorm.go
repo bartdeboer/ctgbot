@@ -1,4 +1,4 @@
-package repository
+package gormstorage
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	"gorm.io/gorm"
 )
 
@@ -21,7 +22,7 @@ type GORMStorage struct {
 	artifacts      *gormArtifacts
 }
 
-func NewGORM(db *gorm.DB) *GORMStorage {
+func New(db *gorm.DB) *GORMStorage {
 	return &GORMStorage{
 		db:             db,
 		chats:          &gormChats{db: db},
@@ -46,15 +47,15 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 	)
 }
 
-func (s *GORMStorage) Chats() ChatRepository                   { return s.chats }
-func (s *GORMStorage) Threads() ThreadRepository               { return s.threads }
-func (s *GORMStorage) Components() ComponentRepository         { return s.components }
-func (s *GORMStorage) ChatComponents() ChatComponentRepository { return s.chatComponents }
-func (s *GORMStorage) ThreadComponentMappings() ThreadComponentMappingRepository {
+func (s *GORMStorage) Chats() repository.ChatRepository                   { return s.chats }
+func (s *GORMStorage) Threads() repository.ThreadRepository               { return s.threads }
+func (s *GORMStorage) Components() repository.ComponentRepository         { return s.components }
+func (s *GORMStorage) ChatComponents() repository.ChatComponentRepository { return s.chatComponents }
+func (s *GORMStorage) ThreadComponentMappings() repository.ThreadComponentMappingRepository {
 	return s.threadMappings
 }
-func (s *GORMStorage) Messages() MessageRepository   { return s.messages }
-func (s *GORMStorage) Artifacts() ArtifactRepository { return s.artifacts }
+func (s *GORMStorage) Messages() repository.MessageRepository   { return s.messages }
+func (s *GORMStorage) Artifacts() repository.ArtifactRepository { return s.artifacts }
 
 type gormChats struct{ db *gorm.DB }
 

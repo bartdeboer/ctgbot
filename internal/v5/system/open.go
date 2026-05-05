@@ -15,6 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	v5hostbridgeserver "github.com/bartdeboer/ctgbot/internal/v5/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
+	v5gormstorage "github.com/bartdeboer/ctgbot/internal/v5/repository/gormstorage"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	v5docker "github.com/bartdeboer/ctgbot/internal/v5/runtime/docker"
 	v5local "github.com/bartdeboer/ctgbot/internal/v5/runtime/local"
@@ -69,7 +70,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 		return nil, err
 	}
 
-	storage := repository.NewGORM(db)
+	storage := v5gormstorage.New(db)
 	if err := storage.AutoMigrate(ctx); err != nil {
 		return nil, err
 	}

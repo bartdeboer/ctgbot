@@ -18,6 +18,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
+	v5gormstorage "github.com/bartdeboer/ctgbot/internal/v5/repository/gormstorage"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -216,7 +217,7 @@ func newSQLiteStorage(t *testing.T) repository.Storage {
 	}
 	sqlDB.SetMaxOpenConns(1)
 	sqlDB.SetMaxIdleConns(1)
-	storage := repository.NewGORM(db)
+	storage := v5gormstorage.New(db)
 	if err := storage.AutoMigrate(context.Background()); err != nil {
 		t.Fatalf("AutoMigrate() error = %v", err)
 	}
