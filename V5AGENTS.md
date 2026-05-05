@@ -142,4 +142,4 @@ After the first bring-up, verify:
 
 For the intended long-term `v5` shape, see:
 
-- [V5DESIGN.md](/Users/bart/src/go/ctgbot/V5DESIGN.md)
+- `/workspace/WORKSPACE-DOCS/ctgbot/V5DESIGN.md` (workspace docs)

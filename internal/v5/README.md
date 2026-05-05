@@ -128,4 +128,4 @@ What is intentionally unfinished:
 
 For the more opinionated target model and CLI examples, see:
 
-- [V5DESIGN.md](/Users/bart/src/go/ctgbot/V5DESIGN.md)
+- `/workspace/WORKSPACE-DOCS/ctgbot/V5DESIGN.md` (workspace docs)
