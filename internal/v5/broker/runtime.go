@@ -30,7 +30,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	var (
 		components       []*component.Loaded
 		agents           []AgentBinding
-		relays           []component.OutboundRelay
+		relays           []RelayBinding
 		surfaces         []component.CommandSurface
 		runtimeWorkspace string
 	)
@@ -66,7 +66,11 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 			}
 		case coremodel.ChatComponentRoleRelay:
 			if relay, ok := instance.Component.(component.OutboundRelay); ok {
-				relays = append(relays, relay)
+				relays = append(relays, RelayBinding{
+					ComponentID: binding.ComponentID,
+					Binding:     binding,
+					Relay:       relay,
+				})
 			}
 		case coremodel.ChatComponentRoleCommand:
 			if surface, ok := instance.Component.(component.CommandSurface); ok {
@@ -173,22 +177,26 @@ func (r *agentTurnRuntime) StartChatAction(ctx context.Context, action messenger
 		return func() {}, nil
 	}
 	var stops []func()
-	targets, err := r.broker.relayTargetsForRuntime(ctx, r.runtime, r.thread)
-	if err != nil {
-		return nil, err
-	}
-	for _, relay := range r.runtime.Relays {
-		for _, target := range targets {
-			stop, err := relay.StartChatAction(ctx, target, action)
-			if err != nil {
-				for _, s := range stops {
-					s()
-				}
-				return nil, err
+	for _, relayBinding := range r.runtime.Relays {
+		target, ok, err := r.broker.Mapper.RelayTarget(ctx, r.thread.ID, relayBinding.Binding)
+		if err != nil {
+			for _, s := range stops {
+				s()
 			}
-			if stop != nil {
-				stops = append(stops, stop)
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		stop, err := relayBinding.Relay.StartChatAction(ctx, *target, action)
+		if err != nil {
+			for _, s := range stops {
+				s()
 			}
+			return nil, err
+		}
+		if stop != nil {
+			stops = append(stops, stop)
 		}
 	}
 	return func() {

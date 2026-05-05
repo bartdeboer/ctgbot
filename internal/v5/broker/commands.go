@@ -51,7 +51,7 @@ func (b *Broker) tryHandleMessageCommand(
 		return true, nil, nil
 	}
 
-	message, err := b.appendAndRelayMessage(
+	message, err := b.storeAndRelayMessage(
 		ctx,
 		runtime,
 		chat,

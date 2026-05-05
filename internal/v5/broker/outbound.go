@@ -13,7 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 )
 
-func (b *Broker) appendInbound(ctx context.Context, chat coremodel.Chat, thread coremodel.Thread, event component.InboundEvent) (*coremodel.ThreadMessage, error) {
+func (b *Broker) storeInboundMessage(ctx context.Context, chat coremodel.Chat, thread coremodel.Thread, event component.InboundEvent) (*coremodel.ThreadMessage, error) {
 	actor := event.Payload.ResolvedActor()
 	message := &coremodel.ThreadMessage{
 		ChatID:       chat.ID,
@@ -57,7 +57,87 @@ func inboundKind(event component.InboundEvent) coremodel.MessageKind {
 	return coremodel.MessageKindEvent
 }
 
-func (b *Broker) appendAndRelayMessage(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, message coremodel.ThreadMessage, sourceType string) (*coremodel.ThreadMessage, error) {
+func (b *Broker) storeMessageArtifacts(ctx context.Context, message *coremodel.ThreadMessage, attachments []messenger.Media) error {
+	if message == nil {
+		return fmt.Errorf("missing message")
+	}
+	for _, media := range attachments {
+		if err := b.Storage.Artifacts().Append(ctx, &coremodel.Artifact{
+			ChatID:      message.ChatID,
+			ThreadID:    message.ThreadID,
+			MessageID:   message.ID,
+			ComponentID: message.ComponentID,
+			Filename:    strings.TrimSpace(media.Filename),
+			ContentType: strings.TrimSpace(media.ContentType),
+			Syntax:      strings.TrimSpace(media.Syntax),
+			Content:     append([]byte(nil), media.Content...),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *Broker) storeOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []messenger.Media) error {
+	if message == nil {
+		return fmt.Errorf("missing message")
+	}
+	if err := b.Storage.Messages().Append(ctx, message); err != nil {
+		return err
+	}
+	return b.storeMessageArtifacts(ctx, message, attachments)
+}
+
+func (b *Broker) relayPayloadToRelayBindings(ctx context.Context, relayBindings []RelayBinding, thread coremodel.Thread, payload messenger.OutboundPayload) error {
+	if len(relayBindings) == 0 || payload.IsZero() {
+		return nil
+	}
+	for _, relayBinding := range relayBindings {
+		target, ok, err := b.Mapper.RelayTarget(ctx, thread.ID, relayBinding.Binding)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		outbound := payload
+		outbound.ProviderChatID = target.ProviderChatID
+		outbound.ProviderThreadID = target.ProviderThreadID
+		if err := relayBinding.Relay.Send(ctx, outbound); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *Broker) resolveRelayBindingsForChat(ctx context.Context, chatID modeluuid.UUID) ([]RelayBinding, error) {
+	bindings, err := b.Storage.ChatComponents().ListEnabledByChatID(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	relayBindings := make([]RelayBinding, 0, len(bindings))
+	for _, binding := range bindings {
+		if binding.Role != coremodel.ChatComponentRoleRelay {
+			continue
+		}
+		instance, err := b.Resolver.ResolveComponent(ctx, binding.ComponentID)
+		if err != nil {
+			return nil, err
+		}
+		relay, ok := instance.Component.(component.OutboundRelay)
+		if !ok {
+			continue
+		}
+		relayBindings = append(relayBindings, RelayBinding{
+			ComponentID: binding.ComponentID,
+			Binding:     binding,
+			Relay:       relay,
+		})
+	}
+	return relayBindings, nil
+}
+
+func (b *Broker) storeAndRelayMessage(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, message coremodel.ThreadMessage, sourceType string) (*coremodel.ThreadMessage, error) {
 	message.ChatID = chat.ID
 	message.ThreadID = thread.ID
 	message.Direction = coremodel.MessageDirectionOutbound
@@ -67,24 +147,15 @@ func (b *Broker) appendAndRelayMessage(ctx context.Context, runtime *ChatRuntime
 	if strings.TrimSpace(message.ActorLabel) == "" {
 		message.ActorLabel = sourceType
 	}
-	if err := b.Storage.Messages().Append(ctx, &message); err != nil {
+	if err := b.storeOutboundMessage(ctx, &message, nil); err != nil {
 		return nil, err
 	}
 	payload := messenger.OutboundPayload{
 		Text: messenger.TextMessage{Text: message.Text},
 	}
-	targets, err := b.relayTargetsForRuntime(ctx, runtime, thread)
-	if err != nil {
-		return nil, err
-	}
-	for _, relay := range runtime.Relays {
-		for _, target := range targets {
-			outbound := payload
-			outbound.ProviderChatID = target.ProviderChatID
-			outbound.ProviderThreadID = target.ProviderThreadID
-			if err := relay.Send(ctx, outbound); err != nil {
-				return nil, err
-			}
+	if runtime != nil {
+		if err := b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, payload); err != nil {
+			return nil, err
 		}
 	}
 	return &message, nil
@@ -102,36 +173,11 @@ func (b *Broker) deliverPayload(ctx context.Context, runtime *ChatRuntime, chat 
 		ComponentID: componentID,
 		Text:        strings.TrimSpace(payload.Text.Text),
 	}
-	if err := b.Storage.Messages().Append(ctx, &message); err != nil {
+	if err := b.storeOutboundMessage(ctx, &message, payload.Attachments); err != nil {
 		return nil, err
 	}
-	for _, media := range payload.Attachments {
-		if err := b.Storage.Artifacts().Append(ctx, &coremodel.Artifact{
-			ChatID:      chat.ID,
-			ThreadID:    thread.ID,
-			MessageID:   message.ID,
-			ComponentID: componentID,
-			Filename:    strings.TrimSpace(media.Filename),
-			ContentType: strings.TrimSpace(media.ContentType),
-			Syntax:      strings.TrimSpace(media.Syntax),
-			Content:     append([]byte(nil), media.Content...),
-		}); err != nil {
-			return nil, err
-		}
-	}
-	targets, err := b.relayTargetsForRuntime(ctx, runtime, thread)
-	if err != nil {
+	if err := b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, payload); err != nil {
 		return nil, err
-	}
-	for _, relay := range runtime.Relays {
-		for _, target := range targets {
-			outbound := payload
-			outbound.ProviderChatID = target.ProviderChatID
-			outbound.ProviderThreadID = target.ProviderThreadID
-			if err := relay.Send(ctx, outbound); err != nil {
-				return nil, err
-			}
-		}
 	}
 	return []coremodel.ThreadMessage{message}, nil
 }
@@ -237,28 +283,7 @@ func injectFilesIntoPrompt(paths []string, prompt string) string {
 	return strings.TrimSpace(b.String())
 }
 
-func (b *Broker) relayTargetsForRuntime(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread) ([]messenger.ChatTarget, error) {
-	if runtime == nil {
-		return nil, nil
-	}
-	var out []messenger.ChatTarget
-	for _, binding := range runtime.Bindings {
-		if binding.Role != coremodel.ChatComponentRoleRelay {
-			continue
-		}
-		target, ok, err := b.Mapper.RelayTarget(ctx, thread.ID, binding)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			continue
-		}
-		out = append(out, *target)
-	}
-	return out, nil
-}
-
-func (b *Broker) relaySystemMessage(ctx context.Context, chat coremodel.Chat, thread coremodel.Thread, text string) (*coremodel.ThreadMessage, error) {
+func (b *Broker) relaySystemMessage(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, text string) (*coremodel.ThreadMessage, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil, nil
@@ -273,39 +298,22 @@ func (b *Broker) relaySystemMessage(ctx context.Context, chat coremodel.Chat, th
 		Text:        text,
 		ComponentID: modeluuid.UUID{},
 	}
-	if err := b.Storage.Messages().Append(ctx, message); err != nil {
-		return nil, err
-	}
-	bindings, err := b.Storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
-	if err != nil {
+	if err := b.storeOutboundMessage(ctx, message, nil); err != nil {
 		return nil, err
 	}
 	payload := messenger.OutboundPayload{Text: messenger.TextMessage{Text: text}}
-	for _, binding := range bindings {
-		if binding.Role != coremodel.ChatComponentRoleRelay {
-			continue
-		}
-		target, ok, err := b.Mapper.RelayTarget(ctx, thread.ID, binding)
+	relayBindings := []RelayBinding(nil)
+	if runtime != nil {
+		relayBindings = runtime.Relays
+	} else {
+		var err error
+		relayBindings, err = b.resolveRelayBindingsForChat(ctx, chat.ID)
 		if err != nil {
 			return nil, err
 		}
-		if !ok {
-			continue
-		}
-		instance, err := b.Resolver.ResolveComponent(ctx, binding.ComponentID)
-		if err != nil {
-			return nil, err
-		}
-		relay, ok := instance.Component.(component.OutboundRelay)
-		if !ok {
-			continue
-		}
-		outbound := payload
-		outbound.ProviderChatID = target.ProviderChatID
-		outbound.ProviderThreadID = target.ProviderThreadID
-		if err := relay.Send(ctx, outbound); err != nil {
-			return nil, err
-		}
+	}
+	if err := b.relayPayloadToRelayBindings(ctx, relayBindings, thread, payload); err != nil {
+		return nil, err
 	}
 	return message, nil
 }

@@ -43,7 +43,7 @@ type ChatRuntime struct {
 	Bindings         []coremodel.ChatComponent
 	Components       []*component.Loaded
 	Agents           []AgentBinding
-	Relays           []component.OutboundRelay
+	Relays           []RelayBinding
 	MessageCommands  *commandengine.Engine
 	AgentCommands    *commandengine.Engine
 	Homes            map[modeluuid.UUID]v5runtime.Home
@@ -52,6 +52,12 @@ type ChatRuntime struct {
 type AgentBinding struct {
 	ComponentID modeluuid.UUID
 	Agent       component.Agent
+}
+
+type RelayBinding struct {
+	ComponentID modeluuid.UUID
+	Binding     coremodel.ChatComponent
+	Relay       component.OutboundRelay
 }
 
 func New(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any)) *Broker {
@@ -96,12 +102,13 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	if err != nil {
 		return EventOutcome{}, err
 	}
+	var runtime *ChatRuntime
 	failConversation := func(inbound *coremodel.ThreadMessage, outbound []coremodel.ThreadMessage, turnErr error) (EventOutcome, error) {
 		text := conversationErrorText(turnErr)
 		if text == "" {
 			return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
 		}
-		message, relayErr := b.relaySystemMessage(ctx, *chat, *thread, text)
+		message, relayErr := b.relaySystemMessage(ctx, runtime, *chat, *thread, text)
 		if relayErr != nil {
 			b.logf("v5 inbound error relay failed chat=%s thread=%s err=%v", chat.ID, thread.ID, relayErr)
 			return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
@@ -113,7 +120,6 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	}
 
 	rawText := strings.TrimSpace(event.Payload.Text.Text)
-	var runtime *ChatRuntime
 	if _, ok := commandArgv(rawText); ok {
 		runtime, err = b.runtimeForChat(ctx, *chat)
 		if err != nil {
@@ -152,12 +158,12 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		}
 	}
 
-	inbound, err := b.appendInbound(ctx, *chat, *thread, event)
+	inbound, err := b.storeInboundMessage(ctx, *chat, *thread, event)
 	if err != nil {
 		return failConversation(nil, nil, err)
 	}
 	if rawText == "" && len(savedPaths) > 0 {
-		message, relayErr := b.relaySystemMessage(ctx, *chat, *thread, uploadSavedMessage(savedPaths))
+		message, relayErr := b.relaySystemMessage(ctx, runtime, *chat, *thread, uploadSavedMessage(savedPaths))
 		if relayErr != nil {
 			return failConversation(inbound, nil, relayErr)
 		}
@@ -208,7 +214,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		if strings.TrimSpace(result.Final.Text) == turnRuntime.LastText() {
 			continue
 		}
-		message, err := b.appendAndRelayMessage(ctx, runtime, *chat, *thread, *result.Final, agentBinding.Agent.Type())
+		message, err := b.storeAndRelayMessage(ctx, runtime, *chat, *thread, *result.Final, agentBinding.Agent.Type())
 		if err != nil {
 			return failConversation(inbound, outbound, err)
 		}
