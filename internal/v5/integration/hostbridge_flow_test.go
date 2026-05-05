@@ -31,6 +31,31 @@ func init() {
 	gob.Register(pingCommand{})
 }
 
+func skipIfHostbridgeListenerUnavailable(t *testing.T, bridge *v5hostbridgeserver.Bridge) {
+	t.Helper()
+
+	_, _, unregister, err := bridge.BindThread(modeluuid.New(), nil)
+	if err == nil {
+		if unregister != nil {
+			unregister()
+		}
+		return
+	}
+	if isHostbridgeListenerUnavailable(err) {
+		t.Skipf("hostbridge listener unavailable in this environment: %v", err)
+	}
+	t.Fatalf("hostbridge availability probe error = %v", err)
+}
+
+func isHostbridgeListenerUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := err.Error()
+	return strings.Contains(text, "bind: operation not permitted") ||
+		strings.Contains(text, "listen tcp") && strings.Contains(text, "operation not permitted")
+}
+
 func TestV5HostbridgeFlow(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
@@ -40,6 +65,7 @@ func TestV5HostbridgeFlow(t *testing.T) {
 		t.Cleanup(func() {
 			_ = bridge.Close()
 		})
+		skipIfHostbridgeListenerUnavailable(t, bridge)
 
 		runtimeState := &runtimeState{}
 		messengerState := &messengerState{
@@ -184,6 +210,7 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 		t.Cleanup(func() {
 			_ = bridge.Close()
 		})
+		skipIfHostbridgeListenerUnavailable(t, bridge)
 
 		runtimeState := &runtimeState{}
 		messengerState := &messengerState{
@@ -340,6 +367,7 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 		t.Cleanup(func() {
 			_ = bridge.Close()
 		})
+		skipIfHostbridgeListenerUnavailable(t, bridge)
 
 		runtimeState := &runtimeState{}
 		messengerState := &messengerState{
@@ -453,6 +481,7 @@ func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 		t.Cleanup(func() {
 			_ = bridge.Close()
 		})
+		skipIfHostbridgeListenerUnavailable(t, bridge)
 
 		runtimeState := &runtimeState{}
 		messengerState := &messengerState{

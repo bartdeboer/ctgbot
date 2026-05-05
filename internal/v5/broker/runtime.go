@@ -28,10 +28,11 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	resolved := map[modeluuid.UUID]*component.Loaded{}
 	homes := map[modeluuid.UUID]v5runtime.Home{}
 	var (
-		components []*component.Loaded
-		agents     []AgentBinding
-		relays     []component.OutboundRelay
-		surfaces   []component.CommandSurface
+		components       []*component.Loaded
+		agents           []AgentBinding
+		relays           []component.OutboundRelay
+		surfaces         []component.CommandSurface
+		runtimeWorkspace string
 	)
 	commandSurfaceIDs := map[modeluuid.UUID]struct{}{}
 
@@ -53,6 +54,9 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 					ComponentID: binding.ComponentID,
 					Agent:       agentImpl,
 				})
+				if runtimeWorkspace == "" && instance.Runtime != nil {
+					runtimeWorkspace = strings.TrimSpace(instance.Runtime.RuntimeWorkspacePath(workspace))
+				}
 			}
 			if surface, ok := instance.Component.(component.CommandSurface); ok {
 				if _, seen := commandSurfaceIDs[binding.ComponentID]; !seen {
@@ -73,6 +77,9 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 			}
 		}
 	}
+	if runtimeWorkspace == "" {
+		runtimeWorkspace = workspace
+	}
 
 	surfaces = append(surfaces, brokercomponent.New(b))
 
@@ -86,15 +93,16 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 
 	return &ChatRuntime{
-		Chat:            chat,
-		Workspace:       workspace,
-		Bindings:        bindings,
-		Components:      components,
-		Agents:          agents,
-		Relays:          relays,
-		MessageCommands: messageCommands,
-		AgentCommands:   agentCommands,
-		Homes:           homes,
+		Chat:             chat,
+		Workspace:        workspace,
+		RuntimeWorkspace: runtimeWorkspace,
+		Bindings:         bindings,
+		Components:       components,
+		Agents:           agents,
+		Relays:           relays,
+		MessageCommands:  messageCommands,
+		AgentCommands:    agentCommands,
+		Homes:            homes,
 	}, nil
 }
 

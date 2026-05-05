@@ -46,6 +46,7 @@ type Thread struct {
 	ID                   modeluuid.UUID `gorm:"primaryKey"`
 	ChatID               modeluuid.UUID `gorm:"index"`
 	Label                string
+	KeepRunning          bool
 	CodexModel           string
 	CodexReasoningEffort string
 

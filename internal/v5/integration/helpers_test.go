@@ -27,6 +27,7 @@ import (
 type runtimeState struct {
 	mu           sync.Mutex
 	execCalls    int
+	stopCalls    int
 	lastThreadID modeluuid.UUID
 	lastName     string
 	lastArgs     []string
@@ -142,6 +143,9 @@ func (r *fakeRuntime) Start(ctx context.Context, workspacePath string, threadID 
 }
 func (r *fakeRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
 	_, _, _ = ctx, workspacePath, threadID
+	r.state.mu.Lock()
+	r.state.stopCalls++
+	r.state.mu.Unlock()
 	return nil
 }
 func (r *fakeRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (bool, error) {

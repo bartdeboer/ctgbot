@@ -200,7 +200,11 @@ func (c *Component) start(ctx context.Context, req commandengine.Request) (comma
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: fmt.Sprintf("container started\ncontainer: %s\nstate: %s", status.Name, status.State)}, nil
+	thread.KeepRunning = true
+	if err := c.storage.Threads().Save(ctx, thread); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("container started\nkeep_running: true\ncontainer: %s\nstate: %s", status.Name, status.State)}, nil
 }
 
 func (c *Component) stop(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
@@ -211,7 +215,11 @@ func (c *Component) stop(ctx context.Context, req commandengine.Request) (comman
 	if err := c.runtime.Stop(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "container stopped"}, nil
+	thread.KeepRunning = false
+	if err := c.storage.Threads().Save(ctx, thread); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "container stopped\nkeep_running: false"}, nil
 }
 
 func (c *Component) purge(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
@@ -220,6 +228,10 @@ func (c *Component) purge(ctx context.Context, req commandengine.Request) (comma
 		return commandengine.Result{}, err
 	}
 	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
+		return commandengine.Result{}, err
+	}
+	thread.KeepRunning = false
+	if err := c.storage.Threads().Save(ctx, thread); err != nil {
 		return commandengine.Result{}, err
 	}
 	if err := c.storage.ThreadComponentMappings().DeleteByThreadAndComponent(ctx, thread.ID, c.registration.ID); err != nil {
@@ -268,6 +280,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 	lines := []string{
 		"chat_id: " + thread.ChatID.String(),
 		"thread_id: " + thread.ID.String(),
+		fmt.Sprintf("keep_running: %t", thread.KeepRunning),
 		"runtime: " + c.runtime.Kind(),
 		"container: " + status.Name,
 		"container_state: " + status.State,

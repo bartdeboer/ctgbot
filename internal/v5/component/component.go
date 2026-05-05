@@ -30,6 +30,7 @@ type Constructor func(
 type Loaded struct {
 	Registration coremodel.Component
 	Home         v5runtime.Home
+	Runtime      v5runtime.Factory
 	Component    Component
 }
 
@@ -95,6 +96,7 @@ func (r *Registry) Build(
 	return &Loaded{
 		Registration: registration,
 		Home:         home,
+		Runtime:      runtime,
 		Component:    value,
 	}, nil
 }

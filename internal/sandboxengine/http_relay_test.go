@@ -9,6 +9,17 @@ import (
 	"time"
 )
 
+func skipIfListenerUnavailable(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+	text := err.Error()
+	if strings.Contains(text, "bind: operation not permitted") || (strings.Contains(text, "listen tcp") && strings.Contains(text, "operation not permitted")) {
+		t.Skipf("listener unavailable in this environment: %v", err)
+	}
+}
+
 func TestRelayTargetURLPreservesPathAndQuery(t *testing.T) {
 	t.Parallel()
 
@@ -33,6 +44,7 @@ func TestHTTPRelayCopiesContainerResponse(t *testing.T) {
 		},
 	})
 	if err != nil {
+		skipIfListenerUnavailable(t, err)
 		t.Fatalf("start relay: %v", err)
 	}
 	defer func() { _ = relay.Close(context.Background()) }()
@@ -67,6 +79,7 @@ func TestHTTPRelayRejectsNonGET(t *testing.T) {
 		},
 	})
 	if err != nil {
+		skipIfListenerUnavailable(t, err)
 		t.Fatalf("start relay: %v", err)
 	}
 	defer func() { _ = relay.Close(context.Background()) }()
@@ -93,6 +106,7 @@ func TestHTTPRelayReturnsBadGatewayForInvalidContainerResponse(t *testing.T) {
 		},
 	})
 	if err != nil {
+		skipIfListenerUnavailable(t, err)
 		t.Fatalf("start relay: %v", err)
 	}
 	defer func() { _ = relay.Close(context.Background()) }()
@@ -118,6 +132,7 @@ func TestHTTPRelayTimeoutClosesServer(t *testing.T) {
 		},
 	})
 	if err != nil {
+		skipIfListenerUnavailable(t, err)
 		t.Fatalf("start relay: %v", err)
 	}
 

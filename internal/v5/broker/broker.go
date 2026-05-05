@@ -37,15 +37,16 @@ type EventOutcome struct {
 }
 
 type ChatRuntime struct {
-	Chat            coremodel.Chat
-	Workspace       string
-	Bindings        []coremodel.ChatComponent
-	Components      []*component.Loaded
-	Agents          []AgentBinding
-	Relays          []component.OutboundRelay
-	MessageCommands *commandengine.Engine
-	AgentCommands   *commandengine.Engine
-	Homes           map[modeluuid.UUID]v5runtime.Home
+	Chat             coremodel.Chat
+	Workspace        string
+	RuntimeWorkspace string
+	Bindings         []coremodel.ChatComponent
+	Components       []*component.Loaded
+	Agents           []AgentBinding
+	Relays           []component.OutboundRelay
+	MessageCommands  *commandengine.Engine
+	AgentCommands    *commandengine.Engine
+	Homes            map[modeluuid.UUID]v5runtime.Home
 }
 
 type AgentBinding struct {
@@ -95,12 +96,28 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	if err != nil {
 		return EventOutcome{}, err
 	}
+	failConversation := func(inbound *coremodel.ThreadMessage, outbound []coremodel.ThreadMessage, turnErr error) (EventOutcome, error) {
+		text := conversationErrorText(turnErr)
+		if text == "" {
+			return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+		}
+		message, relayErr := b.relaySystemMessage(ctx, *chat, *thread, text)
+		if relayErr != nil {
+			b.logf("v5 inbound error relay failed chat=%s thread=%s err=%v", chat.ID, thread.ID, relayErr)
+			return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+		}
+		if message != nil {
+			outbound = append(outbound, *message)
+		}
+		return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+	}
 
+	rawText := strings.TrimSpace(event.Payload.Text.Text)
 	var runtime *ChatRuntime
-	if _, ok := commandArgv(event.Payload.Text.Text); ok {
+	if _, ok := commandArgv(rawText); ok {
 		runtime, err = b.runtimeForChat(ctx, *chat)
 		if err != nil {
-			return EventOutcome{}, err
+			return failConversation(nil, nil, err)
 		}
 		handled, commandOutbound, err := b.tryHandleMessageCommand(
 			ctx,
@@ -110,22 +127,55 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 			runtime,
 		)
 		if err != nil {
-			return EventOutcome{Outbound: commandOutbound}, err
+			return failConversation(nil, commandOutbound, err)
 		}
 		if handled {
 			return EventOutcome{Outbound: commandOutbound}, nil
 		}
 	}
 
+	var savedPaths []string
+	if len(event.Payload.Attachments) > 0 {
+		if runtime == nil {
+			runtime, err = b.runtimeForChat(ctx, *chat)
+			if err != nil {
+				return failConversation(nil, nil, err)
+			}
+		}
+		workspacePath, resolveErr := b.Resolver.ResolveChatWorkspace(ctx, *chat)
+		if resolveErr != nil {
+			return failConversation(nil, nil, resolveErr)
+		}
+		savedPaths, err = materializeIncomingAttachments(workspacePath, runtime.RuntimeWorkspace, event.Payload.Attachments)
+		if err != nil {
+			return failConversation(nil, nil, err)
+		}
+	}
+
 	inbound, err := b.appendInbound(ctx, *chat, *thread, event)
 	if err != nil {
-		return EventOutcome{}, err
+		return failConversation(nil, nil, err)
+	}
+	if rawText == "" && len(savedPaths) > 0 {
+		message, relayErr := b.relaySystemMessage(ctx, *chat, *thread, uploadSavedMessage(savedPaths))
+		if relayErr != nil {
+			return failConversation(inbound, nil, relayErr)
+		}
+		outbound := []coremodel.ThreadMessage{}
+		if message != nil {
+			outbound = append(outbound, *message)
+		}
+		return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+	}
+	turnInbound := *inbound
+	if len(savedPaths) > 0 {
+		turnInbound.Text = injectFilesIntoPrompt(savedPaths, rawText)
 	}
 
 	if runtime == nil {
 		runtime, err = b.runtimeForChat(ctx, *chat)
 		if err != nil {
-			return EventOutcome{Inbound: inbound}, err
+			return failConversation(inbound, nil, err)
 		}
 	}
 
@@ -144,13 +194,13 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		result, err := agentBinding.Agent.HandleTurn(ctx, component.Turn{
 			Chat:    *chat,
 			Thread:  *thread,
-			Inbound: *inbound,
+			Inbound: turnInbound,
 			Runtime: turnRuntime,
 		})
 		outbound = append(outbound, turnRuntime.outputs...)
 		turnRuntime.outputs = nil
 		if err != nil {
-			return EventOutcome{Inbound: inbound, Outbound: outbound}, err
+			return failConversation(inbound, outbound, err)
 		}
 		if result == nil || result.Final == nil || strings.TrimSpace(result.Final.Text) == "" {
 			continue
@@ -160,7 +210,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		}
 		message, err := b.appendAndRelayMessage(ctx, runtime, *chat, *thread, *result.Final, agentBinding.Agent.Type())
 		if err != nil {
-			return EventOutcome{Inbound: inbound, Outbound: outbound}, err
+			return failConversation(inbound, outbound, err)
 		}
 		outbound = append(outbound, *message)
 	}

@@ -22,6 +22,7 @@ import (
 type testRuntime struct {
 	status       v5runtime.Status
 	refreshCalls int
+	stopCalls    int
 }
 
 func (r *testRuntime) Kind() string { return "docker" }
@@ -46,6 +47,7 @@ func (r *testRuntime) Start(ctx context.Context, workspacePath string, threadID 
 }
 func (r *testRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
 	_, _, _ = ctx, workspacePath, threadID
+	r.stopCalls++
 	return nil
 }
 func (r *testRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (bool, error) {
@@ -135,6 +137,7 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 		}
 		for _, want := range []string{
 			"container_state: running",
+			"keep_running: false",
 			"codex_model: gpt-test",
 			"codex_model_source: thread",
 			"provider_thread_id: (none)",
@@ -142,6 +145,85 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 			if !strings.Contains(statusResult.Text, want) {
 				t.Fatalf("status missing %q:\n%s", want, statusResult.Text)
 			}
+		}
+	})
+}
+
+func TestCodexCommandStartAndStopToggleKeepRunning(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		cfg := newTestConfig(t, root)
+		storage := repository.NewMemory()
+		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
+		runtime := &testRuntime{
+			status: v5runtime.Status{
+				Name:                 "ctgbot-v5-codex-thread",
+				State:                "running",
+				RuntimeHomePath:      "/profile/components/codex/codex",
+				RuntimeWorkspacePath: "/workspace",
+			},
+		}
+		c := &Component{
+			registration: registration,
+			runtime:      runtime,
+			storage:      storage,
+			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+				_ = chat
+				return filepath.Join(root, "workspace"), nil
+			},
+			config: cfg,
+		}
+
+		chat := &coremodel.Chat{ID: modeluuid.New(), Label: "team", Enabled: true}
+		if err := storage.Chats().Save(ctx, chat); err != nil {
+			t.Fatalf("Chats().Save() error = %v", err)
+		}
+		thread := &coremodel.Thread{ID: modeluuid.New(), ChatID: chat.ID}
+		if err := storage.Threads().Save(ctx, thread); err != nil {
+			t.Fatalf("Threads().Save() error = %v", err)
+		}
+
+		engine := newCodexCommandEngine(t, c, commandengine.SourceMessage)
+		base := commandengine.Request{
+			Context: commandengine.Context{
+				Source:   commandengine.SourceMessage,
+				Actor:    commandengine.Actor{ID: "bart", Roles: []simplerbac.Role{simplerbac.RoleUser}},
+				ChatID:   chat.ID,
+				ThreadID: thread.ID,
+			},
+		}
+
+		startResult, err := engine.Run(ctx, base, []string{"codex", "container", "start"})
+		if err != nil {
+			t.Fatalf("start error = %v", err)
+		}
+		if got, want := startResult.Text, "container started\nkeep_running: true\ncontainer: ctgbot-v5-codex-thread\nstate: running"; got != want {
+			t.Fatalf("start text = %q, want %q", got, want)
+		}
+		saved, err := storage.Threads().GetByID(ctx, thread.ID)
+		if err != nil {
+			t.Fatalf("Threads().GetByID() after start error = %v", err)
+		}
+		if !saved.KeepRunning {
+			t.Fatal("KeepRunning = false, want true after start")
+		}
+
+		stopResult, err := engine.Run(ctx, base, []string{"codex", "container", "stop"})
+		if err != nil {
+			t.Fatalf("stop error = %v", err)
+		}
+		if got, want := stopResult.Text, "container stopped\nkeep_running: false"; got != want {
+			t.Fatalf("stop text = %q, want %q", got, want)
+		}
+		saved, err = storage.Threads().GetByID(ctx, thread.ID)
+		if err != nil {
+			t.Fatalf("Threads().GetByID() after stop error = %v", err)
+		}
+		if saved.KeepRunning {
+			t.Fatal("KeepRunning = true, want false after stop")
+		}
+		if got, want := runtime.stopCalls, 1; got != want {
+			t.Fatalf("stop calls = %d, want %d", got, want)
 		}
 	})
 }

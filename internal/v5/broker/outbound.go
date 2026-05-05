@@ -2,6 +2,9 @@ package broker
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/messenger"
@@ -169,6 +172,71 @@ func inboundMetadataJSON(payload messenger.InboundPayload) string {
 	return strings.Join(metadata, "\n")
 }
 
+func materializeIncomingAttachments(workspacePath string, runtimeWorkspacePath string, attachments []messenger.Media) ([]string, error) {
+	if len(attachments) == 0 {
+		return nil, nil
+	}
+	workspacePath = strings.TrimSpace(workspacePath)
+	if workspacePath == "" {
+		return nil, fmt.Errorf("missing workspace path")
+	}
+	runtimeWorkspacePath = strings.TrimSpace(runtimeWorkspacePath)
+	if runtimeWorkspacePath == "" {
+		runtimeWorkspacePath = workspacePath
+	}
+	inboxHost := filepath.Join(workspacePath, "inbox")
+	if err := os.MkdirAll(inboxHost, 0o755); err != nil {
+		return nil, err
+	}
+	savedPaths := make([]string, 0, len(attachments))
+	for _, attachment := range attachments {
+		filename := safeIncomingFilename(attachment.Filename)
+		targetHost := filepath.Join(inboxHost, filename)
+		if err := os.WriteFile(targetHost, attachment.Content, 0o644); err != nil {
+			return nil, err
+		}
+		savedPaths = append(savedPaths, filepath.ToSlash(filepath.Join(runtimeWorkspacePath, "inbox", filename)))
+	}
+	return savedPaths, nil
+}
+
+func safeIncomingFilename(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "upload.bin"
+	}
+	return name
+}
+
+func uploadSavedMessage(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	if len(paths) == 1 {
+		return "upload saved: " + paths[0]
+	}
+	return "uploads saved:\n- " + strings.Join(paths, "\n- ")
+}
+
+func injectFilesIntoPrompt(paths []string, prompt string) string {
+	prompt = strings.TrimSpace(prompt)
+	if len(paths) == 0 {
+		return prompt
+	}
+	var b strings.Builder
+	b.WriteString("Files made available:\n")
+	for _, path := range paths {
+		b.WriteString("- ")
+		b.WriteString(path)
+		b.WriteString("\n")
+	}
+	if prompt != "" {
+		b.WriteString("\n")
+		b.WriteString(prompt)
+	}
+	return strings.TrimSpace(b.String())
+}
+
 func (b *Broker) relayTargetsForRuntime(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread) ([]messenger.ChatTarget, error) {
 	if runtime == nil {
 		return nil, nil
@@ -188,4 +256,67 @@ func (b *Broker) relayTargetsForRuntime(ctx context.Context, runtime *ChatRuntim
 		out = append(out, *target)
 	}
 	return out, nil
+}
+
+func (b *Broker) relaySystemMessage(ctx context.Context, chat coremodel.Chat, thread coremodel.Thread, text string) (*coremodel.ThreadMessage, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil, nil
+	}
+	message := &coremodel.ThreadMessage{
+		ChatID:      chat.ID,
+		ThreadID:    thread.ID,
+		Direction:   coremodel.MessageDirectionOutbound,
+		Kind:        coremodel.MessageKindSystem,
+		ActorID:     "ctgbot",
+		ActorLabel:  "ctgbot",
+		Text:        text,
+		ComponentID: modeluuid.UUID{},
+	}
+	if err := b.Storage.Messages().Append(ctx, message); err != nil {
+		return nil, err
+	}
+	bindings, err := b.Storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
+	if err != nil {
+		return nil, err
+	}
+	payload := messenger.OutboundPayload{Text: messenger.TextMessage{Text: text}}
+	for _, binding := range bindings {
+		if binding.Role != coremodel.ChatComponentRoleRelay {
+			continue
+		}
+		target, ok, err := b.Mapper.RelayTarget(ctx, thread.ID, binding)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		instance, err := b.Resolver.ResolveComponent(ctx, binding.ComponentID)
+		if err != nil {
+			return nil, err
+		}
+		relay, ok := instance.Component.(component.OutboundRelay)
+		if !ok {
+			continue
+		}
+		outbound := payload
+		outbound.ProviderChatID = target.ProviderChatID
+		outbound.ProviderThreadID = target.ProviderThreadID
+		if err := relay.Send(ctx, outbound); err != nil {
+			return nil, err
+		}
+	}
+	return message, nil
+}
+
+func conversationErrorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	text := strings.TrimSpace(err.Error())
+	if text == "" {
+		return ""
+	}
+	return "conversation error: " + text
 }

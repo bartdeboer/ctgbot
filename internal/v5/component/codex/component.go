@@ -72,13 +72,17 @@ func New(
 	}, nil
 }
 
+type sessionExecutor interface {
+	HandleRuntimeTurn(ctx context.Context, runtime codexengine.ExecRuntime, output agentcore.OutputHandler, providerThreadID string, prompt string, options agentcore.TurnOptions) (agentcore.TurnResult, error)
+}
+
 type Component struct {
 	registration     coremodel.Component
 	runtime          v5runtime.Runtime
 	storage          repository.Storage
 	resolveWorkspace func(context.Context, coremodel.Chat) (string, error)
 	config           *appstate.Config
-	executor         *codexengine.SessionExecutor
+	executor         sessionExecutor
 }
 
 func (c *Component) Type() string {
@@ -174,6 +178,11 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		ReasoningEffort: strings.TrimSpace(turn.Thread.CodexReasoningEffort),
 	}
 	result, err := c.executor.HandleRuntimeTurn(ctx, run, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, options)
+	if !turn.Thread.KeepRunning {
+		if stopErr := c.runtime.Stop(ctx, workspacePath, turn.Thread.ID); stopErr != nil && err == nil {
+			err = stopErr
+		}
+	}
 	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && err == nil {
 		err = saveErr
 	}

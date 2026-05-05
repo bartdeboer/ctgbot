@@ -41,7 +41,10 @@ func (b *Broker) Run(ctx context.Context) error {
 		go func() {
 			err := source.RunInbound(runCtx, func(eventCtx context.Context, event component.InboundEvent) error {
 				_, handleErr := b.HandleInbound(eventCtx, event)
-				return handleErr
+				if handleErr != nil {
+					b.logf("v5 inbound handling failed component=%s external_id=%q err=%v", event.ComponentID, event.ExternalID, handleErr)
+				}
+				return nil
 			})
 			if err != nil && !errors.Is(err, context.Canceled) {
 				errCh <- fmt.Errorf("source %s: %w", source.Type(), err)

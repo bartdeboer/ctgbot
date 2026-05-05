@@ -354,6 +354,7 @@ func TestChatProfileEnsurePaths(t *testing.T) {
 
 func TestRootSettersAndGlobalConfig(t *testing.T) {
 	cfg, _ := newTestConfig(t)
+	t.Setenv("HOME", t.TempDir())
 	global, err := clistate.NewGlobal("ctgbot", "config")
 	if err != nil {
 		t.Fatalf("new global store: %v", err)
