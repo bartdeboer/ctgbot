@@ -2,6 +2,7 @@ package docker
 
 import (
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -52,8 +53,12 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	if !hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
 		t.Fatalf("expected hostbridge TLS mount in %#v", sandbox.Mounts)
 	}
-	if !hasAddHost(sandbox.AddHosts, "host.docker.internal:host-gateway") {
-		t.Fatalf("expected host.docker.internal add-host in %#v", sandbox.AddHosts)
+	if goruntime.GOOS == "linux" {
+		if !hasAddHost(sandbox.AddHosts, "host.docker.internal:host-gateway") {
+			t.Fatalf("expected host.docker.internal add-host in %#v", sandbox.AddHosts)
+		}
+	} else if len(sandbox.AddHosts) != 0 {
+		t.Fatalf("unexpected add-hosts on %s: %#v", goruntime.GOOS, sandbox.AddHosts)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"time"
 
@@ -263,7 +264,7 @@ func (r *Runtime) sandbox(
 			Env(append([]string{}, r.env...)).
 			Mounts([]sandboxengine.Mount{{Source: r.home.Path, Target: runtimeHomePath}}).
 			SecurityOpts([]string{"seccomp=unconfined"}).
-			AddHosts([]string{"host.docker.internal:host-gateway"}).
+			AddHosts(sandboxAddHosts()).
 			Cmd([]string{"tail", "-f", "/dev/null"}).
 			Build()
 		return r.sandboxes.CreateSandbox(spec), func() {}, nil
@@ -302,10 +303,17 @@ func (r *Runtime) sandbox(
 		Env(env).
 		Mounts(mounts).
 		SecurityOpts([]string{"seccomp=unconfined"}).
-		AddHosts([]string{"host.docker.internal:host-gateway"}).
+		AddHosts(sandboxAddHosts()).
 		Cmd([]string{"tail", "-f", "/dev/null"}).
 		Build()
 	return r.sandboxes.CreateSandbox(spec), cleanup, nil
+}
+
+func sandboxAddHosts() []string {
+	if goruntime.GOOS != "linux" {
+		return nil
+	}
+	return []string{"host.docker.internal:host-gateway"}
 }
 
 func (r *Runtime) statusForSandbox(ctx context.Context, workspacePath string, sbx *sandboxengine.Sandbox) (v5runtime.Status, error) {
