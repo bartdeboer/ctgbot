@@ -22,10 +22,9 @@ import (
 )
 
 const (
-	// Type is intentionally distinct while codex2 lives beside the existing v5
-	// codex component. If codex2 replaces codex, this can become "codex" at the
-	// registry boundary without changing the internal implementation.
-	Type                 = "codex2"
+	// Type matches the existing Codex component registration name so callers can
+	// switch implementations by changing only the import path.
+	Type                 = "codex"
 	DefaultImage         = "ctgbot-codex:latest"
 	DefaultCallbackPort  = 1455
 	stopAfterTurnTimeout = 5 * time.Second
