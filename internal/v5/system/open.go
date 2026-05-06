@@ -134,7 +134,11 @@ func resolveComponentsRoot(stateRoot string) string {
 
 func buildRuntimes(rootDir string, stateRoot string, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger) (map[string]v5runtime.Factory, error) {
 	runtimes := map[string]v5runtime.Factory{}
-	bridge := v5hostbridgeserver.NewBridge(stateRoot, storage, logger)
+	listenAddress := strings.TrimSpace(os.Getenv("CTGBOT_V5_HOSTBRIDGE_LISTEN_ADDR"))
+	if listenAddress == "" {
+		listenAddress = v5hostbridgeserver.DefaultListenAddress
+	}
+	bridge := v5hostbridgeserver.NewBridge(stateRoot, storage, logger).WithListenAddress(listenAddress)
 	componentsRoot := resolveComponentsRoot(stateRoot)
 	for _, runtimeKind := range []string{"docker", "local"} {
 		var runtime v5runtime.Factory

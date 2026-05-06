@@ -23,10 +23,13 @@ import (
 
 const TLSDir = "/ctgbot/hostbridge-tls"
 
+const DefaultListenAddress = "0.0.0.0:4568"
+
 type Bridge struct {
 	stateRoot string
 	storage   repository.Storage
 	logger    *log.Logger
+	listen    string
 
 	mu               sync.Mutex
 	entries          map[modeluuid.UUID]*threadEntry
@@ -49,6 +52,13 @@ func NewBridge(stateRoot string, storage repository.Storage, logger *log.Logger)
 		logger:    logger,
 		entries:   map[modeluuid.UUID]*threadEntry{},
 	}
+}
+
+func (b *Bridge) WithListenAddress(address string) *Bridge {
+	if b != nil {
+		b.listen = strings.TrimSpace(address)
+	}
+	return b
 }
 
 func (b *Bridge) BindThread(
@@ -224,7 +234,11 @@ func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, e
 	if err != nil {
 		return "", "", err
 	}
-	ln, err := hostbridgeserver.ListenTLS("0.0.0.0:0", tlsConfig)
+	listenAddress := strings.TrimSpace(b.listen)
+	if listenAddress == "" {
+		listenAddress = "0.0.0.0:0"
+	}
+	ln, err := hostbridgeserver.ListenTLS(listenAddress, tlsConfig)
 	if err != nil {
 		return "", "", err
 	}
@@ -246,6 +260,7 @@ func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, e
 
 	containerAddress = net.JoinHostPort(hostbridgetls.ServerName, port)
 	hostAddress = net.JoinHostPort("127.0.0.1", port)
+	b.logf("v5 hostbridge listening host=%s container=%s", hostAddress, containerAddress)
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
