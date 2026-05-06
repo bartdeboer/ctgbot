@@ -10,8 +10,12 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	clientpkg "github.com/bartdeboer/ctgbot/internal/hostbridge/client"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	"github.com/bartdeboer/ctgbot/internal/schema/routers"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
+	v5component "github.com/bartdeboer/ctgbot/internal/v5/component"
+	brokercomponent "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
+	codexcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/codex"
+	configcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/config"
 )
 
 func main() {
@@ -26,7 +30,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	router, err := routers.NewHostbridgeRouter()
+	router, err := commandset.NewRouterForSource(commandengine.SourceHostbridge, hostbridgeCommandSurfaces()...)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -38,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	resp, err := clientpkg.DoCommand(context.Background(), getenv("HOSTBRIDGE_ADDR", "host.docker.internal:4567"), getenv("HOSTBRIDGE_TLS_DIR", ""), hostbridge.CommandRequest{Request: req})
+	resp, err := clientpkg.DoCommand(context.Background(), getenv("HOSTBRIDGE_ADDR", "host.docker.internal:4568"), getenv("HOSTBRIDGE_TLS_DIR", ""), hostbridge.CommandRequest{Request: req})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -55,15 +59,27 @@ func normalizedArgs(args []string) []string {
 	if len(args) >= 2 && args[0] == "run" && args[1] == "sendstdin" {
 		return append([]string{"sendstdin"}, args[2:]...)
 	}
-	if isManagementCommand(args[0]) {
+	if isDirectHostbridgeCommand(args[0]) {
 		return args
+	}
+	if isLegacyCodexShorthand(args[0]) {
+		return append([]string{"codex"}, args...)
 	}
 	return append([]string{"run"}, args...)
 }
 
-func isManagementCommand(arg string) bool {
+func isDirectHostbridgeCommand(arg string) bool {
 	switch arg {
-	case "", "run", "sendfile", "sendstdin", "config", "refresh", "purge", "interrupt", "install", "upgrade", "quit", "stop", "status", "container", "chat", "help":
+	case "", "run", "sendfile", "sendstdin", "config", "codex", "help":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLegacyCodexShorthand(arg string) bool {
+	switch arg {
+	case "refresh", "purge", "interrupt", "status", "container", "chat", "model":
 		return true
 	default:
 		return false
@@ -97,15 +113,20 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "usage: hostbridge <command> [args...]")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "Commands for Telegram-attached ctgbot hostbridge:")
-	printDefinitionHelp(routers.HostbridgeDefinitions())
-	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "Standalone ctgbot hostbridge serve accepts only:")
-	printDefinitionHelp(routers.HostbridgeRunDefinitions())
+	printDefinitionHelp(commandset.DefinitionsForSource(commandengine.SourceHostbridge, hostbridgeCommandSurfaces()...))
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "environment:")
-	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_ADDR     TCP address (default host.docker.internal:4567)")
+	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_ADDR     TCP address (default host.docker.internal:4568)")
 	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_TLS_DIR  Optional directory containing ca.crt, client.crt, client.key")
 	fmt.Fprintln(os.Stdout, "  CTGBOT_SANDBOX_ID   Sandbox/thread id for outbound/config commands")
+}
+
+func hostbridgeCommandSurfaces() []v5component.CommandSurface {
+	return []v5component.CommandSurface{
+		brokercomponent.New(nil),
+		(*configcomponent.Component)(nil),
+		(*codexcomponent.Component)(nil),
+	}
 }
 
 func printDefinitionHelp(definitions []commandengine.Definition) {

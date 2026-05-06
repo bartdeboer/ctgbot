@@ -143,10 +143,11 @@ type TurnResult struct {
 }
 
 type TurnInstructions struct {
-	ChatProvider           string
-	MessagePrefix          string
-	KeepRepliesConcise     bool
-	HostbridgeCommandNames []string
+	ChatProvider              string
+	MessagePrefix             string
+	KeepRepliesConcise        bool
+	HostbridgeCommandNames    []string
+	HostbridgeControlCommands []string
 }
 
 type TurnRuntime interface {

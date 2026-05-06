@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func moduleRoot() (string, error) {
@@ -41,30 +42,14 @@ func tarFromModule() (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		if info.IsDir() {
-			return nil, errors.New("selected file is a directory: " + spec.Source)
+			if err := writeDirectoryToTar(tw, src, spec.Target); err != nil {
+				return nil, err
+			}
+			continue
 		}
-
-		hdr, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return nil, err
-		}
-		hdr.Name = filepath.ToSlash(spec.Target)
-		hdr.Mode = 0o644
-
-		if err := tw.WriteHeader(hdr); err != nil {
-			return nil, err
-		}
-
-		f, err := os.Open(src)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := io.Copy(tw, f); err != nil {
-			_ = f.Close()
-			return nil, err
-		}
-		if err := f.Close(); err != nil {
+		if err := writeFileToTar(tw, src, spec.Target, info); err != nil {
 			return nil, err
 		}
 	}
@@ -74,4 +59,64 @@ func tarFromModule() (io.ReadCloser, error) {
 	}
 
 	return io.NopCloser(bytes.NewReader(buf.Bytes())), nil
+}
+
+func writeDirectoryToTar(tw *tar.Writer, sourceRoot string, targetRoot string) error {
+	return filepath.Walk(sourceRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(sourceRoot, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.ToSlash(filepath.Join(targetRoot, rel))
+		if shouldSkipTarget(target) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+		return writeFileToTar(tw, path, target, info)
+	})
+}
+
+func writeFileToTar(tw *tar.Writer, src string, target string, info os.FileInfo) error {
+	hdr, err := tar.FileInfoHeader(info, "")
+	if err != nil {
+		return err
+	}
+	hdr.Name = filepath.ToSlash(target)
+	hdr.Mode = 0o644
+
+	if err := tw.WriteHeader(hdr); err != nil {
+		return err
+	}
+
+	f, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = io.Copy(tw, f)
+	return err
+}
+
+func shouldSkipTarget(target string) bool {
+	target = filepath.ToSlash(target)
+	switch {
+	case strings.HasPrefix(target, ".git/"):
+		return true
+	case strings.HasPrefix(target, "internal/containerassets/assets/"):
+		return true
+	default:
+		return false
+	}
 }

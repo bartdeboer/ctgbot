@@ -342,15 +342,16 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 		allowedCommandsText = "<none>"
 	}
 	text, err := bootstrapassets.Text(bootstrapassets.TemplateData{
-		Workspace:          workspace,
-		WorkspaceInbox:     workspace + "/inbox",
-		CodexHome:          home,
-		ContainerOS:        "linux",
-		HostOS:             goruntime.GOOS,
-		ChatProvider:       chatProvider,
-		MessagePrefix:      instructions.MessagePrefix,
-		KeepRepliesConcise: instructions.KeepRepliesConcise,
-		Binaries:           allowedCommandsText,
+		Workspace:                 workspace,
+		WorkspaceInbox:            workspace + "/inbox",
+		CodexHome:                 home,
+		ContainerOS:               "linux",
+		HostOS:                    goruntime.GOOS,
+		ChatProvider:              chatProvider,
+		MessagePrefix:             instructions.MessagePrefix,
+		KeepRepliesConcise:        instructions.KeepRepliesConcise,
+		Binaries:                  allowedCommandsText,
+		HostbridgeControlCommands: append([]string(nil), instructions.HostbridgeControlCommands...),
 	})
 	if err != nil {
 		return "", err

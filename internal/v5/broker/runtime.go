@@ -11,6 +11,8 @@ import (
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
 	component "github.com/bartdeboer/ctgbot/internal/v5/component"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/config"
@@ -100,11 +102,11 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		}
 	}
 
-	messageCommands, err := buildCommandEngine(surfaces, commandengine.SourceMessage)
+	messageCommands, err := commandset.NewEngineForSource(commandengine.SourceMessage, surfaces...)
 	if err != nil {
 		return nil, err
 	}
-	agentCommands, err := buildCommandEngine(surfaces, commandengine.SourceHostbridge)
+	agentCommands, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, surfaces...)
 	if err != nil {
 		return nil, err
 	}
@@ -121,28 +123,6 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		AgentCommands:    agentCommands,
 		Homes:            homes,
 	}, nil
-}
-
-func buildCommandEngine(surfaces []component.CommandSurface, source commandengine.Source) (*commandengine.Engine, error) {
-	if len(surfaces) == 0 {
-		return nil, nil
-	}
-	var definitions []commandengine.Definition
-	registry := commandengine.NewRegistry()
-	for _, surface := range surfaces {
-		if surface == nil {
-			continue
-		}
-		definitions = append(definitions, surface.CommandDefinitions()...)
-		if err := surface.RegisterCommandHandlers(registry); err != nil {
-			return nil, err
-		}
-	}
-	router, err := commandengine.NewRouter(definitions, source)
-	if err != nil {
-		return nil, err
-	}
-	return commandengine.NewEngine(router, registry), nil
 }
 
 type agentTurnRuntime struct {
@@ -188,7 +168,34 @@ func (r *agentTurnRuntime) Instructions() component.TurnInstructions {
 		instructions.HostbridgeCommandNames = hostbridgeserver.AllowedCommandNames(allowed)
 		sort.Strings(instructions.HostbridgeCommandNames)
 	}
+	instructions.HostbridgeControlCommands = hostbridgeControlCommands(r.runtime)
 	return instructions
+}
+
+func hostbridgeControlCommands(runtime *ChatRuntime) []string {
+	if runtime == nil || runtime.AgentCommands == nil {
+		return nil
+	}
+	patterns := commandset.CanonicalRoutePatterns(
+		runtime.AgentCommands.Definitions(),
+		simplerbac.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+	)
+	out := make([]string, 0, len(patterns))
+	for _, pattern := range patterns {
+		switch {
+		case strings.TrimSpace(pattern) == "":
+			continue
+		case strings.HasPrefix(pattern, "run "):
+			continue
+		case strings.HasPrefix(pattern, "sendfile"):
+			continue
+		case strings.HasPrefix(pattern, "sendstdin"):
+			continue
+		default:
+			out = append(out, "hostbridge "+pattern)
+		}
+	}
+	return out
 }
 
 func (r *agentTurnRuntime) Send(ctx context.Context, payload messenger.OutboundPayload) error {

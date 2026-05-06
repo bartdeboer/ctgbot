@@ -26,7 +26,13 @@ func TestBuildContextTarContainsDockerfiles(t *testing.T) {
 		found[hdr.Name] = true
 	}
 
-	for _, name := range []string{"Dockerfile", "slim.Dockerfile", "cuda.Dockerfile"} {
+	for _, name := range []string{
+		"Dockerfile",
+		"slim.Dockerfile",
+		"cuda.Dockerfile",
+		"cmd/hostbridge/main.go",
+		"internal/v5/commandset/commandset.go",
+	} {
 		if !found[name] {
 			t.Fatalf("build context tar does not contain %s", name)
 		}

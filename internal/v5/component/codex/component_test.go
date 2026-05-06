@@ -35,10 +35,11 @@ type stubTurnRuntime struct{}
 func (stubTurnRuntime) Commands() commandengine.CommandExecutor { return nil }
 func (stubTurnRuntime) Instructions() component.TurnInstructions {
 	return component.TurnInstructions{
-		ChatProvider:           "Telegram",
-		MessagePrefix:          "🤖",
-		KeepRepliesConcise:     true,
-		HostbridgeCommandNames: []string{"docker", "git-push-ctgbot"},
+		ChatProvider:              "Telegram",
+		MessagePrefix:             "🤖",
+		KeepRepliesConcise:        true,
+		HostbridgeCommandNames:    []string{"docker", "git-push-ctgbot"},
+		HostbridgeControlCommands: []string{"hostbridge codex status", "hostbridge config list"},
 	}
 }
 func (stubTurnRuntime) Send(ctx context.Context, payload messenger.OutboundPayload) error {
@@ -208,17 +209,21 @@ func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 
 func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
 	text, err := codexBootstrap("/workspace", "/profile/components/codex/codex", component.TurnInstructions{
-		ChatProvider:           "Telegram",
-		MessagePrefix:          "🤖",
-		KeepRepliesConcise:     true,
-		HostbridgeCommandNames: []string{"docker", "git-push-ctgbot"},
+		ChatProvider:              "Telegram",
+		MessagePrefix:             "🤖",
+		KeepRepliesConcise:        true,
+		HostbridgeCommandNames:    []string{"docker", "git-push-ctgbot"},
+		HostbridgeControlCommands: []string{"hostbridge codex status", "hostbridge config list"},
 	})
 	if err != nil {
 		t.Fatalf("codexBootstrap() error = %v", err)
 	}
 	for _, want := range []string{
 		"The `hostbridge` command is available",
-		"Available hostbridge commands: `docker, git-push-ctgbot`",
+		"Canonical hostbridge control commands for this chat:",
+		"`hostbridge codex status`",
+		"`hostbridge config list`",
+		"Available hostbridge run aliases: `docker, git-push-ctgbot`",
 		"The user interacts through Telegram; keep replies concise",
 		"Start every assistant message with `🤖`",
 	} {

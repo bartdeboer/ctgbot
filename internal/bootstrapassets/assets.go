@@ -11,16 +11,17 @@ import (
 var bootstrapText string
 
 type TemplateData struct {
-	Workspace          string
-	WorkspaceInbox     string
-	CodexHome          string
-	ContainerOS        string
-	HostOS             string
-	HostbridgeAddr     string
-	Binaries           string
-	ChatProvider       string
-	MessagePrefix      string
-	KeepRepliesConcise bool
+	Workspace                 string
+	WorkspaceInbox            string
+	CodexHome                 string
+	ContainerOS               string
+	HostOS                    string
+	HostbridgeAddr            string
+	Binaries                  string
+	HostbridgeControlCommands []string
+	ChatProvider              string
+	MessagePrefix             string
+	KeepRepliesConcise        bool
 }
 
 func Text(data TemplateData) (string, error) {

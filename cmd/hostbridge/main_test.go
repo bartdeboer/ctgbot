@@ -1,61 +1,77 @@
 package main
 
 import (
-	"bytes"
-	"io"
-	"os"
-	"reflect"
-	"strings"
+	"context"
 	"testing"
+
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
 )
 
-func TestNormalizedArgsTreatsRunSendstdinAsMediaCommand(t *testing.T) {
-	got := normalizedArgs([]string{"run", "sendstdin", "-caption", "note"})
-	want := []string{"sendstdin", "-caption", "note"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("normalizedArgs() = %#v, want %#v", got, want)
+func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{name: "status", in: []string{"status"}, want: []string{"codex", "status"}},
+		{name: "refresh", in: []string{"refresh"}, want: []string{"codex", "refresh"}},
+		{name: "interrupt", in: []string{"interrupt"}, want: []string{"codex", "interrupt"}},
+		{name: "model status", in: []string{"model"}, want: []string{"codex", "model"}},
+		{name: "model set", in: []string{"model", "set", "gpt-5.5"}, want: []string{"codex", "model", "set", "gpt-5.5"}},
+		{name: "run alias", in: []string{"whoami"}, want: []string{"run", "whoami"}},
+		{name: "direct hostbridge", in: []string{"sendstdin"}, want: []string{"sendstdin"}},
+		{name: "config", in: []string{"config", "list"}, want: []string{"config", "list"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizedArgs(tc.in)
+			if len(got) != len(tc.want) {
+				t.Fatalf("normalizedArgs(%v) length = %d, want %d (%v)", tc.in, len(got), len(tc.want), got)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Fatalf("normalizedArgs(%v)[%d] = %q, want %q (%v)", tc.in, i, got[i], tc.want[i], got)
+				}
+			}
+		})
 	}
 }
 
-func TestPrintHelpDistinguishesStandaloneHostbridgeSurface(t *testing.T) {
-	output := captureStdout(t, printHelp)
-	for _, want := range []string{
-		"Commands for Telegram-attached ctgbot hostbridge:",
-		"Standalone ctgbot hostbridge serve accepts only:",
-		"config get <key> - Show a config value",
-		"model set <model> - Set the Codex model for this thread",
-		"model effort set <effort> - Set the Codex reasoning effort for this thread",
-		"run <command> - Run a whitelisted host command",
-	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("help output missing %q:\n%s", want, output)
+func TestHostbridgeRouterUsesV5CodexDefinitions(t *testing.T) {
+	router, err := commandset.NewRouterForSource(commandengine.SourceHostbridge, hostbridgeCommandSurfaces()...)
+	if err != nil {
+		t.Fatalf("NewRouterForSource() error = %v", err)
+	}
+
+	base := commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{
+				ID:    "hostbridge",
+				Roles: []simplerbac.Role{simplerbac.RoleAgent},
+			},
+		},
+	}
+
+	tests := []struct {
+		argv []string
+		want string
+	}{
+		{argv: normalizedArgs([]string{"status"}), want: "codex.status"},
+		{argv: normalizedArgs([]string{"refresh"}), want: "codex.refresh"},
+		{argv: normalizedArgs([]string{"interrupt"}), want: "codex.interrupt"},
+		{argv: normalizedArgs([]string{"model"}), want: "codex.model-status"},
+	}
+
+	for _, tc := range tests {
+		req, err := router.Parse(context.Background(), base, tc.argv)
+		if err != nil {
+			t.Fatalf("Parse(%v) error = %v", tc.argv, err)
+		}
+		if req.DefinitionID != tc.want {
+			t.Fatalf("Parse(%v) definition = %q, want %q", tc.argv, req.DefinitionID, tc.want)
 		}
 	}
-	if strings.Contains(output, "config hostbridge scaffold") {
-		t.Fatalf("help output includes CLI-only scaffold command:\n%s", output)
-	}
-}
-
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-
-	prev := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	os.Stdout = w
-	defer func() { os.Stdout = prev }()
-
-	outC := make(chan string, 1)
-	go func() {
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, r)
-		outC <- buf.String()
-	}()
-
-	fn()
-
-	_ = w.Close()
-	return <-outC
 }

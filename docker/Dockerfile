@@ -4,13 +4,7 @@ WORKDIR /src
 ARG TARGETARCH
 COPY go.mod go.sum ./
 COPY cmd/hostbridge ./cmd/hostbridge
-COPY internal/commandengine ./internal/commandengine
-COPY internal/configengine ./internal/configengine
-COPY internal/hostbridge ./internal/hostbridge
-COPY internal/hostbridgetls ./internal/hostbridgetls
-COPY internal/modeluuid ./internal/modeluuid
-COPY internal/schema ./internal/schema
-COPY internal/simplerbac ./internal/simplerbac
+COPY internal ./internal
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} go build -o /out/hostbridge ./cmd/hostbridge
 
 FROM node:22-alpine
