@@ -6,12 +6,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	component "github.com/bartdeboer/ctgbot/internal/v5/component"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
+	configcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/config"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
@@ -88,6 +90,15 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 
 	surfaces = append(surfaces, brokercomponent.New(b))
+	if provider, ok := b.Resolver.(interface{ AppConfig() *appstate.Config }); ok {
+		configSurface, err := configcomponent.New(provider.AppConfig())
+		if err != nil {
+			return nil, err
+		}
+		if configSurface != nil {
+			surfaces = append(surfaces, configSurface)
+		}
+	}
 
 	messageCommands, err := buildCommandEngine(surfaces, commandengine.SourceMessage)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -17,6 +18,7 @@ import (
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
 	"github.com/bartdeboer/go-clir"
+	"github.com/bartdeboer/go-clistate"
 )
 
 func TestV5MessageCommandRunsAndSkipsAgent(t *testing.T) {
@@ -630,10 +632,83 @@ func TestV5HelpListsActiveMessageCommands(t *testing.T) {
 			t.Fatalf("relay payload count = %d, want %d", got, want)
 		}
 		text := messengerState.relayPayloads[0].Text.Text
-		for _, want := range []string{"/help", "/agentctl ping", "/install", "/process install", "/quit"} {
+		for _, want := range []string{"/help", "/agentctl ping", "/config get <key>", "/config list", "/config set <key> <value>", "/install", "/process install", "/quit"} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("help text = %q, missing %q", text, want)
 			}
+		}
+	})
+}
+
+func TestV5ConfigMessageCommands(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		run := func(text string) string {
+			system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
+				t,
+				root,
+				component.InboundEvent{
+					ExternalID: "cfg-" + strings.ReplaceAll(text, " ", "-"),
+					Payload: messenger.InboundPayload{
+						ProviderType:      "mockmsg",
+						ProviderChatID:    "chat-1",
+						ProviderThreadID:  "provider-thread-1",
+						ProviderMessageID: "cfg-" + strings.ReplaceAll(text, " ", "-"),
+						Actor:             actorWithRoles("13145044", "bart", simplerbac.RoleUser, simplerbac.RoleRoot),
+						Text:              messenger.TextMessage{Text: text},
+					},
+				},
+				nil,
+			)
+
+			messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
+			if err != nil {
+				t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
+			}
+			agentRegistration, err := system.EnsureComponent(ctx, "mockagent", "local", "")
+			if err != nil {
+				t.Fatalf("EnsureComponent(mockagent) error = %v", err)
+			}
+
+			chat := &coremodel.Chat{Label: "team", Enabled: true}
+			if err := storage.Chats().Save(ctx, chat); err != nil {
+				t.Fatalf("Chats().Save() error = %v", err)
+			}
+			if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleSource, messengerRegistration.Ref(), "chat-1"); err != nil {
+				t.Fatalf("BindChatComponent(source) error = %v", err)
+			}
+			if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleRelay, messengerRegistration.Ref(), "chat-1"); err != nil {
+				t.Fatalf("BindChatComponent(relay) error = %v", err)
+			}
+			if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleAgent, agentRegistration.Ref(), ""); err != nil {
+				t.Fatalf("BindChatComponent(agent) error = %v", err)
+			}
+
+			b := v5broker.New(storage, system, nil)
+			if err := b.Run(ctx); err != nil {
+				t.Fatalf("Run(%q) error = %v", text, err)
+			}
+
+			if agentState.turnCalls != 0 {
+				t.Fatalf("agent turn calls for %q = %d, want 0", text, agentState.turnCalls)
+			}
+			if runtimeState.execCalls != 0 {
+				t.Fatalf("runtime exec calls for %q = %d, want 0", text, runtimeState.execCalls)
+			}
+			if got, want := len(messengerState.relayPayloads), 1; got != want {
+				t.Fatalf("relay payload count for %q = %d, want %d", text, got, want)
+			}
+			return messengerState.relayPayloads[0].Text.Text
+		}
+
+		if got := run("/config get hostbridge.tcp_listen_addr"); got != "hostbridge.tcp-listen-addr=127.0.0.1:4567" {
+			t.Fatalf("config get reply = %q", got)
+		}
+		if got := run("/config set hostbridge.tcp_listen_addr 127.0.0.1:4568"); got != "hostbridge.tcp-listen-addr=127.0.0.1:4568" {
+			t.Fatalf("config set reply = %q", got)
+		}
+		if got := run("/config get hostbridge.tcp_listen_addr"); got != "hostbridge.tcp-listen-addr=127.0.0.1:4568" {
+			t.Fatalf("config get after set reply = %q", got)
 		}
 	})
 }
@@ -686,6 +761,11 @@ func newMessageCommandTestSystem(
 		},
 	}, registry)
 	system.StateRoot = filepath.Join(root, ".ctgbot")
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("NewCwd(config store): %v", err)
+	}
+	system.Config = appstate.New(system.StateRoot, store)
 
 	return system, storage, messengerState, agentState, runtimeState
 }

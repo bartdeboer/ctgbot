@@ -43,6 +43,13 @@ type System struct {
 	loaded   map[string]*component.Loaded
 }
 
+func (s *System) AppConfig() *appstate.Config {
+	if s == nil {
+		return nil
+	}
+	return s.Config
+}
+
 func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.Store, logger *log.Logger) (*System, error) {
 	if logger == nil {
 		logger = log.New(os.Stdout, "", log.LstdFlags)
