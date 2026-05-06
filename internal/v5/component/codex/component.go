@@ -2,6 +2,7 @@ package codex
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -9,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	agentcore "github.com/bartdeboer/ctgbot/internal/agent"
-	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -23,11 +22,27 @@ import (
 )
 
 const (
+	// Type matches the existing Codex component registration name so callers can
+	// switch implementations by changing only the import path.
 	Type                 = "codex"
 	DefaultImage         = "ctgbot-codex:latest"
 	DefaultCallbackPort  = 1455
 	stopAfterTurnTimeout = 5 * time.Second
 )
+
+type TurnRunner interface {
+	RunTurn(ctx context.Context, runtime ExecRuntime, output OutputHandler, request TurnRequest) (TurnResult, error)
+}
+
+type Component struct {
+	registration     coremodel.Component
+	runtime          v5runtime.Runtime
+	storage          repository.Storage
+	resolveWorkspace func(context.Context, coremodel.Chat) (string, error)
+	config           *appstate.Config
+	runner           TurnRunner
+	logger           *log.Logger
+}
 
 func New(
 	ctx context.Context,
@@ -69,21 +84,9 @@ func New(
 		storage:          storage,
 		resolveWorkspace: resolveWorkspace,
 		config:           cfg,
-		executor:         codexengine.NewSessionExecutor(cfg, logger),
+		runner:           NewRunner(cfg, logger),
+		logger:           logger,
 	}, nil
-}
-
-type sessionExecutor interface {
-	HandleRuntimeTurn(ctx context.Context, runtime codexengine.ExecRuntime, output agentcore.OutputHandler, providerThreadID string, prompt string, options agentcore.TurnOptions) (agentcore.TurnResult, error)
-}
-
-type Component struct {
-	registration     coremodel.Component
-	runtime          v5runtime.Runtime
-	storage          repository.Storage
-	resolveWorkspace func(context.Context, coremodel.Chat) (string, error)
-	config           *appstate.Config
-	executor         sessionExecutor
 }
 
 func (c *Component) Type() string {
@@ -94,6 +97,7 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 	return []component.ManagedFile{
 		{RelativePath: "auth.json", Required: true, Sensitive: true},
 		{RelativePath: "config.toml", Required: false, Sensitive: false},
+		{RelativePath: "ctgbot-bootstrap.md", Required: false, Sensitive: false},
 	}
 }
 
@@ -103,7 +107,11 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 	}
 	home := c.runtime.ComponentHome()
 	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
-	if err := codexengine.PrepareConversationHome(c.config, home.Path, runtimeHomePath, runtimeHomePath, ""); err != nil {
+	if err := PrepareHome(c.config, HomeSpec{
+		HostHome:         home.Path,
+		RuntimeHome:      runtimeHomePath,
+		RuntimeWorkspace: runtimeHomePath,
+	}); err != nil {
 		return err
 	}
 	closeRelay, err := c.runtime.OpenHTTPRelayPort(
@@ -131,8 +139,8 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 }
 
 func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
-	if c == nil || c.executor == nil {
-		return nil, fmt.Errorf("missing codex executor")
+	if c == nil || c.runner == nil {
+		return nil, fmt.Errorf("missing codex runner")
 	}
 	if c.runtime == nil {
 		return nil, fmt.Errorf("missing component runtime")
@@ -142,15 +150,19 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		return nil, nil
 	}
 
-	home := c.runtime.ComponentHome()
-	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
 	workspacePath := turn.Runtime.WorkspacePath()
 	runtimeWorkspacePath := c.runtime.RuntimeWorkspacePath(workspacePath)
+	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
 	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath, turn.Runtime.Instructions())
 	if err != nil {
 		return nil, err
 	}
-	if err := codexengine.PrepareConversationHome(c.config, home.Path, runtimeHomePath, runtimeWorkspacePath, bootstrapText); err != nil {
+	if err := PrepareHome(c.config, HomeSpec{
+		HostHome:         c.runtime.ComponentHome().Path,
+		RuntimeHome:      runtimeHomePath,
+		RuntimeWorkspace: runtimeWorkspacePath,
+		BootstrapText:    bootstrapText,
+	}); err != nil {
 		return nil, err
 	}
 
@@ -159,35 +171,38 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		defer stopTyping()
 	}
 
-	componentThreadID, ok, err := turn.Runtime.ComponentThreadID(c.registration.ID)
+	providerThreadID, err := c.providerThreadID(turn.Runtime)
 	if err != nil {
 		return nil, err
 	}
-	providerThreadID := ""
-	if ok {
-		providerThreadID = strings.TrimSpace(componentThreadID)
-	}
 
-	run := commandRuntime{
+	result, runErr := c.runner.RunTurn(ctx, commandRuntime{
 		runtime:       c.runtime,
 		threadID:      turn.Thread.ID,
 		workspacePath: workspacePath,
 		commands:      turn.Runtime.Commands(),
-	}
-	options := agentcore.TurnOptions{
-		Model:           strings.TrimSpace(turn.Thread.CodexModel),
-		ReasoningEffort: strings.TrimSpace(turn.Thread.CodexReasoningEffort),
-	}
-	result, err := c.executor.HandleRuntimeTurn(ctx, run, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, options)
+	}, outputHandler{runtime: turn.Runtime}, TurnRequest{
+		ProviderThreadID: providerThreadID,
+		Prompt:           prompt,
+		Options: TurnOptions{
+			Model:           strings.TrimSpace(turn.Thread.CodexModel),
+			ReasoningEffort: strings.TrimSpace(turn.Thread.CodexReasoningEffort),
+		},
+	})
+
 	if !turn.Thread.KeepRunning {
 		c.stopAfterTurn(workspacePath, turn.Thread.ID)
 	}
-	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && err == nil {
-		err = saveErr
+	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && runErr == nil {
+		runErr = saveErr
 	}
-	if err != nil {
-		return nil, err
+	if runErr != nil {
+		if errors.Is(runErr, context.Canceled) && ctx.Err() == nil {
+			return nil, nil
+		}
+		return nil, runErr
 	}
+
 	reply := strings.TrimSpace(result.Reply)
 	if reply == "" {
 		return nil, nil
@@ -203,6 +218,17 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}, nil
 }
 
+func (c *Component) providerThreadID(turnRuntime component.TurnRuntime) (string, error) {
+	componentThreadID, ok, err := turnRuntime.ComponentThreadID(c.registration.ID)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", nil
+	}
+	return strings.TrimSpace(componentThreadID), nil
+}
+
 func (c *Component) stopAfterTurn(workspacePath string, threadID modeluuid.UUID) {
 	if c == nil || c.runtime == nil {
 		return
@@ -210,7 +236,7 @@ func (c *Component) stopAfterTurn(workspacePath string, threadID modeluuid.UUID)
 	stopCtx, cancel := context.WithTimeout(context.Background(), stopAfterTurnTimeout)
 	defer cancel()
 	if err := c.runtime.Stop(stopCtx, workspacePath, threadID); err != nil {
-		log.Printf("codex stop-after-turn failed thread=%s err=%v", threadID, err)
+		c.logf("codex stop-after-turn failed thread=%s err=%v", threadID, err)
 	}
 }
 
@@ -223,6 +249,12 @@ func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, pro
 		return fmt.Errorf("missing turn runtime")
 	}
 	return turnRuntime.BindComponentThreadID(c.registration.ID, providerThreadID)
+}
+
+func (c *Component) logf(format string, args ...any) {
+	if c != nil && c.logger != nil {
+		c.logger.Printf(format, args...)
+	}
 }
 
 type commandRuntime struct {

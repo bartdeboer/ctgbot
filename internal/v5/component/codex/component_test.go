@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	agentcore "github.com/bartdeboer/ctgbot/internal/agent"
-	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -19,16 +17,16 @@ import (
 )
 
 type stubExecutor struct {
-	result     agentcore.TurnResult
+	result     TurnResult
 	err        error
 	lastPrompt string
 	calls      int
 }
 
-func (e *stubExecutor) HandleRuntimeTurn(ctx context.Context, runtime codexengine.ExecRuntime, output agentcore.OutputHandler, providerThreadID string, prompt string, options agentcore.TurnOptions) (agentcore.TurnResult, error) {
-	_, _, _, _, _ = ctx, runtime, output, providerThreadID, options
+func (e *stubExecutor) RunTurn(ctx context.Context, runtime ExecRuntime, output OutputHandler, request TurnRequest) (TurnResult, error) {
+	_, _, _ = ctx, runtime, output
 	e.calls++
-	e.lastPrompt = prompt
+	e.lastPrompt = request.Prompt
 	return e.result, e.err
 }
 
@@ -72,7 +70,7 @@ func TestHandleTurnStopsRuntimeWhenKeepRunningDisabled(t *testing.T) {
 		storage := repository.NewMemory()
 		runtime := &testRuntime{}
 		executor := &stubExecutor{
-			result: agentcore.TurnResult{
+			result: TurnResult{
 				Reply:            "done",
 				ProviderThreadID: "provider-thread-1",
 			},
@@ -86,8 +84,8 @@ func TestHandleTurnStopsRuntimeWhenKeepRunningDisabled(t *testing.T) {
 				_ = chat
 				return filepath.Join(root, "workspace"), nil
 			},
-			config:   cfg,
-			executor: executor,
+			config: cfg,
+			runner: executor,
 		}
 
 		result, err := c.HandleTurn(ctx, component.Turn{
@@ -122,7 +120,7 @@ func TestHandleTurnKeepsRuntimeRunningWhenEnabled(t *testing.T) {
 		storage := repository.NewMemory()
 		runtime := &testRuntime{}
 		executor := &stubExecutor{
-			result: agentcore.TurnResult{
+			result: TurnResult{
 				Reply:            "done",
 				ProviderThreadID: "provider-thread-1",
 			},
@@ -136,8 +134,8 @@ func TestHandleTurnKeepsRuntimeRunningWhenEnabled(t *testing.T) {
 				_ = chat
 				return filepath.Join(root, "workspace"), nil
 			},
-			config:   cfg,
-			executor: executor,
+			config: cfg,
+			runner: executor,
 		}
 
 		_, err := c.HandleTurn(ctx, component.Turn{
@@ -168,7 +166,7 @@ func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 			stopErr: fmt.Errorf("stop failed"),
 		}
 		executor := &stubExecutor{
-			result: agentcore.TurnResult{
+			result: TurnResult{
 				Reply:            "done",
 				ProviderThreadID: "provider-thread-1",
 			},
@@ -182,8 +180,8 @@ func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 				_ = chat
 				return filepath.Join(root, "workspace"), nil
 			},
-			config:   cfg,
-			executor: executor,
+			config: cfg,
+			runner: executor,
 		}
 
 		result, err := c.HandleTurn(ctx, component.Turn{

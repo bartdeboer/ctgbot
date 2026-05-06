@@ -1,4 +1,4 @@
-package codex2
+package codex
 
 import (
 	"os"
@@ -29,10 +29,10 @@ func TestPrepareHomeWritesManagedFilesAndImportsAuth(t *testing.T) {
 			t.Fatalf("write shared auth: %v", err)
 		}
 
-		homeDir := filepath.Join(root, "components", "codex2")
+		homeDir := filepath.Join(root, "components", "codex")
 		if err := PrepareHome(cfg, HomeSpec{
 			HostHome:         homeDir,
-			RuntimeHome:      "/profile/components/codex2/codex2",
+			RuntimeHome:      "/profile/components/codex/codex",
 			RuntimeWorkspace: "/workspace",
 			BootstrapText:    "bootstrap text",
 		}); err != nil {
@@ -65,10 +65,10 @@ func TestPrepareHomeWritesPosixModelInstructionsPath(t *testing.T) {
 			t.Fatalf("new config: %v", err)
 		}
 
-		homeDir := filepath.Join(root, "components", "codex2")
+		homeDir := filepath.Join(root, "components", "codex")
 		if err := PrepareHome(cfg, HomeSpec{
 			HostHome:         homeDir,
-			RuntimeHome:      `\\profile\\components\\codex2\\codex2`,
+			RuntimeHome:      `\\profile\\components\\codex\\codex`,
 			RuntimeWorkspace: `\\workspace`,
 			BootstrapText:    "bootstrap",
 		}); err != nil {
@@ -80,13 +80,13 @@ func TestPrepareHomeWritesPosixModelInstructionsPath(t *testing.T) {
 			t.Fatalf("read config.toml: %v", err)
 		}
 		text := string(body)
-		if !strings.Contains(text, `model_instructions_file = "/profile/components/codex2/codex2/ctgbot-bootstrap.md"`) {
+		if !strings.Contains(text, `model_instructions_file = "/profile/components/codex/codex/ctgbot-bootstrap.md"`) {
 			t.Fatalf("config.toml missing model instructions path:\n%s", text)
 		}
 		if strings.Contains(text, `\\profile`) {
 			t.Fatalf("config.toml still contains windows-style paths:\n%s", text)
 		}
-		if !strings.Contains(text, `writable_roots = ["/workspace", "/profile/components/codex2/codex2", "/tmp"]`) {
+		if !strings.Contains(text, `writable_roots = ["/workspace", "/profile/components/codex/codex", "/tmp"]`) {
 			t.Fatalf("config.toml missing writable roots:\n%s", text)
 		}
 	})

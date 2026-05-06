@@ -1,4 +1,4 @@
-package codex2
+package codex
 
 import (
 	"bytes"
