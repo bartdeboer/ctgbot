@@ -20,7 +20,7 @@ import (
 	v5codex "github.com/bartdeboer/ctgbot/internal/v5/component/codex"
 	v5gmail "github.com/bartdeboer/ctgbot/internal/v5/component/gmail"
 	v5process "github.com/bartdeboer/ctgbot/internal/v5/component/process"
-	v5telegram "github.com/bartdeboer/ctgbot/internal/v5/component/telegram"
+	v5telegram "github.com/bartdeboer/ctgbot/internal/v5/component/telegram2"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
