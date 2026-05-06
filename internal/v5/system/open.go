@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
@@ -73,7 +72,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 	}
 
 	dbPath = resolveDBPath(rootDir, stateRoot, dbPath)
-	db, err := codexengine.OpenDB(dbPath, logger)
+	db, err := openDB(dbPath, logger)
 	if err != nil {
 		return nil, err
 	}
