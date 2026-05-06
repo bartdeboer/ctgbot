@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
@@ -109,6 +110,30 @@ func TestV5ChatComponentAddBindsExternalChatID(t *testing.T) {
 		}
 		if bindings[0].ExternalChatID != "chat-1" {
 			t.Fatalf("ExternalChatID = %q, want chat-1", bindings[0].ExternalChatID)
+		}
+	})
+}
+
+func TestResolveV5CodexImageUsesConfigWhenOverrideEmpty(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		store, err := clistate.NewCwd("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("NewCwd: %v", err)
+		}
+		cfg := appstate.New(root, store)
+		if err := cfg.Docker().SetImage("ctgbot-codex:gpu"); err != nil {
+			t.Fatalf("SetImage: %v", err)
+		}
+
+		system, err := v5system.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
+		if err != nil {
+			t.Fatalf("open v5 runtime: %v", err)
+		}
+		if got, want := resolveV5CodexImage(system, ""), "ctgbot-codex:gpu"; got != want {
+			t.Fatalf("resolveV5CodexImage(config) = %q, want %q", got, want)
+		}
+		if got, want := resolveV5CodexImage(system, "override:image"), "override:image"; got != want {
+			t.Fatalf("resolveV5CodexImage(override) = %q, want %q", got, want)
 		}
 	})
 }

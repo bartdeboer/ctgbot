@@ -36,7 +36,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			stateRoot := fs.String("state-root", "", "ctgbot state root (default: <cwd>/.ctgbot)")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
-			codexImage := fs.String("codex-image", v5codex.DefaultImage, "Codex runtime image")
+			codexImage := fs.String("codex-image", "", "Codex runtime image override")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
@@ -135,7 +135,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
-			codexImage := fs.String("codex-image", v5codex.DefaultImage, "Codex runtime image")
+			codexImage := fs.String("codex-image", "", "Codex runtime image override")
 			runtimeKind := fs.String("runtime", "", "Runtime kind for this registered component (docker or local)")
 			homePath := fs.String("home", "", "Optional host component home override")
 			if err := fs.Parse(req.Extra); err != nil {
@@ -172,7 +172,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
-			image := fs.String("image", v5codex.DefaultImage, "auth runtime image")
+			image := fs.String("image", "", "Auth runtime image override")
 			callbackPort := fs.Int("callback-port", v5codex.DefaultCallbackPort, "auth callback relay port")
 			callbackTimeout := fs.Duration("callback-timeout", 10*time.Minute, "auth callback relay timeout")
 			runtimeKind := fs.String("runtime", "", "Runtime kind for this component registration (default: preserve existing)")
@@ -201,7 +201,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -239,7 +239,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -269,7 +269,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -296,7 +296,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -323,7 +323,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -347,7 +347,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			externalChatID := fs.String("external-chat-id", "", "External provider chat id for source/relay bindings")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
-			codexImage := fs.String("codex-image", v5codex.DefaultImage, "Codex runtime image")
+			codexImage := fs.String("codex-image", "", "Codex runtime image override")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
@@ -394,7 +394,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", v5codex.DefaultImage, nil)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -449,8 +449,9 @@ func newV5Registry(system *v5system.System, telegramToken string, codexImage str
 	}); err != nil {
 		return nil, err
 	}
+	effectiveCodexImage := resolveV5CodexImage(system, codexImage)
 	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.ResolveChatWorkspace, system.Logger, codexImage)
+		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.ResolveChatWorkspace, system.Logger, effectiveCodexImage)
 	}); err != nil {
 		return nil, err
 	}
@@ -466,4 +467,15 @@ func newV5Registry(system *v5system.System, telegramToken string, codexImage str
 		return nil, err
 	}
 	return registry, nil
+}
+
+func resolveV5CodexImage(system *v5system.System, override string) string {
+	override = strings.TrimSpace(override)
+	if override != "" {
+		return override
+	}
+	if system != nil && system.Config != nil {
+		return strings.TrimSpace(system.Config.Docker().Image())
+	}
+	return ""
 }
