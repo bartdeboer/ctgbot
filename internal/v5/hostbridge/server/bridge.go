@@ -23,7 +23,9 @@ import (
 
 const TLSDir = "/ctgbot/hostbridge-tls"
 
-const DefaultListenAddress = "0.0.0.0:4568"
+// Match the proven v1 Docker Desktop/WSL contract:
+// listen on host loopback and advertise host.docker.internal to containers.
+const DefaultListenAddress = "127.0.0.1:4568"
 
 type Bridge struct {
 	stateRoot string
