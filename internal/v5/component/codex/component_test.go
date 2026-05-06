@@ -25,11 +25,26 @@ type stubExecutor struct {
 	calls      int
 }
 
-func (e *stubExecutor) HandleRuntimeTurn(ctx context.Context, runtime codexengine.ExecRuntime, output agentcore.OutputHandler, providerThreadID string, prompt string, options agentcore.TurnOptions) (agentcore.TurnResult, error) {
-	_, _, _, _, _ = ctx, runtime, output, providerThreadID, options
+func (e *stubExecutor) HandleRuntimeTurn(ctx context.Context, runtime codexengine.ExecRuntime, providerThreadID string, prompt string, options agentcore.TurnOptions, emitAgentMessage func(context.Context, string) error) (agentcore.TurnResult, error) {
+	_, _, _, _, _, _ = ctx, runtime, providerThreadID, options, emitAgentMessage, e
 	e.calls++
 	e.lastPrompt = prompt
 	return e.result, e.err
+}
+
+type outputtingExecutor struct {
+	result     agentcore.TurnResult
+	outputText string
+}
+
+func (e *outputtingExecutor) HandleRuntimeTurn(ctx context.Context, runtime codexengine.ExecRuntime, providerThreadID string, prompt string, options agentcore.TurnOptions, emitAgentMessage func(context.Context, string) error) (agentcore.TurnResult, error) {
+	_, _, _, _, _, _ = ctx, runtime, providerThreadID, prompt, options, e
+	if emitAgentMessage != nil && strings.TrimSpace(e.outputText) != "" {
+		if err := emitAgentMessage(ctx, e.outputText); err != nil {
+			return agentcore.TurnResult{}, err
+		}
+	}
+	return e.result, nil
 }
 
 type stubTurnRuntime struct{}
@@ -49,8 +64,9 @@ func (stubTurnRuntime) Send(ctx context.Context, payload messenger.OutboundPaylo
 }
 func (stubTurnRuntime) StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error) {
 	_, _ = ctx, action
-	return func() {}, nil
+	return stubTurnRuntime{}.StopChatAction, nil
 }
+func (stubTurnRuntime) StopChatAction()       {}
 func (stubTurnRuntime) WorkspacePath() string { return "/tmp/workspace" }
 func (stubTurnRuntime) ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool) {
 	_ = componentID
@@ -61,6 +77,55 @@ func (stubTurnRuntime) ComponentThreadID(componentID modeluuid.UUID) (string, bo
 	return "", false, nil
 }
 func (stubTurnRuntime) BindComponentThreadID(componentID modeluuid.UUID, componentThreadID string) error {
+	_, _ = componentID, componentThreadID
+	return nil
+}
+
+type observingTurnRuntime struct {
+	events      []string
+	currentStop func()
+}
+
+func (r *observingTurnRuntime) Commands() commandengine.CommandExecutor { return nil }
+func (r *observingTurnRuntime) Instructions() component.TurnInstructions {
+	return component.TurnInstructions{
+		ChatProvider:           "Telegram",
+		MessagePrefix:          "🤖",
+		KeepRepliesConcise:     true,
+		HostbridgeCommandNames: []string{"docker"},
+	}
+}
+func (r *observingTurnRuntime) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+	_ = ctx
+	r.events = append(r.events, "send:"+payload.Text.Text)
+	return nil
+}
+func (r *observingTurnRuntime) StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error) {
+	_, _ = ctx, action
+	r.events = append(r.events, "start:"+string(action))
+	r.currentStop = func() {
+		r.events = append(r.events, "stop:"+string(action))
+	}
+	return r.StopChatAction, nil
+}
+func (r *observingTurnRuntime) StopChatAction() {
+	if r.currentStop == nil {
+		return
+	}
+	stop := r.currentStop
+	r.currentStop = nil
+	stop()
+}
+func (r *observingTurnRuntime) WorkspacePath() string { return "/tmp/workspace" }
+func (r *observingTurnRuntime) ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool) {
+	_ = componentID
+	return v5runtime.Home{}, false
+}
+func (r *observingTurnRuntime) ComponentThreadID(componentID modeluuid.UUID) (string, bool, error) {
+	_ = componentID
+	return "", false, nil
+}
+func (r *observingTurnRuntime) BindComponentThreadID(componentID modeluuid.UUID, componentThreadID string) error {
 	_, _ = componentID, componentThreadID
 	return nil
 }
@@ -204,6 +269,49 @@ func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 		}
 		if got, want := runtime.stopCalls, 1; got != want {
 			t.Fatalf("stop calls = %d, want %d", got, want)
+		}
+	})
+}
+
+func TestHandleTurnStopsTypingBeforeStreamingAgentMessage(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		cfg := newTestConfig(t, root)
+		storage := repository.NewMemory()
+		runtime := &testRuntime{}
+		executor := &outputtingExecutor{
+			result:     agentcore.TurnResult{Reply: "done", ProviderThreadID: "provider-thread-1"},
+			outputText: "streamed reply",
+		}
+		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
+		turnRuntime := &observingTurnRuntime{}
+		c := &Component{
+			registration: registration,
+			runtime:      runtime,
+			storage:      storage,
+			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+				_ = chat
+				return filepath.Join(root, "workspace"), nil
+			},
+			config:   cfg,
+			executor: executor,
+		}
+
+		_, err := c.HandleTurn(ctx, component.Turn{
+			Chat: coremodel.Chat{ID: modeluuid.New(), Enabled: true},
+			Thread: coremodel.Thread{
+				ID:          modeluuid.New(),
+				ChatID:      modeluuid.New(),
+				KeepRunning: false,
+			},
+			Inbound: coremodel.ThreadMessage{ID: modeluuid.New(), Text: "hello"},
+			Runtime: turnRuntime,
+		})
+		if err != nil {
+			t.Fatalf("HandleTurn() error = %v", err)
+		}
+		if got, want := strings.Join(turnRuntime.events, ","), "start:typing,stop:typing,send:streamed reply"; got != want {
+			t.Fatalf("events = %q, want %q", got, want)
 		}
 	})
 }
