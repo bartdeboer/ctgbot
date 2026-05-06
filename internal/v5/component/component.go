@@ -142,8 +142,16 @@ type TurnResult struct {
 	Final *coremodel.ThreadMessage
 }
 
+type TurnInstructions struct {
+	ChatProvider           string
+	MessagePrefix          string
+	KeepRepliesConcise     bool
+	HostbridgeCommandNames []string
+}
+
 type TurnRuntime interface {
 	Commands() commandengine.CommandExecutor
+	Instructions() TurnInstructions
 	Send(ctx context.Context, payload messenger.OutboundPayload) error
 	StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error)
 	WorkspacePath() string

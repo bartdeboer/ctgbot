@@ -3,9 +3,11 @@ package broker
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	component "github.com/bartdeboer/ctgbot/internal/v5/component"
@@ -148,6 +150,34 @@ func (r *agentTurnRuntime) Commands() commandengine.CommandExecutor {
 		return nil
 	}
 	return r.runtime.AgentCommands
+}
+
+func (r *agentTurnRuntime) Instructions() component.TurnInstructions {
+	instructions := component.TurnInstructions{ChatProvider: "Chat"}
+	if r == nil || r.runtime == nil {
+		return instructions
+	}
+	for _, loaded := range r.runtime.Components {
+		if loaded == nil {
+			continue
+		}
+		if loaded.Registration.Type == "telegram" {
+			instructions.ChatProvider = "Telegram"
+			instructions.MessagePrefix = "🤖"
+			instructions.KeepRepliesConcise = true
+			break
+		}
+	}
+	if r.broker != nil && r.broker.Resolver != nil {
+		allowed := hostbridgeserver.DefaultAllowedCommands()
+		extra, err := r.broker.Resolver.ResolveChatHostbridgeAllowedCommands(r.context(), r.chat)
+		if err == nil {
+			allowed = hostbridgeserver.MergeNamedAllowedCommands(extra)
+		}
+		instructions.HostbridgeCommandNames = hostbridgeserver.AllowedCommandNames(allowed)
+		sort.Strings(instructions.HostbridgeCommandNames)
+	}
+	return instructions
 }
 
 func (r *agentTurnRuntime) Send(ctx context.Context, payload messenger.OutboundPayload) error {

@@ -146,7 +146,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
 	workspacePath := turn.Runtime.WorkspacePath()
 	runtimeWorkspacePath := c.runtime.RuntimeWorkspacePath(workspacePath)
-	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath)
+	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath, turn.Runtime.Instructions())
 	if err != nil {
 		return nil, err
 	}
@@ -300,28 +300,28 @@ func componentImage(value string) string {
 	return value
 }
 
-func codexBootstrap(workspace string, home string) (string, error) {
+func codexBootstrap(workspace string, home string, instructions component.TurnInstructions) (string, error) {
+	chatProvider := strings.TrimSpace(instructions.ChatProvider)
+	if chatProvider == "" {
+		chatProvider = "Chat"
+	}
+	allowedCommandsText := strings.Join(instructions.HostbridgeCommandNames, ", ")
+	if strings.TrimSpace(allowedCommandsText) == "" {
+		allowedCommandsText = "<none>"
+	}
 	text, err := bootstrapassets.Text(bootstrapassets.TemplateData{
 		Workspace:          workspace,
 		WorkspaceInbox:     workspace + "/inbox",
 		CodexHome:          home,
 		ContainerOS:        "linux",
 		HostOS:             goruntime.GOOS,
-		ChatProvider:       "Chat",
-		MessagePrefix:      "",
-		KeepRepliesConcise: false,
-		Binaries:           "<none>",
+		ChatProvider:       chatProvider,
+		MessagePrefix:      instructions.MessagePrefix,
+		KeepRepliesConcise: instructions.KeepRepliesConcise,
+		Binaries:           allowedCommandsText,
 	})
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(text, "\n")
-	var out []string
-	for _, line := range lines {
-		if strings.Contains(line, "hostbridge") || strings.Contains(line, "Available hostbridge commands") {
-			continue
-		}
-		out = append(out, line)
-	}
-	return strings.TrimSpace(strings.Join(out, "\n")), nil
+	return strings.TrimSpace(text), nil
 }

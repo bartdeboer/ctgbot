@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	agentcore "github.com/bartdeboer/ctgbot/internal/agent"
@@ -34,6 +35,14 @@ func (e *stubExecutor) HandleRuntimeTurn(ctx context.Context, runtime codexengin
 type stubTurnRuntime struct{}
 
 func (stubTurnRuntime) Commands() commandengine.CommandExecutor { return nil }
+func (stubTurnRuntime) Instructions() component.TurnInstructions {
+	return component.TurnInstructions{
+		ChatProvider:           "Telegram",
+		MessagePrefix:          "🤖",
+		KeepRepliesConcise:     true,
+		HostbridgeCommandNames: []string{"docker", "git-push-ctgbot"},
+	}
+}
 func (stubTurnRuntime) Send(ctx context.Context, payload messenger.OutboundPayload) error {
 	_, _ = ctx, payload
 	return nil
@@ -197,4 +206,26 @@ func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 			t.Fatalf("stop calls = %d, want %d", got, want)
 		}
 	})
+}
+
+func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
+	text, err := codexBootstrap("/workspace", "/profile/components/codex/codex", component.TurnInstructions{
+		ChatProvider:           "Telegram",
+		MessagePrefix:          "🤖",
+		KeepRepliesConcise:     true,
+		HostbridgeCommandNames: []string{"docker", "git-push-ctgbot"},
+	})
+	if err != nil {
+		t.Fatalf("codexBootstrap() error = %v", err)
+	}
+	for _, want := range []string{
+		"The `hostbridge` command is available",
+		"Available hostbridge commands: `docker, git-push-ctgbot`",
+		"The user interacts through Telegram; keep replies concise",
+		"Start every assistant message with `🤖`",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("bootstrap missing %q:\n%s", want, text)
+		}
+	}
 }
