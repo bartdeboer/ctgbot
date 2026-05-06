@@ -42,17 +42,7 @@ func (c *Component) handleUpdate(ctx context.Context, update dbmodel.TelegramUpd
 		return
 	}
 
-	event := update
-	if c.updates != nil {
-		if err := c.updates.Create(ctx, &event); err != nil {
-			c.logf("persisting telegram event failed (chat=%d msg=%d): %v", update.ChatID, update.MessageID, err)
-		}
-	}
-
-	eventCtx := context.WithValue(ctx, tgEventKey{}, &event)
-	defer c.persistEvent(eventCtx)
-	if err := c.emitUpdate(eventCtx, event, text, emit); err != nil {
-		c.recordEventError(eventCtx, err)
+	if err := c.emitUpdate(ctx, update, text, emit); err != nil {
 		c.logf("telegram update handling failed chat=%d thread=%d msg=%d err=%v", update.ChatID, update.ThreadID, update.MessageID, err)
 	}
 }

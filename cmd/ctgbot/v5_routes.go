@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/dbstorage/gormstorage"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	v5broker "github.com/bartdeboer/ctgbot/internal/v5/broker"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
@@ -435,23 +434,18 @@ func openV5SystemForRoutes(req *clir.Request, store *clistate.Store, stateRoot s
 	if err != nil {
 		return nil, err
 	}
-	system.Registry, err = newV5Registry(req.Context(), system, telegramToken, codexImage, processActions)
+	system.Registry, err = newV5Registry(system, telegramToken, codexImage, processActions)
 	if err != nil {
 		return nil, err
 	}
 	return system, nil
 }
 
-func newV5Registry(ctx context.Context, system *v5system.System, telegramToken string, codexImage string, processActions v5process.Actions) (*component.Registry, error) {
+func newV5Registry(system *v5system.System, telegramToken string, codexImage string, processActions v5process.Actions) (*component.Registry, error) {
 	registry := component.NewRegistry()
 
-	auxStorage := gormstorage.New(system.DB)
-	if err := auxStorage.AutoMigrate(ctx); err != nil {
-		return nil, err
-	}
-
 	if err := registry.Add(v5telegram.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5telegram.New(ctx, registration, runtime, home, storage, telegramToken, system.Config, auxStorage.TelegramUpdates(), system.Logger)
+		return v5telegram.New(ctx, registration, runtime, home, storage, telegramToken, system.Config, system.Logger)
 	}); err != nil {
 		return nil, err
 	}

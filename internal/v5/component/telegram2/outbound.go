@@ -30,7 +30,6 @@ func (c *Component) Send(ctx context.Context, payload messenger.OutboundPayload)
 	}
 	if len(payload.Attachments) == 0 {
 		text := cleanTextForTelegram(payload.Text.Text)
-		c.appendEventResponse(ctx, text)
 		return c.sendRenderedText(ctx, chatID, threadID, text)
 	}
 	for i, attachment := range payload.Attachments {

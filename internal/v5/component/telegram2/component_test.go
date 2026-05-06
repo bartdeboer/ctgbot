@@ -150,35 +150,6 @@ func (f *fakeTelegramAPI) actionCount() int {
 	return len(f.actions)
 }
 
-type fakeTelegramUpdateStorage struct {
-	mu      sync.Mutex
-	created []dbmodel.TelegramUpdate
-	saved   []dbmodel.TelegramUpdate
-}
-
-func (f *fakeTelegramUpdateStorage) Create(ctx context.Context, event *dbmodel.TelegramUpdate) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if event.ID == 0 {
-		event.ID = uint(len(f.created) + 1)
-	}
-	f.created = append(f.created, *event)
-	return nil
-}
-
-func (f *fakeTelegramUpdateStorage) Save(ctx context.Context, event *dbmodel.TelegramUpdate) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.saved = append(f.saved, *event)
-	return nil
-}
-
-func (f *fakeTelegramUpdateStorage) savedSnapshot() []dbmodel.TelegramUpdate {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]dbmodel.TelegramUpdate(nil), f.saved...)
-}
-
 func newTelegramTestConfig(t *testing.T) (*appstate.Config, *clistate.Store) {
 	t.Helper()
 	root := t.TempDir()
@@ -197,7 +168,7 @@ func newTelegramTestConfig(t *testing.T) (*appstate.Config, *clistate.Store) {
 	return appstate.New(filepath.Join(root, ".ctgbot"), store), store
 }
 
-func TestRunInboundEmitsV5EventPersistsAndRelaysResponse(t *testing.T) {
+func TestRunInboundEmitsV5EventAndRelaysResponse(t *testing.T) {
 	cfg, store := newTelegramTestConfig(t)
 	if err := store.PersistInt("telegram.defaults.debounce_ms", 0); err != nil {
 		t.Fatalf("PersistInt debounce: %v", err)
@@ -211,9 +182,8 @@ func TestRunInboundEmitsV5EventPersistsAndRelaysResponse(t *testing.T) {
 		Username:  "bart",
 		UserID:    7,
 	}}}
-	updates := &fakeTelegramUpdateStorage{}
 	componentID := modeluuid.New()
-	c := &Component{componentID: componentID, api: api, updates: updates, cfg: cfg}
+	c := &Component{componentID: componentID, api: api, cfg: cfg}
 
 	var events []v5component.InboundEvent
 	err := c.RunInbound(context.Background(), func(ctx context.Context, event v5component.InboundEvent) error {
@@ -245,28 +215,19 @@ func TestRunInboundEmitsV5EventPersistsAndRelaysResponse(t *testing.T) {
 	if len(messages) != 1 || messages[0].chatID != 123 || messages[0].threadID != 4 || messages[0].text != "pong" {
 		t.Fatalf("messages = %#v, want one pong to chat/thread", messages)
 	}
-	saved := updates.savedSnapshot()
-	if len(saved) != 1 || saved[0].ResponseText != "pong" || saved[0].ErrorText != "" {
-		t.Fatalf("saved events = %#v, want response logged", saved)
-	}
 }
 
-func TestRunInboundRecordsEmitError(t *testing.T) {
+func TestRunInboundDoesNotReturnEmitError(t *testing.T) {
 	cfg, store := newTelegramTestConfig(t)
 	if err := store.PersistInt("telegram.defaults.debounce_ms", 0); err != nil {
 		t.Fatalf("PersistInt debounce: %v", err)
 	}
 	api := &fakeTelegramAPI{updates: []dbmodel.TelegramUpdate{{ChatID: 1, ThreadID: 2, MessageID: 3, Text: "hi"}}}
-	updates := &fakeTelegramUpdateStorage{}
-	c := &Component{componentID: modeluuid.New(), api: api, updates: updates, cfg: cfg}
+	c := &Component{componentID: modeluuid.New(), api: api, cfg: cfg}
 
 	errBoom := errors.New("boom")
 	if err := c.RunInbound(context.Background(), func(ctx context.Context, event v5component.InboundEvent) error { return errBoom }); err != nil {
 		t.Fatalf("RunInbound() error = %v", err)
-	}
-	saved := updates.savedSnapshot()
-	if len(saved) != 1 || saved[0].ErrorText != "boom" {
-		t.Fatalf("saved events = %#v, want boom error", saved)
 	}
 }
 

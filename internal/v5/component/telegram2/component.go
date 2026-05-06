@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/dbstorage"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
@@ -25,7 +24,6 @@ func New(
 	storage repository.Storage,
 	token string,
 	cfg *appstate.Config,
-	updates dbstorage.TelegramUpdateStorage,
 	logger *log.Logger,
 ) (component.Component, error) {
 	_, _, _, _ = ctx, runtime, home, storage
@@ -41,7 +39,6 @@ func New(
 	return &Component{
 		componentID: registration.ID,
 		api:         api,
-		updates:     updates,
 		cfg:         cfg,
 		logger:      logger,
 	}, nil
@@ -50,7 +47,6 @@ func New(
 type Component struct {
 	componentID modeluuid.UUID
 	api         TelegramAPI
-	updates     dbstorage.TelegramUpdateStorage
 	cfg         *appstate.Config
 	logger      *log.Logger
 }
