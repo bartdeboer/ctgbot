@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -155,9 +154,6 @@ type agentTurnRuntime struct {
 	componentID modeluuid.UUID
 	outputs     []coremodel.ThreadMessage
 	lastText    string
-
-	chatActionMu   sync.Mutex
-	stopChatAction func()
 }
 
 func (r *agentTurnRuntime) Commands() commandengine.CommandExecutor {
@@ -221,7 +217,6 @@ func (r *agentTurnRuntime) StartChatAction(ctx context.Context, action messenger
 	if r == nil || r.runtime == nil || r.broker == nil {
 		return func() {}, nil
 	}
-	r.StopChatAction()
 	var stops []func()
 	for _, relayBinding := range r.runtime.Relays {
 		target, ok, err := r.broker.Mapper.RelayTarget(ctx, r.thread.ID, relayBinding.Binding)
@@ -245,28 +240,11 @@ func (r *agentTurnRuntime) StartChatAction(ctx context.Context, action messenger
 			stops = append(stops, stop)
 		}
 	}
-	stop := onceStop(func() {
+	return func() {
 		for _, stop := range stops {
 			stop()
 		}
-	})
-	r.chatActionMu.Lock()
-	r.stopChatAction = stop
-	r.chatActionMu.Unlock()
-	return r.StopChatAction, nil
-}
-
-func (r *agentTurnRuntime) StopChatAction() {
-	if r == nil {
-		return
-	}
-	r.chatActionMu.Lock()
-	stop := r.stopChatAction
-	r.stopChatAction = nil
-	r.chatActionMu.Unlock()
-	if stop != nil {
-		stop()
-	}
+	}, nil
 }
 
 func (r *agentTurnRuntime) WorkspacePath() string {
@@ -303,14 +281,4 @@ func (r *agentTurnRuntime) context() context.Context {
 		return r.ctx
 	}
 	return context.Background()
-}
-
-func onceStop(stop func()) func() {
-	if stop == nil {
-		return nil
-	}
-	var once sync.Once
-	return func() {
-		once.Do(stop)
-	}
 }

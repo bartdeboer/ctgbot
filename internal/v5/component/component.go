@@ -154,7 +154,6 @@ type TurnRuntime interface {
 	Instructions() TurnInstructions
 	Send(ctx context.Context, payload messenger.OutboundPayload) error
 	StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error)
-	StopChatAction()
 	WorkspacePath() string
 	ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool)
 	ComponentThreadID(componentID modeluuid.UUID) (string, bool, error)

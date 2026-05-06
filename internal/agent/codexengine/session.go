@@ -72,14 +72,7 @@ func (e *SessionExecutor) InstallSkill(ctx context.Context, sbx *sandboxengine.S
 	return nil
 }
 
-func (e *SessionExecutor) HandleRuntimeTurn(
-	ctx context.Context,
-	runtime ExecRuntime,
-	providerThreadID string,
-	prompt string,
-	options agent.TurnOptions,
-	emitAgentMessage func(context.Context, string) error,
-) (agent.TurnResult, error) {
+func (e *SessionExecutor) HandleRuntimeTurn(ctx context.Context, runtime ExecRuntime, output agent.OutputHandler, providerThreadID string, prompt string, options agent.TurnOptions) (agent.TurnResult, error) {
 	if e.Config == nil {
 		return agent.TurnResult{}, fmt.Errorf("missing config")
 	}
@@ -130,10 +123,12 @@ func (e *SessionExecutor) HandleRuntimeTurn(
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
 	stdout := newCodexJSONWriter(&stdoutBuf, e.logf, func(text string) {
-		if emitAgentMessage == nil {
+		if output == nil {
 			return
 		}
-		if err := emitAgentMessage(ctx, text); err != nil {
+		if err := output.Send(ctx, messenger.OutboundPayload{
+			Text: messenger.TextMessage{Text: text},
+		}); err != nil {
 			e.logf("send codex agent message failed: %v", err)
 		}
 	})

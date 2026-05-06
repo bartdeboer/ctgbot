@@ -74,7 +74,7 @@ func New(
 }
 
 type sessionExecutor interface {
-	HandleRuntimeTurn(ctx context.Context, runtime codexengine.ExecRuntime, providerThreadID string, prompt string, options agentcore.TurnOptions, emitAgentMessage func(context.Context, string) error) (agentcore.TurnResult, error)
+	HandleRuntimeTurn(ctx context.Context, runtime codexengine.ExecRuntime, output agentcore.OutputHandler, providerThreadID string, prompt string, options agentcore.TurnOptions) (agentcore.TurnResult, error)
 }
 
 type Component struct {
@@ -154,7 +154,8 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		return nil, err
 	}
 
-	if stopTyping, err := turn.Runtime.StartChatAction(ctx, messenger.ChatActionTyping); err == nil && stopTyping != nil {
+	stopTyping, err := turn.Runtime.StartChatAction(ctx, messenger.ChatActionTyping)
+	if err == nil && stopTyping != nil {
 		defer stopTyping()
 	}
 
@@ -177,18 +178,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		Model:           strings.TrimSpace(turn.Thread.CodexModel),
 		ReasoningEffort: strings.TrimSpace(turn.Thread.CodexReasoningEffort),
 	}
-	result, err := c.executor.HandleRuntimeTurn(
-		ctx,
-		run,
-		providerThreadID,
-		prompt, options,
-		func(ctx context.Context, text string) error {
-			turn.Runtime.StopChatAction()
-			return turn.Runtime.Send(ctx, messenger.OutboundPayload{
-				Text: messenger.TextMessage{Text: text},
-			})
-		},
-	)
+	result, err := c.executor.HandleRuntimeTurn(ctx, run, outputHandler{runtime: turn.Runtime}, providerThreadID, prompt, options)
 	if !turn.Thread.KeepRunning {
 		c.stopAfterTurn(workspacePath, turn.Thread.ID)
 	}
@@ -268,6 +258,17 @@ func (r commandRuntime) CombinedOutput(ctx context.Context, name string, args ..
 		name,
 		args...,
 	)
+}
+
+type outputHandler struct {
+	runtime component.TurnRuntime
+}
+
+func (h outputHandler) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+	if h.runtime == nil {
+		return nil
+	}
+	return h.runtime.Send(ctx, payload)
 }
 
 func callbackPortOrDefault(value int) int {

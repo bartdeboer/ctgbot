@@ -104,7 +104,6 @@ func (f fakeFactory) Bind(registration coremodel.Component, home v5runtime.Home,
 
 type fakeMessengerRecorder struct {
 	payloads []messenger.OutboundPayload
-	events   []string
 }
 
 type fakeMessenger struct {
@@ -126,24 +125,18 @@ func (c *fakeMessenger) RunInbound(ctx context.Context, emit component.InboundEm
 func (c *fakeMessenger) Send(ctx context.Context, payload messenger.OutboundPayload) error {
 	_ = ctx
 	c.recorder.payloads = append(c.recorder.payloads, payload)
-	c.recorder.events = append(c.recorder.events, "send:"+payload.Text.Text)
 	return nil
 }
 func (c *fakeMessenger) StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error) {
 	_, _, _ = ctx, target, action
-	c.recorder.events = append(c.recorder.events, "start:"+string(action))
-	return func() {
-		c.recorder.events = append(c.recorder.events, "stop:"+string(action))
-	}, nil
+	return func() {}, nil
 }
 
 type fakeAgentRecorder struct {
-	prompts                  []string
-	homes                    []v5runtime.Home
-	streamText               string
-	finalText                string
-	startTyping              bool
-	stopChatActionBeforeSend bool
+	prompts    []string
+	homes      []v5runtime.Home
+	streamText string
+	finalText  string
 }
 
 type fakeAgent struct {
@@ -158,21 +151,9 @@ func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if home, ok := turn.Runtime.ComponentHome(c.componentID); ok {
 		c.recorder.homes = append(c.recorder.homes, home)
 	}
-	if c.recorder.startTyping {
-		stopTyping, err := turn.Runtime.StartChatAction(ctx, messenger.ChatActionTyping)
-		if err != nil {
-			return nil, err
-		}
-		if stopTyping != nil {
-			defer stopTyping()
-		}
-	}
 	streamText := strings.TrimSpace(c.recorder.streamText)
 	if streamText == "" {
 		streamText = "working..."
-	}
-	if c.recorder.stopChatActionBeforeSend {
-		turn.Runtime.StopChatAction()
 	}
 	if err := turn.Runtime.Send(context.Background(), messenger.OutboundPayload{
 		Text: messenger.TextMessage{Text: streamText},
@@ -362,66 +343,6 @@ func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T)
 	}
 	if got, want := len(messages), 2; got != want {
 		t.Fatalf("stored messages = %d, want %d", got, want)
-	}
-}
-
-func TestHandleInboundStopsTypingBeforeStreamingReply(t *testing.T) {
-	root := t.TempDir()
-	storage := repository.NewMemory()
-	messengerRecorder := &fakeMessengerRecorder{}
-	agentRecorder := &fakeAgentRecorder{
-		startTyping:              true,
-		stopChatActionBeforeSend: true,
-		streamText:               "done",
-		finalText:                "done",
-	}
-	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := broker.New(storage, system, nil)
-
-	chat := &coremodel.Chat{Label: "team", Enabled: true}
-	if err := storage.Chats().Save(context.Background(), chat); err != nil {
-		t.Fatal(err)
-	}
-	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
-	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
-	if err := storage.Components().Save(context.Background(), telegram); err != nil {
-		t.Fatal(err)
-	}
-	if err := storage.Components().Save(context.Background(), codex); err != nil {
-		t.Fatal(err)
-	}
-	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
-	} {
-		binding := binding
-		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	_, err := b.HandleInbound(context.Background(), component.InboundEvent{
-		ComponentID: telegram.ID,
-		ExternalID:  "msg-1",
-		Payload: messenger.InboundPayload{
-			ProviderType:      "telegram",
-			ProviderChatID:    "chat-1",
-			ProviderThreadID:  "thread-7",
-			ProviderMessageID: "msg-1",
-			Actor: messenger.Actor{
-				ID:    "bart",
-				Label: "bart",
-				Roles: []simplerbac.Role{simplerbac.RoleUser},
-			},
-			Text: messenger.TextMessage{Text: "hello"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("HandleInbound() error = %v", err)
-	}
-	if got, want := strings.Join(messengerRecorder.events, ","), "start:typing,stop:typing,send:done"; got != want {
-		t.Fatalf("events = %q, want %q", got, want)
 	}
 }
 
