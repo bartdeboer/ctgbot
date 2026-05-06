@@ -1,5 +1,7 @@
 package appstate
 
+import "strings"
+
 import hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 
 func (c *Config) Hostbridge() HostbridgeConfig {
@@ -23,6 +25,13 @@ func (h HostbridgeConfig) TCPListenAddr() string {
 		return "127.0.0.1:4567"
 	}
 	return addr
+}
+
+func (h HostbridgeConfig) ConfiguredTCPListenAddr() string {
+	if h.cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(h.cfg.string("hostbridge.tcp_listen_addr", ""))
 }
 
 func (h HostbridgeConfig) SetTCPListenAddr(addr string) error {

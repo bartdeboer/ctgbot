@@ -30,6 +30,7 @@ type System struct {
 	Registry   *component.Registry
 	Workspaces map[string]Workspace
 	Runtimes   map[string]v5runtime.Factory
+	Hostbridge *v5hostbridgeserver.Bridge
 
 	RootDir   string
 	StateRoot string
@@ -79,7 +80,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 	if err != nil {
 		return nil, err
 	}
-	runtimes, err := buildRuntimes(rootDir, stateRoot, storage, sandboxengine.NewSandboxManager(logger), logger)
+	runtimes, bridge, err := buildRuntimes(rootDir, stateRoot, cfg, storage, sandboxengine.NewSandboxManager(logger), logger)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +89,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 		Storage:    storage,
 		Workspaces: workspaces,
 		Runtimes:   runtimes,
+		Hostbridge: bridge,
 		RootDir:    rootDir,
 		StateRoot:  stateRoot,
 		DBPath:     dbPath,
@@ -104,6 +106,13 @@ func New(storage repository.Storage, workspaces map[string]Workspace, runtimes m
 		Runtimes:   runtimes,
 		Registry:   registry,
 	}
+}
+
+func (s *System) StartHostbridge() (containerAddress string, hostAddress string, err error) {
+	if s == nil || s.Hostbridge == nil {
+		return "", "", nil
+	}
+	return s.Hostbridge.Start()
 }
 
 func resolveStateRoot(rootDir string, stateRoot string) string {
@@ -132,9 +141,12 @@ func resolveComponentsRoot(stateRoot string) string {
 	return filepath.Join(strings.TrimSpace(stateRoot), "components")
 }
 
-func buildRuntimes(rootDir string, stateRoot string, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger) (map[string]v5runtime.Factory, error) {
+func buildRuntimes(rootDir string, stateRoot string, cfg *appstate.Config, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger) (map[string]v5runtime.Factory, *v5hostbridgeserver.Bridge, error) {
 	runtimes := map[string]v5runtime.Factory{}
-	listenAddress := strings.TrimSpace(os.Getenv("CTGBOT_V5_HOSTBRIDGE_LISTEN_ADDR"))
+	listenAddress := strings.TrimSpace(os.Getenv("CTGBOT_HOSTBRIDGE_LISTEN_ADDR"))
+	if listenAddress == "" {
+		listenAddress = strings.TrimSpace(cfg.Hostbridge().ConfiguredTCPListenAddr())
+	}
 	if listenAddress == "" {
 		listenAddress = v5hostbridgeserver.DefaultListenAddress
 	}
@@ -148,9 +160,9 @@ func buildRuntimes(rootDir string, stateRoot string, storage repository.Storage,
 		case "local":
 			runtime = v5local.New(rootDir, componentsRoot)
 		default:
-			return nil, fmt.Errorf("unsupported runtime %q", runtimeKind)
+			return nil, nil, fmt.Errorf("unsupported runtime %q", runtimeKind)
 		}
 		runtimes[runtimeKind] = runtime
 	}
-	return runtimes, nil
+	return runtimes, bridge, nil
 }

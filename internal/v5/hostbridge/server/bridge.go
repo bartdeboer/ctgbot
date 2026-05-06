@@ -61,6 +61,13 @@ func (b *Bridge) WithListenAddress(address string) *Bridge {
 	return b
 }
 
+func (b *Bridge) Start() (containerAddress string, hostAddress string, err error) {
+	if b == nil {
+		return "", "", fmt.Errorf("missing hostbridge")
+	}
+	return b.ensureStarted()
+}
+
 func (b *Bridge) BindThread(
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,

@@ -61,6 +61,9 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
+			if _, _, err := system.StartHostbridge(); err != nil {
+				return fmt.Errorf("start v5 hostbridge: %w", err)
+			}
 
 			fmt.Println("ctgbot v5 runtime initialized")
 			fmt.Printf("state_root: %s\n", system.StateRoot)

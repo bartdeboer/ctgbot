@@ -313,6 +313,27 @@ func TestChatHostbridgeSetters(t *testing.T) {
 	}
 }
 
+func TestHostbridgeConfiguredTCPListenAddr(t *testing.T) {
+	cfg, store := newTestConfig(t)
+
+	if got := cfg.Hostbridge().ConfiguredTCPListenAddr(); got != "" {
+		t.Fatalf("ConfiguredTCPListenAddr() = %q, want empty", got)
+	}
+	if got := cfg.Hostbridge().TCPListenAddr(); got != "127.0.0.1:4567" {
+		t.Fatalf("TCPListenAddr() = %q, want default 127.0.0.1:4567", got)
+	}
+
+	if err := store.PersistString("hostbridge.tcp_listen_addr", "127.0.0.1:4568"); err != nil {
+		t.Fatalf("persist listen addr: %v", err)
+	}
+	if got := cfg.Hostbridge().ConfiguredTCPListenAddr(); got != "127.0.0.1:4568" {
+		t.Fatalf("ConfiguredTCPListenAddr() = %q, want 127.0.0.1:4568", got)
+	}
+	if got := cfg.Hostbridge().TCPListenAddr(); got != "127.0.0.1:4568" {
+		t.Fatalf("TCPListenAddr() = %q, want 127.0.0.1:4568", got)
+	}
+}
+
 func TestIdentityHelpers(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 	chatID := modeluuid.New()
