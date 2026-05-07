@@ -16,6 +16,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5gormstorage "github.com/bartdeboer/ctgbot/internal/v5/repository/gormstorage"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
+	v5backend "github.com/bartdeboer/ctgbot/internal/v5/runtime/backend"
 	v5docker "github.com/bartdeboer/ctgbot/internal/v5/runtime/docker"
 	v5local "github.com/bartdeboer/ctgbot/internal/v5/runtime/local"
 	"github.com/bartdeboer/go-clistate"
@@ -158,13 +159,15 @@ func buildRuntimes(rootDir string, stateRoot string, cfg *appstate.Config, stora
 	}
 	bridge := v5hostbridgeserver.NewBridge(stateRoot, storage, logger).WithListenAddress(listenAddress)
 	componentsRoot := resolveComponentsRoot(stateRoot)
-	for _, runtimeKind := range []string{"docker", "local"} {
+	for _, runtimeKind := range []string{"docker", "local", v5backend.Kind} {
 		var runtime v5runtime.Factory
 		switch runtimeKind {
 		case "docker":
 			runtime = v5docker.New(rootDir, componentsRoot, sandboxes, bridge)
 		case "local":
 			runtime = v5local.New(rootDir, componentsRoot)
+		case v5backend.Kind:
+			runtime = v5backend.New(componentsRoot, logger)
 		default:
 			return nil, nil, fmt.Errorf("unsupported runtime %q", runtimeKind)
 		}

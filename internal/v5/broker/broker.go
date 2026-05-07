@@ -229,16 +229,15 @@ func (b *Broker) runAgentTurn(
 	turnRuntime *agentTurnRuntime,
 ) (*coremodel.ThreadMessage, error) {
 	if agentBinding.Completion != nil {
-		messages, err := b.completionMessages(ctx, thread.ID, inbound)
+		prompt, err := b.completionPrompt(ctx, thread.ID, inbound)
 		if err != nil {
 			return nil, err
 		}
 		result, err := agentBinding.Completion.HandleCompletion(ctx, component.CompletionRequest{
-			Chat:     chat,
-			Thread:   thread,
-			Inbound:  inbound,
-			Messages: messages,
-			Runtime:  turnRuntime,
+			Chat:    chat,
+			Thread:  thread,
+			Prompt:  prompt,
+			Runtime: turnRuntime,
 		})
 		if err != nil || result == nil {
 			return nil, err
@@ -258,19 +257,6 @@ func (b *Broker) runAgentTurn(
 		return nil, err
 	}
 	return result.Final, nil
-}
-
-func (b *Broker) completionMessages(ctx context.Context, threadID modeluuid.UUID, inbound coremodel.ThreadMessage) ([]coremodel.ThreadMessage, error) {
-	messages, err := b.Storage.Messages().ListByThreadID(ctx, threadID)
-	if err != nil {
-		return nil, err
-	}
-	for i := range messages {
-		if messages[i].ID == inbound.ID {
-			messages[i] = inbound
-		}
-	}
-	return messages, nil
 }
 
 func agentType(binding AgentBinding) string {

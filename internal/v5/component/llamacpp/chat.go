@@ -3,7 +3,7 @@ package llamacpp
 import (
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
+	component "github.com/bartdeboer/ctgbot/internal/v5/component"
 )
 
 type chatMessage struct {
@@ -11,36 +11,18 @@ type chatMessage struct {
 	Content string `json:"content"`
 }
 
-func brokerMessagesToChat(messages []coremodel.ThreadMessage) []chatMessage {
-	out := make([]chatMessage, 0, len(messages))
-	for _, message := range messages {
-		content := strings.TrimSpace(message.Text)
+func completionPromptToChat(prompt component.CompletionPrompt) []chatMessage {
+	out := make([]chatMessage, 0, len(prompt.Messages))
+	for _, message := range prompt.Messages {
+		content := strings.TrimSpace(message.Content)
 		if content == "" {
 			continue
 		}
-		role := roleForMessage(message)
+		role := strings.TrimSpace(string(message.Role))
 		if role == "" {
 			continue
 		}
 		out = append(out, chatMessage{Role: role, Content: content})
 	}
 	return out
-}
-
-func roleForMessage(message coremodel.ThreadMessage) string {
-	switch message.Kind {
-	case coremodel.MessageKindSystem:
-		return "system"
-	case coremodel.MessageKindAgent:
-		return "assistant"
-	case coremodel.MessageKindUser:
-		return "user"
-	}
-	switch message.Direction {
-	case coremodel.MessageDirectionInbound:
-		return "user"
-	case coremodel.MessageDirectionOutbound:
-		return "assistant"
-	}
-	return ""
 }

@@ -3,20 +3,22 @@ package llamacpp
 import (
 	"testing"
 
-	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
+	component "github.com/bartdeboer/ctgbot/internal/v5/component"
 )
 
-func TestBrokerMessagesToChat(t *testing.T) {
-	messages := []coremodel.ThreadMessage{
-		{Kind: coremodel.MessageKindSystem, Text: "system prompt"},
-		{Direction: coremodel.MessageDirectionInbound, Kind: coremodel.MessageKindUser, Text: "hello"},
-		{Direction: coremodel.MessageDirectionOutbound, Kind: coremodel.MessageKindAgent, Text: "hi"},
-		{Direction: coremodel.MessageDirectionInbound, Text: "fallback user"},
-		{Direction: coremodel.MessageDirectionOutbound, Text: "fallback assistant"},
-		{Kind: coremodel.MessageKindUser, Text: "   "},
+func TestCompletionPromptToChat(t *testing.T) {
+	prompt := component.CompletionPrompt{
+		Messages: []component.CompletionMessage{
+			{Role: component.CompletionRoleSystem, Content: "system prompt"},
+			{Role: component.CompletionRoleUser, Content: "hello"},
+			{Role: component.CompletionRoleAssistant, Content: "hi"},
+			{Role: component.CompletionRoleUser, Content: "fallback user"},
+			{Role: component.CompletionRoleAssistant, Content: "fallback assistant"},
+			{Role: component.CompletionRoleUser, Content: "   "},
+		},
 	}
 
-	got := brokerMessagesToChat(messages)
+	got := completionPromptToChat(prompt)
 	want := []chatMessage{
 		{Role: "system", Content: "system prompt"},
 		{Role: "user", Content: "hello"},

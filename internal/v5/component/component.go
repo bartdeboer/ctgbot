@@ -125,12 +125,11 @@ type Agent interface {
 	HandleTurn(ctx context.Context, turn Turn) (*TurnResult, error)
 }
 
-// CompletionAgent receives the broker's conversation-shaped view of a thread.
+// CompletionAgent receives a normalized completion prompt for a thread.
 //
-// Implementations are responsible for translating that stable broker model to
-// their backend-specific request format. For example, a llama.cpp component can
-// turn the messages into OpenAI-compatible chat JSON while a future backend can
-// choose a different wire format without changing the broker.
+// The prompt shape intentionally aligns with OpenAI-style chat completions so
+// that components such as llama.cpp can translate it almost directly to their
+// backend payloads without needing to understand broker storage details.
 type CompletionAgent interface {
 	Component
 	HandleCompletion(ctx context.Context, request CompletionRequest) (*CompletionResult, error)
@@ -153,12 +152,30 @@ type TurnResult struct {
 	Final *coremodel.ThreadMessage
 }
 
+type CompletionRole string
+
+const (
+	CompletionRoleSystem    CompletionRole = "system"
+	CompletionRoleDeveloper CompletionRole = "developer"
+	CompletionRoleUser      CompletionRole = "user"
+	CompletionRoleAssistant CompletionRole = "assistant"
+	CompletionRoleTool      CompletionRole = "tool"
+)
+
+type CompletionMessage struct {
+	Role    CompletionRole
+	Content string
+}
+
+type CompletionPrompt struct {
+	Messages []CompletionMessage
+}
+
 type CompletionRequest struct {
-	Chat     coremodel.Chat
-	Thread   coremodel.Thread
-	Inbound  coremodel.ThreadMessage
-	Messages []coremodel.ThreadMessage
-	Runtime  TurnRuntime
+	Chat    coremodel.Chat
+	Thread  coremodel.Thread
+	Prompt  CompletionPrompt
+	Runtime TurnRuntime
 }
 
 type CompletionResult struct {

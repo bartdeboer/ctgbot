@@ -18,15 +18,15 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
+	v5backend "github.com/bartdeboer/ctgbot/internal/v5/runtime/backend"
 )
 
 type Component struct {
-	registration coremodel.Component
-	home         v5runtime.Home
-	profile      Profile
-	containers   *containerengine.Manager
-	client       *http.Client
-	logger       *log.Logger
+	registration    coremodel.Component
+	componentConfig ComponentConfig
+	runtime         *v5backend.Runtime
+	client          *http.Client
+	logger          *log.Logger
 }
 
 var _ component.Component = (*Component)(nil)
@@ -41,35 +41,51 @@ func New(
 	storage repository.Storage,
 	logger *log.Logger,
 ) (component.Component, error) {
-	_, _, _ = ctx, runtimeFactory, storage
-	profile, err := loadProfile(home.Path, registration.Name)
+	_, _ = ctx, storage
+	backendFactory, ok := runtimeFactory.(v5backend.Binder)
+	if !ok {
+		return nil, fmt.Errorf("llamacpp requires backend runtime, got %T", runtimeFactory)
+	}
+	runtimeConfig, err := loadRuntimeConfig(home.Path)
+	if err != nil {
+		return nil, err
+	}
+	componentConfig, err := loadComponentConfig(home.Path, registration.Name)
 	if err != nil {
 		return nil, err
 	}
 	return &Component{
-		registration: registration,
-		home:         home,
-		profile:      profile,
-		containers:   containerengine.NewManager(logger),
-		client:       &http.Client{Timeout: 2 * time.Minute},
-		logger:       logger,
+		registration:    registration,
+		componentConfig: componentConfig,
+		runtime:         backendFactory.BindBackend(registration, home, runtimeConfig, serviceSpec(componentConfig)),
+		client:          &http.Client{Timeout: 2 * time.Minute},
+		logger:          logger,
 	}, nil
 }
 
 func (c *Component) Type() string { return Type }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {
-	return []component.ManagedFile{{RelativePath: "config.json", Required: false, Sensitive: false}}
+	return []component.ManagedFile{
+		{RelativePath: v5runtime.ConfigFilename, Required: false, Sensitive: false},
+		{RelativePath: ComponentConfigFilename, Required: false, Sensitive: false},
+	}
 }
 
 func (c *Component) HandleCompletion(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
 	if c == nil {
 		return nil, fmt.Errorf("missing llamacpp component")
 	}
-	if err := c.ensureServer(ctx); err != nil {
+	if c.runtime == nil {
+		return nil, fmt.Errorf("missing llamacpp backend runtime")
+	}
+	if _, err := c.runtime.Start(ctx); err != nil {
 		return nil, err
 	}
-	text, err := c.complete(ctx, brokerMessagesToChat(request.Messages))
+	if !c.componentConfig.KeepRunning {
+		defer c.stopAfterCompletion()
+	}
+	text, err := c.complete(ctx, completionPromptToChat(request.Prompt))
 	if err != nil {
 		return nil, err
 	}
@@ -80,84 +96,56 @@ func (c *Component) HandleCompletion(ctx context.Context, request component.Comp
 	return &component.CompletionResult{Final: &coremodel.ThreadMessage{Text: text}}, nil
 }
 
-func (c *Component) ensureServer(ctx context.Context) error {
-	container := c.containers.Container(c.containerName())
-	state, err := container.InspectState(ctx)
-	if err != nil {
-		return err
-	}
-	if state == containerengine.StateMissing {
-		if _, err := c.containers.Create(ctx, c.containerSpec()); err != nil {
-			return err
-		}
-	}
-	if state != containerengine.StateRunning {
-		if err := container.Start(ctx); err != nil {
-			return err
-		}
-	}
-	return c.waitReady(ctx)
-}
-
-func (c *Component) containerSpec() containerengine.ContainerSpec {
-	modelDir := filepath.Dir(c.profile.ModelPath)
+func serviceSpec(config ComponentConfig) v5backend.ServiceSpec {
+	modelDir := filepath.Dir(config.ModelPath)
 	cmd := []string{
-		"-m", "/models/" + filepath.Base(c.profile.ModelPath),
+		"-m", "/models/" + filepath.Base(config.ModelPath),
 		"--host", "0.0.0.0",
 		"--port", "8080",
-		"--ctx-size", strconv.Itoa(c.profile.ContextSize),
-		"--gpu-layers", strconv.Itoa(c.profile.GPULayers),
+		"--ctx-size", strconv.Itoa(config.ContextSize),
+		"--gpu-layers", strconv.Itoa(config.GPULayers),
 		"--jinja",
 	}
 	mounts := []containerengine.Mount{{Source: modelDir, Target: "/models", ReadOnly: true}}
-	if strings.TrimSpace(c.profile.MMProjPath) != "" {
-		cmd = append(cmd, "--mmproj", "/models/"+filepath.Base(c.profile.MMProjPath))
+	if mmprojPath := strings.TrimSpace(config.MMProjPath); mmprojPath != "" {
+		if filepath.Dir(mmprojPath) == modelDir {
+			cmd = append(cmd, "--mmproj", "/models/"+filepath.Base(mmprojPath))
+		} else {
+			mounts = append(mounts, containerengine.Mount{
+				Source:   filepath.Dir(mmprojPath),
+				Target:   "/mmproj",
+				ReadOnly: true,
+			})
+			cmd = append(cmd, "--mmproj", "/mmproj/"+filepath.Base(mmprojPath))
+		}
 	}
-	return containerengine.ContainerSpec{
-		Name:   c.containerName(),
-		Image:  c.profile.Image,
-		GPUs:   "all",
-		Ports:  []string{fmt.Sprintf("127.0.0.1:%d:8080", c.profile.HostPort)},
-		Mounts: mounts,
-		Cmd:    cmd,
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", config.HostPort)
+	return v5backend.ServiceSpec{
+		BaseURL:   baseURL,
+		HealthURL: baseURL + "/health",
+		Ports:     []string{fmt.Sprintf("127.0.0.1:%d:8080", config.HostPort)},
+		Mounts:    mounts,
+		Cmd:       cmd,
 	}
 }
 
-func (c *Component) waitReady(ctx context.Context) error {
-	url := c.baseURL() + "/health"
-	deadline := time.Now().Add(2 * time.Minute)
-	var lastErr error
-	for time.Now().Before(deadline) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		if err != nil {
-			return err
-		}
-		resp, err := c.client.Do(req)
-		if err == nil {
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
-			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				return nil
-			}
-			lastErr = fmt.Errorf("health status %s", resp.Status)
-		} else {
-			lastErr = err
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
+func (c *Component) stopAfterCompletion() {
+	if c == nil || c.runtime == nil {
+		return
 	}
-	return fmt.Errorf("llamacpp server not ready: %w", lastErr)
+	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.runtime.Stop(stopCtx); err != nil {
+		c.logf("llamacpp stop-after-completion failed component=%s err=%v", c.registration.Ref(), err)
+	}
 }
 
 func (c *Component) complete(ctx context.Context, messages []chatMessage) (string, error) {
 	body := completionRequest{
 		Model:       c.registration.Name,
 		Messages:    messages,
-		MaxTokens:   c.profile.MaxTokens,
-		Temperature: c.profile.Temperature,
+		MaxTokens:   c.componentConfig.MaxTokens,
+		Temperature: c.componentConfig.Temperature,
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -191,34 +179,16 @@ func (c *Component) complete(ctx context.Context, messages []chatMessage) (strin
 }
 
 func (c *Component) baseURL() string {
-	return fmt.Sprintf("http://127.0.0.1:%d", c.profile.HostPort)
+	if c == nil || c.runtime == nil {
+		return ""
+	}
+	return c.runtime.BaseURL()
 }
 
-func (c *Component) containerName() string {
-	return "ctgbot-v5-llamacpp-" + safeName(c.registration.Name)
-}
-
-func safeName(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	var b strings.Builder
-	prevDash := false
-	for _, r := range value {
-		ok := r >= 'a' && r <= 'z' || r >= '0' && r <= '9'
-		if ok {
-			b.WriteRune(r)
-			prevDash = false
-			continue
-		}
-		if !prevDash {
-			b.WriteByte('-')
-			prevDash = true
-		}
+func (c *Component) logf(format string, args ...any) {
+	if c != nil && c.logger != nil {
+		c.logger.Printf(format, args...)
 	}
-	out := strings.Trim(b.String(), "-")
-	if out == "" {
-		return "default"
-	}
-	return out
 }
 
 type completionRequest struct {
