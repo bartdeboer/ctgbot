@@ -52,6 +52,7 @@ type ChatRuntime struct {
 type AgentBinding struct {
 	ComponentID modeluuid.UUID
 	Agent       component.Agent
+	Completion  component.CompletionAgent
 }
 
 type RelayBinding struct {
@@ -197,24 +198,19 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	for _, agentBinding := range runtime.Agents {
 		turnRuntime.componentID = agentBinding.ComponentID
 		turnRuntime.lastText = ""
-		result, err := agentBinding.Agent.HandleTurn(ctx, component.Turn{
-			Chat:    *chat,
-			Thread:  *thread,
-			Inbound: turnInbound,
-			Runtime: turnRuntime,
-		})
+		final, err := b.runAgentTurn(ctx, agentBinding, *chat, *thread, turnInbound, turnRuntime)
 		outbound = append(outbound, turnRuntime.outputs...)
 		turnRuntime.outputs = nil
 		if err != nil {
 			return failConversation(inbound, outbound, err)
 		}
-		if result == nil || result.Final == nil || strings.TrimSpace(result.Final.Text) == "" {
+		if final == nil || strings.TrimSpace(final.Text) == "" {
 			continue
 		}
-		if strings.TrimSpace(result.Final.Text) == turnRuntime.LastText() {
+		if strings.TrimSpace(final.Text) == turnRuntime.LastText() {
 			continue
 		}
-		message, err := b.storeAndRelayMessage(ctx, runtime, *chat, *thread, *result.Final, agentBinding.Agent.Type())
+		message, err := b.storeAndRelayMessage(ctx, runtime, *chat, *thread, *final, agentType(agentBinding))
 		if err != nil {
 			return failConversation(inbound, outbound, err)
 		}
@@ -222,6 +218,69 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	}
 
 	return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+}
+
+func (b *Broker) runAgentTurn(
+	ctx context.Context,
+	agentBinding AgentBinding,
+	chat coremodel.Chat,
+	thread coremodel.Thread,
+	inbound coremodel.ThreadMessage,
+	turnRuntime *agentTurnRuntime,
+) (*coremodel.ThreadMessage, error) {
+	if agentBinding.Completion != nil {
+		messages, err := b.completionMessages(ctx, thread.ID, inbound)
+		if err != nil {
+			return nil, err
+		}
+		result, err := agentBinding.Completion.HandleCompletion(ctx, component.CompletionRequest{
+			Chat:     chat,
+			Thread:   thread,
+			Inbound:  inbound,
+			Messages: messages,
+			Runtime:  turnRuntime,
+		})
+		if err != nil || result == nil {
+			return nil, err
+		}
+		return result.Final, nil
+	}
+	if agentBinding.Agent == nil {
+		return nil, nil
+	}
+	result, err := agentBinding.Agent.HandleTurn(ctx, component.Turn{
+		Chat:    chat,
+		Thread:  thread,
+		Inbound: inbound,
+		Runtime: turnRuntime,
+	})
+	if err != nil || result == nil {
+		return nil, err
+	}
+	return result.Final, nil
+}
+
+func (b *Broker) completionMessages(ctx context.Context, threadID modeluuid.UUID, inbound coremodel.ThreadMessage) ([]coremodel.ThreadMessage, error) {
+	messages, err := b.Storage.Messages().ListByThreadID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range messages {
+		if messages[i].ID == inbound.ID {
+			messages[i] = inbound
+		}
+	}
+	return messages, nil
+}
+
+func agentType(binding AgentBinding) string {
+	if binding.Completion != nil {
+		return binding.Completion.Type()
+	}
+	if binding.Agent != nil {
+		return binding.Agent.Type()
+	}
+	return ""
 }
 
 func (b *Broker) ensureReady() error {

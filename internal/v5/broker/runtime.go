@@ -55,7 +55,15 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		}
 		switch binding.Role {
 		case coremodel.ChatComponentRoleAgent:
-			if agentImpl, ok := instance.Component.(component.Agent); ok {
+			if completionImpl, ok := instance.Component.(component.CompletionAgent); ok {
+				agents = append(agents, AgentBinding{
+					ComponentID: binding.ComponentID,
+					Completion:  completionImpl,
+				})
+				if runtimeWorkspace == "" && instance.Runtime != nil {
+					runtimeWorkspace = strings.TrimSpace(instance.Runtime.RuntimeWorkspacePath(workspace))
+				}
+			} else if agentImpl, ok := instance.Component.(component.Agent); ok {
 				agents = append(agents, AgentBinding{
 					ComponentID: binding.ComponentID,
 					Agent:       agentImpl,

@@ -32,6 +32,7 @@ type ContainerSpec struct {
 	User         string
 	UserMode     string
 	GPUs         string
+	Ports        []string
 	Labels       map[string]string
 	Env          []string
 	Mounts       []Mount

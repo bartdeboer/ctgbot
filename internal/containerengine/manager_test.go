@@ -51,6 +51,28 @@ func TestBuildCreateArgsIncludesGPUs(t *testing.T) {
 	}
 }
 
+func TestBuildCreateArgsIncludesPorts(t *testing.T) {
+	t.Parallel()
+
+	args := buildCreateArgs(ContainerSpec{
+		Name:  "ctgbot-test",
+		Image: "ctgbot:latest",
+		Ports: []string{"127.0.0.1:18080:8080"},
+		Cmd:   []string{"server"},
+	})
+
+	found := false
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--publish" && args[i+1] == "127.0.0.1:18080:8080" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected published port in args: %#v", args)
+	}
+}
+
 func TestBuildCreateArgsIncludesUser(t *testing.T) {
 	t.Parallel()
 

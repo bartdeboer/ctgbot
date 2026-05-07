@@ -108,6 +108,12 @@ func buildCreateArgs(spec ContainerSpec) []string {
 	if gpus := strings.TrimSpace(spec.GPUs); gpus != "" {
 		args = append(args, "--gpus", gpus)
 	}
+	for _, port := range spec.Ports {
+		if strings.TrimSpace(port) == "" {
+			continue
+		}
+		args = append(args, "--publish", port)
+	}
 	if workdir := strings.TrimSpace(spec.Workdir); workdir != "" {
 		args = append(args, "--workdir", workdir)
 	}
