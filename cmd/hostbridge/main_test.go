@@ -11,22 +11,26 @@ import (
 func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 	tests := []struct {
 		name string
+		ref  string
 		in   []string
 		want []string
 	}{
-		{name: "status", in: []string{"status"}, want: []string{"codex", "status"}},
-		{name: "refresh", in: []string{"refresh"}, want: []string{"codex", "refresh"}},
-		{name: "interrupt", in: []string{"interrupt"}, want: []string{"codex", "interrupt"}},
-		{name: "model status", in: []string{"model"}, want: []string{"codex", "model"}},
-		{name: "model set", in: []string{"model", "set", "gpt-5.5"}, want: []string{"codex", "model", "set", "gpt-5.5"}},
-		{name: "run alias", in: []string{"whoami"}, want: []string{"run", "whoami"}},
-		{name: "direct hostbridge", in: []string{"sendstdin"}, want: []string{"sendstdin"}},
-		{name: "config", in: []string{"config", "list"}, want: []string{"config", "list"}},
+		{name: "status", ref: "codex", in: []string{"status"}, want: []string{"codex", "status"}},
+		{name: "refresh", ref: "codex", in: []string{"refresh"}, want: []string{"codex", "refresh"}},
+		{name: "interrupt", ref: "codex", in: []string{"interrupt"}, want: []string{"codex", "interrupt"}},
+		{name: "model status", ref: "codex", in: []string{"model"}, want: []string{"codex", "model"}},
+		{name: "model set", ref: "codex", in: []string{"model", "set", "gpt-5.5"}, want: []string{"codex", "model", "set", "gpt-5.5"}},
+		{name: "llamacpp status is explicit", ref: "llamacpp/default", in: []string{"llamacpp", "status"}, want: []string{"llamacpp", "status"}},
+		{name: "llamacpp shorthand is not assumed", ref: "llamacpp/default", in: []string{"status"}, want: []string{"run", "status"}},
+		{name: "full current ref is direct", ref: "llamacpp/default", in: []string{"llamacpp/default", "status"}, want: []string{"llamacpp/default", "status"}},
+		{name: "run alias", ref: "codex", in: []string{"whoami"}, want: []string{"run", "whoami"}},
+		{name: "direct hostbridge", ref: "codex", in: []string{"sendstdin"}, want: []string{"sendstdin"}},
+		{name: "config", ref: "codex", in: []string{"config", "list"}, want: []string{"config", "list"}},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := normalizedArgs(tc.in)
+			got := normalizedArgs(tc.in, tc.ref)
 			if len(got) != len(tc.want) {
 				t.Fatalf("normalizedArgs(%v) length = %d, want %d (%v)", tc.in, len(got), len(tc.want), got)
 			}
@@ -58,10 +62,10 @@ func TestHostbridgeRouterUsesV5CodexDefinitions(t *testing.T) {
 		argv []string
 		want string
 	}{
-		{argv: normalizedArgs([]string{"status"}), want: "codex status"},
-		{argv: normalizedArgs([]string{"refresh"}), want: "codex container refresh"},
-		{argv: normalizedArgs([]string{"interrupt"}), want: "codex interrupt"},
-		{argv: normalizedArgs([]string{"model"}), want: "codex model"},
+		{argv: normalizedArgs([]string{"status"}, "codex"), want: "codex status"},
+		{argv: normalizedArgs([]string{"refresh"}, "codex"), want: "codex container refresh"},
+		{argv: normalizedArgs([]string{"interrupt"}, "codex"), want: "codex interrupt"},
+		{argv: normalizedArgs([]string{"model"}, "codex"), want: "codex model"},
 	}
 
 	for _, tc := range tests {
@@ -72,5 +76,58 @@ func TestHostbridgeRouterUsesV5CodexDefinitions(t *testing.T) {
 		if req.CanonicalPattern != tc.want {
 			t.Fatalf("Parse(%v) canonical pattern = %q, want %q", tc.argv, req.CanonicalPattern, tc.want)
 		}
+	}
+}
+
+func TestHostbridgeRouterSupportsLlamacppSurface(t *testing.T) {
+	t.Setenv("CTGBOT_COMPONENT_REF", "llamacpp/default")
+	router, err := hostbridgeRouter()
+	if err != nil {
+		t.Fatalf("hostbridgeRouter() error = %v", err)
+	}
+
+	base := commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{
+				ID:    "hostbridge",
+				Roles: []simplerbac.Role{simplerbac.RoleAgent},
+			},
+		},
+	}
+
+	req, err := router.Parse(context.Background(), base, []string{"llamacpp", "status"})
+	if err != nil {
+		t.Fatalf("Parse(llamacpp status) error = %v", err)
+	}
+	if got, want := req.CanonicalPattern, "llamacpp/default status"; got != want {
+		t.Fatalf("Parse(llamacpp status) canonical pattern = %q, want %q", got, want)
+	}
+}
+
+func TestHostbridgeRouterFallsBackToGlobalsForUnsupportedComponent(t *testing.T) {
+	t.Setenv("CTGBOT_COMPONENT_REF", "gmail/work")
+	router, err := hostbridgeRouter()
+	if err != nil {
+		t.Fatalf("hostbridgeRouter() error = %v", err)
+	}
+
+	base := commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{
+				ID:    "hostbridge",
+				Roles: []simplerbac.Role{simplerbac.RoleAgent},
+			},
+		},
+	}
+
+	req, err := router.Parse(context.Background(), base, []string{"run", "whoami"})
+	if err != nil {
+		t.Fatalf("Parse(run whoami) error = %v", err)
+	}
+	if got, want := req.CanonicalPattern, "run <command>"; got != want {
+		t.Fatalf("Parse(run whoami) canonical pattern = %q, want %q", got, want)
+	}
+	if _, err := router.Parse(context.Background(), base, []string{"gmail", "sendmessage"}); err == nil {
+		t.Fatal("Parse(gmail sendmessage) error = nil, want no matching command")
 	}
 }

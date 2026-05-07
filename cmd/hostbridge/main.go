@@ -12,15 +12,11 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
-	v5component "github.com/bartdeboer/ctgbot/internal/v5/component"
-	brokercomponent "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
-	codexcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/codex"
-	configcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/config"
-	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/v5/hostbridgecmd"
 )
 
 func main() {
-	args := normalizedArgs(os.Args[1:])
+	args := normalizedArgs(os.Args[1:], currentComponentRef())
 	if len(args) == 0 || (len(args) == 1 && args[0] == "help") {
 		printHelp()
 		return
@@ -53,29 +49,33 @@ func main() {
 	}
 }
 
-func normalizedArgs(args []string) []string {
+func normalizedArgs(args []string, componentRef string) []string {
 	if len(args) == 0 {
 		return nil
 	}
 	if len(args) >= 2 && args[0] == "run" && args[1] == "sendstdin" {
 		return append([]string{"sendstdin"}, args[2:]...)
 	}
-	if isDirectHostbridgeCommand(args[0]) {
+	if isDirectHostbridgeCommand(args[0], componentRef) {
 		return args
 	}
-	if isLegacyCodexShorthand(args[0]) {
+	if hostbridgecmd.LegacyCodexShorthandEnabled(componentRef) && isLegacyCodexShorthand(args[0]) {
 		return append([]string{"codex"}, args...)
 	}
 	return append([]string{"run"}, args...)
 }
 
-func isDirectHostbridgeCommand(arg string) bool {
+func isDirectHostbridgeCommand(arg string, componentRef string) bool {
 	switch arg {
-	case "", "run", "sendfile", "sendstdin", "config", "codex", "help":
+	case "", "run", "sendfile", "sendstdin", "config", "help":
 		return true
-	default:
-		return false
 	}
+	for _, prefix := range hostbridgecmd.DirectPrefixes(componentRef) {
+		if arg == prefix {
+			return true
+		}
+	}
+	return false
 }
 
 func isLegacyCodexShorthand(arg string) bool {
@@ -121,13 +121,18 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_TLS_DIR  Optional directory containing ca.crt, client.crt, client.key")
 	fmt.Fprintln(os.Stdout, "  CTGBOT_SANDBOX_ID   Sandbox/thread id for outbound/config commands")
 	fmt.Fprintln(os.Stdout, "  CTGBOT_COMPONENT_REF  Current component ref for bound command routing (default codex)")
+	resolved := hostbridgecmd.Resolve(currentComponentRef())
+	if !resolved.Supported {
+		fmt.Fprintln(os.Stdout, "")
+		fmt.Fprintf(os.Stdout, "note: no component-specific hostbridge commands are registered for %s\n", resolved.ComponentRef)
+	}
 }
 
 func hostbridgeRouter() (*commandengine.Router, error) {
 	return commandset.NewBoundRouterForSource(
 		commandengine.SourceHostbridge,
 		hostbridgeBoundSurfaces(),
-		hostbridgeGlobalSurfaces()...,
+		hostbridgecmd.GlobalSurfaces()...,
 	)
 }
 
@@ -135,38 +140,19 @@ func hostbridgeDefinitions() []commandengine.Definition {
 	return commandset.DefinitionsForBoundSource(
 		commandengine.SourceHostbridge,
 		hostbridgeBoundSurfaces(),
-		hostbridgeGlobalSurfaces()...,
+		hostbridgecmd.GlobalSurfaces()...,
 	)
 }
 
-func hostbridgeGlobalSurfaces() []v5component.CommandSurface {
-	return []v5component.CommandSurface{
-		brokercomponent.New(nil),
-		(*configcomponent.Component)(nil),
-	}
-}
-
 func hostbridgeBoundSurfaces() []commandset.BoundSurface {
-	ref := currentComponentRef()
-	parsed, err := coremodel.ParseComponentRef(ref)
-	if err != nil {
-		parsed = coremodel.ParsedComponentRef{
-			Type: codexcomponent.Type,
-			Name: coremodel.DefaultComponentName(codexcomponent.Type),
-		}
-	}
-	return []commandset.BoundSurface{{
-		Surface:       (*codexcomponent.Component)(nil),
-		ComponentRef:  parsed.Ref(),
-		ComponentType: parsed.Type,
-	}}
+	return hostbridgecmd.BoundSurfaces(currentComponentRef())
 }
 
 func currentComponentRef() string {
 	if ref := strings.TrimSpace(os.Getenv("CTGBOT_COMPONENT_REF")); ref != "" {
 		return ref
 	}
-	return codexcomponent.Type
+	return hostbridgecmd.DefaultComponentType
 }
 
 func printDefinitionHelp(definitions []commandengine.Definition) {

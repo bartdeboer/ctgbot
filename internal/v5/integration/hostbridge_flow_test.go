@@ -781,7 +781,7 @@ func (a *hostbridgeRunAgent) HandleTurn(ctx context.Context, turn component.Turn
 		Command: schemacommands.RunCommand{
 			Command: commandName,
 		},
-		CanonicalPattern: "run <name>",
+		CanonicalPattern: "run <command>",
 		Route:            "run " + commandName,
 	})
 	if err != nil {

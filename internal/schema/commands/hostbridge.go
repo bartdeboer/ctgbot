@@ -50,7 +50,7 @@ func HostbridgeCommands() []commandengine.Definition {
 
 func RunCommandDefinition() commandengine.Definition {
 	return commandengine.Definition{
-		Pattern: "run <name>",
+		Pattern: "run <command>",
 		Help:    "Run a whitelisted host command",
 		Build:   buildRunCommand,
 		Sources: []commandengine.Source{commandengine.SourceHostbridge},
@@ -59,7 +59,7 @@ func RunCommandDefinition() commandengine.Definition {
 }
 
 func buildRunCommand(req *clir.Request) (any, error) {
-	command := strings.TrimSpace(req.Params["name"])
+	command := strings.TrimSpace(req.Params["command"])
 	if command == "" {
 		return nil, fmt.Errorf("missing command")
 	}
