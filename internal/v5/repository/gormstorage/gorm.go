@@ -294,7 +294,6 @@ func (r *gormThreadComponentMappings) DeleteByThreadAndComponent(ctx context.Con
 type gormThreadComponentStates struct{ db *gorm.DB }
 
 func (r *gormThreadComponentStates) Save(ctx context.Context, state *coremodel.ThreadComponentState) error {
-	state.ProviderThreadID = clean(state.ProviderThreadID)
 	state.StateJSON = clean(state.StateJSON)
 	if state.ID.IsNull() {
 		existing, err := r.GetByThreadAndComponent(ctx, state.ThreadID, state.ComponentID)

@@ -406,7 +406,6 @@ func (r memoryThreadStates) Save(ctx context.Context, state *coremodel.ThreadCom
 	if state == nil {
 		return nil
 	}
-	state.ProviderThreadID = strings.TrimSpace(state.ProviderThreadID)
 	state.StateJSON = strings.TrimSpace(state.StateJSON)
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
