@@ -79,10 +79,15 @@ func (c *Component) HandleCompletion(ctx context.Context, request component.Comp
 	if c.runtime == nil {
 		return nil, fmt.Errorf("missing llamacpp backend runtime")
 	}
+	wasRunning, err := c.isRunning(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := c.runtime.Start(ctx); err != nil {
 		return nil, err
 	}
-	if !c.componentConfig.KeepRunning {
+	autoStarted := !wasRunning
+	if autoStarted && !c.componentConfig.KeepRunning {
 		defer c.stopAfterCompletion()
 	}
 	text, err := c.complete(ctx, completionPromptToChat(request.Prompt))
@@ -94,6 +99,17 @@ func (c *Component) HandleCompletion(ctx context.Context, request component.Comp
 		return nil, nil
 	}
 	return &component.CompletionResult{Final: &coremodel.ThreadMessage{Text: text}}, nil
+}
+
+func (c *Component) isRunning(ctx context.Context) (bool, error) {
+	if c == nil || c.runtime == nil {
+		return false, nil
+	}
+	status, err := c.runtime.Status(ctx)
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(status.State) == "running", nil
 }
 
 func serviceSpec(config ComponentConfig) v5backend.ServiceSpec {
