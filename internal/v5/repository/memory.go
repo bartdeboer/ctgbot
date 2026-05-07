@@ -18,6 +18,7 @@ type MemoryStorage struct {
 	components          map[modeluuid.UUID]coremodel.Component
 	chatComponents      map[modeluuid.UUID]coremodel.ChatComponent
 	threadComponentMaps map[modeluuid.UUID]coremodel.ThreadComponentMapping
+	threadComponentRows map[modeluuid.UUID]coremodel.ThreadComponentState
 	messages            map[modeluuid.UUID]coremodel.ThreadMessage
 	artifacts           map[modeluuid.UUID]coremodel.Artifact
 }
@@ -29,6 +30,7 @@ func NewMemory() *MemoryStorage {
 		components:          map[modeluuid.UUID]coremodel.Component{},
 		chatComponents:      map[modeluuid.UUID]coremodel.ChatComponent{},
 		threadComponentMaps: map[modeluuid.UUID]coremodel.ThreadComponentMapping{},
+		threadComponentRows: map[modeluuid.UUID]coremodel.ThreadComponentState{},
 		messages:            map[modeluuid.UUID]coremodel.ThreadMessage{},
 		artifacts:           map[modeluuid.UUID]coremodel.Artifact{},
 	}
@@ -59,6 +61,9 @@ func (s *MemoryStorage) ChatComponents() ChatComponentRepository { return memory
 func (s *MemoryStorage) ThreadComponentMappings() ThreadComponentMappingRepository {
 	return memoryThreadMappings{s}
 }
+func (s *MemoryStorage) ThreadComponentStates() ThreadComponentStateRepository {
+	return memoryThreadStates{s}
+}
 func (s *MemoryStorage) Messages() MessageRepository   { return memoryMessages{s} }
 func (s *MemoryStorage) Artifacts() ArtifactRepository { return memoryArtifacts{s} }
 
@@ -79,6 +84,9 @@ func (s *MemoryStorage) cloneLocked() *MemoryStorage {
 	for k, v := range s.threadComponentMaps {
 		clone.threadComponentMaps[k] = v
 	}
+	for k, v := range s.threadComponentRows {
+		clone.threadComponentRows[k] = v
+	}
 	for k, v := range s.messages {
 		clone.messages[k] = v
 	}
@@ -97,6 +105,7 @@ func (s *MemoryStorage) replaceLocked(next *MemoryStorage) {
 	s.components = next.components
 	s.chatComponents = next.chatComponents
 	s.threadComponentMaps = next.threadComponentMaps
+	s.threadComponentRows = next.threadComponentRows
 	s.messages = next.messages
 	s.artifacts = next.artifacts
 }
@@ -385,6 +394,63 @@ func (r memoryThreadMappings) DeleteByThreadAndComponent(ctx context.Context, th
 	for id, mapping := range r.s.threadComponentMaps {
 		if mapping.ThreadID == threadID && mapping.ComponentID == componentID {
 			delete(r.s.threadComponentMaps, id)
+		}
+	}
+	return nil
+}
+
+type memoryThreadStates struct{ s *MemoryStorage }
+
+func (r memoryThreadStates) Save(ctx context.Context, state *coremodel.ThreadComponentState) error {
+	_ = ctx
+	if state == nil {
+		return nil
+	}
+	state.ProviderThreadID = strings.TrimSpace(state.ProviderThreadID)
+	state.StateJSON = strings.TrimSpace(state.StateJSON)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	now := time.Now()
+	if state.ID.IsNull() {
+		for id, existing := range r.s.threadComponentRows {
+			if existing.ThreadID == state.ThreadID && existing.ComponentID == state.ComponentID {
+				state.ID = id
+				state.CreatedAt = existing.CreatedAt
+				break
+			}
+		}
+	}
+	if state.ID.IsNull() {
+		state.ID = modeluuid.New()
+		state.CreatedAt = now
+	} else if existing, ok := r.s.threadComponentRows[state.ID]; ok && state.CreatedAt.IsZero() {
+		state.CreatedAt = existing.CreatedAt
+	}
+	state.UpdatedAt = now
+	r.s.threadComponentRows[state.ID] = *state
+	return nil
+}
+
+func (r memoryThreadStates) GetByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (*coremodel.ThreadComponentState, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for _, state := range r.s.threadComponentRows {
+		if state.ThreadID == threadID && state.ComponentID == componentID {
+			copy := state
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r memoryThreadStates) DeleteByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) error {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for id, state := range r.s.threadComponentRows {
+		if state.ThreadID == threadID && state.ComponentID == componentID {
+			delete(r.s.threadComponentRows, id)
 		}
 	}
 	return nil

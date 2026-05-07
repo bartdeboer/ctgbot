@@ -40,6 +40,7 @@ type Component struct {
 	storage          repository.Storage
 	resolveWorkspace func(context.Context, coremodel.Chat) (string, error)
 	config           *appstate.Config
+	componentConfig  ComponentConfig
 	runner           TurnRunner
 	logger           *log.Logger
 }
@@ -68,15 +69,19 @@ func New(
 	if resolveWorkspace == nil {
 		return nil, fmt.Errorf("missing workspace resolver")
 	}
+	runtimeConfig, err := v5runtime.LoadBindConfig(home.Path)
+	if err != nil {
+		return nil, err
+	}
+	componentConfig, err := loadComponentConfig(home.Path)
+	if err != nil {
+		return nil, err
+	}
 	runtimeHomePath := runtimeFactory.RuntimeComponentHomePath(registration, home)
 	runtime := runtimeFactory.Bind(
 		registration,
 		home,
-		componentImage(image),
-		[]string{
-			"HOME=" + runtimeHomePath,
-			"CODEX_HOME=" + runtimeHomePath,
-		},
+		componentBindConfig(runtimeConfig, cfg, image, runtimeHomePath),
 	)
 	return &Component{
 		registration:     registration,
@@ -84,6 +89,7 @@ func New(
 		storage:          storage,
 		resolveWorkspace: resolveWorkspace,
 		config:           cfg,
+		componentConfig:  componentConfig,
 		runner:           NewRunner(cfg, logger),
 		logger:           logger,
 	}, nil
@@ -98,6 +104,8 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 		{RelativePath: "auth.json", Required: true, Sensitive: true},
 		{RelativePath: "config.toml", Required: false, Sensitive: false},
 		{RelativePath: "ctgbot-bootstrap.md", Required: false, Sensitive: false},
+		{RelativePath: v5runtime.ConfigFilename, Required: false, Sensitive: false},
+		{RelativePath: ComponentConfigFilename, Required: false, Sensitive: false},
 	}
 }
 
@@ -185,8 +193,8 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		ProviderThreadID: providerThreadID,
 		Prompt:           prompt,
 		Options: TurnOptions{
-			Model:           strings.TrimSpace(turn.Thread.CodexModel),
-			ReasoningEffort: strings.TrimSpace(turn.Thread.CodexReasoningEffort),
+			Model:           c.turnModel(&turn.Thread),
+			ReasoningEffort: c.turnReasoningEffort(&turn.Thread),
 		},
 	})
 
@@ -249,6 +257,18 @@ func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, pro
 		return fmt.Errorf("missing turn runtime")
 	}
 	return turnRuntime.BindComponentThreadID(c.registration.ID, providerThreadID)
+}
+
+func componentBindConfig(config v5runtime.BindConfig, cfg *appstate.Config, imageOverride string, runtimeHomePath string) v5runtime.BindConfig {
+	config = config.Clean()
+	if strings.TrimSpace(config.Image) == "" && cfg != nil {
+		config.Image = strings.TrimSpace(cfg.Docker().Image())
+	}
+	config.Image = componentImage(firstNonEmpty(imageOverride, config.Image))
+	return config.WithEnv(
+		"HOME="+runtimeHomePath,
+		"CODEX_HOME="+runtimeHomePath,
+	)
 }
 
 func (c *Component) logf(format string, args ...any) {

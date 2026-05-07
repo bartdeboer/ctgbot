@@ -18,6 +18,7 @@ type GORMStorage struct {
 	components     *gormComponents
 	chatComponents *gormChatComponents
 	threadMappings *gormThreadComponentMappings
+	threadStates   *gormThreadComponentStates
 	messages       *gormMessages
 	artifacts      *gormArtifacts
 }
@@ -30,6 +31,7 @@ func New(db *gorm.DB) *GORMStorage {
 		components:     &gormComponents{db: db},
 		chatComponents: &gormChatComponents{db: db},
 		threadMappings: &gormThreadComponentMappings{db: db},
+		threadStates:   &gormThreadComponentStates{db: db},
 		messages:       &gormMessages{db: db},
 		artifacts:      &gormArtifacts{db: db},
 	}
@@ -42,6 +44,7 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.Component{},
 		&coremodel.ChatComponent{},
 		&coremodel.ThreadComponentMapping{},
+		&coremodel.ThreadComponentState{},
 		&coremodel.ThreadMessage{},
 		&coremodel.Artifact{},
 	)
@@ -62,6 +65,9 @@ func (s *GORMStorage) Components() repository.ComponentRepository         { retu
 func (s *GORMStorage) ChatComponents() repository.ChatComponentRepository { return s.chatComponents }
 func (s *GORMStorage) ThreadComponentMappings() repository.ThreadComponentMappingRepository {
 	return s.threadMappings
+}
+func (s *GORMStorage) ThreadComponentStates() repository.ThreadComponentStateRepository {
+	return s.threadStates
 }
 func (s *GORMStorage) Messages() repository.MessageRepository   { return s.messages }
 func (s *GORMStorage) Artifacts() repository.ArtifactRepository { return s.artifacts }
@@ -282,6 +288,44 @@ func (r *gormThreadComponentMappings) DeleteByThreadAndComponent(ctx context.Con
 	return r.db.WithContext(ctx).
 		Where("thread_id = ? AND component_id = ?", threadID, componentID).
 		Delete(&coremodel.ThreadComponentMapping{}).
+		Error
+}
+
+type gormThreadComponentStates struct{ db *gorm.DB }
+
+func (r *gormThreadComponentStates) Save(ctx context.Context, state *coremodel.ThreadComponentState) error {
+	state.ProviderThreadID = clean(state.ProviderThreadID)
+	state.StateJSON = clean(state.StateJSON)
+	if state.ID.IsNull() {
+		existing, err := r.GetByThreadAndComponent(ctx, state.ThreadID, state.ComponentID)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			state.ID = existing.ID
+		}
+	}
+	ensureID(&state.ID)
+	return r.db.WithContext(ctx).Save(state).Error
+}
+
+func (r *gormThreadComponentStates) GetByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (*coremodel.ThreadComponentState, error) {
+	var state coremodel.ThreadComponentState
+	if err := first(r.db.WithContext(ctx).
+		Where("thread_id = ? AND component_id = ?", threadID, componentID).
+		First(&state)); err != nil {
+		return nil, err
+	}
+	if state.ID.IsNull() {
+		return nil, nil
+	}
+	return &state, nil
+}
+
+func (r *gormThreadComponentStates) DeleteByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) error {
+	return r.db.WithContext(ctx).
+		Where("thread_id = ? AND component_id = ?", threadID, componentID).
+		Delete(&coremodel.ThreadComponentState{}).
 		Error
 }
 

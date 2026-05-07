@@ -740,7 +740,7 @@ func newMessageCommandTestSystem(
 		_, _, _ = ctx, home, storage
 		return &mockAgent{
 			componentID: registration.ID,
-			runtime:     runtime.Bind(registration, home, "", nil),
+			runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 			state:       agentState,
 		}, nil
 	}); err != nil {

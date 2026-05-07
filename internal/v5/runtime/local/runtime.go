@@ -50,15 +50,15 @@ func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
 func (f *Factory) Bind(
 	registration coremodel.Component,
 	home v5runtime.Home,
-	image string,
-	env []string,
+	config v5runtime.BindConfig,
 ) v5runtime.Runtime {
 	_ = registration
 	return &Runtime{
 		rootDir: f.rootDir,
 		home:    home,
-		image:   strings.TrimSpace(image),
-		env:     append([]string{}, env...),
+		image:   strings.TrimSpace(config.Image),
+		env:     append([]string{}, config.Env...),
+		gpus:    strings.TrimSpace(config.GPUs),
 	}
 }
 
@@ -67,6 +67,7 @@ type Runtime struct {
 	home    v5runtime.Home
 	image   string
 	env     []string
+	gpus    string
 }
 
 func (r *Runtime) Kind() string {
@@ -143,7 +144,7 @@ func (r *Runtime) Exec(
 	name string,
 	args ...string,
 ) error {
-	_, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.image
+	_, _, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.image, r.gpus
 	_ = r.env
 	return fmt.Errorf("local runtime is not implemented yet")
 }
@@ -156,7 +157,7 @@ func (r *Runtime) CombinedOutput(
 	name string,
 	args ...string,
 ) ([]byte, error) {
-	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, name, args, r.image
+	_, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, name, args, r.image, r.gpus
 	_ = r.env
 	return nil, fmt.Errorf("local runtime is not implemented yet")
 }
@@ -169,7 +170,7 @@ func (r *Runtime) OpenHTTPRelayPort(
 	callbackPort int,
 	callbackTimeout time.Duration,
 ) (func(context.Context) error, error) {
-	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, callbackPort, callbackTimeout, r.image
+	_, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, callbackPort, callbackTimeout, r.image, r.gpus
 	_ = r.env
 	return nil, fmt.Errorf("local runtime is not implemented yet")
 }

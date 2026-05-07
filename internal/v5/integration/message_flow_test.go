@@ -55,7 +55,7 @@ func TestV5MockComponentsEndToEnd(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, "", nil),
+				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -204,7 +204,7 @@ func TestV5InboundAttachmentsMaterializeIntoWorkspaceInboxAndInjectPrompt(t *tes
 			_, _, _ = ctx, home, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, "", nil),
+				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -341,7 +341,7 @@ func TestV5AttachmentOnlyInboundReturnsUploadSavedMessage(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, "", nil),
+				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -455,7 +455,7 @@ func TestV5ConversationErrorIsReportedToChatAndDoesNotStopSource(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &failingAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, "", nil),
+				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {

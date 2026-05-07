@@ -98,7 +98,7 @@ func TestV5HostbridgeFlow(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, "", nil),
+				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 				bridge:      bridge,
 				state:       agentState,
 			}, nil
@@ -242,7 +242,7 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeMediaAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, "", nil),
+				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 				bridge:      bridge,
 				state:       agentState,
 			}, nil
@@ -399,7 +399,7 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeRunAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, "", nil),
+				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 				bridge:      bridge,
 				command:     "pwd",
 				state:       agentState,
@@ -513,7 +513,7 @@ func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeRunAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, "", nil),
+				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 				bridge:      bridge,
 				command:     "echo-workspace",
 				state:       agentState,

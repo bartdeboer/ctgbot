@@ -61,8 +61,7 @@ func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
 func (f *Factory) Bind(
 	registration coremodel.Component,
 	home v5runtime.Home,
-	image string,
-	env []string,
+	config v5runtime.BindConfig,
 ) v5runtime.Runtime {
 	return &Runtime{
 		rootDir:      f.rootDir,
@@ -70,8 +69,9 @@ func (f *Factory) Bind(
 		bridge:       f.bridge,
 		registration: registration,
 		home:         home,
-		image:        resolveImage(image),
-		env:          append([]string{}, env...),
+		image:        resolveImage(config.Image),
+		env:          append([]string{}, config.Env...),
+		gpus:         strings.TrimSpace(config.GPUs),
 	}
 }
 
@@ -83,6 +83,7 @@ type Runtime struct {
 	home         v5runtime.Home
 	image        string
 	env          []string
+	gpus         string
 }
 
 func (r *Runtime) Kind() string {
@@ -261,6 +262,7 @@ func (r *Runtime) sandbox(
 			Workdir(runtimeHomePath).
 			// Keep mounted profile files writable by the host ctgbot process.
 			UserMode("host").
+			GPUs(r.gpus).
 			Env(append([]string{}, r.env...)).
 			Mounts([]sandboxengine.Mount{{Source: r.home.Path, Target: runtimeHomePath}}).
 			SecurityOpts([]string{"seccomp=unconfined"}).
@@ -300,6 +302,7 @@ func (r *Runtime) sandbox(
 		Workdir(workspaceRuntime).
 		// Keep mounted profile/workspace files writable by the host ctgbot process.
 		UserMode("host").
+		GPUs(r.gpus).
 		Env(env).
 		Mounts(mounts).
 		SecurityOpts([]string{"seccomp=unconfined"}).

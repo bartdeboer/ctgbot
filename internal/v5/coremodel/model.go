@@ -115,6 +115,17 @@ type ThreadComponentMapping struct {
 	UpdatedAt time.Time
 }
 
+type ThreadComponentState struct {
+	ID               modeluuid.UUID `gorm:"primaryKey"`
+	ThreadID         modeluuid.UUID `gorm:"index;uniqueIndex:idx_thread_component_state"`
+	ComponentID      modeluuid.UUID `gorm:"uniqueIndex:idx_thread_component_state"`
+	ProviderThreadID string         `gorm:"index"`
+	StateJSON        string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type ThreadMessage struct {
 	ID           modeluuid.UUID `gorm:"primaryKey"`
 	ChatID       modeluuid.UUID `gorm:"index"`

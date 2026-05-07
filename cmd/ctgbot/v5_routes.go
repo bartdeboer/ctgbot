@@ -449,9 +449,8 @@ func newV5Registry(system *v5system.System, telegramToken string, codexImage str
 	}); err != nil {
 		return nil, err
 	}
-	effectiveCodexImage := resolveV5CodexImage(system, codexImage)
 	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.ResolveChatWorkspace, system.Logger, effectiveCodexImage)
+		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.ResolveChatWorkspace, system.Logger, strings.TrimSpace(codexImage))
 	}); err != nil {
 		return nil, err
 	}
@@ -467,15 +466,4 @@ func newV5Registry(system *v5system.System, telegramToken string, codexImage str
 		return nil, err
 	}
 	return registry, nil
-}
-
-func resolveV5CodexImage(system *v5system.System, override string) string {
-	override = strings.TrimSpace(override)
-	if override != "" {
-		return override
-	}
-	if system != nil && system.Config != nil {
-		return strings.TrimSpace(system.Config.Docker().Image())
-	}
-	return ""
 }

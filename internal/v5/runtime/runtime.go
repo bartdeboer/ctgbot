@@ -14,6 +14,12 @@ type Home struct {
 	Path string
 }
 
+type BindConfig struct {
+	Image string   `json:"image"`
+	Env   []string `json:"env"`
+	GPUs  string   `json:"gpus"`
+}
+
 type Status struct {
 	Name                 string
 	State                string
@@ -33,8 +39,7 @@ type Factory interface {
 	Bind(
 		registration coremodel.Component,
 		home Home,
-		image string,
-		env []string,
+		config BindConfig,
 	) Runtime
 }
 

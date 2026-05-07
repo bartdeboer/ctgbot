@@ -429,6 +429,11 @@ func (c *Component) effectiveModel(thread *coremodel.Thread) (string, string) {
 			return model, "thread"
 		}
 	}
+	if c != nil {
+		if model := strings.TrimSpace(c.componentConfig.Model); model != "" {
+			return model, "profile"
+		}
+	}
 	if c != nil && c.config != nil {
 		if model := strings.TrimSpace(c.config.Codex().Model()); model != "" {
 			return model, "global"
@@ -443,7 +448,28 @@ func (c *Component) effectiveReasoningEffort(thread *coremodel.Thread) (string, 
 			return effort, "thread"
 		}
 	}
+	if c != nil {
+		if effort := strings.TrimSpace(c.componentConfig.ReasoningEffort); effort != "" {
+			return effort, "profile"
+		}
+	}
 	return "(codex default)", "codex"
+}
+
+func (c *Component) turnModel(thread *coremodel.Thread) string {
+	model, source := c.effectiveModel(thread)
+	if source == "codex" {
+		return ""
+	}
+	return model
+}
+
+func (c *Component) turnReasoningEffort(thread *coremodel.Thread) string {
+	effort, source := c.effectiveReasoningEffort(thread)
+	if source == "codex" {
+		return ""
+	}
+	return effort
 }
 
 func codexCommand(id string, command any, help string, patterns []string) commandengine.Definition {

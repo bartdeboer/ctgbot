@@ -120,7 +120,7 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 			}
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, "", nil),
+				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
 				state:       state,
 			}, nil
 		}); err != nil {

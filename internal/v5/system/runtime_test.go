@@ -84,8 +84,8 @@ func (f fakeFactory) RuntimeComponentHomePath(registration coremodel.Component, 
 func (f fakeFactory) RuntimeWorkspacePath(workspacePath string) string {
 	return workspacePath
 }
-func (f fakeFactory) Bind(registration coremodel.Component, home v5runtime.Home, image string, env []string) v5runtime.Runtime {
-	_, _, _ = registration, image, env
+func (f fakeFactory) Bind(registration coremodel.Component, home v5runtime.Home, config v5runtime.BindConfig) v5runtime.Runtime {
+	_, _, _ = registration, home, config
 	return fakeRuntime{home: home, kind: f.kind}
 }
 

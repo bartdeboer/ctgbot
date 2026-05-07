@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	v5hostbridgeserver "github.com/bartdeboer/ctgbot/internal/v5/hostbridge/server"
+	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
 )
 
 func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
@@ -26,7 +27,7 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 		Runtime: "docker",
 	}
 	home := factory.ComponentHome(registration)
-	runtime := factory.Bind(registration, home, "", nil).(*Runtime)
+	runtime := factory.Bind(registration, home, v5runtime.BindConfig{}).(*Runtime)
 
 	threadID := modeluuid.New()
 	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, nil, true)
@@ -59,6 +60,29 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 		}
 	} else if len(sandbox.AddHosts) != 0 {
 		t.Fatalf("unexpected add-hosts on %s: %#v", goruntime.GOOS, sandbox.AddHosts)
+	}
+}
+
+func TestSandboxPropagatesConfiguredGPUs(t *testing.T) {
+	root := t.TempDir()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
+	registration := coremodel.Component{
+		Type:    "mockagent",
+		Name:    "gpu",
+		Runtime: "docker",
+	}
+	home := factory.ComponentHome(registration)
+	runtime := factory.Bind(registration, home, v5runtime.BindConfig{GPUs: "all"}).(*Runtime)
+
+	threadID := modeluuid.New()
+	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, nil, false)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+
+	if got, want := sandbox.GPUs, "all"; got != want {
+		t.Fatalf("Sandbox GPUs = %q, want %q", got, want)
 	}
 }
 
