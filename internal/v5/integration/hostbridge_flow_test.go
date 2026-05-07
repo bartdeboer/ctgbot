@@ -610,17 +610,14 @@ func (c *mockCommandComponent) Type() string {
 
 func (c *mockCommandComponent) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{{
-		ID:      "mockcmd.ping",
+		Pattern: "mockcmd ping",
+		Help:    "Reply with pong",
+		Build: func(req *clir.Request) (any, error) {
+			_ = req
+			return pingCommand{}, nil
+		},
 		Sources: []commandengine.Source{commandengine.SourceHostbridge},
 		Policy:  simplerbac.Public(),
-		Routes: []commandengine.Route{{
-			Pattern: "mockcmd ping",
-			Help:    "Reply with pong",
-			Build: func(req *clir.Request) (any, error) {
-				_ = req
-				return pingCommand{}, nil
-			},
-		}},
 	}}
 }
 
@@ -692,7 +689,7 @@ func (a *hostbridgeMediaAgent) HandleTurn(ctx context.Context, turn component.Tu
 			Syntax:      "markdown",
 			Content:     []byte("hello from hostbridge"),
 		},
-		DefinitionID: "hostbridge.sendstdin",
+		DefinitionID: "sendstdin",
 		Route:        "sendstdin",
 	})
 	if err != nil {
@@ -748,7 +745,7 @@ func (a *hostbridgeAgent) HandleTurn(ctx context.Context, turn component.Turn) (
 			SandboxID: turn.Thread.ID,
 		},
 		Command:      pingCommand{},
-		DefinitionID: "mockcmd.ping",
+		DefinitionID: "mockcmd ping",
 		Route:        "mockcmd ping",
 	})
 	if err != nil {
@@ -784,8 +781,8 @@ func (a *hostbridgeRunAgent) HandleTurn(ctx context.Context, turn component.Turn
 		Command: schemacommands.RunCommand{
 			Command: commandName,
 		},
-		DefinitionID: "hostbridge.run",
-		Route:        "run <command>",
+		DefinitionID: "run <name>",
+		Route:        "run " + commandName,
 	})
 	if err != nil {
 		return nil, err

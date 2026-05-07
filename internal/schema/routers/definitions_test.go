@@ -23,7 +23,7 @@ func TestSourceDefinitionsExcludeCLIOnlyScaffold(t *testing.T) {
 
 func hasRoute(definitions []commandengine.Definition, pattern string) bool {
 	for _, definition := range definitions {
-		for _, route := range definition.Routes {
+		for _, route := range definition.Routes() {
 			if commandengine.NormalizePattern(route.Pattern) == commandengine.NormalizePattern(pattern) {
 				return true
 			}

@@ -37,7 +37,8 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		components       []*component.Loaded
 		agents           []AgentBinding
 		relays           []RelayBinding
-		surfaces         []component.CommandSurface
+		boundSurfaces    []commandset.BoundSurface
+		globalSurfaces   []component.CommandSurface
 		runtimeWorkspace string
 	)
 	commandSurfaceIDs := map[modeluuid.UUID]struct{}{}
@@ -75,7 +76,11 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 			if surface, ok := instance.Component.(component.CommandSurface); ok {
 				if _, seen := commandSurfaceIDs[binding.ComponentID]; !seen {
 					commandSurfaceIDs[binding.ComponentID] = struct{}{}
-					surfaces = append(surfaces, surface)
+					boundSurfaces = append(boundSurfaces, commandset.BoundSurface{
+						Surface:       surface,
+						ComponentRef:  instance.Registration.Ref(),
+						ComponentType: instance.Registration.Type,
+					})
 				}
 			}
 		case coremodel.ChatComponentRoleRelay:
@@ -90,7 +95,11 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 			if surface, ok := instance.Component.(component.CommandSurface); ok {
 				if _, seen := commandSurfaceIDs[binding.ComponentID]; !seen {
 					commandSurfaceIDs[binding.ComponentID] = struct{}{}
-					surfaces = append(surfaces, surface)
+					boundSurfaces = append(boundSurfaces, commandset.BoundSurface{
+						Surface:       surface,
+						ComponentRef:  instance.Registration.Ref(),
+						ComponentType: instance.Registration.Type,
+					})
 				}
 			}
 		}
@@ -99,22 +108,22 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		runtimeWorkspace = workspace
 	}
 
-	surfaces = append(surfaces, brokercomponent.New(b))
+	globalSurfaces = append(globalSurfaces, brokercomponent.New(b))
 	if provider, ok := b.Resolver.(interface{ AppConfig() *appstate.Config }); ok {
 		configSurface, err := configcomponent.New(provider.AppConfig())
 		if err != nil {
 			return nil, err
 		}
 		if configSurface != nil {
-			surfaces = append(surfaces, configSurface)
+			globalSurfaces = append(globalSurfaces, configSurface)
 		}
 	}
 
-	messageCommands, err := commandset.NewEngineForSource(commandengine.SourceMessage, surfaces...)
+	messageCommands, err := commandset.NewBoundEngineForSource(commandengine.SourceMessage, boundSurfaces, globalSurfaces...)
 	if err != nil {
 		return nil, err
 	}
-	agentCommands, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, surfaces...)
+	agentCommands, err := commandset.NewBoundEngineForSource(commandengine.SourceHostbridge, boundSurfaces, globalSurfaces...)
 	if err != nil {
 		return nil, err
 	}

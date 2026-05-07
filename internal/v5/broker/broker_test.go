@@ -611,17 +611,14 @@ func (c *fakeCommandComponent) Type() string { return "tools" }
 
 func (c *fakeCommandComponent) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{{
-		ID:      "tools.ping.message",
+		Pattern: "tools ping",
+		Help:    "Reply with pong",
+		Build: func(req *clir.Request) (any, error) {
+			_ = req
+			return pingCommand{}, nil
+		},
 		Sources: []commandengine.Source{commandengine.SourceMessage},
 		Policy:  simplerbac.Public(),
-		Routes: []commandengine.Route{{
-			Pattern: "tools ping",
-			Help:    "Reply with pong",
-			Build: func(req *clir.Request) (any, error) {
-				_ = req
-				return pingCommand{}, nil
-			},
-		}},
 	}}
 }
 

@@ -273,6 +273,156 @@ func TestV5AgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.
 	})
 }
 
+func TestV5MultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
+			t,
+			root,
+			component.InboundEvent{
+				ExternalID: "msg-agent-full-ref",
+				Payload: messenger.InboundPayload{
+					ProviderType:      "mockmsg",
+					ProviderChatID:    "chat-1",
+					ProviderThreadID:  "provider-thread-1",
+					ProviderMessageID: "msg-agent-full-ref",
+					Actor:             actorWithRoles("", "bart"),
+					Text:              messenger.TextMessage{Text: "/agentctl/work ping"},
+				},
+			},
+			func(registry *component.Registry) error {
+				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+					_, _, _, _, _ = ctx, runtime, home, storage, registry
+					return &mockLocalAgentCommandComponent{name: registration.Name}, nil
+				})
+			},
+		)
+
+		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
+		if err != nil {
+			t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
+		}
+		workAgent, err := system.EnsureComponent(ctx, "agentctl/work", "local", "")
+		if err != nil {
+			t.Fatalf("EnsureComponent(agentctl/work) error = %v", err)
+		}
+		personalAgent, err := system.EnsureComponent(ctx, "agentctl/personal", "local", "")
+		if err != nil {
+			t.Fatalf("EnsureComponent(agentctl/personal) error = %v", err)
+		}
+
+		chat := &coremodel.Chat{Label: "team", Enabled: true}
+		if err := storage.Chats().Save(ctx, chat); err != nil {
+			t.Fatalf("Chats().Save() error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleSource, messengerRegistration.Ref(), "chat-1"); err != nil {
+			t.Fatalf("BindChatComponent(source) error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleRelay, messengerRegistration.Ref(), "chat-1"); err != nil {
+			t.Fatalf("BindChatComponent(relay) error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleAgent, workAgent.Ref(), ""); err != nil {
+			t.Fatalf("BindChatComponent(agent work) error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleAgent, personalAgent.Ref(), ""); err != nil {
+			t.Fatalf("BindChatComponent(agent personal) error = %v", err)
+		}
+
+		b := v5broker.New(storage, system, nil)
+		if err := b.Run(ctx); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		if agentState.turnCalls != 0 {
+			t.Fatalf("agent turn calls = %d, want 0", agentState.turnCalls)
+		}
+		if runtimeState.execCalls != 0 {
+			t.Fatalf("runtime exec calls = %d, want 0", runtimeState.execCalls)
+		}
+		if got, want := len(messengerState.relayPayloads), 1; got != want {
+			t.Fatalf("relay payload count = %d, want %d", got, want)
+		}
+		if got, want := messengerState.relayPayloads[0].Text.Text, "pong from work"; got != want {
+			t.Fatalf("relay text = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestV5MultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
+			t,
+			root,
+			component.InboundEvent{
+				ExternalID: "msg-agent-short",
+				Payload: messenger.InboundPayload{
+					ProviderType:      "mockmsg",
+					ProviderChatID:    "chat-1",
+					ProviderThreadID:  "provider-thread-1",
+					ProviderMessageID: "msg-agent-short",
+					Actor:             actorWithRoles("", "bart"),
+					Text:              messenger.TextMessage{Text: "/agentctl ping"},
+				},
+			},
+			func(registry *component.Registry) error {
+				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+					_, _, _, _, _ = ctx, runtime, home, storage, registry
+					return &mockLocalAgentCommandComponent{name: registration.Name}, nil
+				})
+			},
+		)
+
+		messengerRegistration, err := system.EnsureComponent(ctx, "mockmsg", "local", "")
+		if err != nil {
+			t.Fatalf("EnsureComponent(mockmsg) error = %v", err)
+		}
+		workAgent, err := system.EnsureComponent(ctx, "agentctl/work", "local", "")
+		if err != nil {
+			t.Fatalf("EnsureComponent(agentctl/work) error = %v", err)
+		}
+		personalAgent, err := system.EnsureComponent(ctx, "agentctl/personal", "local", "")
+		if err != nil {
+			t.Fatalf("EnsureComponent(agentctl/personal) error = %v", err)
+		}
+
+		chat := &coremodel.Chat{Label: "team", Enabled: true}
+		if err := storage.Chats().Save(ctx, chat); err != nil {
+			t.Fatalf("Chats().Save() error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleSource, messengerRegistration.Ref(), "chat-1"); err != nil {
+			t.Fatalf("BindChatComponent(source) error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleRelay, messengerRegistration.Ref(), "chat-1"); err != nil {
+			t.Fatalf("BindChatComponent(relay) error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleAgent, workAgent.Ref(), ""); err != nil {
+			t.Fatalf("BindChatComponent(agent work) error = %v", err)
+		}
+		if _, err := system.BindChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleAgent, personalAgent.Ref(), ""); err != nil {
+			t.Fatalf("BindChatComponent(agent personal) error = %v", err)
+		}
+
+		b := v5broker.New(storage, system, nil)
+		if err := b.Run(ctx); err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+
+		if agentState.turnCalls != 0 {
+			t.Fatalf("agent turn calls = %d, want 0", agentState.turnCalls)
+		}
+		if runtimeState.execCalls != 0 {
+			t.Fatalf("runtime exec calls = %d, want 0", runtimeState.execCalls)
+		}
+		if got, want := len(messengerState.relayPayloads), 1; got != want {
+			t.Fatalf("relay payload count = %d, want %d", got, want)
+		}
+		if got := messengerState.relayPayloads[0].Text.Text; !strings.HasPrefix(got, "command error:") {
+			t.Fatalf("relay text = %q, want command error", got)
+		}
+	})
+}
+
 func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
@@ -780,17 +930,14 @@ func (c *mockMessageCommandComponent) Type() string {
 
 func (c *mockMessageCommandComponent) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{{
-		ID:      "tools.ping.message",
+		Pattern: "tools ping",
+		Help:    "Reply with pong",
+		Build: func(req *clir.Request) (any, error) {
+			_ = req
+			return mockMessagePing{}, nil
+		},
 		Sources: []commandengine.Source{commandengine.SourceMessage},
 		Policy:  simplerbac.Public(),
-		Routes: []commandengine.Route{{
-			Pattern: "tools ping",
-			Help:    "Reply with pong",
-			Build: func(req *clir.Request) (any, error) {
-				_ = req
-				return mockMessagePing{}, nil
-			},
-		}},
 	}}
 }
 
@@ -823,17 +970,14 @@ func (c *mockAgentCommandComponent) HandleTurn(ctx context.Context, turn compone
 
 func (c *mockAgentCommandComponent) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{{
-		ID:      "agentctl.ping",
+		Pattern: "agentctl ping",
+		Help:    "Reply with pong",
+		Build: func(req *clir.Request) (any, error) {
+			_ = req
+			return mockAgentCommandPing{}, nil
+		},
 		Sources: []commandengine.Source{commandengine.SourceMessage},
 		Policy:  simplerbac.Public(),
-		Routes: []commandengine.Route{{
-			Pattern: "agentctl ping",
-			Help:    "Reply with pong",
-			Build: func(req *clir.Request) (any, error) {
-				_ = req
-				return mockAgentCommandPing{}, nil
-			},
-		}},
 	}}
 }
 
@@ -841,6 +985,52 @@ func (c *mockAgentCommandComponent) RegisterCommandHandlers(registry *commandeng
 	return commandengine.Register[mockAgentCommandPing](registry, func(ctx context.Context, req commandengine.Request, cmd mockAgentCommandPing) (commandengine.Result, error) {
 		_, _, _ = ctx, req, cmd
 		return commandengine.Result{Text: "pong"}, nil
+	})
+}
+
+type mockLocalAgentCommandComponent struct {
+	name string
+}
+
+var _ component.LocalCommandSurface = (*mockLocalAgentCommandComponent)(nil)
+
+func (c *mockLocalAgentCommandComponent) Type() string {
+	return "agentctl"
+}
+
+func (c *mockLocalAgentCommandComponent) UsesLocalCommandRoutes() bool {
+	return true
+}
+
+func (c *mockLocalAgentCommandComponent) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
+	_, _, _ = ctx, turn, c
+	return &component.TurnResult{
+		Final: &coremodel.ThreadMessage{
+			Kind:       coremodel.MessageKindAgent,
+			ActorID:    "agentctl",
+			ActorLabel: "agentctl",
+			Text:       "handled as agent",
+		},
+	}, nil
+}
+
+func (c *mockLocalAgentCommandComponent) CommandDefinitions() []commandengine.Definition {
+	return []commandengine.Definition{{
+		Pattern: "ping",
+		Help:    "Reply with pong",
+		Build: func(req *clir.Request) (any, error) {
+			_ = req
+			return mockAgentCommandPing{}, nil
+		},
+		Sources: []commandengine.Source{commandengine.SourceMessage},
+		Policy:  simplerbac.Public(),
+	}}
+}
+
+func (c *mockLocalAgentCommandComponent) RegisterCommandHandlers(registry *commandengine.Registry) error {
+	return commandengine.RegisterDefinition[mockAgentCommandPing](registry, "ping", func(ctx context.Context, req commandengine.Request, cmd mockAgentCommandPing) (commandengine.Result, error) {
+		_, _, _ = ctx, req, cmd
+		return commandengine.Result{Text: "pong from " + c.name}, nil
 	})
 }
 

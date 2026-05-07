@@ -44,22 +44,19 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 	definitions := schemacommands.HostbridgeCommands()
 	out := []commandengine.Definition{
 		{
-			ID:      "broker.help",
+			Pattern: "help",
+			Help:    "Show available commands",
+			Build: func(req *clir.Request) (any, error) {
+				_ = req
+				return helpCommand{}, nil
+			},
 			Sources: []commandengine.Source{commandengine.SourceMessage},
 			Policy:  simplerbac.Public(),
-			Routes: []commandengine.Route{{
-				Pattern: "help",
-				Help:    "Show available commands",
-				Build: func(req *clir.Request) (any, error) {
-					_ = req
-					return helpCommand{}, nil
-				},
-			}},
 		},
 	}
 	for _, definition := range definitions {
-		switch definition.ID {
-		case "hostbridge.run", "hostbridge.sendfile", "hostbridge.sendstdin":
+		switch definition.ID() {
+		case "run <name>", "sendfile <path>", "sendstdin":
 			out = append(out, definition)
 		}
 	}
@@ -150,10 +147,13 @@ func FormatHelp(definitions []commandengine.Definition) string {
 	}
 	lines := make([]line, 0)
 	for _, definition := range definitions {
-		for _, route := range definition.Routes {
+		for _, route := range definition.Routes() {
+			if route.Hidden {
+				continue
+			}
 			pattern := "/" + commandengine.NormalizePattern(route.Pattern)
 			text := pattern
-			help := strings.TrimSpace(route.Help)
+			help := strings.TrimSpace(definition.Help)
 			if help != "" {
 				text += " - " + help
 			}

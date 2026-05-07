@@ -16,20 +16,15 @@ type Echo struct {
 func ExampleCommands() []commandengine.Definition {
 	return []commandengine.Definition{
 		{
-			ID: "example.echo",
+			Pattern: "echo <text>",
+			Help:    "Echo text",
+			Build:   buildEcho,
 			Sources: []commandengine.Source{
 				commandengine.SourceCLI,
 				commandengine.SourceMessage,
 				commandengine.SourceHostbridge,
 			},
 			Policy: simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
-			Routes: []commandengine.Route{
-				{
-					Pattern: "echo <text>",
-					Help:    "Echo text",
-					Build:   buildEcho,
-				},
-			},
 		},
 	}
 }

@@ -24,6 +24,7 @@ type Component struct {
 
 var _ component.Component = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
+var _ component.LocalCommandSurface = (*Component)(nil)
 
 type installCommand struct{}
 type upgradeCommand struct{}
@@ -40,53 +41,100 @@ func (c *Component) Type() string {
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
 		processCommandDefinition(
-			"process.install",
+			"install",
 			"Install ctgbot binaries from source",
 			buildInstallCommand,
 			commandengine.SourceMessage,
-			[]string{"process install", "install"},
+			[]commandengine.Route{
+				{Pattern: "install", Absolute: true},
+			},
 		),
 		processCommandDefinition(
-			"process.install.cli",
+			"process install",
 			"Install ctgbot binaries from source",
 			buildInstallCommand,
 			commandengine.SourceCLI,
-			[]string{"process install"},
+			nil,
 		),
 		processCommandDefinition(
-			"process.upgrade",
+			"upgrade",
 			"Upgrade ctgbot",
 			buildUpgradeCommand,
 			commandengine.SourceMessage,
-			[]string{"process upgrade", "upgrade"},
+			[]commandengine.Route{
+				{Pattern: "upgrade", Absolute: true},
+			},
 		),
 		processCommandDefinition(
-			"process.upgrade.cli",
+			"process upgrade",
 			"Upgrade ctgbot",
 			buildUpgradeCommand,
 			commandengine.SourceCLI,
-			[]string{"process upgrade"},
+			nil,
 		),
 		processCommandDefinition(
-			"process.quit",
+			"quit",
 			"Restart ctgbot",
 			buildQuitCommand,
 			commandengine.SourceMessage,
-			[]string{"process quit", "quit"},
+			[]commandengine.Route{
+				{Pattern: "quit", Absolute: true},
+			},
 		),
 		processCommandDefinition(
-			"process.quit.cli",
+			"process quit",
 			"Restart ctgbot",
 			buildQuitCommand,
 			commandengine.SourceCLI,
-			[]string{"process quit"},
+			nil,
 		),
 	}
 }
 
+func (c *Component) UsesLocalCommandRoutes() bool { return true }
+
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
+	}
+	if err := commandengine.RegisterDefinition[installCommand](
+		registry,
+		"install",
+		func(ctx context.Context, req commandengine.Request, cmd installCommand) (commandengine.Result, error) {
+			_, _, _ = req, cmd, c
+			if err := c.install(ctx); err != nil {
+				return commandengine.Result{}, err
+			}
+			return commandengine.Result{Text: "install completed\ntype /quit to restart"}, nil
+		},
+	); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterDefinition[upgradeCommand](
+		registry,
+		"upgrade",
+		func(ctx context.Context, req commandengine.Request, cmd upgradeCommand) (commandengine.Result, error) {
+			_, _, _ = req, cmd, c
+			if err := c.upgrade(ctx); err != nil {
+				return commandengine.Result{}, err
+			}
+			return commandengine.Result{Text: "upgrade completed\ntype /quit to restart"}, nil
+		},
+	); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterDefinition[quitCommand](
+		registry,
+		"quit",
+		func(ctx context.Context, req commandengine.Request, cmd quitCommand) (commandengine.Result, error) {
+			_, _, _ = req, cmd, c
+			if err := c.quit(ctx); err != nil {
+				return commandengine.Result{}, err
+			}
+			return commandengine.Result{Text: "quit requested"}, nil
+		},
+	); err != nil {
+		return err
 	}
 	if err := commandengine.Register[installCommand](
 		registry,
@@ -145,20 +193,14 @@ func (c *Component) quit(ctx context.Context) error {
 	return c.Actions.Quit(ctx)
 }
 
-func processCommandDefinition(id string, help string, build commandengine.BuildFunc, source commandengine.Source, patterns []string) commandengine.Definition {
-	routes := make([]commandengine.Route, 0, len(patterns))
-	for _, pattern := range patterns {
-		routes = append(routes, commandengine.Route{
-			Pattern: pattern,
-			Help:    help,
-			Build:   build,
-		})
-	}
+func processCommandDefinition(pattern string, help string, build commandengine.BuildFunc, source commandengine.Source, aliases []commandengine.Route) commandengine.Definition {
 	return commandengine.Definition{
-		ID:      id,
+		Pattern: pattern,
+		Help:    help,
+		Build:   build,
 		Sources: []commandengine.Source{source},
 		Policy:  simplerbac.Any(simplerbac.RoleRoot),
-		Routes:  routes,
+		Aliases: aliases,
 	}
 }
 

@@ -44,37 +44,53 @@ type Result struct {
 type BuildFunc func(req *clir.Request) (any, error)
 
 type Route struct {
-	Pattern string
-	Help    string
-	Build   BuildFunc
+	Pattern  string
+	Absolute bool
+	Hidden   bool
 }
 
 type Definition struct {
-	ID      string
-	Sources []Source
-	Policy  simplerbac.Rule
-	Routes  []Route
+	Pattern  string
+	Help     string
+	Build    BuildFunc
+	Absolute bool
+	Hidden   bool
+	Sources  []Source
+	Policy   simplerbac.Rule
+	Aliases  []Route
 }
 
 func (d Definition) Validate() error {
-	if strings.TrimSpace(d.ID) == "" {
-		return fmt.Errorf("missing command definition id")
+	if NormalizePattern(d.Pattern) == "" {
+		return fmt.Errorf("missing command definition pattern")
+	}
+	if d.Build == nil {
+		return fmt.Errorf("command definition %s has no builder", d.ID())
 	}
 	if len(d.Sources) == 0 {
-		return fmt.Errorf("command definition %s has no sources", d.ID)
+		return fmt.Errorf("command definition %s has no sources", d.ID())
 	}
-	if len(d.Routes) == 0 {
-		return fmt.Errorf("command definition %s has no routes", d.ID)
-	}
-	for _, route := range d.Routes {
+	for _, route := range d.Aliases {
 		if NormalizePattern(route.Pattern) == "" {
-			return fmt.Errorf("command definition %s has an empty route pattern", d.ID)
-		}
-		if route.Build == nil {
-			return fmt.Errorf("command definition %s route %q has no builder", d.ID, route.Pattern)
+			return fmt.Errorf("command definition %s has an empty alias pattern", d.ID())
 		}
 	}
 	return nil
+}
+
+func (d Definition) ID() string {
+	return NormalizePattern(d.Pattern)
+}
+
+func (d Definition) Routes() []Route {
+	routes := make([]Route, 0, len(d.Aliases)+1)
+	routes = append(routes, Route{
+		Pattern:  d.Pattern,
+		Absolute: d.Absolute,
+		Hidden:   d.Hidden,
+	})
+	routes = append(routes, d.Aliases...)
+	return routes
 }
 
 func (d Definition) AllowsSource(source Source) bool {
@@ -88,4 +104,17 @@ func (d Definition) AllowsSource(source Source) bool {
 
 func NormalizePattern(pattern string) string {
 	return strings.Join(strings.Fields(strings.TrimSpace(pattern)), " ")
+}
+
+func JoinPattern(prefix string, pattern string) string {
+	prefix = NormalizePattern(prefix)
+	pattern = NormalizePattern(pattern)
+	switch {
+	case prefix == "":
+		return pattern
+	case pattern == "":
+		return prefix
+	default:
+		return NormalizePattern(prefix + " " + pattern)
+	}
 }

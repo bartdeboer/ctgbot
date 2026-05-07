@@ -16,26 +16,20 @@ type testCommand struct {
 func TestRouterFiltersBySourceAndChecksPolicy(t *testing.T) {
 	definitions := []Definition{
 		{
-			ID:      "test.cli",
+			Pattern: "only-cli <value>",
+			Build: func(req *clir.Request) (any, error) {
+				return testCommand{Value: req.Params["value"]}, nil
+			},
 			Sources: []Source{SourceCLI},
 			Policy:  simplerbac.Any(simplerbac.RoleRoot),
-			Routes: []Route{{
-				Pattern: "only-cli <value>",
-				Build: func(req *clir.Request) (any, error) {
-					return testCommand{Value: req.Params["value"]}, nil
-				},
-			}},
 		},
 		{
-			ID:      "test.message",
+			Pattern: "only-message <value>",
+			Build: func(req *clir.Request) (any, error) {
+				return testCommand{Value: req.Params["value"]}, nil
+			},
 			Sources: []Source{SourceMessage},
 			Policy:  simplerbac.Any(simplerbac.RoleUser),
-			Routes: []Route{{
-				Pattern: "only-message <value>",
-				Build: func(req *clir.Request) (any, error) {
-					return testCommand{Value: req.Params["value"]}, nil
-				},
-			}},
 		},
 	}
 
@@ -46,7 +40,7 @@ func TestRouterFiltersBySourceAndChecksPolicy(t *testing.T) {
 	_, err = router.Parse(context.Background(), Request{
 		Context: Context{Actor: Actor{Roles: []simplerbac.Role{simplerbac.RoleRoot}}},
 	}, []string{"only-message", "x"})
-	if err == nil || !strings.Contains(err.Error(), "command test.message denied") {
+	if err == nil || !strings.Contains(err.Error(), "command only-message <value> denied") {
 		t.Fatalf("Parse() error = %v, want policy denial", err)
 	}
 
@@ -73,22 +67,21 @@ func TestRouterFiltersBySourceAndChecksPolicy(t *testing.T) {
 
 func TestRouterRejectsDuplicateRoutes(t *testing.T) {
 	_, err := NewRouter([]Definition{
-		testDefinition("one", "same"),
-		testDefinition("two", "same"),
+		testDefinition("one", "one", Route{Pattern: "same"}),
+		testDefinition("two", "two", Route{Pattern: "same"}),
 	}, SourceCLI)
 	if err == nil || !strings.Contains(err.Error(), `duplicate command route "same"`) {
 		t.Fatalf("NewRouter() error = %v, want duplicate route", err)
 	}
 }
 
-func testDefinition(id string, pattern string) Definition {
+func testDefinition(help string, pattern string, aliases ...Route) Definition {
 	return Definition{
-		ID:      id,
+		Pattern: pattern,
+		Help:    help,
+		Build:   func(req *clir.Request) (any, error) { return testCommand{}, nil },
 		Sources: []Source{SourceCLI},
 		Policy:  simplerbac.Public(),
-		Routes: []Route{{
-			Pattern: pattern,
-			Build:   func(req *clir.Request) (any, error) { return testCommand{}, nil },
-		}},
+		Aliases: aliases,
 	}
 }

@@ -33,72 +33,64 @@ type ModelEffortClear struct{}
 
 func ThreadCommands() []commandengine.Definition {
 	return []commandengine.Definition{
-		threadCommand("thread.refresh", RefreshContainer{}, "Delete and recreate the container on next turn", []string{"refresh", "container refresh"}),
-		threadCommand("thread.container-start", StartContainer{}, "Start the active container and keep it running", []string{"container start"}),
-		threadCommand("thread.container-stop", StopContainer{}, "Stop the container but keep its data", []string{"container stop"}),
-		threadCommand("thread.purge", PurgeChat{}, "Reset the conversation and delete the container", []string{"purge", "chat purge"}),
-		threadCommand("thread.interrupt", InterruptTurn{}, "Interrupt the active turn", []string{"interrupt"}),
-		threadCommand("thread.install", Install{}, "Install ctgbot binaries from source", []string{"install"}),
-		threadCommand("thread.upgrade", Upgrade{}, "Upgrade ctgbot", []string{"upgrade"}),
-		threadCommand("thread.quit", Quit{}, "Restart ctgbot", []string{"quit"}),
-		threadCommand("thread.status", Status{}, "Show conversation and container status", []string{"status"}),
-		threadCommand("thread.model-status", ModelStatus{}, "Show the Codex model for this thread", []string{"model"}),
-		threadCommand("thread.model-list", ModelList{}, "List suggested Codex models", []string{"model list"}),
+		threadCommand(RefreshContainer{}, "Delete and recreate the container on next turn", "refresh", "container refresh"),
+		threadCommand(StartContainer{}, "Start the active container and keep it running", "container start"),
+		threadCommand(StopContainer{}, "Stop the container but keep its data", "container stop"),
+		threadCommand(PurgeChat{}, "Reset the conversation and delete the container", "purge", "chat purge"),
+		threadCommand(InterruptTurn{}, "Interrupt the active turn", "interrupt"),
+		threadCommand(Install{}, "Install ctgbot binaries from source", "install"),
+		threadCommand(Upgrade{}, "Upgrade ctgbot", "upgrade"),
+		threadCommand(Quit{}, "Restart ctgbot", "quit"),
+		threadCommand(Status{}, "Show conversation and container status", "status"),
+		threadCommand(ModelStatus{}, "Show the Codex model for this thread", "model"),
+		threadCommand(ModelList{}, "List suggested Codex models", "model list"),
 		{
-			ID:      "thread.model-set",
+			Pattern: "model set <model>",
+			Help:    "Set the Codex model for this thread",
+			Build: func(req *clir.Request) (any, error) {
+				model := strings.TrimSpace(req.Params["model"])
+				if model == "" {
+					return nil, fmt.Errorf("missing model")
+				}
+				return ModelSet{Model: model}, nil
+			},
 			Sources: allSources(),
 			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
-			Routes: []commandengine.Route{{
-				Pattern: "model set <model>",
-				Help:    "Set the Codex model for this thread",
-				Build: func(req *clir.Request) (any, error) {
-					model := strings.TrimSpace(req.Params["model"])
-					if model == "" {
-						return nil, fmt.Errorf("missing model")
-					}
-					return ModelSet{Model: model}, nil
-				},
-			}},
 		},
-		threadCommand("thread.model-clear", ModelClear{}, "Clear the thread model override", []string{"model clear"}),
-		threadCommand("thread.model-effort-status", ModelEffortStatus{}, "Show the Codex reasoning effort for this thread", []string{"model effort"}),
-		threadCommand("thread.model-effort-list", ModelEffortList{}, "List suggested Codex reasoning efforts", []string{"model effort list"}),
+		threadCommand(ModelClear{}, "Clear the thread model override", "model clear"),
+		threadCommand(ModelEffortStatus{}, "Show the Codex reasoning effort for this thread", "model effort"),
+		threadCommand(ModelEffortList{}, "List suggested Codex reasoning efforts", "model effort list"),
 		{
-			ID:      "thread.model-effort-set",
+			Pattern: "model effort set <effort>",
+			Help:    "Set the Codex reasoning effort for this thread",
+			Build: func(req *clir.Request) (any, error) {
+				effort := strings.TrimSpace(req.Params["effort"])
+				if effort == "" {
+					return nil, fmt.Errorf("missing reasoning effort")
+				}
+				return ModelEffortSet{Effort: effort}, nil
+			},
 			Sources: allSources(),
 			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
-			Routes: []commandengine.Route{{
-				Pattern: "model effort set <effort>",
-				Help:    "Set the Codex reasoning effort for this thread",
-				Build: func(req *clir.Request) (any, error) {
-					effort := strings.TrimSpace(req.Params["effort"])
-					if effort == "" {
-						return nil, fmt.Errorf("missing reasoning effort")
-					}
-					return ModelEffortSet{Effort: effort}, nil
-				},
-			}},
 		},
-		threadCommand("thread.model-effort-clear", ModelEffortClear{}, "Clear the thread reasoning effort override", []string{"model effort clear"}),
+		threadCommand(ModelEffortClear{}, "Clear the thread reasoning effort override", "model effort clear"),
 	}
 }
 
-func threadCommand(id string, command any, help string, patterns []string) commandengine.Definition {
-	routes := make([]commandengine.Route, 0, len(patterns))
-	for _, pattern := range patterns {
-		command := command
-		routes = append(routes, commandengine.Route{
-			Pattern: pattern,
-			Help:    help,
-			Build: func(req *clir.Request) (any, error) {
-				return command, nil
-			},
-		})
+func threadCommand(command any, help string, patterns ...string) commandengine.Definition {
+	aliases := make([]commandengine.Route, 0)
+	for _, pattern := range patterns[1:] {
+		aliases = append(aliases, commandengine.Route{Pattern: pattern})
 	}
 	return commandengine.Definition{
-		ID:      id,
+		Pattern: patterns[0],
+		Help:    help,
+		Build: func(req *clir.Request) (any, error) {
+			_ = req
+			return command, nil
+		},
 		Sources: allSources(),
 		Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
-		Routes:  routes,
+		Aliases: aliases,
 	}
 }

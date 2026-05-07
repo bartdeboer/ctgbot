@@ -141,6 +141,11 @@ type CommandSurface interface {
 	RegisterCommandHandlers(registry *commandengine.Registry) error
 }
 
+type LocalCommandSurface interface {
+	CommandSurface
+	UsesLocalCommandRoutes() bool
+}
+
 type Turn struct {
 	Chat    coremodel.Chat
 	Thread  coremodel.Thread

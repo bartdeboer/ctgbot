@@ -6,7 +6,6 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
 )
 
 func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
@@ -41,9 +40,9 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 }
 
 func TestHostbridgeRouterUsesV5CodexDefinitions(t *testing.T) {
-	router, err := commandset.NewRouterForSource(commandengine.SourceHostbridge, hostbridgeCommandSurfaces()...)
+	router, err := hostbridgeRouter()
 	if err != nil {
-		t.Fatalf("NewRouterForSource() error = %v", err)
+		t.Fatalf("hostbridgeRouter() error = %v", err)
 	}
 
 	base := commandengine.Request{
@@ -59,10 +58,10 @@ func TestHostbridgeRouterUsesV5CodexDefinitions(t *testing.T) {
 		argv []string
 		want string
 	}{
-		{argv: normalizedArgs([]string{"status"}), want: "codex.status"},
-		{argv: normalizedArgs([]string{"refresh"}), want: "codex.refresh"},
-		{argv: normalizedArgs([]string{"interrupt"}), want: "codex.interrupt"},
-		{argv: normalizedArgs([]string{"model"}), want: "codex.model-status"},
+		{argv: normalizedArgs([]string{"status"}), want: "codex status"},
+		{argv: normalizedArgs([]string{"refresh"}), want: "codex container refresh"},
+		{argv: normalizedArgs([]string{"interrupt"}), want: "codex interrupt"},
+		{argv: normalizedArgs([]string{"model"}), want: "codex model"},
 	}
 
 	for _, tc := range tests {

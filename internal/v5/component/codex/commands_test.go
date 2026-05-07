@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/v5/runtime"
@@ -440,15 +441,15 @@ func TestCodexCommandPurgeClearsProviderThreadMapping(t *testing.T) {
 
 func newCodexCommandEngine(t *testing.T, c *Component, source commandengine.Source) *commandengine.Engine {
 	t.Helper()
-	registry := commandengine.NewRegistry()
-	if err := c.RegisterCommandHandlers(registry); err != nil {
-		t.Fatalf("RegisterCommandHandlers() error = %v", err)
-	}
-	router, err := commandengine.NewRouter(c.CommandDefinitions(), source)
+	engine, err := commandset.NewBoundEngineForSource(source, []commandset.BoundSurface{{
+		Surface:       c,
+		ComponentRef:  c.registration.Ref(),
+		ComponentType: c.registration.Type,
+	}})
 	if err != nil {
-		t.Fatalf("NewRouter() error = %v", err)
+		t.Fatalf("NewBoundEngineForSource() error = %v", err)
 	}
-	return commandengine.NewEngine(router, registry)
+	return engine
 }
 
 func newTestConfig(t *testing.T, root string) *appstate.Config {

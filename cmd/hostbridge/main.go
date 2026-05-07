@@ -16,6 +16,7 @@ import (
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/config"
+	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
 )
 
 func main() {
@@ -30,7 +31,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	router, err := commandset.NewRouterForSource(commandengine.SourceHostbridge, hostbridgeCommandSurfaces()...)
+	router, err := hostbridgeRouter()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -113,30 +114,72 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "usage: hostbridge <command> [args...]")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "Commands for Telegram-attached ctgbot hostbridge:")
-	printDefinitionHelp(commandset.DefinitionsForSource(commandengine.SourceHostbridge, hostbridgeCommandSurfaces()...))
+	printDefinitionHelp(hostbridgeDefinitions())
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "environment:")
 	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_ADDR     TCP address (default host.docker.internal:4568)")
 	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_TLS_DIR  Optional directory containing ca.crt, client.crt, client.key")
 	fmt.Fprintln(os.Stdout, "  CTGBOT_SANDBOX_ID   Sandbox/thread id for outbound/config commands")
+	fmt.Fprintln(os.Stdout, "  CTGBOT_COMPONENT_REF  Current component ref for bound command routing (default codex)")
 }
 
-func hostbridgeCommandSurfaces() []v5component.CommandSurface {
+func hostbridgeRouter() (*commandengine.Router, error) {
+	return commandset.NewBoundRouterForSource(
+		commandengine.SourceHostbridge,
+		hostbridgeBoundSurfaces(),
+		hostbridgeGlobalSurfaces()...,
+	)
+}
+
+func hostbridgeDefinitions() []commandengine.Definition {
+	return commandset.DefinitionsForBoundSource(
+		commandengine.SourceHostbridge,
+		hostbridgeBoundSurfaces(),
+		hostbridgeGlobalSurfaces()...,
+	)
+}
+
+func hostbridgeGlobalSurfaces() []v5component.CommandSurface {
 	return []v5component.CommandSurface{
 		brokercomponent.New(nil),
 		(*configcomponent.Component)(nil),
-		(*codexcomponent.Component)(nil),
 	}
+}
+
+func hostbridgeBoundSurfaces() []commandset.BoundSurface {
+	ref := currentComponentRef()
+	parsed, err := coremodel.ParseComponentRef(ref)
+	if err != nil {
+		parsed = coremodel.ParsedComponentRef{
+			Type: codexcomponent.Type,
+			Name: coremodel.DefaultComponentName(codexcomponent.Type),
+		}
+	}
+	return []commandset.BoundSurface{{
+		Surface:       (*codexcomponent.Component)(nil),
+		ComponentRef:  parsed.Ref(),
+		ComponentType: parsed.Type,
+	}}
+}
+
+func currentComponentRef() string {
+	if ref := strings.TrimSpace(os.Getenv("CTGBOT_COMPONENT_REF")); ref != "" {
+		return ref
+	}
+	return codexcomponent.Type
 }
 
 func printDefinitionHelp(definitions []commandengine.Definition) {
 	for _, definition := range definitions {
-		for _, route := range definition.Routes {
-			if route.Help == "" {
+		for _, route := range definition.Routes() {
+			if route.Hidden {
+				continue
+			}
+			if definition.Help == "" {
 				fmt.Fprintf(os.Stdout, "%s\n", route.Pattern)
 				continue
 			}
-			fmt.Fprintf(os.Stdout, "%s - %s\n", route.Pattern, route.Help)
+			fmt.Fprintf(os.Stdout, "%s - %s\n", route.Pattern, definition.Help)
 		}
 	}
 }

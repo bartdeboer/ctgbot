@@ -3,28 +3,42 @@ package broker
 import (
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/v5/component/broker"
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/v5/component/config"
+	"github.com/bartdeboer/go-clistate"
 )
 
 func TestHostbridgeControlCommandsUsesCanonicalAgentSurface(t *testing.T) {
-	router, err := commandset.NewRouterForSource(
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("NewCwd() error = %v", err)
+	}
+	configSurface, err := configcomponent.New(appstate.New(t.TempDir(), store))
+	if err != nil {
+		t.Fatalf("configcomponent.New() error = %v", err)
+	}
+	engine, err := commandset.NewBoundEngineForSource(
 		commandengine.SourceHostbridge,
+		[]commandset.BoundSurface{{
+			Surface:       (*codexcomponent.Component)(nil),
+			ComponentRef:  "codex/work",
+			ComponentType: "codex",
+		}},
 		brokercomponent.New(nil),
-		(*configcomponent.Component)(nil),
-		(*codexcomponent.Component)(nil),
+		configSurface,
 	)
 	if err != nil {
-		t.Fatalf("NewRouterForSource() error = %v", err)
+		t.Fatalf("NewBoundEngineForSource() error = %v", err)
 	}
 
-	got := hostbridgeControlCommands(&ChatRuntime{AgentCommands: commandengine.NewEngine(router, nil)})
+	got := hostbridgeControlCommands(&ChatRuntime{AgentCommands: engine})
 	wantContains := []string{
 		"hostbridge codex status",
-		"hostbridge codex refresh",
+		"hostbridge codex container refresh",
 		"hostbridge codex interrupt",
 		"hostbridge codex model",
 		"hostbridge config list",

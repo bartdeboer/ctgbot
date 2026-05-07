@@ -32,43 +32,34 @@ func HostbridgeCommands() []commandengine.Definition {
 	return []commandengine.Definition{
 		RunCommandDefinition(),
 		{
-			ID:      "hostbridge.sendfile",
+			Pattern: "sendfile <path>",
+			Help:    "Upload a file",
+			Build:   buildSendFile,
 			Sources: []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:  agentPolicy(),
-			Routes: []commandengine.Route{{
-				Pattern: "sendfile <path>",
-				Help:    "Upload a file",
-				Build:   buildSendFile,
-			}},
 		},
 		{
-			ID:      "hostbridge.sendstdin",
+			Pattern: "sendstdin",
+			Help:    "Send stdin as text",
+			Build:   buildSendStdin,
 			Sources: []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:  agentPolicy(),
-			Routes: []commandengine.Route{{
-				Pattern: "sendstdin",
-				Help:    "Send stdin as text",
-				Build:   buildSendStdin,
-			}},
 		},
 	}
 }
 
 func RunCommandDefinition() commandengine.Definition {
 	return commandengine.Definition{
-		ID:      "hostbridge.run",
+		Pattern: "run <name>",
+		Help:    "Run a whitelisted host command",
+		Build:   buildRunCommand,
 		Sources: []commandengine.Source{commandengine.SourceHostbridge},
 		Policy:  agentPolicy(),
-		Routes: []commandengine.Route{{
-			Pattern: "run <command>",
-			Help:    "Run a whitelisted host command",
-			Build:   buildRunCommand,
-		}},
 	}
 }
 
 func buildRunCommand(req *clir.Request) (any, error) {
-	command := strings.TrimSpace(req.Params["command"])
+	command := strings.TrimSpace(req.Params["name"])
 	if command == "" {
 		return nil, fmt.Errorf("missing command")
 	}

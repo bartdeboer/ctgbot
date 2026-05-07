@@ -51,6 +51,9 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	if got, want := findEnv(sandbox.Env, "CTGBOT_SANDBOX_ID"), threadID.String(); got != want {
 		t.Fatalf("CTGBOT_SANDBOX_ID = %q, want %q", got, want)
 	}
+	if got, want := findEnv(sandbox.Env, "CTGBOT_COMPONENT_REF"), registration.Ref(); got != want {
+		t.Fatalf("CTGBOT_COMPONENT_REF = %q, want %q", got, want)
+	}
 	if !hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
 		t.Fatalf("expected hostbridge TLS mount in %#v", sandbox.Mounts)
 	}

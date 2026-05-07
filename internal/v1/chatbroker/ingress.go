@@ -138,13 +138,13 @@ func (b *Broker) messageActor(chatID modeluuid.UUID, msg messenger.InboundPayloa
 func commandHelp(definitions []commandengine.Definition) string {
 	var lines []string
 	for _, definition := range definitions {
-		for _, route := range definition.Routes {
+		for _, route := range definition.Routes() {
 			pattern := "/" + commandengine.NormalizePattern(route.Pattern)
-			if strings.TrimSpace(route.Help) == "" {
+			if strings.TrimSpace(definition.Help) == "" {
 				lines = append(lines, pattern)
 				continue
 			}
-			lines = append(lines, pattern+" - "+strings.TrimSpace(route.Help))
+			lines = append(lines, pattern+" - "+strings.TrimSpace(definition.Help))
 		}
 	}
 	return "Commands:\n" + strings.Join(lines, "\n")

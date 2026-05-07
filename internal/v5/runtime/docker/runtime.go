@@ -278,6 +278,7 @@ func (r *Runtime) sandbox(
 	}
 	runtimeHomePath := r.RuntimeComponentHomePath()
 	env := append([]string{}, r.env...)
+	env = append(env, "CTGBOT_COMPONENT_REF="+r.registration.Ref())
 	mounts := []sandboxengine.Mount{
 		{Source: r.home.Path, Target: runtimeHomePath},
 		{Source: workspaceHost, Target: workspaceRuntime},
