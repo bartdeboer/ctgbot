@@ -4,22 +4,27 @@
 
 The current direction is:
 
-- workspaces come from config
-- components are global registrations
-- components carry runtime and optional home overrides
+- workspaces come from root config
+- workspaces define a host path and hostbridge workflow policy
+- component registrations are global reusable instances
+- runtime kind lives on the component registration
+- static runtime config lives in component-home `runtime.json`
+- static component config lives in component-home `component.json`
 - chats carry workspace context
 - broker wires source, relay, agent, and command roles per chat
+- mutable per-thread component settings belong in `ThreadComponentState`
 
 ## Core model
 
 The main concepts are:
 
 - `Workspace`
-- `Runtime`
 - `Component`
+- `Runtime`
 - `Chat`
 - `ChatComponent`
 - `ThreadComponentMapping`
+- `ThreadComponentState`
 - `Broker`
 
 Everything else should support those concepts directly instead of hiding them
@@ -27,13 +32,15 @@ behind managers and option structs.
 
 ## Workspace flow
 
-Workspaces are loaded from config.
+Workspaces are loaded from root config.
 
 Each workspace defines:
 
 - `path`
+- optional hostbridge allowed commands
 
-A workspace is just a named host path.
+A workspace is the shared work context for a chat. It is not the place for
+component auth, model defaults, or Docker image settings.
 
 Chats may point at a named workspace.
 
@@ -43,28 +50,6 @@ workspace:
 - `.ctgbot/chats/<chatID>/workspace`
 
 This default is intentionally chat-scoped, not thread-scoped.
-
-## Runtime flow
-
-Runtime is configured per component registration.
-
-Examples:
-
-- `codex/work` with runtime `docker`
-- `codex/personal` with runtime `local`
-
-At startup we build runtime factories by kind:
-
-- `docker`
-- `local`
-
-These runtime factories are wired and ready, but they do not start containers
-or processes yet.
-
-Actual execution only starts when:
-
-- a component runs auth
-- an agent handles a turn
 
 ## Component flow
 
@@ -82,14 +67,50 @@ Component homes default to:
 If `HomePath` is set on the registration, that explicit host path is used
 instead.
 
+Each component home may contain:
+
+- auth and local state owned by the component
+- `runtime.json` for generic runtime settings such as `image`, `gpus`, and
+  `env`
+- `component.json` for component-specific static config
+
 When a component is resolved:
 
 1. load the registration row
-2. find the runtime for that component
-3. derive the component home from the registration
-4. call the constructor for that component type
+2. resolve the component home
+3. load generic runtime config from `runtime.json`
+4. bind the runtime using the registration runtime kind plus that config
+5. let the component constructor load its own `component.json`
 
-The constructor signature stays intentionally direct and explicit.
+## Runtime flow
+
+Runtime kind is configured per component registration.
+
+Current expected kinds are:
+
+- `docker`
+- `local`
+
+Runtime factories are built by kind:
+
+- `docker`
+- `local`
+
+Static runtime settings are not stored on chats. They come from the component
+home so different component aliases can carry different execution requirements
+without duplicating workspaces.
+
+## Thread component state
+
+Mutable component-specific thread settings belong in `ThreadComponentState`.
+
+Examples:
+
+- Codex model override
+- Codex reasoning effort
+- future temperature or backend-specific knobs
+
+This is intentionally separate from broker-owned thread/component mapping.
 
 ## Broker flow
 
@@ -108,6 +129,7 @@ Broker does not own:
 - Docker internals
 - local process internals
 - component auth implementation details
+- component-specific profile config schemas
 - component home conventions beyond the explicit runtime/component seams
 
 ## Current status
@@ -115,17 +137,20 @@ Broker does not own:
 `v5` currently proves the flatter architecture:
 
 - config-backed workspaces
-- runtime chosen per component registration
+- runtime kind chosen per component registration
 - explicit component home handling
-- component resolution with runtime injection
+- component-home `runtime.json` and `component.json` support
 - broker routing with thread-component mapping
+- `ThreadComponentState` foundation
+- Codex thread settings moving out of the generic `Thread` row
 - hostbridge command support in the runtime path
 
 What is intentionally unfinished:
 
-- real `local` runtime execution
+- full migration of all component-specific thread state out of older thread
+  fields
 - broader deploy polish after the first live `v5` rollout
 
 For the more opinionated target model and CLI examples, see:
 
-- `/workspace/WORKSPACE-DOCS/ctgbot/V5DESIGN.md` (workspace docs)
+- `/workspace/WORKSPACE-DOCS/ctgbot/V5DESIGN.md`
