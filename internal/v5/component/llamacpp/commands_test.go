@@ -19,15 +19,15 @@ func TestCommandDefinitions(t *testing.T) {
 	}
 	for _, definition := range definitions {
 		if err := definition.Validate(); err != nil {
-			t.Fatalf("definition %s invalid: %v", definition.ID(), err)
+			t.Fatalf("definition %s invalid: %v", definition.CanonicalPattern(), err)
 		}
-		pattern, ok := want[definition.ID()]
+		pattern, ok := want[definition.CanonicalPattern()]
 		if !ok {
-			t.Fatalf("unexpected definition id %q", definition.ID())
+			t.Fatalf("unexpected canonical pattern %q", definition.CanonicalPattern())
 		}
 		routes := definition.Routes()
 		if len(routes) != 1 || commandengine.NormalizePattern(routes[0].Pattern) != pattern {
-			t.Fatalf("definition %s routes = %#v, want %q", definition.ID(), routes, pattern)
+			t.Fatalf("definition %s routes = %#v, want %q", definition.CanonicalPattern(), routes, pattern)
 		}
 	}
 }

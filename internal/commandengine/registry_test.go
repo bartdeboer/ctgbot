@@ -28,20 +28,20 @@ func TestRegistryDispatchesByConcreteType(t *testing.T) {
 	}
 }
 
-func TestRegistryDispatchesByDefinitionID(t *testing.T) {
+func TestRegistryDispatchesByCanonicalPattern(t *testing.T) {
 	registry := NewRegistry()
-	if err := RegisterDefinition[testCommand](registry, "test status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
-		if got, want := req.DefinitionID, "test status"; got != want {
-			t.Fatalf("DefinitionID = %q, want %q", got, want)
+	if err := RegisterPattern[testCommand](registry, "test status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
+		if got, want := req.CanonicalPattern, "test status"; got != want {
+			t.Fatalf("CanonicalPattern = %q, want %q", got, want)
 		}
 		return Result{Text: cmd.Value}, nil
 	}); err != nil {
-		t.Fatalf("RegisterDefinition() error = %v", err)
+		t.Fatalf("RegisterPattern() error = %v", err)
 	}
 
 	result, err := registry.Execute(context.Background(), Request{
-		DefinitionID: "test status",
-		Command:      testCommand{Value: "ok"},
+		CanonicalPattern: "test status",
+		Command:          testCommand{Value: "ok"},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -51,17 +51,17 @@ func TestRegistryDispatchesByDefinitionID(t *testing.T) {
 	}
 }
 
-func TestRegistryDefinitionPrefix(t *testing.T) {
-	registry := NewRegistry().WithDefinitionPrefix("codex/work")
-	if err := RegisterDefinition[testCommand](registry, "status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
-		return Result{Text: req.DefinitionID + "=" + cmd.Value}, nil
+func TestRegistryPatternPrefix(t *testing.T) {
+	registry := NewRegistry().WithPatternPrefix("codex/work")
+	if err := RegisterPattern[testCommand](registry, "status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
+		return Result{Text: req.CanonicalPattern + "=" + cmd.Value}, nil
 	}); err != nil {
-		t.Fatalf("RegisterDefinition() error = %v", err)
+		t.Fatalf("RegisterPattern() error = %v", err)
 	}
 
 	result, err := registry.Execute(context.Background(), Request{
-		DefinitionID: "codex/work status",
-		Command:      testCommand{Value: "ok"},
+		CanonicalPattern: "codex/work status",
+		Command:          testCommand{Value: "ok"},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -71,34 +71,34 @@ func TestRegistryDefinitionPrefix(t *testing.T) {
 	}
 }
 
-func TestRegistryRejectsDuplicateDefinitionHandler(t *testing.T) {
+func TestRegistryRejectsDuplicatePatternHandler(t *testing.T) {
 	registry := NewRegistry()
-	if err := RegisterDefinition[testCommand](registry, "status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
+	if err := RegisterPattern[testCommand](registry, "status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
 		_, _, _ = req, cmd, registry
 		return Result{}, nil
 	}); err != nil {
-		t.Fatalf("RegisterDefinition() error = %v", err)
+		t.Fatalf("RegisterPattern() error = %v", err)
 	}
-	err := RegisterDefinition[testCommand](registry, "status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
+	err := RegisterPattern[testCommand](registry, "status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
 		_, _, _ = req, cmd, registry
 		return Result{}, nil
 	})
 	if err == nil || !strings.Contains(err.Error(), "duplicate command handler") {
-		t.Fatalf("duplicate RegisterDefinition() error = %v, want duplicate command handler", err)
+		t.Fatalf("duplicate RegisterPattern() error = %v, want duplicate command handler", err)
 	}
 }
 
-func TestRegistryDefinitionPrefixComposes(t *testing.T) {
-	registry := NewRegistry().WithDefinitionPrefix("codex").WithDefinitionPrefix("work")
-	if err := RegisterDefinition[testCommand](registry, "status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
-		return Result{Text: req.DefinitionID + "=" + cmd.Value}, nil
+func TestRegistryPatternPrefixComposes(t *testing.T) {
+	registry := NewRegistry().WithPatternPrefix("codex").WithPatternPrefix("work")
+	if err := RegisterPattern[testCommand](registry, "status", func(_ context.Context, req Request, cmd testCommand) (Result, error) {
+		return Result{Text: req.CanonicalPattern + "=" + cmd.Value}, nil
 	}); err != nil {
-		t.Fatalf("RegisterDefinition() error = %v", err)
+		t.Fatalf("RegisterPattern() error = %v", err)
 	}
 
 	result, err := registry.Execute(context.Background(), Request{
-		DefinitionID: "codex work status",
-		Command:      testCommand{Value: "ok"},
+		CanonicalPattern: "codex work status",
+		Command:          testCommand{Value: "ok"},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

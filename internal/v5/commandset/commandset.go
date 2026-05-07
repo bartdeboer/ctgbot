@@ -151,7 +151,7 @@ func buildBoundDefinitions(source commandengine.Source, bound []BoundSurface, gl
 		surface := binding.Surface
 		prefix := definitionPrefix
 		registrars = append(registrars, func(registry *commandengine.Registry) error {
-			return surface.RegisterCommandHandlers(registry.WithDefinitionPrefix(prefix))
+			return surface.RegisterCommandHandlers(registry.WithPatternPrefix(prefix))
 		})
 	}
 

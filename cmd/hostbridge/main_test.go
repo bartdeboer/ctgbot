@@ -69,8 +69,8 @@ func TestHostbridgeRouterUsesV5CodexDefinitions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Parse(%v) error = %v", tc.argv, err)
 		}
-		if req.DefinitionID != tc.want {
-			t.Fatalf("Parse(%v) definition = %q, want %q", tc.argv, req.DefinitionID, tc.want)
+		if req.CanonicalPattern != tc.want {
+			t.Fatalf("Parse(%v) canonical pattern = %q, want %q", tc.argv, req.CanonicalPattern, tc.want)
 		}
 	}
 }

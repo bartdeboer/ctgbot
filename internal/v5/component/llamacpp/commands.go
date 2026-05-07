@@ -33,19 +33,19 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
 	}
-	if err := commandengine.RegisterDefinition[startCommand](registry, "start", func(ctx context.Context, req commandengine.Request, cmd startCommand) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[startCommand](registry, "start", func(ctx context.Context, req commandengine.Request, cmd startCommand) (commandengine.Result, error) {
 		_, _ = req, cmd
 		return c.start(ctx)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterDefinition[stopCommand](registry, "stop", func(ctx context.Context, req commandengine.Request, cmd stopCommand) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[stopCommand](registry, "stop", func(ctx context.Context, req commandengine.Request, cmd stopCommand) (commandengine.Result, error) {
 		_, _ = req, cmd
 		return c.stop(ctx)
 	}); err != nil {
 		return err
 	}
-	return commandengine.RegisterDefinition[statusCommand](registry, "status", func(ctx context.Context, req commandengine.Request, cmd statusCommand) (commandengine.Result, error) {
+	return commandengine.RegisterPattern[statusCommand](registry, "status", func(ctx context.Context, req commandengine.Request, cmd statusCommand) (commandengine.Result, error) {
 		_, _ = req, cmd
 		return c.status(ctx)
 	})

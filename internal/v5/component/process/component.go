@@ -97,7 +97,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
 	}
-	if err := commandengine.RegisterDefinition[installCommand](
+	if err := commandengine.RegisterPattern[installCommand](
 		registry,
 		"install",
 		func(ctx context.Context, req commandengine.Request, cmd installCommand) (commandengine.Result, error) {
@@ -110,7 +110,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterDefinition[upgradeCommand](
+	if err := commandengine.RegisterPattern[upgradeCommand](
 		registry,
 		"upgrade",
 		func(ctx context.Context, req commandengine.Request, cmd upgradeCommand) (commandengine.Result, error) {
@@ -123,7 +123,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterDefinition[quitCommand](
+	if err := commandengine.RegisterPattern[quitCommand](
 		registry,
 		"quit",
 		func(ctx context.Context, req commandengine.Request, cmd quitCommand) (commandengine.Result, error) {

@@ -26,9 +26,9 @@ func (c *testCommandSurface) CommandDefinitions() []commandengine.Definition {
 	}}
 }
 func (c *testCommandSurface) RegisterCommandHandlers(registry *commandengine.Registry) error {
-	return commandengine.RegisterDefinition[testCommand](registry, "status", func(ctx context.Context, req commandengine.Request, cmd testCommand) (commandengine.Result, error) {
+	return commandengine.RegisterPattern[testCommand](registry, "status", func(ctx context.Context, req commandengine.Request, cmd testCommand) (commandengine.Result, error) {
 		_, _ = ctx, cmd
-		return commandengine.Result{Text: req.DefinitionID}, nil
+		return commandengine.Result{Text: req.CanonicalPattern}, nil
 	})
 }
 

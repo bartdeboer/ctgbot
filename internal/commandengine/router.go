@@ -9,9 +9,9 @@ import (
 )
 
 type Router struct {
-	source      Source
-	clir        *clir.Router
-	definitions map[string]Definition
+	source               Source
+	clir                 *clir.Router
+	definitionsByPattern map[string]Definition
 }
 
 type parseState struct {
@@ -25,9 +25,9 @@ func NewRouter(definitions []Definition, source Source) (*Router, error) {
 		return nil, fmt.Errorf("missing command source")
 	}
 	router := &Router{
-		source:      source,
-		clir:        clir.New(),
-		definitions: map[string]Definition{},
+		source:               source,
+		clir:                 clir.New(),
+		definitionsByPattern: map[string]Definition{},
 	}
 	seenRoutes := map[string]string{}
 	var routes []registeredRoute
@@ -38,17 +38,17 @@ func NewRouter(definitions []Definition, source Source) (*Router, error) {
 		if !definition.AllowsSource(source) {
 			continue
 		}
-		definitionID := definition.ID()
-		if _, exists := router.definitions[definitionID]; exists {
-			return nil, fmt.Errorf("duplicate command definition: %s", definitionID)
+		canonicalPattern := definition.CanonicalPattern()
+		if _, exists := router.definitionsByPattern[canonicalPattern]; exists {
+			return nil, fmt.Errorf("duplicate command pattern: %s", canonicalPattern)
 		}
-		router.definitions[definitionID] = definition
+		router.definitionsByPattern[canonicalPattern] = definition
 		for _, route := range definition.Routes() {
 			pattern := NormalizePattern(route.Pattern)
 			if previous, ok := seenRoutes[pattern]; ok {
-				return nil, fmt.Errorf("duplicate command route %q in %s and %s", pattern, previous, definitionID)
+				return nil, fmt.Errorf("duplicate command route %q in %s and %s", pattern, previous, canonicalPattern)
 			}
-			seenRoutes[pattern] = definitionID
+			seenRoutes[pattern] = canonicalPattern
 			routes = append(routes, registeredRoute{
 				definition: definition,
 				route:      route,
@@ -73,7 +73,7 @@ func NewRouter(definitions []Definition, source Source) (*Router, error) {
 				}
 				state.Request.Context.Source = source
 				state.Request.Command = command
-				state.Request.DefinitionID = registered.definition.ID()
+				state.Request.CanonicalPattern = registered.definition.CanonicalPattern()
 				state.Request.Route = registered.pattern
 				return nil
 			})
@@ -110,25 +110,25 @@ func (r *Router) Authorize(req Request) error {
 	if r == nil || r.clir == nil {
 		return fmt.Errorf("missing command router")
 	}
-	definition, ok := r.definitionFor(req.DefinitionID)
+	definition, ok := r.definitionForPattern(req.CanonicalPattern)
 	if !ok {
-		return fmt.Errorf("missing command definition: %s", req.DefinitionID)
+		return fmt.Errorf("missing command pattern: %s", req.CanonicalPattern)
 	}
 	if !definition.AllowsSource(req.Context.Source) {
-		return fmt.Errorf("command %s unavailable from source %s", definition.ID(), req.Context.Source)
+		return fmt.Errorf("command %s unavailable from source %s", definition.CanonicalPattern(), req.Context.Source)
 	}
 	actor := simplerbac.Actor{Roles: req.Context.Actor.Roles}
 	if err := definition.Policy.Check(actor); err != nil {
-		return fmt.Errorf("command %s denied: %w", definition.ID(), err)
+		return fmt.Errorf("command %s denied: %w", definition.CanonicalPattern(), err)
 	}
 	return nil
 }
 
-func (r *Router) definitionFor(id string) (Definition, bool) {
+func (r *Router) definitionForPattern(pattern string) (Definition, bool) {
 	if r == nil || r.clir == nil {
 		return Definition{}, false
 	}
-	definition, ok := r.definitions[id]
+	definition, ok := r.definitionsByPattern[pattern]
 	return definition, ok
 }
 
@@ -136,8 +136,8 @@ func (r *Router) Definitions() []Definition {
 	if r == nil {
 		return nil
 	}
-	out := make([]Definition, 0, len(r.definitions))
-	for _, definition := range r.definitions {
+	out := make([]Definition, 0, len(r.definitionsByPattern))
+	for _, definition := range r.definitionsByPattern {
 		out = append(out, definition)
 	}
 	return out

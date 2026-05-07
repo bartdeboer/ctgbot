@@ -1028,7 +1028,7 @@ func (c *mockLocalAgentCommandComponent) CommandDefinitions() []commandengine.De
 }
 
 func (c *mockLocalAgentCommandComponent) RegisterCommandHandlers(registry *commandengine.Registry) error {
-	return commandengine.RegisterDefinition[mockAgentCommandPing](registry, "ping", func(ctx context.Context, req commandengine.Request, cmd mockAgentCommandPing) (commandengine.Result, error) {
+	return commandengine.RegisterPattern[mockAgentCommandPing](registry, "ping", func(ctx context.Context, req commandengine.Request, cmd mockAgentCommandPing) (commandengine.Result, error) {
 		_, _, _ = ctx, req, cmd
 		return commandengine.Result{Text: "pong from " + c.name}, nil
 	})

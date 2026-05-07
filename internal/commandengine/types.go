@@ -31,10 +31,10 @@ type Context struct {
 }
 
 type Request struct {
-	Context      Context
-	Command      any
-	DefinitionID string
-	Route        string
+	Context          Context
+	Command          any
+	CanonicalPattern string
+	Route            string
 }
 
 type Result struct {
@@ -65,20 +65,20 @@ func (d Definition) Validate() error {
 		return fmt.Errorf("missing command definition pattern")
 	}
 	if d.Build == nil {
-		return fmt.Errorf("command definition %s has no builder", d.ID())
+		return fmt.Errorf("command definition %s has no builder", d.CanonicalPattern())
 	}
 	if len(d.Sources) == 0 {
-		return fmt.Errorf("command definition %s has no sources", d.ID())
+		return fmt.Errorf("command definition %s has no sources", d.CanonicalPattern())
 	}
 	for _, route := range d.Aliases {
 		if NormalizePattern(route.Pattern) == "" {
-			return fmt.Errorf("command definition %s has an empty alias pattern", d.ID())
+			return fmt.Errorf("command definition %s has an empty alias pattern", d.CanonicalPattern())
 		}
 	}
 	return nil
 }
 
-func (d Definition) ID() string {
+func (d Definition) CanonicalPattern() string {
 	return NormalizePattern(d.Pattern)
 }
 

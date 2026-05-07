@@ -12,19 +12,19 @@ type Handler func(ctx context.Context, req Request) (Result, error)
 type HandlerFunc[T any] func(ctx context.Context, req Request, cmd T) (Result, error)
 
 type Registry struct {
-	handlersByDefinitionID map[string]Handler
-	handlersByType         map[reflect.Type]Handler
-	definitionPrefix       string
+	handlersByPattern map[string]Handler
+	handlersByType    map[reflect.Type]Handler
+	patternPrefix     string
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		handlersByDefinitionID: map[string]Handler{},
-		handlersByType:         map[reflect.Type]Handler{},
+		handlersByPattern: map[string]Handler{},
+		handlersByType:    map[reflect.Type]Handler{},
 	}
 }
 
-func (r *Registry) WithDefinitionPrefix(prefix string) *Registry {
+func (r *Registry) WithPatternPrefix(prefix string) *Registry {
 	if r == nil {
 		return nil
 	}
@@ -33,10 +33,10 @@ func (r *Registry) WithDefinitionPrefix(prefix string) *Registry {
 		return r
 	}
 	view := &Registry{
-		handlersByDefinitionID: r.handlersByDefinitionID,
-		handlersByType:         r.handlersByType,
+		handlersByPattern: r.handlersByPattern,
+		handlersByType:    r.handlersByType,
 	}
-	view.definitionPrefix = JoinPattern(r.definitionPrefix, prefix)
+	view.patternPrefix = JoinPattern(r.patternPrefix, prefix)
 	return view
 }
 
@@ -64,7 +64,7 @@ func Register[T any](r *Registry, handler HandlerFunc[T]) error {
 	return nil
 }
 
-func RegisterDefinition[T any](r *Registry, definitionID string, handler HandlerFunc[T]) error {
+func RegisterPattern[T any](r *Registry, pattern string, handler HandlerFunc[T]) error {
 	if r == nil {
 		return fmt.Errorf("missing command registry")
 	}
@@ -75,14 +75,14 @@ func RegisterDefinition[T any](r *Registry, definitionID string, handler Handler
 	if commandType == nil {
 		return fmt.Errorf("missing command type")
 	}
-	resolvedID, err := r.resolveDefinitionID(definitionID)
+	resolvedPattern, err := r.resolvePattern(pattern)
 	if err != nil {
 		return err
 	}
-	if _, exists := r.handlersByDefinitionID[resolvedID]; exists {
-		return fmt.Errorf("duplicate command handler for %s", resolvedID)
+	if _, exists := r.handlersByPattern[resolvedPattern]; exists {
+		return fmt.Errorf("duplicate command handler for %s", resolvedPattern)
 	}
-	r.handlersByDefinitionID[resolvedID] = func(ctx context.Context, req Request) (Result, error) {
+	r.handlersByPattern[resolvedPattern] = func(ctx context.Context, req Request) (Result, error) {
 		command, ok := req.Command.(T)
 		if !ok {
 			return Result{}, fmt.Errorf("command type mismatch: got %T, want %s", req.Command, commandType)
@@ -92,16 +92,16 @@ func RegisterDefinition[T any](r *Registry, definitionID string, handler Handler
 	return nil
 }
 
-func (r *Registry) resolveDefinitionID(definitionID string) (string, error) {
+func (r *Registry) resolvePattern(pattern string) (string, error) {
 	if r == nil {
 		return "", fmt.Errorf("missing command registry")
 	}
-	definitionID = NormalizePattern(definitionID)
-	definitionID = JoinPattern(r.definitionPrefix, definitionID)
-	if definitionID == "" {
-		return "", fmt.Errorf("missing command definition id")
+	pattern = NormalizePattern(pattern)
+	pattern = JoinPattern(r.patternPrefix, pattern)
+	if pattern == "" {
+		return "", fmt.Errorf("missing command pattern")
 	}
-	return definitionID, nil
+	return pattern, nil
 }
 
 func (r *Registry) Execute(ctx context.Context, req Request) (Result, error) {
@@ -111,8 +111,8 @@ func (r *Registry) Execute(ctx context.Context, req Request) (Result, error) {
 	if req.Command == nil {
 		return Result{}, fmt.Errorf("missing command")
 	}
-	if definitionID := strings.TrimSpace(req.DefinitionID); definitionID != "" {
-		if handler, ok := r.handlersByDefinitionID[definitionID]; ok {
+	if pattern := strings.TrimSpace(req.CanonicalPattern); pattern != "" {
+		if handler, ok := r.handlersByPattern[pattern]; ok {
 			return handler(ctx, req)
 		}
 	}

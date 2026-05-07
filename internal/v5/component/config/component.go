@@ -40,7 +40,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 	all := schemacommands.ConfigCommands()
 	out := make([]commandengine.Definition, 0, 3)
 	for _, definition := range all {
-		switch definition.ID() {
+		switch definition.CanonicalPattern() {
 		case "config list", "config get <key>", "config set <key> <value>":
 			out = append(out, definition)
 		}

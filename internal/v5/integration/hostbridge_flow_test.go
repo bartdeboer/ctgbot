@@ -689,8 +689,8 @@ func (a *hostbridgeMediaAgent) HandleTurn(ctx context.Context, turn component.Tu
 			Syntax:      "markdown",
 			Content:     []byte("hello from hostbridge"),
 		},
-		DefinitionID: "sendstdin",
-		Route:        "sendstdin",
+		CanonicalPattern: "sendstdin",
+		Route:            "sendstdin",
 	})
 	if err != nil {
 		return nil, err
@@ -744,9 +744,9 @@ func (a *hostbridgeAgent) HandleTurn(ctx context.Context, turn component.Turn) (
 		Context: commandengine.Context{
 			SandboxID: turn.Thread.ID,
 		},
-		Command:      pingCommand{},
-		DefinitionID: "mockcmd ping",
-		Route:        "mockcmd ping",
+		Command:          pingCommand{},
+		CanonicalPattern: "mockcmd ping",
+		Route:            "mockcmd ping",
 	})
 	if err != nil {
 		return nil, err
@@ -781,8 +781,8 @@ func (a *hostbridgeRunAgent) HandleTurn(ctx context.Context, turn component.Turn
 		Command: schemacommands.RunCommand{
 			Command: commandName,
 		},
-		DefinitionID: "run <name>",
-		Route:        "run " + commandName,
+		CanonicalPattern: "run <name>",
+		Route:            "run " + commandName,
 	})
 	if err != nil {
 		return nil, err
