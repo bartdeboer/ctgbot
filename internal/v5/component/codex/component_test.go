@@ -17,16 +17,18 @@ import (
 )
 
 type stubExecutor struct {
-	result     TurnResult
-	err        error
-	lastPrompt string
-	calls      int
+	result      TurnResult
+	err         error
+	lastPrompt  string
+	lastRequest TurnRequest
+	calls       int
 }
 
 func (e *stubExecutor) RunTurn(ctx context.Context, runtime ExecRuntime, output OutputHandler, request TurnRequest) (TurnResult, error) {
 	_, _, _ = ctx, runtime, output
 	e.calls++
 	e.lastPrompt = request.Prompt
+	e.lastRequest = request
 	return e.result, e.err
 }
 
@@ -154,6 +156,61 @@ func TestHandleTurnKeepsRuntimeRunningWhenEnabled(t *testing.T) {
 		}
 		if got := runtime.stopCalls; got != 0 {
 			t.Fatalf("stop calls = %d, want 0", got)
+		}
+	})
+}
+
+func TestHandleTurnUsesThreadComponentStateOptions(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		cfg := newTestConfig(t, root)
+		storage := repository.NewMemory()
+		runtime := &testRuntime{}
+		executor := &stubExecutor{
+			result: TurnResult{
+				Reply:            "done",
+				ProviderThreadID: "provider-thread-1",
+			},
+		}
+		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
+		threadID := modeluuid.New()
+		if err := storage.ThreadComponentStates().Save(ctx, &coremodel.ThreadComponentState{
+			ThreadID:    threadID,
+			ComponentID: registration.ID,
+			StateJSON:   `{"model":"gpt-state","reasoning_effort":"high"}`,
+		}); err != nil {
+			t.Fatalf("ThreadComponentStates().Save() error = %v", err)
+		}
+		c := &Component{
+			registration: registration,
+			runtime:      runtime,
+			storage:      storage,
+			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+				_ = chat
+				return filepath.Join(root, "workspace"), nil
+			},
+			config: cfg,
+			runner: executor,
+		}
+
+		_, err := c.HandleTurn(ctx, component.Turn{
+			Chat: coremodel.Chat{ID: modeluuid.New(), Enabled: true},
+			Thread: coremodel.Thread{
+				ID:          threadID,
+				ChatID:      modeluuid.New(),
+				KeepRunning: false,
+			},
+			Inbound: coremodel.ThreadMessage{ID: modeluuid.New(), Text: "hello"},
+			Runtime: stubTurnRuntime{},
+		})
+		if err != nil {
+			t.Fatalf("HandleTurn() error = %v", err)
+		}
+		if got, want := executor.lastRequest.Options.Model, "gpt-state"; got != want {
+			t.Fatalf("request model = %q, want %q", got, want)
+		}
+		if got, want := executor.lastRequest.Options.ReasoningEffort, "high"; got != want {
+			t.Fatalf("request reasoning effort = %q, want %q", got, want)
 		}
 	})
 }

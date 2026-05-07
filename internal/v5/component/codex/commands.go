@@ -275,8 +275,10 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 	if providerValue == "" {
 		providerValue = "(none)"
 	}
-	model, modelSource := c.effectiveModel(thread)
-	effort, effortSource := c.effectiveReasoningEffort(thread)
+	settings, err := c.resolveThreadSettings(ctx, thread)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
 	lines := []string{
 		"chat_id: " + thread.ChatID.String(),
 		"thread_id: " + thread.ID.String(),
@@ -288,10 +290,10 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 		"runtime_workspace: " + status.RuntimeWorkspacePath,
 		"runtime_home: " + status.RuntimeHomePath,
 		"provider_thread_id: " + providerValue,
-		"codex_model: " + model,
-		"codex_model_source: " + modelSource,
-		"codex_reasoning_effort: " + effort,
-		"codex_reasoning_effort_source: " + effortSource,
+		"codex_model: " + settings.Model,
+		"codex_model_source: " + settings.ModelSource,
+		"codex_reasoning_effort: " + settings.ReasoningEffort,
+		"codex_reasoning_effort_source: " + settings.ReasoningEffortSource,
 	}
 	if status.ActiveCommandName != "" {
 		lines = append(lines, "active_command: "+strings.TrimSpace(status.ActiveCommandName+" "+strings.Join(status.ActiveCommandArgs, " ")))
@@ -304,8 +306,11 @@ func (c *Component) modelStatus(ctx context.Context, req commandengine.Request) 
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	model, source := c.effectiveModel(thread)
-	return commandengine.Result{Text: fmt.Sprintf("codex model: %s\nsource: %s", model, source)}, nil
+	settings, err := c.resolveThreadSettings(ctx, thread)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("codex model: %s\nsource: %s", settings.Model, settings.ModelSource)}, nil
 }
 
 func (c *Component) modelList(ctx context.Context) (commandengine.Result, error) {
@@ -318,14 +323,18 @@ func (c *Component) modelSet(ctx context.Context, req commandengine.Request, cmd
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	thread.CodexModel = strings.TrimSpace(cmd.Model)
-	if thread.CodexModel == "" {
+	model := strings.TrimSpace(cmd.Model)
+	if model == "" {
 		return commandengine.Result{}, fmt.Errorf("missing model")
 	}
-	if err := c.storage.Threads().Save(ctx, thread); err != nil {
+	if err := c.updateThreadState(ctx, thread, func(thread *coremodel.Thread) {
+		thread.CodexModel = ""
+	}, func(state *threadState) {
+		state.Model = model
+	}); err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "codex model=" + thread.CodexModel}, nil
+	return commandengine.Result{Text: "codex model=" + model}, nil
 }
 
 func (c *Component) modelClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
@@ -333,12 +342,18 @@ func (c *Component) modelClear(ctx context.Context, req commandengine.Request) (
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	thread.CodexModel = ""
-	if err := c.storage.Threads().Save(ctx, thread); err != nil {
+	if err := c.updateThreadState(ctx, thread, func(thread *coremodel.Thread) {
+		thread.CodexModel = ""
+	}, func(state *threadState) {
+		state.Model = ""
+	}); err != nil {
 		return commandengine.Result{}, err
 	}
-	model, source := c.effectiveModel(thread)
-	return commandengine.Result{Text: fmt.Sprintf("codex model cleared\ncodex model: %s\nsource: %s", model, source)}, nil
+	settings, err := c.resolveThreadSettings(ctx, thread)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("codex model cleared\ncodex model: %s\nsource: %s", settings.Model, settings.ModelSource)}, nil
 }
 
 func (c *Component) modelEffortStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
@@ -346,8 +361,11 @@ func (c *Component) modelEffortStatus(ctx context.Context, req commandengine.Req
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	effort, source := c.effectiveReasoningEffort(thread)
-	return commandengine.Result{Text: fmt.Sprintf("codex reasoning effort: %s\nsource: %s", effort, source)}, nil
+	settings, err := c.resolveThreadSettings(ctx, thread)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("codex reasoning effort: %s\nsource: %s", settings.ReasoningEffort, settings.ReasoningEffortSource)}, nil
 }
 
 func (c *Component) modelEffortList(ctx context.Context) (commandengine.Result, error) {
@@ -360,14 +378,18 @@ func (c *Component) modelEffortSet(ctx context.Context, req commandengine.Reques
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	thread.CodexReasoningEffort = strings.TrimSpace(cmd.Effort)
-	if thread.CodexReasoningEffort == "" {
+	effort := strings.TrimSpace(cmd.Effort)
+	if effort == "" {
 		return commandengine.Result{}, fmt.Errorf("missing reasoning effort")
 	}
-	if err := c.storage.Threads().Save(ctx, thread); err != nil {
+	if err := c.updateThreadState(ctx, thread, func(thread *coremodel.Thread) {
+		thread.CodexReasoningEffort = ""
+	}, func(state *threadState) {
+		state.ReasoningEffort = effort
+	}); err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "codex reasoning effort=" + thread.CodexReasoningEffort}, nil
+	return commandengine.Result{Text: "codex reasoning effort=" + effort}, nil
 }
 
 func (c *Component) modelEffortClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
@@ -375,12 +397,18 @@ func (c *Component) modelEffortClear(ctx context.Context, req commandengine.Requ
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	thread.CodexReasoningEffort = ""
-	if err := c.storage.Threads().Save(ctx, thread); err != nil {
+	if err := c.updateThreadState(ctx, thread, func(thread *coremodel.Thread) {
+		thread.CodexReasoningEffort = ""
+	}, func(state *threadState) {
+		state.ReasoningEffort = ""
+	}); err != nil {
 		return commandengine.Result{}, err
 	}
-	effort, source := c.effectiveReasoningEffort(thread)
-	return commandengine.Result{Text: fmt.Sprintf("codex reasoning effort cleared\ncodex reasoning effort: %s\nsource: %s", effort, source)}, nil
+	settings, err := c.resolveThreadSettings(ctx, thread)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("codex reasoning effort cleared\ncodex reasoning effort: %s\nsource: %s", settings.ReasoningEffort, settings.ReasoningEffortSource)}, nil
 }
 
 func (c *Component) thread(ctx context.Context, req commandengine.Request) (*coremodel.Thread, error) {
@@ -421,55 +449,6 @@ func (c *Component) threadWorkspace(ctx context.Context, req commandengine.Reque
 		return nil, "", err
 	}
 	return thread, workspacePath, nil
-}
-
-func (c *Component) effectiveModel(thread *coremodel.Thread) (string, string) {
-	if thread != nil {
-		if model := strings.TrimSpace(thread.CodexModel); model != "" {
-			return model, "thread"
-		}
-	}
-	if c != nil {
-		if model := strings.TrimSpace(c.componentConfig.Model); model != "" {
-			return model, "profile"
-		}
-	}
-	if c != nil && c.config != nil {
-		if model := strings.TrimSpace(c.config.Codex().Model()); model != "" {
-			return model, "global"
-		}
-	}
-	return "(codex default)", "codex"
-}
-
-func (c *Component) effectiveReasoningEffort(thread *coremodel.Thread) (string, string) {
-	if thread != nil {
-		if effort := strings.TrimSpace(thread.CodexReasoningEffort); effort != "" {
-			return effort, "thread"
-		}
-	}
-	if c != nil {
-		if effort := strings.TrimSpace(c.componentConfig.ReasoningEffort); effort != "" {
-			return effort, "profile"
-		}
-	}
-	return "(codex default)", "codex"
-}
-
-func (c *Component) turnModel(thread *coremodel.Thread) string {
-	model, source := c.effectiveModel(thread)
-	if source == "codex" {
-		return ""
-	}
-	return model
-}
-
-func (c *Component) turnReasoningEffort(thread *coremodel.Thread) string {
-	effort, source := c.effectiveReasoningEffort(thread)
-	if source == "codex" {
-		return ""
-	}
-	return effort
 }
 
 func codexCommand(id string, command any, help string, patterns []string) commandengine.Definition {

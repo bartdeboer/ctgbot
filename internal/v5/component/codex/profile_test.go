@@ -113,11 +113,15 @@ func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 		if got, want := factory.config.GPUs, "all"; got != want {
 			t.Fatalf("bind gpus = %q, want %q", got, want)
 		}
-		if got, want := componentValue.turnModel(&coremodel.Thread{}), "gpt-5.5"; got != want {
-			t.Fatalf("turnModel() = %q, want %q", got, want)
+		settings, err := componentValue.resolveThreadSettings(context.Background(), &coremodel.Thread{})
+		if err != nil {
+			t.Fatalf("resolveThreadSettings() error = %v", err)
 		}
-		if got, want := componentValue.turnReasoningEffort(&coremodel.Thread{}), "high"; got != want {
-			t.Fatalf("turnReasoningEffort() = %q, want %q", got, want)
+		if got, want := settings.Model, "gpt-5.5"; got != want {
+			t.Fatalf("settings.Model = %q, want %q", got, want)
+		}
+		if got, want := settings.ReasoningEffort, "high"; got != want {
+			t.Fatalf("settings.ReasoningEffort = %q, want %q", got, want)
 		}
 		if got, want := factory.config.Env[0], "FOO=bar"; got != want {
 			t.Fatalf("first env = %q, want %q", got, want)

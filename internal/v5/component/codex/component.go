@@ -192,10 +192,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}, outputHandler{runtime: turn.Runtime}, TurnRequest{
 		ProviderThreadID: providerThreadID,
 		Prompt:           prompt,
-		Options: TurnOptions{
-			Model:           c.turnModel(&turn.Thread),
-			ReasoningEffort: c.turnReasoningEffort(&turn.Thread),
-		},
+		Options:          c.turnOptions(ctx, &turn.Thread),
 	})
 
 	if !turn.Thread.KeepRunning {
@@ -257,6 +254,22 @@ func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, pro
 		return fmt.Errorf("missing turn runtime")
 	}
 	return turnRuntime.BindComponentThreadID(c.registration.ID, providerThreadID)
+}
+
+func (c *Component) turnOptions(ctx context.Context, thread *coremodel.Thread) TurnOptions {
+	settings, err := c.resolveThreadSettings(ctx, thread)
+	if err != nil {
+		c.logf("resolve codex thread settings failed thread=%s err=%v", thread.ID, err)
+		return TurnOptions{}
+	}
+	options := TurnOptions{}
+	if settings.ModelSource != "codex" {
+		options.Model = settings.Model
+	}
+	if settings.ReasoningEffortSource != "codex" {
+		options.ReasoningEffort = settings.ReasoningEffort
+	}
+	return options
 }
 
 func componentBindConfig(config v5runtime.BindConfig, cfg *appstate.Config, imageOverride string, runtimeHomePath string) v5runtime.BindConfig {

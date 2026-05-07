@@ -128,8 +128,18 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Threads().GetByID() error = %v", err)
 		}
-		if got, want := saved.CodexModel, "gpt-test"; got != want {
-			t.Fatalf("stored model = %q, want %q", got, want)
+		if got := saved.CodexModel; got != "" {
+			t.Fatalf("stored legacy thread model = %q, want empty", got)
+		}
+		stateRow, err := storage.ThreadComponentStates().GetByThreadAndComponent(ctx, thread.ID, registration.ID)
+		if err != nil {
+			t.Fatalf("ThreadComponentStates().GetByThreadAndComponent() error = %v", err)
+		}
+		if stateRow == nil {
+			t.Fatal("expected thread component state row")
+		}
+		if got, want := stateRow.StateJSON, `{"model":"gpt-test"}`; got != want {
+			t.Fatalf("state json = %q, want %q", got, want)
 		}
 
 		statusResult, err := engine.Run(ctx, base, []string{"codex", "status"})
@@ -140,12 +150,146 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 			"container_state: running",
 			"keep_running: false",
 			"codex_model: gpt-test",
-			"codex_model_source: thread",
+			"codex_model_source: thread_component_state",
 			"provider_thread_id: (none)",
 		} {
 			if !strings.Contains(statusResult.Text, want) {
 				t.Fatalf("status missing %q:\n%s", want, statusResult.Text)
 			}
+		}
+	})
+}
+
+func TestCodexCommandModelStatusFallsBackToLegacyThreadStateUntilTouched(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		cfg := newTestConfig(t, root)
+		storage := repository.NewMemory()
+		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
+		c := &Component{
+			registration: registration,
+			runtime:      &testRuntime{},
+			storage:      storage,
+			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+				_ = chat
+				return filepath.Join(root, "workspace"), nil
+			},
+			config: cfg,
+		}
+
+		chat := &coremodel.Chat{ID: modeluuid.New(), Label: "team", Enabled: true}
+		if err := storage.Chats().Save(ctx, chat); err != nil {
+			t.Fatalf("Chats().Save() error = %v", err)
+		}
+		thread := &coremodel.Thread{ID: modeluuid.New(), ChatID: chat.ID, CodexModel: "legacy-model"}
+		if err := storage.Threads().Save(ctx, thread); err != nil {
+			t.Fatalf("Threads().Save() error = %v", err)
+		}
+
+		engine := newCodexCommandEngine(t, c, commandengine.SourceMessage)
+		base := commandengine.Request{
+			Context: commandengine.Context{
+				Source:   commandengine.SourceMessage,
+				Actor:    commandengine.Actor{ID: "bart", Roles: []simplerbac.Role{simplerbac.RoleUser}},
+				ChatID:   chat.ID,
+				ThreadID: thread.ID,
+			},
+		}
+
+		statusResult, err := engine.Run(ctx, base, []string{"codex", "model"})
+		if err != nil {
+			t.Fatalf("model status error = %v", err)
+		}
+		for _, want := range []string{
+			"codex model: legacy-model",
+			"source: legacy_thread",
+		} {
+			if !strings.Contains(statusResult.Text, want) {
+				t.Fatalf("model status missing %q:\n%s", want, statusResult.Text)
+			}
+		}
+
+		clearResult, err := engine.Run(ctx, base, []string{"codex", "model", "clear"})
+		if err != nil {
+			t.Fatalf("model clear error = %v", err)
+		}
+		for _, want := range []string{
+			"codex model cleared",
+			"source: codex",
+		} {
+			if !strings.Contains(clearResult.Text, want) {
+				t.Fatalf("model clear missing %q:\n%s", want, clearResult.Text)
+			}
+		}
+		saved, err := storage.Threads().GetByID(ctx, thread.ID)
+		if err != nil {
+			t.Fatalf("Threads().GetByID() error = %v", err)
+		}
+		if got := saved.CodexModel; got != "" {
+			t.Fatalf("legacy thread model = %q, want empty after clear", got)
+		}
+		stateRow, err := storage.ThreadComponentStates().GetByThreadAndComponent(ctx, thread.ID, registration.ID)
+		if err != nil {
+			t.Fatalf("ThreadComponentStates().GetByThreadAndComponent() error = %v", err)
+		}
+		if stateRow != nil {
+			t.Fatalf("expected no thread component state row after clear, got %#v", stateRow)
+		}
+	})
+}
+
+func TestCodexCommandModelEffortSetUsesThreadComponentState(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		cfg := newTestConfig(t, root)
+		storage := repository.NewMemory()
+		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
+		c := &Component{
+			registration: registration,
+			runtime:      &testRuntime{},
+			storage:      storage,
+			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+				_ = chat
+				return filepath.Join(root, "workspace"), nil
+			},
+			config: cfg,
+		}
+
+		chat := &coremodel.Chat{ID: modeluuid.New(), Label: "team", Enabled: true}
+		if err := storage.Chats().Save(ctx, chat); err != nil {
+			t.Fatalf("Chats().Save() error = %v", err)
+		}
+		thread := &coremodel.Thread{ID: modeluuid.New(), ChatID: chat.ID}
+		if err := storage.Threads().Save(ctx, thread); err != nil {
+			t.Fatalf("Threads().Save() error = %v", err)
+		}
+
+		engine := newCodexCommandEngine(t, c, commandengine.SourceMessage)
+		base := commandengine.Request{
+			Context: commandengine.Context{
+				Source:   commandengine.SourceMessage,
+				Actor:    commandengine.Actor{ID: "bart", Roles: []simplerbac.Role{simplerbac.RoleUser}},
+				ChatID:   chat.ID,
+				ThreadID: thread.ID,
+			},
+		}
+
+		result, err := engine.Run(ctx, base, []string{"codex", "model", "effort", "set", "high"})
+		if err != nil {
+			t.Fatalf("model effort set error = %v", err)
+		}
+		if got, want := result.Text, "codex reasoning effort=high"; got != want {
+			t.Fatalf("model effort text = %q, want %q", got, want)
+		}
+		stateRow, err := storage.ThreadComponentStates().GetByThreadAndComponent(ctx, thread.ID, registration.ID)
+		if err != nil {
+			t.Fatalf("ThreadComponentStates().GetByThreadAndComponent() error = %v", err)
+		}
+		if stateRow == nil {
+			t.Fatal("expected thread component state row")
+		}
+		if got, want := stateRow.StateJSON, `{"reasoning_effort":"high"}`; got != want {
+			t.Fatalf("state json = %q, want %q", got, want)
 		}
 	})
 }
