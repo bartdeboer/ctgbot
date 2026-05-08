@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -16,28 +15,6 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
-
-type legacyArtifactSchema struct {
-	ID           modeluuid.UUID `gorm:"primaryKey"`
-	ChatID       modeluuid.UUID `gorm:"index"`
-	ThreadID     modeluuid.UUID `gorm:"index"`
-	MessageID    modeluuid.UUID `gorm:"index"`
-	ComponentID  modeluuid.UUID `gorm:"index"`
-	Filename     string
-	ContentType  string
-	Syntax       string
-	Content      []byte
-	StorageKind  string
-	StoragePath  string
-	Size         int64
-	SHA256       string
-	MetadataJSON string
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (legacyArtifactSchema) TableName() string { return "artifacts" }
 
 func TestTransactionRollsBackOnError(t *testing.T) {
 	store := newTestStore(t)
@@ -190,26 +167,6 @@ func TestArtifactsAppendFailsWithoutArtifactDir(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "artifact storage directory is not configured") {
 		t.Fatalf("Artifacts().Append() error = %v", err)
-	}
-}
-
-func TestAutoMigrateDropsLegacyArtifactContentColumn(t *testing.T) {
-	ctx := context.Background()
-	name := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
-	dsn := fmt.Sprintf("file:%s-%s?mode=memory&cache=shared", name, modeluuid.New().String())
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("gorm.Open() error = %v", err)
-	}
-	if err := db.WithContext(ctx).AutoMigrate(&legacyArtifactSchema{}); err != nil {
-		t.Fatalf("legacy AutoMigrate() error = %v", err)
-	}
-	store := NewWithArtifactDir(db, filepath.Join(t.TempDir(), "artifacts"))
-	if err := store.AutoMigrate(ctx); err != nil {
-		t.Fatalf("AutoMigrate() error = %v", err)
-	}
-	if db.WithContext(ctx).Migrator().HasColumn("artifacts", "content") {
-		t.Fatal("artifacts.content column still exists after migrate")
 	}
 }
 

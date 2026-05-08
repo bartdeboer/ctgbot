@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -27,28 +26,6 @@ type GORMStorage struct {
 	messages       *gormMessages
 	artifacts      *gormArtifacts
 }
-
-type legacyArtifactRow struct {
-	ID           modeluuid.UUID `gorm:"primaryKey"`
-	ChatID       modeluuid.UUID `gorm:"index"`
-	ThreadID     modeluuid.UUID `gorm:"index"`
-	MessageID    modeluuid.UUID `gorm:"index"`
-	ComponentID  modeluuid.UUID `gorm:"index"`
-	Filename     string
-	ContentType  string
-	Syntax       string
-	Content      []byte
-	StorageKind  string
-	StoragePath  string
-	Size         int64
-	SHA256       string
-	MetadataJSON string
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-func (legacyArtifactRow) TableName() string { return "artifacts" }
 
 func New(db *gorm.DB) *GORMStorage {
 	return NewWithArtifactDir(db, "")
@@ -80,15 +57,6 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.Artifact{},
 	); err != nil {
 		return err
-	}
-	if s == nil || s.db == nil {
-		return nil
-	}
-	tx := s.db.WithContext(ctx)
-	if tx.Migrator().HasTable("artifacts") && tx.Migrator().HasColumn("artifacts", "content") {
-		if err := tx.Migrator().DropColumn(&legacyArtifactRow{}, "Content"); err != nil {
-			return fmt.Errorf("drop artifacts.content: %w", err)
-		}
 	}
 	return nil
 }
