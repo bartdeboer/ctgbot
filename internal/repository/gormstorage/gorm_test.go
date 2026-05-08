@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -15,6 +16,28 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+type legacyArtifactSchema struct {
+	ID           modeluuid.UUID `gorm:"primaryKey"`
+	ChatID       modeluuid.UUID `gorm:"index"`
+	ThreadID     modeluuid.UUID `gorm:"index"`
+	MessageID    modeluuid.UUID `gorm:"index"`
+	ComponentID  modeluuid.UUID `gorm:"index"`
+	Filename     string
+	ContentType  string
+	Syntax       string
+	Content      []byte
+	StorageKind  string
+	StoragePath  string
+	Size         int64
+	SHA256       string
+	MetadataJSON string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (legacyArtifactSchema) TableName() string { return "artifacts" }
 
 func TestTransactionRollsBackOnError(t *testing.T) {
 	store := newTestStore(t)
@@ -178,11 +201,7 @@ func TestAutoMigrateDropsLegacyArtifactContentColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("gorm.Open() error = %v", err)
 	}
-	type legacyArtifact struct {
-		ID      modeluuid.UUID `gorm:"primaryKey"`
-		Content []byte
-	}
-	if err := db.WithContext(ctx).AutoMigrate(&legacyArtifact{}); err != nil {
+	if err := db.WithContext(ctx).AutoMigrate(&legacyArtifactSchema{}); err != nil {
 		t.Fatalf("legacy AutoMigrate() error = %v", err)
 	}
 	store := NewWithArtifactDir(db, filepath.Join(t.TempDir(), "artifacts"))
