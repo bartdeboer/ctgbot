@@ -13,8 +13,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	v5broker "github.com/bartdeboer/ctgbot/internal/v5/broker"
+	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	v5codex "github.com/bartdeboer/ctgbot/internal/v5/component/codex"
 	v5gmail "github.com/bartdeboer/ctgbot/internal/v5/component/gmail"
@@ -178,14 +181,24 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, nil)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, newRuntimeProcessActions(globalStore, nil, nil))
 			if err != nil {
 				return err
 			}
-			if err := system.AuthComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath), *callbackPort, *callbackTimeout, os.Stdout, os.Stderr); err != nil {
+			registration, err := system.EnsureComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath))
+			if err != nil {
 				return err
 			}
-			fmt.Println("component auth completed")
+			args := []string{"auth"}
+			if *callbackPort != 0 {
+				args = append(args, "--callback-port", fmt.Sprintf("%d", *callbackPort))
+			}
+			if *callbackTimeout != 0 {
+				args = append(args, "--callback-timeout", callbackTimeout.String())
+			}
+			if err := runV5ComponentCLI(req, system, registration, args); err != nil {
+				return err
+			}
 			return nil
 		})
 
@@ -196,17 +209,19 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
 			image := fs.String("image", "", "Runtime image override")
-			runtimeKind := fs.String("runtime", "", "Runtime kind for this component registration (default: preserve existing)")
-			homePath := fs.String("home", "", "Optional host component home override")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, nil)
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, newRuntimeProcessActions(globalStore, nil, nil))
 			if err != nil {
 				return err
 			}
-			return system.CheckComponentAuth(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath), os.Stdout, os.Stderr)
+			registration, err := system.ResolveComponentRef(req.Context(), strings.TrimSpace(req.Params["component"]))
+			if err != nil {
+				return err
+			}
+			return runV5ComponentCLI(req, system, registration, []string{"auth", "status"})
 		})
 
 		b.Handle("v5 component list", "List registered v5 components", func(req *clir.Request) error {
@@ -245,6 +260,37 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 				fmt.Printf("\thost_home=%s\thome_path=%s\n", home.Path, registration.HomePath)
 			}
 			return nil
+		})
+
+		b.Handle("v5 component <component>", "Run a registered v5 component CLI command", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("v5 component", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
+			image := fs.String("image", "", "Runtime image override")
+			runtimeKind := fs.String("runtime", "", "Runtime kind for this component registration (used when creating it)")
+			homePath := fs.String("home", "", "Optional host component home override")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, newRuntimeProcessActions(globalStore, nil, nil))
+			if err != nil {
+				return err
+			}
+
+			componentRef := strings.TrimSpace(req.Params["component"])
+			var registration *coremodel.Component
+			if strings.TrimSpace(*runtimeKind) != "" || strings.TrimSpace(*homePath) != "" {
+				registration, err = system.EnsureComponent(req.Context(), componentRef, strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath))
+			} else {
+				registration, err = system.ResolveComponentRef(req.Context(), componentRef)
+			}
+			if err != nil {
+				return err
+			}
+			return runV5ComponentCLI(req, system, registration, fs.Args())
 		})
 
 		b.Handle("v5 chat create <label>", "Create a v5 chat", func(req *clir.Request) error {
@@ -443,6 +489,90 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 	})
+}
+
+func runV5ComponentCLI(req *clir.Request, system *v5system.System, registration *coremodel.Component, argv []string) error {
+	if req == nil {
+		return fmt.Errorf("missing request")
+	}
+	if system == nil {
+		return fmt.Errorf("missing system")
+	}
+	if registration == nil {
+		return fmt.Errorf("missing component registration")
+	}
+	loaded, err := system.ResolveComponent(req.Context(), registration.ID)
+	if err != nil {
+		return err
+	}
+	bound := boundCLIComponentSurfaces(loaded)
+	if len(bound) == 0 {
+		return fmt.Errorf("component has no CLI commands: %s", registration.Ref())
+	}
+	definitions := commandset.DefinitionsForBoundSource(commandengine.SourceCLI, bound)
+	if len(argv) == 0 {
+		printComponentCLIHelp(definitions)
+		return nil
+	}
+	engine, err := commandset.NewBoundEngineForSource(commandengine.SourceCLI, bound)
+	if err != nil {
+		return err
+	}
+	base := commandengine.Request{
+		Context: commandengine.Context{
+			Source: commandengine.SourceCLI,
+			Actor: commandengine.Actor{
+				ID:    "cli",
+				Roles: []simplerbac.Role{simplerbac.RoleRoot},
+			},
+		},
+	}
+	result, err := engine.Run(req.Context(), base, append([]string{registration.Ref()}, argv...))
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(result.Text) != "" {
+		fmt.Println(result.Text)
+	}
+	return nil
+}
+
+func boundCLIComponentSurfaces(loaded *component.Loaded) []commandset.BoundSurface {
+	if loaded == nil || loaded.Component == nil {
+		return nil
+	}
+	componentRef := loaded.Registration.Ref()
+	componentType := strings.TrimSpace(loaded.Registration.Type)
+	var bound []commandset.BoundSurface
+	if surface, ok := loaded.Component.(component.CommandSurface); ok {
+		bound = append(bound, commandset.BoundSurface{
+			Surface:       surface,
+			ComponentRef:  componentRef,
+			ComponentType: componentType,
+		})
+	}
+	if surface := component.NewCLIAdminSurface(loaded.Component); surface != nil {
+		bound = append(bound, commandset.BoundSurface{
+			Surface:       surface,
+			ComponentRef:  componentRef,
+			ComponentType: componentType,
+		})
+	}
+	return bound
+}
+
+func printComponentCLIHelp(definitions []commandengine.Definition) {
+	patterns := commandset.CanonicalRoutePatterns(definitions, simplerbac.Actor{
+		Roles: []simplerbac.Role{simplerbac.RoleRoot},
+	})
+	if len(patterns) == 0 {
+		fmt.Println("no component CLI commands")
+		return
+	}
+	fmt.Println("available component commands:")
+	for _, pattern := range patterns {
+		fmt.Printf("  %s\n", pattern)
+	}
 }
 
 func openV5SystemForRoutes(req *clir.Request, store *clistate.Store, stateRoot string, dbPath string, telegramToken string, codexImage string, processActions v5process.Actions) (*v5system.System, error) {

@@ -27,8 +27,8 @@ The important global operational commands are:
 - `process install`
 - `process upgrade`
 - `process quit`
-- `v5 component auth <component>`
-- `v5 component auth-status <component>`
+- `v5 component <component> auth`
+- `v5 component <component> auth status`
 
 Convenience aliases still exist for:
 
@@ -71,12 +71,15 @@ Examples:
 
 Mutable per-thread component settings belong in the database through
 `ThreadComponentState`, not in the component home files.
+The canonical CLI form is `v5 component <component> ...`; the older
+`v5 component auth <component>` and `v5 component auth-status <component>`
+forms remain as compatibility aliases.
 
 ## Deployment Notes
 
 - `ctgbot image build --no-cache` rebuilds the shared Codex image.
-- `v5 component auth codex` authenticates the default Codex registration.
-- `v5 component auth-status codex` checks authentication state for that registration.
+- `v5 component codex auth` authenticates the default Codex registration.
+- `v5 component codex auth status` checks authentication state for that registration.
 - `process upgrade` runs:
   - `git pull --ff-only`
   - `go generate ./internal/containerassets`

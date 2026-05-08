@@ -68,9 +68,13 @@ func TestV5ChatComponentAddBindsExternalChatID(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewCwd: %v", err)
 		}
+		globalStore, err := clistate.NewGlobal("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("NewGlobal: %v", err)
+		}
 
 		router := clir.New()
-		registerV5Routes(router, store, nil)
+		registerV5Routes(router, store, globalStore)
 
 		if err := router.Run(context.Background(), []string{"v5", "component", "register", "telegram", "--runtime", "local"}); err != nil {
 			t.Fatalf("component register: %v", err)
@@ -109,6 +113,32 @@ func TestV5ChatComponentAddBindsExternalChatID(t *testing.T) {
 		}
 		if bindings[0].ExternalChatID != "chat-1" {
 			t.Fatalf("ExternalChatID = %q, want chat-1", bindings[0].ExternalChatID)
+		}
+	})
+}
+
+func TestV5ComponentCommandRouteUsesBoundCLISurface(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		_ = root
+		store, err := clistate.NewCwd("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("NewCwd: %v", err)
+		}
+
+		router := clir.New()
+		registerV5Routes(router, store, nil)
+
+		if err := router.Run(context.Background(), []string{"v5", "component", "register", "process", "--runtime", "local"}); err != nil {
+			t.Fatalf("component register: %v", err)
+		}
+
+		output := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"v5", "component", "process", "quit"}); err != nil {
+				t.Fatalf("component quit: %v", err)
+			}
+		})
+		if !strings.Contains(output, "quit requested") {
+			t.Fatalf("unexpected component command output: %q", output)
 		}
 	})
 }
