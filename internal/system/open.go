@@ -78,7 +78,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 		return nil, err
 	}
 
-	storage := gormstoragepkg.New(db)
+	storage := gormstoragepkg.NewWithArtifactDir(db, filepath.Join(stateRoot, "artifacts"))
 	if err := storage.AutoMigrate(ctx); err != nil {
 		return nil, err
 	}

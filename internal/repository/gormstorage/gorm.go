@@ -2,7 +2,11 @@ package gormstorage
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -24,6 +28,10 @@ type GORMStorage struct {
 }
 
 func New(db *gorm.DB) *GORMStorage {
+	return NewWithArtifactDir(db, "")
+}
+
+func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
 	return &GORMStorage{
 		db:             db,
 		chats:          &gormChats{db: db},
@@ -33,12 +41,12 @@ func New(db *gorm.DB) *GORMStorage {
 		threadMappings: &gormThreadComponentMappings{db: db},
 		threadStates:   &gormThreadComponentStates{db: db},
 		messages:       &gormMessages{db: db},
-		artifacts:      &gormArtifacts{db: db},
+		artifacts:      &gormArtifacts{db: db, artifactDir: clean(artifactDir)},
 	}
 }
 
 func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
-	return s.db.WithContext(ctx).AutoMigrate(
+	if err := s.db.WithContext(ctx).AutoMigrate(
 		&coremodel.Chat{},
 		&coremodel.Thread{},
 		&coremodel.Component{},
@@ -47,7 +55,19 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.ThreadComponentState{},
 		&coremodel.ThreadMessage{},
 		&coremodel.Artifact{},
-	)
+	); err != nil {
+		return err
+	}
+	if s == nil || s.db == nil {
+		return nil
+	}
+	tx := s.db.WithContext(ctx)
+	if tx.Migrator().HasTable("artifacts") && tx.Migrator().HasColumn("artifacts", "content") {
+		if err := tx.Migrator().DropColumn("artifacts", "content"); err != nil {
+			return fmt.Errorf("drop artifacts.content: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *GORMStorage) Transaction(ctx context.Context, fn func(repository.Storage) error) error {
@@ -339,17 +359,115 @@ func (r *gormMessages) ListByThreadID(ctx context.Context, threadID modeluuid.UU
 	return out, err
 }
 
-type gormArtifacts struct{ db *gorm.DB }
+type gormArtifacts struct {
+	db          *gorm.DB
+	artifactDir string
+}
 
 func (r *gormArtifacts) Append(ctx context.Context, artifact *coremodel.Artifact) error {
+	if err := r.prepareArtifactForStorage(artifact); err != nil {
+		return err
+	}
 	ensureID(&artifact.ID)
-	return r.db.WithContext(ctx).Create(artifact).Error
+	if err := r.db.WithContext(ctx).Create(artifact).Error; err != nil {
+		r.removePreparedFile(artifact)
+		return err
+	}
+	return nil
 }
 
 func (r *gormArtifacts) ListByMessageID(ctx context.Context, messageID modeluuid.UUID) ([]coremodel.Artifact, error) {
 	var out []coremodel.Artifact
 	err := r.db.WithContext(ctx).Where("message_id = ?", messageID).Order("created_at ASC").Find(&out).Error
-	return out, err
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if err := r.loadFileContent(&out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+func (r *gormArtifacts) prepareArtifactForStorage(artifact *coremodel.Artifact) error {
+	if artifact == nil {
+		return fmt.Errorf("missing artifact")
+	}
+	if strings.TrimSpace(r.artifactDir) == "" {
+		return fmt.Errorf("artifact storage directory is not configured")
+	}
+	ensureID(&artifact.ID)
+	artifact.Filename = strings.TrimSpace(artifact.Filename)
+	artifact.ContentType = clean(artifact.ContentType)
+	artifact.Syntax = clean(artifact.Syntax)
+	artifact.StorageKind = "file"
+	artifact.StoragePath = clean(artifact.StoragePath)
+	artifact.SHA256 = clean(artifact.SHA256)
+	artifact.MetadataJSON = clean(artifact.MetadataJSON)
+	artifact.Size = int64(len(artifact.Content))
+	sum := sha256.Sum256(artifact.Content)
+	artifact.SHA256 = hex.EncodeToString(sum[:])
+	if err := os.MkdirAll(r.artifactDir, 0o755); err != nil {
+		return fmt.Errorf("artifact dir: %w", err)
+	}
+	relPath := artifact.ID.String() + ".bin"
+	target, err := r.artifactFilePath(relPath)
+	if err != nil {
+		return err
+	}
+	tmp := target + ".tmp"
+	if err := os.WriteFile(tmp, artifact.Content, 0o600); err != nil {
+		return fmt.Errorf("write artifact: %w", err)
+	}
+	if err := os.Rename(tmp, target); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("commit artifact: %w", err)
+	}
+	artifact.StoragePath = relPath
+	artifact.Content = nil
+	return nil
+}
+
+func (r *gormArtifacts) loadFileContent(artifact *coremodel.Artifact) error {
+	if artifact == nil || strings.TrimSpace(artifact.StoragePath) == "" {
+		return nil
+	}
+	if artifact.StorageKind != "file" {
+		return fmt.Errorf("unsupported artifact storage kind %q", artifact.StorageKind)
+	}
+	if strings.TrimSpace(r.artifactDir) == "" {
+		return fmt.Errorf("artifact storage directory is not configured")
+	}
+	path, err := r.artifactFilePath(artifact.StoragePath)
+	if err != nil {
+		return err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read artifact: %w", err)
+	}
+	artifact.Content = content
+	return nil
+}
+
+func (r *gormArtifacts) removePreparedFile(artifact *coremodel.Artifact) {
+	if artifact == nil || artifact.StorageKind != "file" || artifact.StoragePath == "" || r.artifactDir == "" {
+		return
+	}
+	path, err := r.artifactFilePath(artifact.StoragePath)
+	if err != nil {
+		return
+	}
+	_ = os.Remove(path)
+}
+
+func (r *gormArtifacts) artifactFilePath(relPath string) (string, error) {
+	relPath = filepath.Clean(strings.TrimSpace(relPath))
+	if relPath == "." || relPath == ".." || filepath.IsAbs(relPath) || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("unsafe artifact path: %q", relPath)
+	}
+	return filepath.Join(r.artifactDir, relPath), nil
 }
 
 func ensureID(id *modeluuid.UUID) {

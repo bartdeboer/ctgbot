@@ -251,7 +251,7 @@ func newSQLiteStorage(t *testing.T) repository.Storage {
 	}
 	sqlDB.SetMaxOpenConns(1)
 	sqlDB.SetMaxIdleConns(1)
-	storage := gormstoragepkg.New(db)
+	storage := gormstoragepkg.NewWithArtifactDir(db, filepath.Join(t.TempDir(), "artifacts"))
 	if err := storage.AutoMigrate(context.Background()); err != nil {
 		t.Fatalf("AutoMigrate() error = %v", err)
 	}
