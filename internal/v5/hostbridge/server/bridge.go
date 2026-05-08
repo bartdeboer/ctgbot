@@ -18,6 +18,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	_ "github.com/bartdeboer/ctgbot/internal/v5/hostbridgegob"
 	"github.com/bartdeboer/ctgbot/internal/v5/repository"
 )
 

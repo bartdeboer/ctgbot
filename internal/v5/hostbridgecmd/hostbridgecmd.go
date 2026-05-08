@@ -66,6 +66,11 @@ func LegacyCodexShorthandEnabled(ref string) bool {
 	return Resolve(ref).ComponentType == codexcomponent.Type
 }
 
+func RegisterGobTypes(register func(any)) {
+	codexcomponent.RegisterGobTypes(register)
+	llamacppcomponent.RegisterGobTypes(register)
+}
+
 func surfaceForType(componentType string) (v5component.CommandSurface, bool) {
 	switch strings.TrimSpace(componentType) {
 	case codexcomponent.Type:

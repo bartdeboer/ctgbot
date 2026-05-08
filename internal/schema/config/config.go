@@ -15,7 +15,6 @@ func Items(cfg *appstate.Config) []configengine.Item {
 		ChatEnabled(cfg),
 		ChatProcessToolsEnabled(cfg),
 		ChatInteractiveInterruptEnabled(cfg),
-		ChatGPUs(cfg),
 		ChatContainerUserMode(cfg),
 		ChatWorkspaceHostPath(cfg),
 		ChatCodexProfileHostPath(cfg),

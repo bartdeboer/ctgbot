@@ -14,7 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
-	"github.com/bartdeboer/ctgbot/internal/schema/routers"
+	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
@@ -51,7 +51,7 @@ func registerHostbridgeRoutes(r *clir.Router, store *clistate.Store) {
 				resolvedTLSDir = cfg.Hostbridge().TLSRoot()
 			}
 
-			router, err := routers.NewHostbridgeRunRouter()
+			router, err := commandengine.NewRouter([]commandengine.Definition{schemacommands.RunCommandDefinition()}, commandengine.SourceHostbridge)
 			if err != nil {
 				return err
 			}

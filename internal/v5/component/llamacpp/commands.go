@@ -19,6 +19,12 @@ type startCommand struct{}
 type stopCommand struct{}
 type statusCommand struct{}
 
+func RegisterGobTypes(register func(any)) {
+	register(startCommand{})
+	register(stopCommand{})
+	register(statusCommand{})
+}
+
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
 		llamacppCommand("start", startCommand{}, "Start the llama.cpp model service"),

@@ -29,14 +29,6 @@ func ChatInteractiveInterruptEnabled(cfg *appstate.Config) configengine.Item {
 	)
 }
 
-func ChatGPUs(cfg *appstate.Config) configengine.Item {
-	return chatString("chat.gpus", "GPU setting for the current chat", configengine.ValueString, cfg,
-		func(chat appstate.ChatConfig) string { return chat.GPUs() },
-		func(chat appstate.ChatConfig, value string) error { return chat.SetGPUs(value) },
-		rootOrElevated(),
-	)
-}
-
 func ChatContainerUserMode(cfg *appstate.Config) configengine.Item {
 	return chatString("chat.container-user-mode", "Container user mode: default, host, or root", configengine.ValueString, cfg,
 		func(chat appstate.ChatConfig) string { return chat.ContainerUserMode() },

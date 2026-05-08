@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
 	"github.com/bartdeboer/ctgbot/internal/v5/hostbridgecmd"
+	_ "github.com/bartdeboer/ctgbot/internal/v5/hostbridgegob"
 )
 
 func main() {

@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/dbmodel"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	v5component "github.com/bartdeboer/ctgbot/internal/v5/component"
@@ -26,7 +25,7 @@ func (c *Component) RunInbound(ctx context.Context, emit v5component.InboundEmit
 		return fmt.Errorf("missing inbound emitter")
 	}
 
-	handle := func(cbCtx context.Context, update dbmodel.TelegramUpdate) {
+	handle := func(cbCtx context.Context, update TelegramUpdate) {
 		c.handleUpdate(cbCtx, update, emit)
 	}
 	telegramCfg := c.cfg.Telegram()
@@ -36,7 +35,7 @@ func (c *Component) RunInbound(ctx context.Context, emit v5component.InboundEmit
 	return c.api.Run(ctx, telegramCfg.PollTimeout(), handle)
 }
 
-func (c *Component) handleUpdate(ctx context.Context, update dbmodel.TelegramUpdate, emit v5component.InboundEmitter) {
+func (c *Component) handleUpdate(ctx context.Context, update TelegramUpdate, emit v5component.InboundEmitter) {
 	text := strings.TrimSpace(update.Text)
 	if text == "" && len(update.Attachments) == 0 {
 		return
@@ -47,7 +46,7 @@ func (c *Component) handleUpdate(ctx context.Context, update dbmodel.TelegramUpd
 	}
 }
 
-func (c *Component) emitUpdate(ctx context.Context, update dbmodel.TelegramUpdate, text string, emit v5component.InboundEmitter) error {
+func (c *Component) emitUpdate(ctx context.Context, update TelegramUpdate, text string, emit v5component.InboundEmitter) error {
 	if emit == nil {
 		return fmt.Errorf("missing inbound emitter")
 	}
@@ -62,7 +61,7 @@ func (c *Component) emitUpdate(ctx context.Context, update dbmodel.TelegramUpdat
 	})
 }
 
-func (c *Component) inboundPayload(ctx context.Context, update dbmodel.TelegramUpdate, text string) (messenger.InboundPayload, error) {
+func (c *Component) inboundPayload(ctx context.Context, update TelegramUpdate, text string) (messenger.InboundPayload, error) {
 	operator := false
 	if c.cfg != nil && update.UserID != 0 {
 		for _, userID := range c.cfg.Telegram().OperatorUserIDs() {

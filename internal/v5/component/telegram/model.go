@@ -1,4 +1,4 @@
-package dbmodel
+package telegram
 
 import (
 	"strings"
@@ -12,14 +12,12 @@ type TelegramAttachment struct {
 }
 
 type TelegramUpdate struct {
-	ID uint `gorm:"primaryKey"`
-
 	ChatID      int64
 	ChatTitle   string
 	MessageID   int
 	ThreadID    int
 	Text        string
-	Attachments []TelegramAttachment `gorm:"-"`
+	Attachments []TelegramAttachment
 	FirstName   string
 	LastName    string
 	Username    string
@@ -31,7 +29,7 @@ type TelegramUpdate struct {
 	UpdatedAt    time.Time
 }
 
-func (t *TelegramUpdate) UserLabel() string {
+func (t TelegramUpdate) UserLabel() string {
 	if t.Username != "" {
 		return "@" + t.Username
 	}

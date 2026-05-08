@@ -4,11 +4,10 @@ import (
 	"context"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/dbmodel"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 )
 
-func (c *Component) loadIncomingAttachments(ctx context.Context, attachments []dbmodel.TelegramAttachment) ([]messenger.Media, error) {
+func (c *Component) loadIncomingAttachments(ctx context.Context, attachments []TelegramAttachment) ([]messenger.Media, error) {
 	out := make([]messenger.Media, 0, len(attachments))
 	for _, attachment := range attachments {
 		content, err := c.api.DownloadFile(ctx, attachment.FileID)

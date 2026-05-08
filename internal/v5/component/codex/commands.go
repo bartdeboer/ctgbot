@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
-	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/v5/component"
 	"github.com/bartdeboer/ctgbot/internal/v5/coremodel"
@@ -34,18 +33,18 @@ var suggestedCodexReasoningEfforts = []string{
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
-		codexCommand("container refresh", schemacommands.RefreshContainer{}, "Delete and recreate the Codex runtime on next turn",
+		codexCommand("container refresh", RefreshContainer{}, "Delete and recreate the Codex runtime on next turn",
 			hiddenAlias("refresh"),
 		),
-		codexCommand("container start", schemacommands.StartContainer{}, "Start the Codex runtime container"),
-		codexCommand("container stop", schemacommands.StopContainer{}, "Stop the Codex runtime container but keep its data"),
-		codexCommand("chat purge", schemacommands.PurgeChat{}, "Reset the Codex conversation and delete the runtime container",
+		codexCommand("container start", StartContainer{}, "Start the Codex runtime container"),
+		codexCommand("container stop", StopContainer{}, "Stop the Codex runtime container but keep its data"),
+		codexCommand("chat purge", PurgeChat{}, "Reset the Codex conversation and delete the runtime container",
 			hiddenAlias("purge"),
 		),
-		codexCommand("interrupt", schemacommands.InterruptTurn{}, "Interrupt the active Codex turn"),
-		codexCommand("status", schemacommands.Status{}, "Show Codex conversation and runtime status"),
-		codexCommand("model", schemacommands.ModelStatus{}, "Show the Codex model for this thread"),
-		codexCommand("model list", schemacommands.ModelList{}, "List suggested Codex models"),
+		codexCommand("interrupt", InterruptTurn{}, "Interrupt the active Codex turn"),
+		codexCommand("status", Status{}, "Show Codex conversation and runtime status"),
+		codexCommand("model", ModelStatus{}, "Show the Codex model for this thread"),
+		codexCommand("model list", ModelList{}, "List suggested Codex models"),
 		{
 			Pattern: "model set <model>",
 			Help:    "Set the Codex model for this thread",
@@ -54,14 +53,14 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 				if model == "" {
 					return nil, fmt.Errorf("missing model")
 				}
-				return schemacommands.ModelSet{Model: model}, nil
+				return ModelSet{Model: model}, nil
 			},
 			Sources: codexCommandSources(),
 			Policy:  codexCommandPolicy(),
 		},
-		codexCommand("model clear", schemacommands.ModelClear{}, "Clear the thread model override"),
-		codexCommand("model effort", schemacommands.ModelEffortStatus{}, "Show the Codex reasoning effort for this thread"),
-		codexCommand("model effort list", schemacommands.ModelEffortList{}, "List suggested Codex reasoning efforts"),
+		codexCommand("model clear", ModelClear{}, "Clear the thread model override"),
+		codexCommand("model effort", ModelEffortStatus{}, "Show the Codex reasoning effort for this thread"),
+		codexCommand("model effort list", ModelEffortList{}, "List suggested Codex reasoning efforts"),
 		{
 			Pattern: "model effort set <effort>",
 			Help:    "Set the Codex reasoning effort for this thread",
@@ -70,12 +69,12 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 				if effort == "" {
 					return nil, fmt.Errorf("missing reasoning effort")
 				}
-				return schemacommands.ModelEffortSet{Effort: effort}, nil
+				return ModelEffortSet{Effort: effort}, nil
 			},
 			Sources: codexCommandSources(),
 			Policy:  codexCommandPolicy(),
 		},
-		codexCommand("model effort clear", schemacommands.ModelEffortClear{}, "Clear the thread reasoning effort override"),
+		codexCommand("model effort clear", ModelEffortClear{}, "Clear the thread reasoning effort override"),
 	}
 }
 
@@ -85,72 +84,72 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
 	}
-	if err := commandengine.RegisterPattern[schemacommands.RefreshContainer](registry, "container refresh", func(ctx context.Context, req commandengine.Request, _ schemacommands.RefreshContainer) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[RefreshContainer](registry, "container refresh", func(ctx context.Context, req commandengine.Request, _ RefreshContainer) (commandengine.Result, error) {
 		return c.refresh(ctx, req)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.StartContainer](registry, "container start", func(ctx context.Context, req commandengine.Request, _ schemacommands.StartContainer) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[StartContainer](registry, "container start", func(ctx context.Context, req commandengine.Request, _ StartContainer) (commandengine.Result, error) {
 		return c.start(ctx, req)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.StopContainer](registry, "container stop", func(ctx context.Context, req commandengine.Request, _ schemacommands.StopContainer) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[StopContainer](registry, "container stop", func(ctx context.Context, req commandengine.Request, _ StopContainer) (commandengine.Result, error) {
 		return c.stop(ctx, req)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.PurgeChat](registry, "chat purge", func(ctx context.Context, req commandengine.Request, _ schemacommands.PurgeChat) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[PurgeChat](registry, "chat purge", func(ctx context.Context, req commandengine.Request, _ PurgeChat) (commandengine.Result, error) {
 		return c.purge(ctx, req)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.InterruptTurn](registry, "interrupt", func(ctx context.Context, req commandengine.Request, _ schemacommands.InterruptTurn) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[InterruptTurn](registry, "interrupt", func(ctx context.Context, req commandengine.Request, _ InterruptTurn) (commandengine.Result, error) {
 		return c.interrupt(ctx, req)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.Status](registry, "status", func(ctx context.Context, req commandengine.Request, _ schemacommands.Status) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[Status](registry, "status", func(ctx context.Context, req commandengine.Request, _ Status) (commandengine.Result, error) {
 		return c.status(ctx, req)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.ModelStatus](registry, "model", func(ctx context.Context, req commandengine.Request, _ schemacommands.ModelStatus) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[ModelStatus](registry, "model", func(ctx context.Context, req commandengine.Request, _ ModelStatus) (commandengine.Result, error) {
 		return c.modelStatus(ctx, req)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.ModelList](registry, "model list", func(ctx context.Context, req commandengine.Request, _ schemacommands.ModelList) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[ModelList](registry, "model list", func(ctx context.Context, req commandengine.Request, _ ModelList) (commandengine.Result, error) {
 		return c.modelList(ctx)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.ModelSet](registry, "model set <model>", func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelSet) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[ModelSet](registry, "model set <model>", func(ctx context.Context, req commandengine.Request, cmd ModelSet) (commandengine.Result, error) {
 		return c.modelSet(ctx, req, cmd)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.ModelClear](registry, "model clear", func(ctx context.Context, req commandengine.Request, _ schemacommands.ModelClear) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[ModelClear](registry, "model clear", func(ctx context.Context, req commandengine.Request, _ ModelClear) (commandengine.Result, error) {
 		return c.modelClear(ctx, req)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.ModelEffortStatus](registry, "model effort", func(ctx context.Context, req commandengine.Request, _ schemacommands.ModelEffortStatus) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[ModelEffortStatus](registry, "model effort", func(ctx context.Context, req commandengine.Request, _ ModelEffortStatus) (commandengine.Result, error) {
 		return c.modelEffortStatus(ctx, req)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.ModelEffortList](registry, "model effort list", func(ctx context.Context, req commandengine.Request, _ schemacommands.ModelEffortList) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[ModelEffortList](registry, "model effort list", func(ctx context.Context, req commandengine.Request, _ ModelEffortList) (commandengine.Result, error) {
 		return c.modelEffortList(ctx)
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[schemacommands.ModelEffortSet](registry, "model effort set <effort>", func(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelEffortSet) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[ModelEffortSet](registry, "model effort set <effort>", func(ctx context.Context, req commandengine.Request, cmd ModelEffortSet) (commandengine.Result, error) {
 		return c.modelEffortSet(ctx, req, cmd)
 	}); err != nil {
 		return err
 	}
-	return commandengine.RegisterPattern[schemacommands.ModelEffortClear](registry, "model effort clear", func(ctx context.Context, req commandengine.Request, _ schemacommands.ModelEffortClear) (commandengine.Result, error) {
+	return commandengine.RegisterPattern[ModelEffortClear](registry, "model effort clear", func(ctx context.Context, req commandengine.Request, _ ModelEffortClear) (commandengine.Result, error) {
 		return c.modelEffortClear(ctx, req)
 	})
 }
@@ -293,7 +292,7 @@ func (c *Component) modelList(ctx context.Context) (commandengine.Result, error)
 	return commandengine.Result{Text: "suggested Codex models:\n" + strings.Join(suggestedCodexModels, "\n")}, nil
 }
 
-func (c *Component) modelSet(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelSet) (commandengine.Result, error) {
+func (c *Component) modelSet(ctx context.Context, req commandengine.Request, cmd ModelSet) (commandengine.Result, error) {
 	thread, err := c.thread(ctx, req)
 	if err != nil {
 		return commandengine.Result{}, err
@@ -348,7 +347,7 @@ func (c *Component) modelEffortList(ctx context.Context) (commandengine.Result, 
 	return commandengine.Result{Text: "suggested Codex reasoning efforts:\n" + strings.Join(suggestedCodexReasoningEfforts, "\n")}, nil
 }
 
-func (c *Component) modelEffortSet(ctx context.Context, req commandengine.Request, cmd schemacommands.ModelEffortSet) (commandengine.Result, error) {
+func (c *Component) modelEffortSet(ctx context.Context, req commandengine.Request, cmd ModelEffortSet) (commandengine.Result, error) {
 	thread, err := c.thread(ctx, req)
 	if err != nil {
 		return commandengine.Result{}, err

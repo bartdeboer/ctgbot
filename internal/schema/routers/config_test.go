@@ -121,7 +121,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		"build.compiler-path",
 		"chat.codex-profile-host-path",
 		"chat.enabled",
-		"chat.gpus",
 		"chat.interactive-interrupt-enabled",
 		"chat.process-tools-enabled",
 		"chat.skills",
@@ -163,7 +162,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		{key: "hostbridge.tcp-listen-addr", value: "127.0.0.1:9999", wantReply: "hostbridge.tcp-listen-addr=127.0.0.1:9999"},
 		{key: "chat.process-tools-enabled", value: "true", wantReply: "chat.process-tools-enabled=true"},
 		{key: "chat.interactive-interrupt-enabled", value: "false", wantReply: "chat.interactive-interrupt-enabled=false"},
-		{key: "chat.gpus", value: "all", wantReply: "chat.gpus=all"},
 		{key: "chat.workspace-host-path", value: workspace, wantReply: "chat.workspace-host-path=" + workspace},
 		{key: "chat.skills", value: skill, wantReply: "chat.skills=" + skill},
 	} {

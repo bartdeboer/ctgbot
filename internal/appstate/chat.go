@@ -44,10 +44,6 @@ func (c ChatConfig) InteractiveInterruptEnabled() bool {
 	return c.cfg.bool(c.key("interactive_interrupt"), true)
 }
 
-func (c ChatConfig) GPUs() string {
-	return c.cfg.string(c.key("gpus"), "")
-}
-
 func (c ChatConfig) ContainerUserMode() string {
 	mode := normalizeContainerUserMode(c.cfg.string(c.key("container_user_mode"), "default"))
 	if mode == "" {

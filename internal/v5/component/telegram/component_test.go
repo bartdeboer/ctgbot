@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/dbmodel"
 	"github.com/bartdeboer/ctgbot/internal/messenger"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -52,7 +51,7 @@ type sentChatAction struct {
 type fakeTelegramAPI struct {
 	mu sync.Mutex
 
-	updates     []dbmodel.TelegramUpdate
+	updates     []TelegramUpdate
 	runErr      error
 	pollTimeout time.Duration
 
@@ -66,10 +65,10 @@ type fakeTelegramAPI struct {
 	downloads       map[string][]byte
 }
 
-func (f *fakeTelegramAPI) Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(context.Context, dbmodel.TelegramUpdate)) error {
+func (f *fakeTelegramAPI) Run(ctx context.Context, pollTimeout time.Duration, onUpdate func(context.Context, TelegramUpdate)) error {
 	f.mu.Lock()
 	f.pollTimeout = pollTimeout
-	updates := append([]dbmodel.TelegramUpdate(nil), f.updates...)
+	updates := append([]TelegramUpdate(nil), f.updates...)
 	runErr := f.runErr
 	f.mu.Unlock()
 	for _, update := range updates {
@@ -173,7 +172,7 @@ func TestRunInboundEmitsV5EventAndRelaysResponse(t *testing.T) {
 	if err := store.PersistInt("telegram.defaults.debounce_ms", 0); err != nil {
 		t.Fatalf("PersistInt debounce: %v", err)
 	}
-	api := &fakeTelegramAPI{updates: []dbmodel.TelegramUpdate{{
+	api := &fakeTelegramAPI{updates: []TelegramUpdate{{
 		ChatID:    123,
 		ChatTitle: "Project chat",
 		ThreadID:  4,
@@ -222,7 +221,7 @@ func TestRunInboundDoesNotReturnEmitError(t *testing.T) {
 	if err := store.PersistInt("telegram.defaults.debounce_ms", 0); err != nil {
 		t.Fatalf("PersistInt debounce: %v", err)
 	}
-	api := &fakeTelegramAPI{updates: []dbmodel.TelegramUpdate{{ChatID: 1, ThreadID: 2, MessageID: 3, Text: "hi"}}}
+	api := &fakeTelegramAPI{updates: []TelegramUpdate{{ChatID: 1, ThreadID: 2, MessageID: 3, Text: "hi"}}}
 	c := &Component{componentID: modeluuid.New(), api: api, cfg: cfg}
 
 	errBoom := errors.New("boom")
@@ -238,7 +237,7 @@ func TestInboundPayloadMarksConfiguredOperatorAsRoot(t *testing.T) {
 	}
 	c := &Component{api: &fakeTelegramAPI{}, cfg: cfg}
 
-	payload, err := c.inboundPayload(context.Background(), dbmodel.TelegramUpdate{
+	payload, err := c.inboundPayload(context.Background(), TelegramUpdate{
 		ChatID:    1,
 		ThreadID:  2,
 		MessageID: 3,
@@ -258,12 +257,12 @@ func TestInboundPayloadDownloadsAttachments(t *testing.T) {
 	api := &fakeTelegramAPI{downloads: map[string][]byte{"file-1": []byte("contents")}}
 	c := &Component{api: api, cfg: cfg}
 
-	payload, err := c.inboundPayload(context.Background(), dbmodel.TelegramUpdate{
+	payload, err := c.inboundPayload(context.Background(), TelegramUpdate{
 		ChatID:    1,
 		ThreadID:  2,
 		MessageID: 3,
 		Text:      "see attached",
-		Attachments: []dbmodel.TelegramAttachment{{
+		Attachments: []TelegramAttachment{{
 			Kind:     "document",
 			FileID:   "file-1",
 			Filename: "report.txt",

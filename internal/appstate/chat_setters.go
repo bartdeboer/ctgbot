@@ -33,10 +33,6 @@ func (c ChatConfig) SetInteractiveInterruptEnabled(enabled bool) error {
 	return c.persistBool("interactive_interrupt", enabled)
 }
 
-func (c ChatConfig) SetGPUs(raw string) error {
-	return c.persistString("gpus", strings.TrimSpace(raw))
-}
-
 func (c ChatConfig) SetContainerUserMode(raw string) error {
 	mode := strings.ToLower(strings.TrimSpace(raw))
 	if mode == "" {

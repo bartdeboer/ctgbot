@@ -26,9 +26,7 @@ func main() {
 	registerConfigRoutes(r, store, globalStore)
 	registerImageRoutes(r, store)
 	registerCodexRoutes(r, store)
-	registerTelegramRoutes(r, store)
 	registerHostbridgeRoutes(r, store)
-	registerSessionRoutes(r, store)
 	registerV5Routes(r, store)
 
 	if err := r.Run(context.Background(), os.Args[1:]); err != nil {

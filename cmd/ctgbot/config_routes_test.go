@@ -64,12 +64,6 @@ func TestRegisterConfigRoutes_ShowAndMutate(t *testing.T) {
 	if !state.Chat(entry.ID).Enabled() {
 		t.Fatalf("expected chat 123 to be enabled")
 	}
-	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "set", "chat.gpus", "all"}); err != nil {
-		t.Fatalf("Run chat gpu setter: %v", err)
-	}
-	if got := state.Chat(entry.ID).GPUs(); got != "all" {
-		t.Fatalf("chat gpus = %q, want %q", got, "all")
-	}
 	if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "hostbridge", "scaffold", "origin"}); err != nil {
 		t.Fatalf("Run hostbridge scaffold: %v", err)
 	}
@@ -80,15 +74,6 @@ func TestRegisterConfigRoutes_ShowAndMutate(t *testing.T) {
 	}
 	if _, ok := commands["origin"]; !ok {
 		t.Fatalf("allowed commands = %#v, want origin skeleton", commands)
-	}
-
-	getOutput := captureStdout(t, func() {
-		if err := router.Run(context.Background(), []string{"config", "chat", entry.ID.String(), "get", "chat.gpus"}); err != nil {
-			t.Fatalf("Run chat get: %v", err)
-		}
-	})
-	if !strings.Contains(getOutput, "chat.gpus=all") {
-		t.Fatalf("expected chat get output, got %q", getOutput)
 	}
 
 	output := captureStdout(t, func() {
@@ -104,9 +89,6 @@ func TestRegisterConfigRoutes_ShowAndMutate(t *testing.T) {
 	}
 	if strings.Contains(output, "codex.full_auto") {
 		t.Fatalf("did not expect dead codex.full_auto config in output: %q", output)
-	}
-	if !strings.Contains(output, `gpus="all"`) {
-		t.Fatalf("expected chat gpu config in output, got %q", output)
 	}
 	if !strings.Contains(output, "hostbridge.allowed_commands: names=[origin]") {
 		t.Fatalf("expected scaffolded hostbridge alias in output, got %q", output)
