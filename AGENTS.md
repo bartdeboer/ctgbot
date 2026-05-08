@@ -2,15 +2,15 @@
 
 ## Purpose
 
-`ctgbot` now centers on the `v5` runtime path.
+`ctgbot` now centers on the runtime path.
 
 The project’s main responsibilities are:
 
-- run chat-bound component graphs through `ctgbot v5 run`
+- run chat-bound component graphs through `ctgbot run`
 - provide a host-command bridge via `hostbridge` and `ctgbot hostbridge serve`
 - support a small operator CLI surface:
-  - `ctgbot v5 component <component> auth`
-  - `ctgbot v5 component <component> auth status`
+  - `ctgbot component <component> auth`
+  - `ctgbot component <component> auth status`
   - `ctgbot image build`
 
 ## Repo Shape
@@ -31,19 +31,19 @@ The project’s main responsibilities are:
 
 ## Main Commands
 
-- `go run ./cmd/ctgbot v5 run`
-  Runs the live `v5` runtime.
+- `go run ./cmd/ctgbot run`
+  Runs the live runtime.
 
-- `go run ./cmd/ctgbot v5 workspace list`
-  Lists configured `v5` workspaces.
+- `go run ./cmd/ctgbot workspace list`
+  Lists configured workspaces.
 
-- `go run ./cmd/ctgbot v5 component list`
-  Lists registered `v5` components.
+- `go run ./cmd/ctgbot component list`
+  Lists registered components.
 
-- `go run ./cmd/ctgbot v5 component codex auth`
+- `go run ./cmd/ctgbot component codex auth`
   Runs the component-scoped auth flow for the default Codex registration.
 
-- `go run ./cmd/ctgbot v5 component codex auth status`
+- `go run ./cmd/ctgbot component codex auth status`
   Shows authentication status for the default Codex registration.
 
 - `go run ./cmd/ctgbot hostbridge serve`
@@ -79,9 +79,9 @@ There are three important state locations:
 
 `./.ctgbot` is runtime data and should not be committed.
 
-## v5 Model
+## Runtime Model
 
-The important `v5` concepts are:
+The important runtime concepts are:
 
 - `Workspace`
 - `Component`
@@ -96,14 +96,12 @@ Static runtime settings come from component-home `runtime.json`.
 Static component settings come from component-home `component.json`.
 Mutable per-thread component settings belong in `ThreadComponentState`.
 Component-scoped authentication flows resolve through registered component refs.
-The canonical CLI form is `v5 component <component> ...`; the older
-`v5 component auth <component>` and `v5 component auth-status <component>`
-forms remain as compatibility aliases.
+The canonical CLI form is `component <component> ...`.
 
 For the more detailed design model, see:
 
 - [internal/README.md](/Users/bart/src/go/ctgbot/internal/README.md)
-- [V5DESIGN.md](/Users/bart/src/go/WORKSPACE-DOCS/ctgbot/V5DESIGN.md)
+- [current design doc](/Users/bart/src/go/WORKSPACE-DOCS/ctgbot)
 
 ## Known Operational Notes
 
@@ -136,7 +134,7 @@ For the more detailed design model, see:
 If something breaks, check these first:
 
 1. `go run ./cmd/ctgbot config`
-2. `go run ./cmd/ctgbot v5 component list`
-3. `go run ./cmd/ctgbot v5 component codex auth status`
+2. `go run ./cmd/ctgbot component list`
+3. `go run ./cmd/ctgbot component codex auth status`
 4. `go run ./cmd/ctgbot image build --no-cache`
 5. whether the Docker image is stale after changing Dockerfile or embedded assets

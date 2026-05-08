@@ -43,7 +43,7 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 	}
 }
 
-func TestHostbridgeRouterUsesV5CodexDefinitions(t *testing.T) {
+func TestHostbridgeRouterUsesCodexDefinitions(t *testing.T) {
 	router, err := hostbridgeRouter()
 	if err != nil {
 		t.Fatalf("hostbridgeRouter() error = %v", err)

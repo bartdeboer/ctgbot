@@ -45,7 +45,7 @@ component auth, model defaults, or Docker image settings.
 
 Chats may point at a named workspace.
 
-If a chat does not have a named workspace, `v5` falls back to a chat-local
+If a chat does not have a named workspace, the runtime falls back to a chat-local
 workspace:
 
 - `.ctgbot/chats/<chatID>/workspace`
@@ -135,7 +135,7 @@ Broker does not own:
 
 ## Current status
 
-`v5` currently proves the flatter architecture:
+The current runtime now proves the flatter architecture:
 
 - config-backed workspaces
 - runtime kind chosen per component registration
@@ -150,8 +150,8 @@ What is intentionally unfinished:
 
 - full migration of all component-specific thread state out of older thread
   fields
-- broader deploy polish after the first live `v5` rollout
+- broader deploy polish after the first live runtime rollout
 
 For the more opinionated target model and CLI examples, see:
 
-- `/workspace/WORKSPACE-DOCS/ctgbot/V5DESIGN.md`
+- `/workspace/WORKSPACE-DOCS/ctgbot`

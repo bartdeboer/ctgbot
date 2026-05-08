@@ -17,14 +17,14 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
-	v5backend "github.com/bartdeboer/ctgbot/internal/runtime/backend"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	backendruntime "github.com/bartdeboer/ctgbot/internal/runtime/backend"
 )
 
 type Component struct {
 	registration    coremodel.Component
 	componentConfig ComponentConfig
-	runtime         *v5backend.Runtime
+	runtime         *backendruntime.Runtime
 	client          *http.Client
 	logger          *log.Logger
 }
@@ -36,13 +36,13 @@ var _ component.ProfileOwner = (*Component)(nil)
 func New(
 	ctx context.Context,
 	registration coremodel.Component,
-	runtimeFactory v5runtime.Factory,
-	home v5runtime.Home,
+	runtimeFactory runtimepkg.Factory,
+	home runtimepkg.Home,
 	storage repository.Storage,
 	logger *log.Logger,
 ) (component.Component, error) {
 	_, _ = ctx, storage
-	backendFactory, ok := runtimeFactory.(v5backend.Binder)
+	backendFactory, ok := runtimeFactory.(backendruntime.Binder)
 	if !ok {
 		return nil, fmt.Errorf("llamacpp requires backend runtime, got %T", runtimeFactory)
 	}
@@ -67,7 +67,7 @@ func (c *Component) Type() string { return Type }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {
 	return []component.ManagedFile{
-		{RelativePath: v5runtime.ConfigFilename, Required: false, Sensitive: false},
+		{RelativePath: runtimepkg.ConfigFilename, Required: false, Sensitive: false},
 		{RelativePath: ComponentConfigFilename, Required: false, Sensitive: false},
 	}
 }
@@ -112,7 +112,7 @@ func (c *Component) isRunning(ctx context.Context) (bool, error) {
 	return strings.TrimSpace(status.State) == "running", nil
 }
 
-func serviceSpec(config ComponentConfig) v5backend.ServiceSpec {
+func serviceSpec(config ComponentConfig) backendruntime.ServiceSpec {
 	modelDir := filepath.Dir(config.ModelPath)
 	cmd := []string{
 		"-m", "/models/" + filepath.Base(config.ModelPath),
@@ -136,7 +136,7 @@ func serviceSpec(config ComponentConfig) v5backend.ServiceSpec {
 		}
 	}
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", config.HostPort)
-	return v5backend.ServiceSpec{
+	return backendruntime.ServiceSpec{
 		BaseURL:   baseURL,
 		HealthURL: baseURL + "/health",
 		Ports:     []string{fmt.Sprintf("127.0.0.1:%d:8080", config.HostPort)},

@@ -13,32 +13,32 @@ import (
 	"syscall"
 	"time"
 
-	v5broker "github.com/bartdeboer/ctgbot/internal/broker"
+	"github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
-	v5codex "github.com/bartdeboer/ctgbot/internal/component/codex"
-	v5gmail "github.com/bartdeboer/ctgbot/internal/component/gmail"
-	v5llamacpp "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
-	v5process "github.com/bartdeboer/ctgbot/internal/component/process"
-	v5telegram "github.com/bartdeboer/ctgbot/internal/component/telegram"
+	"github.com/bartdeboer/ctgbot/internal/component/codex"
+	"github.com/bartdeboer/ctgbot/internal/component/gmail"
+	"github.com/bartdeboer/ctgbot/internal/component/llamacpp"
+	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
+	"github.com/bartdeboer/ctgbot/internal/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	v5system "github.com/bartdeboer/ctgbot/internal/system"
+	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
 
-func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clistate.Store) {
+func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *clistate.Store) {
 	r.Routes(func(b *clir.Builder) {
-		b.Handle("v5 run", "Run the v5 ctgbot runtime", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 run", flag.ContinueOnError)
+		b.Handle("run", "Run the ctgbot runtime", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("run", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root (default: <cwd>/.ctgbot)")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
 			codexImage := fs.String("codex-image", "", "Codex runtime image override")
 			if err := fs.Parse(req.Extra); err != nil {
@@ -48,7 +48,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			system, err := openV5SystemForRoutes(
+			rtSystem, err := openSystemForRoutes(
 				req,
 				store,
 				*stateRoot,
@@ -60,23 +60,23 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			if err != nil {
 				return err
 			}
-			if _, _, err := system.StartHostbridge(); err != nil {
-				return fmt.Errorf("start v5 hostbridge: %w", err)
+			if _, _, err := rtSystem.StartHostbridge(); err != nil {
+				return fmt.Errorf("start hostbridge: %w", err)
 			}
 
-			fmt.Println("ctgbot v5 runtime initialized")
-			fmt.Printf("state_root: %s\n", system.StateRoot)
-			fmt.Printf("database: %s\n", system.DBPath)
+			fmt.Println("ctgbot runtime initialized")
+			fmt.Printf("state_root: %s\n", rtSystem.StateRoot)
+			fmt.Printf("database: %s\n", rtSystem.DBPath)
 
 			logf := func(format string, args ...any) {}
-			if system.Logger != nil {
-				logf = system.Logger.Printf
+			if rtSystem.Logger != nil {
+				logf = rtSystem.Logger.Printf
 			}
-			return v5broker.New(system.Storage, system, logf).Run(runCtx)
+			return broker.New(rtSystem.Storage, rtSystem, logf).Run(runCtx)
 		})
 
-		b.Handle("v5 workspace set <workspace>", "Configure a v5 workspace", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 workspace set", flag.ContinueOnError)
+		b.Handle("workspace set <workspace>", "Configure a workspace", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("workspace set", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			path := fs.String("path", "", "Host workspace path")
 			if err := fs.Parse(req.Extra); err != nil {
@@ -92,7 +92,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 				return fmt.Errorf("missing workspace path")
 			}
 
-			workspace, err := v5system.SaveWorkspace(rootDir, store, strings.TrimSpace(req.Params["workspace"]), strings.TrimSpace(*path))
+			workspace, err := systempkg.SaveWorkspace(rootDir, store, strings.TrimSpace(req.Params["workspace"]), strings.TrimSpace(*path))
 			if err != nil {
 				return err
 			}
@@ -102,16 +102,16 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
-		b.Handle("v5 workspace list", "List configured v5 workspaces", func(req *clir.Request) error {
+		b.Handle("workspace list", "List configured workspaces", func(req *clir.Request) error {
 			rootDir, err := filepath.Abs(".")
 			if err != nil {
 				return err
 			}
-			workspaces, err := v5system.LoadWorkspaces(rootDir, store)
+			workspaces, err := systempkg.LoadWorkspaces(rootDir, store)
 			if err != nil {
 				return err
 			}
-			configured := v5system.ConfiguredWorkspaces(store)
+			configured := systempkg.ConfiguredWorkspaces(store)
 			names := make([]string, 0, len(workspaces))
 			for name := range workspaces {
 				names = append(names, name)
@@ -129,11 +129,11 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
-		b.Handle("v5 component register <component>", "Register a v5 component instance", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 component register", flag.ContinueOnError)
+		b.Handle("component register <component>", "Register a component instance", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("component register", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
 			codexImage := fs.String("codex-image", "", "Codex runtime image override")
 			runtimeKind := fs.String("runtime", "", "Runtime kind for this registered component (docker or local)")
@@ -142,15 +142,15 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
+			rtSystem, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
 			if err != nil {
 				return err
 			}
-			registration, err := system.EnsureComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath))
+			registration, err := rtSystem.EnsureComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath))
 			if err != nil {
 				return err
 			}
-			runtime, err := system.Runtime(registration.Runtime)
+			runtime, err := rtSystem.Runtime(registration.Runtime)
 			if err != nil {
 				return err
 			}
@@ -166,78 +166,20 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
-		b.Handle("v5 component auth <component>", "Authenticate a v5 component instance", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 component auth", flag.ContinueOnError)
+		b.Handle("component list", "List registered components", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("component list", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
-			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
-			image := fs.String("image", "", "Auth runtime image override")
-			callbackPort := fs.Int("callback-port", v5codex.DefaultCallbackPort, "auth callback relay port")
-			callbackTimeout := fs.Duration("callback-timeout", 10*time.Minute, "auth callback relay timeout")
-			runtimeKind := fs.String("runtime", "", "Runtime kind for this component registration (default: preserve existing)")
-			homePath := fs.String("home", "", "Optional host component home override")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, newRuntimeProcessActions(globalStore, nil, nil))
+			rtSystem, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
-			registration, err := system.EnsureComponent(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath))
-			if err != nil {
-				return err
-			}
-			args := []string{"auth"}
-			if *callbackPort != 0 {
-				args = append(args, "--callback-port", fmt.Sprintf("%d", *callbackPort))
-			}
-			if *callbackTimeout != 0 {
-				args = append(args, "--callback-timeout", callbackTimeout.String())
-			}
-			if err := runV5ComponentCLI(req, system, registration, args); err != nil {
-				return err
-			}
-			return nil
-		})
-
-		b.Handle("v5 component auth-status <component>", "Show authentication status for a v5 component instance", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 component auth-status", flag.ContinueOnError)
-			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
-			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
-			image := fs.String("image", "", "Runtime image override")
-			if err := fs.Parse(req.Extra); err != nil {
-				return err
-			}
-
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, newRuntimeProcessActions(globalStore, nil, nil))
-			if err != nil {
-				return err
-			}
-			registration, err := system.ResolveComponentRef(req.Context(), strings.TrimSpace(req.Params["component"]))
-			if err != nil {
-				return err
-			}
-			return runV5ComponentCLI(req, system, registration, []string{"auth", "status"})
-		})
-
-		b.Handle("v5 component list", "List registered v5 components", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 component list", flag.ContinueOnError)
-			fs.SetOutput(os.Stdout)
-			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
-			if err := fs.Parse(req.Extra); err != nil {
-				return err
-			}
-
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
-			if err != nil {
-				return err
-			}
-			components, err := system.Storage.Components().ListEnabled(req.Context())
+			components, err := rtSystem.Storage.Components().ListEnabled(req.Context())
 			if err != nil {
 				return err
 			}
@@ -246,7 +188,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 				return nil
 			}
 			for _, registration := range components {
-				runtime, err := system.Runtime(registration.Runtime)
+				runtime, err := rtSystem.Runtime(registration.Runtime)
 				if err != nil {
 					return err
 				}
@@ -262,20 +204,22 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
-		b.Handle("v5 component <component>", "Run a registered v5 component CLI command", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 component", flag.ContinueOnError)
+		b.Handle("component <component>", "Run a registered component CLI command", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("component", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
 			image := fs.String("image", "", "Runtime image override")
 			runtimeKind := fs.String("runtime", "", "Runtime kind for this component registration (used when creating it)")
 			homePath := fs.String("home", "", "Optional host component home override")
+			callbackPort := fs.Int("callback-port", codex.DefaultCallbackPort, "auth callback relay port")
+			callbackTimeout := fs.Duration("callback-timeout", 10*time.Minute, "auth callback relay timeout")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, newRuntimeProcessActions(globalStore, nil, nil))
+			rtSystem, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, newRuntimeProcessActions(globalStore, nil, nil))
 			if err != nil {
 				return err
 			}
@@ -283,26 +227,35 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			componentRef := strings.TrimSpace(req.Params["component"])
 			var registration *coremodel.Component
 			if strings.TrimSpace(*runtimeKind) != "" || strings.TrimSpace(*homePath) != "" {
-				registration, err = system.EnsureComponent(req.Context(), componentRef, strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath))
+				registration, err = rtSystem.EnsureComponent(req.Context(), componentRef, strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath))
 			} else {
-				registration, err = system.ResolveComponentRef(req.Context(), componentRef)
+				registration, err = rtSystem.ResolveComponentRef(req.Context(), componentRef)
 			}
 			if err != nil {
 				return err
 			}
-			return runV5ComponentCLI(req, system, registration, fs.Args())
+			argv := fs.Args()
+			if len(argv) == 1 && argv[0] == "auth" {
+				if *callbackPort != 0 {
+					argv = append(argv, "--callback-port", fmt.Sprintf("%d", *callbackPort))
+				}
+				if *callbackTimeout != 0 {
+					argv = append(argv, "--callback-timeout", callbackTimeout.String())
+				}
+			}
+			return runComponentCLI(req, rtSystem, registration, argv)
 		})
 
-		b.Handle("v5 chat create <label>", "Create a v5 chat", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 chat create", flag.ContinueOnError)
+		b.Handle("chat create <label>", "Create a chat", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat create", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
+			system, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -323,16 +276,16 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
-		b.Handle("v5 chat list", "List v5 chats", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 chat list", flag.ContinueOnError)
+		b.Handle("chat list", "List chats", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat list", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
+			system, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -350,16 +303,16 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
-		b.Handle("v5 chat <chatID> workspace set <workspace>", "Assign a named workspace to a v5 chat", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 chat workspace set", flag.ContinueOnError)
+		b.Handle("chat <chatID> workspace set <workspace>", "Assign a named workspace to a chat", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat workspace set", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
+			system, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -377,16 +330,16 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
-		b.Handle("v5 chat <chatID> workspace clear", "Clear the named workspace from a v5 chat", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 chat workspace clear", flag.ContinueOnError)
+		b.Handle("chat <chatID> workspace clear", "Clear the named workspace from a chat", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat workspace clear", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
+			system, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -403,11 +356,11 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
-		b.Handle("v5 chat <chatID> component add <role> <component>", "Bind a registered component to a chat by role", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 chat component add", flag.ContinueOnError)
+		b.Handle("chat <chatID> component add <role> <component>", "Bind a registered component to a chat by role", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat component add", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			externalChatID := fs.String("external-chat-id", "", "External provider chat id for source/relay bindings")
 			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
 			codexImage := fs.String("codex-image", "", "Codex runtime image override")
@@ -415,7 +368,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
+			system, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
 			if err != nil {
 				return err
 			}
@@ -448,16 +401,16 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
-		b.Handle("v5 chat <chatID> component list", "List component bindings for a v5 chat", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("v5 chat component list", flag.ContinueOnError)
+		b.Handle("chat <chatID> component list", "List component bindings for a chat", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat component list", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			stateRoot := fs.String("state-root", "", "ctgbot state root")
-			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
 			}
 
-			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
+			system, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
 			if err != nil {
 				return err
 			}
@@ -491,7 +444,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 	})
 }
 
-func runV5ComponentCLI(req *clir.Request, system *v5system.System, registration *coremodel.Component, argv []string) error {
+func runComponentCLI(req *clir.Request, system *systempkg.System, registration *coremodel.Component, argv []string) error {
 	if req == nil {
 		return fmt.Errorf("missing request")
 	}
@@ -575,45 +528,45 @@ func printComponentCLIHelp(definitions []commandengine.Definition) {
 	}
 }
 
-func openV5SystemForRoutes(req *clir.Request, store *clistate.Store, stateRoot string, dbPath string, telegramToken string, codexImage string, processActions v5process.Actions) (*v5system.System, error) {
+func openSystemForRoutes(req *clir.Request, store *clistate.Store, stateRoot string, dbPath string, telegramToken string, codexImage string, processActions processcomponent.Actions) (*systempkg.System, error) {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
-	system, err := v5system.Open(req.Context(), stateRoot, dbPath, store, logger)
+	rtSystem, err := systempkg.Open(req.Context(), stateRoot, dbPath, store, logger)
 	if err != nil {
 		return nil, err
 	}
-	system.Registry, err = newV5Registry(system, telegramToken, codexImage, processActions)
+	rtSystem.Registry, err = newRuntimeRegistry(rtSystem, telegramToken, codexImage, processActions)
 	if err != nil {
 		return nil, err
 	}
-	return system, nil
+	return rtSystem, nil
 }
 
-func newV5Registry(system *v5system.System, telegramToken string, codexImage string, processActions v5process.Actions) (*component.Registry, error) {
+func newRuntimeRegistry(rtSystem *systempkg.System, telegramToken string, codexImage string, processActions processcomponent.Actions) (*component.Registry, error) {
 	registry := component.NewRegistry()
 
-	if err := registry.Add(v5telegram.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5telegram.New(ctx, registration, runtime, home, storage, telegramToken, system.Config, system.Logger)
+	if err := registry.Add(telegram.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return telegram.New(ctx, registration, runtime, home, storage, telegramToken, rtSystem.Config, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(v5codex.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5codex.New(ctx, registration, runtime, home, storage, system.Config, system.ResolveChatWorkspace, system.Logger, strings.TrimSpace(codexImage))
+	if err := registry.Add(codex.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return codex.New(ctx, registration, runtime, home, storage, rtSystem.Config, rtSystem.ResolveChatWorkspace, rtSystem.Logger, strings.TrimSpace(codexImage))
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(v5gmail.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5gmail.New(ctx, registration, runtime, home, storage, nil)
+	if err := registry.Add(gmail.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return gmail.New(ctx, registration, runtime, home, storage, nil)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(v5llamacpp.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
-		return v5llamacpp.New(ctx, registration, runtime, home, storage, system.Logger)
+	if err := registry.Add(llamacpp.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return llamacpp.New(ctx, registration, runtime, home, storage, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(v5process.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		_, _, _, _, _ = ctx, registration, runtime, home, storage
-		return v5process.New(processActions), nil
+		return processcomponent.New(processActions), nil
 	}); err != nil {
 		return nil, err
 	}

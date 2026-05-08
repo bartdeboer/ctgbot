@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandset"
-	v5component "github.com/bartdeboer/ctgbot/internal/component"
+	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
@@ -36,8 +36,8 @@ func Resolve(ref string) ResolvedSurfaceSet {
 	}
 }
 
-func GlobalSurfaces() []v5component.CommandSurface {
-	return []v5component.CommandSurface{
+func GlobalSurfaces() []componentpkg.CommandSurface {
+	return []componentpkg.CommandSurface{
 		brokercomponent.New(nil),
 		(*configcomponent.Component)(nil),
 	}
@@ -71,7 +71,7 @@ func RegisterGobTypes(register func(any)) {
 	llamacppcomponent.RegisterGobTypes(register)
 }
 
-func surfaceForType(componentType string) (v5component.CommandSurface, bool) {
+func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 	switch strings.TrimSpace(componentType) {
 	case codexcomponent.Type:
 		return (*codexcomponent.Component)(nil), true

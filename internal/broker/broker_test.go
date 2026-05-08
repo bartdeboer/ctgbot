@@ -12,24 +12,24 @@ import (
 	broker "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
-	v5process "github.com/bartdeboer/ctgbot/internal/component/process"
+	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	v5system "github.com/bartdeboer/ctgbot/internal/system"
+	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
 )
 
 type fakeRuntime struct {
-	home v5runtime.Home
+	home runtimepkg.Home
 	kind string
 }
 
 func (r fakeRuntime) Kind() string { return r.kind }
-func (r fakeRuntime) ComponentHome() v5runtime.Home {
+func (r fakeRuntime) ComponentHome() runtimepkg.Home {
 	return r.home
 }
 func (r fakeRuntime) RuntimeComponentHomePath() string {
@@ -42,9 +42,9 @@ func (r fakeRuntime) Refresh(ctx context.Context, workspacePath string, threadID
 	_, _, _ = ctx, workspacePath, threadID
 	return fmt.Errorf("not implemented")
 }
-func (r fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{}, fmt.Errorf("not implemented")
+	return runtimepkg.Status{}, fmt.Errorf("not implemented")
 }
 func (r fakeRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
 	_, _, _ = ctx, workspacePath, threadID
@@ -54,9 +54,9 @@ func (r fakeRuntime) Interrupt(ctx context.Context, workspacePath string, thread
 	_, _, _ = ctx, workspacePath, threadID
 	return false, fmt.Errorf("not implemented")
 }
-func (r fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{}, fmt.Errorf("not implemented")
+	return runtimepkg.Status{}, fmt.Errorf("not implemented")
 }
 func (r fakeRuntime) Exec(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	_, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.kind
@@ -80,21 +80,21 @@ type fakeFactory struct {
 }
 
 func (f fakeFactory) Kind() string { return f.kind }
-func (f fakeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+func (f fakeFactory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
 	hostPath := registration.HomePath
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return v5runtime.Home{Path: hostPath}
+	return runtimepkg.Home{Path: hostPath}
 }
-func (f fakeFactory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+func (f fakeFactory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
 	_, _ = registration, home
 	return home.Path
 }
 func (f fakeFactory) RuntimeWorkspacePath(workspacePath string) string {
 	return workspacePath
 }
-func (f fakeFactory) Bind(registration coremodel.Component, home v5runtime.Home, config v5runtime.BindConfig) v5runtime.Runtime {
+func (f fakeFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.Runtime {
 	_, _, _ = registration, home, config
 	return fakeRuntime{
 		home: home,
@@ -134,7 +134,7 @@ func (c *fakeMessenger) StartChatAction(ctx context.Context, target message.Chat
 
 type fakeAgentRecorder struct {
 	prompts    []string
-	homes      []v5runtime.Home
+	homes      []runtimepkg.Home
 	streamText string
 	finalText  string
 }
@@ -169,17 +169,17 @@ func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}, nil
 }
 
-func newTestSystem(t *testing.T, root string, storage repository.Storage, recorder *fakeMessengerRecorder, agentRecorder *fakeAgentRecorder, events []component.InboundEvent, extras ...func(*component.Registry) error) *v5system.System {
+func newTestSystem(t *testing.T, root string, storage repository.Storage, recorder *fakeMessengerRecorder, agentRecorder *fakeAgentRecorder, events []component.InboundEvent, extras ...func(*component.Registry) error) *systempkg.System {
 	t.Helper()
 
 	registry := component.NewRegistry()
-	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, rt v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		_, _, _, _, _ = ctx, rt, home, storage, registration
 		return &fakeMessenger{componentID: registration.ID, recorder: recorder, events: append([]component.InboundEvent(nil), events...)}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add("codex", func(ctx context.Context, registration coremodel.Component, rt v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add("codex", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		_, _, _, _, _ = ctx, rt, home, storage, registration
 		return &fakeAgent{componentID: registration.ID, recorder: agentRecorder}, nil
 	}); err != nil {
@@ -191,10 +191,10 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage, record
 		}
 	}
 
-	system := v5system.New(
+	system := systempkg.New(
 		storage,
-		map[string]v5system.Workspace{},
-		map[string]v5runtime.Factory{"local": fakeFactory{kind: "local", rootDir: root, componentsRoot: filepath.Join(root, ".ctgbot", "components")}},
+		map[string]systempkg.Workspace{},
+		map[string]runtimepkg.Factory{"local": fakeFactory{kind: "local", rootDir: root, componentsRoot: filepath.Join(root, ".ctgbot", "components")}},
 		registry,
 	)
 	system.StateRoot = filepath.Join(root, ".ctgbot")
@@ -360,7 +360,7 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 		agentRecorder,
 		nil,
 		func(registry *component.Registry) error {
-			return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, rt v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+			return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 				_, _, _, _, _ = ctx, rt, home, storage, registration
 				return &fakeCommandComponent{recorder: commandRecorder}, nil
 			})
@@ -460,9 +460,9 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 		agentRecorder,
 		nil,
 		func(registry *component.Registry) error {
-			return registry.Add(v5process.Type, func(ctx context.Context, registration coremodel.Component, rt v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+			return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 				_, _, _, _, _ = ctx, registration, rt, home, storage
-				return v5process.New(&fakeProcessActions{}), nil
+				return processcomponent.New(&fakeProcessActions{}), nil
 			})
 		},
 	)
@@ -474,7 +474,7 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 	}
 	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
 	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
-	process := &coremodel.Component{Type: v5process.Type, Name: v5process.Type, Runtime: "local", Enabled: true, IsDefault: true}
+	process := &coremodel.Component{Type: processcomponent.Type, Name: processcomponent.Type, Runtime: "local", Enabled: true, IsDefault: true}
 	for _, registration := range []*coremodel.Component{telegram, codex, process} {
 		if err := storage.Components().Save(context.Background(), registration); err != nil {
 			t.Fatal(err)

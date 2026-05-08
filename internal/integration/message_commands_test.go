@@ -7,21 +7,21 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	v5broker "github.com/bartdeboer/ctgbot/internal/broker"
+	brokerpkg "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
-	v5process "github.com/bartdeboer/ctgbot/internal/component/process"
+	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	v5system "github.com/bartdeboer/ctgbot/internal/system"
+	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
 
-func TestV5MessageCommandRunsAndSkipsAgent(t *testing.T) {
+func TestMessageCommandRunsAndSkipsAgent(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
@@ -39,7 +39,7 @@ func TestV5MessageCommandRunsAndSkipsAgent(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+				return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 					_, _, _, _, _ = ctx, registration, runtime, home, storage
 					return &mockMessageCommandComponent{}, nil
 				})
@@ -76,7 +76,7 @@ func TestV5MessageCommandRunsAndSkipsAgent(t *testing.T) {
 			t.Fatalf("BindChatComponent(command) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -116,7 +116,7 @@ func TestV5MessageCommandRunsAndSkipsAgent(t *testing.T) {
 	})
 }
 
-func TestV5UnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
+func TestUnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
@@ -134,7 +134,7 @@ func TestV5UnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+				return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 					_, _, _, _, _ = ctx, registration, runtime, home, storage
 					return &mockMessageCommandComponent{}, nil
 				})
@@ -171,7 +171,7 @@ func TestV5UnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 			t.Fatalf("BindChatComponent(command) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -205,7 +205,7 @@ func TestV5UnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 	})
 }
 
-func TestV5AgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.T) {
+func TestAgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
@@ -223,7 +223,7 @@ func TestV5AgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 					_, _, _, _, _ = ctx, registration, runtime, home, storage
 					return &mockAgentCommandComponent{}, nil
 				})
@@ -253,7 +253,7 @@ func TestV5AgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -273,7 +273,7 @@ func TestV5AgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.
 	})
 }
 
-func TestV5MultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
+func TestMultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
@@ -291,7 +291,7 @@ func TestV5MultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 					_, _, _, _, _ = ctx, runtime, home, storage, registry
 					return &mockLocalAgentCommandComponent{name: registration.Name}, nil
 				})
@@ -328,7 +328,7 @@ func TestV5MultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent personal) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -348,7 +348,7 @@ func TestV5MultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
 	})
 }
 
-func TestV5MultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
+func TestMultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
@@ -366,7 +366,7 @@ func TestV5MultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 					_, _, _, _, _ = ctx, runtime, home, storage, registry
 					return &mockLocalAgentCommandComponent{name: registration.Name}, nil
 				})
@@ -403,7 +403,7 @@ func TestV5MultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent personal) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -423,7 +423,7 @@ func TestV5MultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
 	})
 }
 
-func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
+func TestProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		for _, text := range []string{"/quit", "/process quit"} {
@@ -442,9 +442,9 @@ func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 					},
 				},
 				func(registry *component.Registry) error {
-					return registry.Add(v5process.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 						_, _, _, _, _ = ctx, registration, runtime, home, storage
-						return v5process.New(&noopProcessActions{}), nil
+						return processcomponent.New(&noopProcessActions{}), nil
 					})
 				},
 			)
@@ -457,7 +457,7 @@ func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 			if err != nil {
 				t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 			}
-			commandRegistration, err := system.EnsureComponent(ctx, v5process.Type, "local", "")
+			commandRegistration, err := system.EnsureComponent(ctx, processcomponent.Type, "local", "")
 			if err != nil {
 				t.Fatalf("EnsureComponent(process) error = %v", err)
 			}
@@ -479,7 +479,7 @@ func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 				t.Fatalf("BindChatComponent(command) error = %v", err)
 			}
 
-			b := v5broker.New(storage, system, nil)
+			b := brokerpkg.New(storage, system, nil)
 			if err := b.Run(ctx); err != nil {
 				t.Fatalf("Run(%q) error = %v", text, err)
 			}
@@ -514,7 +514,7 @@ func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 	})
 }
 
-func TestV5ProcessQuitMessageAliasesAllowOperators(t *testing.T) {
+func TestProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		for _, text := range []string{"/quit", "/process quit"} {
@@ -533,9 +533,9 @@ func TestV5ProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 					},
 				},
 				func(registry *component.Registry) error {
-					return registry.Add(v5process.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 						_, _, _, _, _ = ctx, registration, runtime, home, storage
-						return v5process.New(&noopProcessActions{}), nil
+						return processcomponent.New(&noopProcessActions{}), nil
 					})
 				},
 			)
@@ -548,7 +548,7 @@ func TestV5ProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 			if err != nil {
 				t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 			}
-			commandRegistration, err := system.EnsureComponent(ctx, v5process.Type, "local", "")
+			commandRegistration, err := system.EnsureComponent(ctx, processcomponent.Type, "local", "")
 			if err != nil {
 				t.Fatalf("EnsureComponent(process) error = %v", err)
 			}
@@ -570,7 +570,7 @@ func TestV5ProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 				t.Fatalf("BindChatComponent(command) error = %v", err)
 			}
 
-			b := v5broker.New(storage, system, nil)
+			b := brokerpkg.New(storage, system, nil)
 			if err := b.Run(ctx); err != nil {
 				t.Fatalf("Run(%q) error = %v", text, err)
 			}
@@ -608,7 +608,7 @@ func TestV5ProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 	})
 }
 
-func TestV5ProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
+func TestProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		cases := []struct {
@@ -638,9 +638,9 @@ func TestV5ProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 					},
 				},
 				func(registry *component.Registry) error {
-					return registry.Add(v5process.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 						_, _, _, _, _ = ctx, registration, runtime, home, storage
-						return v5process.New(actions), nil
+						return processcomponent.New(actions), nil
 					})
 				},
 			)
@@ -653,7 +653,7 @@ func TestV5ProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 			if err != nil {
 				t.Fatalf("EnsureComponent(mockagent) error = %v", err)
 			}
-			commandRegistration, err := system.EnsureComponent(ctx, v5process.Type, "local", "")
+			commandRegistration, err := system.EnsureComponent(ctx, processcomponent.Type, "local", "")
 			if err != nil {
 				t.Fatalf("EnsureComponent(process) error = %v", err)
 			}
@@ -675,7 +675,7 @@ func TestV5ProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 				t.Fatalf("BindChatComponent(command) error = %v", err)
 			}
 
-			b := v5broker.New(storage, system, nil)
+			b := brokerpkg.New(storage, system, nil)
 			if err := b.Run(ctx); err != nil {
 				t.Fatalf("Run(%q) error = %v", tc.text, err)
 			}
@@ -706,7 +706,7 @@ func TestV5ProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 	})
 }
 
-func TestV5HelpListsActiveMessageCommands(t *testing.T) {
+func TestHelpListsActiveMessageCommands(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
@@ -724,15 +724,15 @@ func TestV5HelpListsActiveMessageCommands(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				if err := registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+				if err := registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 					_, _, _, _, _ = ctx, registration, runtime, home, storage
 					return &mockAgentCommandComponent{}, nil
 				}); err != nil {
 					return err
 				}
-				return registry.Add(v5process.Type, func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+				return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 					_, _, _, _, _ = ctx, registration, runtime, home, storage
-					return v5process.New(&noopProcessActions{}), nil
+					return processcomponent.New(&noopProcessActions{}), nil
 				})
 			},
 		)
@@ -745,7 +745,7 @@ func TestV5HelpListsActiveMessageCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("EnsureComponent(agentctl) error = %v", err)
 		}
-		commandRegistration, err := system.EnsureComponent(ctx, v5process.Type, "local", "")
+		commandRegistration, err := system.EnsureComponent(ctx, processcomponent.Type, "local", "")
 		if err != nil {
 			t.Fatalf("EnsureComponent(process) error = %v", err)
 		}
@@ -767,7 +767,7 @@ func TestV5HelpListsActiveMessageCommands(t *testing.T) {
 			t.Fatalf("BindChatComponent(command) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -790,7 +790,7 @@ func TestV5HelpListsActiveMessageCommands(t *testing.T) {
 	})
 }
 
-func TestV5ConfigMessageCommands(t *testing.T) {
+func TestConfigMessageCommands(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		run := func(text string) string {
@@ -834,7 +834,7 @@ func TestV5ConfigMessageCommands(t *testing.T) {
 				t.Fatalf("BindChatComponent(agent) error = %v", err)
 			}
 
-			b := v5broker.New(storage, system, nil)
+			b := brokerpkg.New(storage, system, nil)
 			if err := b.Run(ctx); err != nil {
 				t.Fatalf("Run(%q) error = %v", text, err)
 			}
@@ -868,7 +868,7 @@ func newMessageCommandTestSystem(
 	root string,
 	event component.InboundEvent,
 	extra func(*component.Registry) error,
-) (*v5system.System, repository.Storage, *messengerState, *agentState, *runtimeState) {
+) (*systempkg.System, repository.Storage, *messengerState, *agentState, *runtimeState) {
 	t.Helper()
 
 	storage := newSQLiteStorage(t)
@@ -877,7 +877,7 @@ func newMessageCommandTestSystem(
 	agentState := &agentState{}
 
 	registry := component.NewRegistry()
-	if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		_, _, _, _, _ = ctx, runtime, home, storage, registration
 		return &mockMessenger{
 			componentID: registration.ID,
@@ -886,11 +886,11 @@ func newMessageCommandTestSystem(
 	}); err != nil {
 		t.Fatalf("register mockmsg: %v", err)
 	}
-	if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		_, _, _ = ctx, home, storage
 		return &mockAgent{
 			componentID: registration.ID,
-			runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
+			runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
 			state:       agentState,
 		}, nil
 	}); err != nil {
@@ -902,7 +902,7 @@ func newMessageCommandTestSystem(
 		}
 	}
 
-	system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+	system := systempkg.New(storage, map[string]systempkg.Workspace{}, map[string]runtimepkg.Factory{
 		"local": fakeRuntimeFactory{
 			runtimeKind:    "local",
 			rootDir:        root,

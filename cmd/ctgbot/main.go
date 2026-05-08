@@ -26,7 +26,7 @@ func main() {
 	registerConfigRoutes(r, store, globalStore)
 	registerImageRoutes(r, store)
 	registerHostbridgeRoutes(r, store)
-	registerV5Routes(r, store, globalStore)
+	registerRuntimeRoutes(r, store, globalStore)
 
 	if err := r.Run(context.Background(), os.Args[1:]); err != nil {
 		fmt.Println("error:", err)

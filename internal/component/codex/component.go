@@ -18,7 +18,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 const (
@@ -36,7 +36,7 @@ type TurnRunner interface {
 
 type Component struct {
 	registration     coremodel.Component
-	runtime          v5runtime.Runtime
+	runtime          runtimepkg.Runtime
 	storage          repository.Storage
 	resolveWorkspace func(context.Context, coremodel.Chat) (string, error)
 	config           *appstate.Config
@@ -48,8 +48,8 @@ type Component struct {
 func New(
 	ctx context.Context,
 	registration coremodel.Component,
-	runtimeFactory v5runtime.Factory,
-	home v5runtime.Home,
+	runtimeFactory runtimepkg.Factory,
+	home runtimepkg.Home,
 	storage repository.Storage,
 	cfg *appstate.Config,
 	resolveWorkspace func(context.Context, coremodel.Chat) (string, error),
@@ -69,7 +69,7 @@ func New(
 	if resolveWorkspace == nil {
 		return nil, fmt.Errorf("missing workspace resolver")
 	}
-	runtimeConfig, err := v5runtime.LoadBindConfig(home.Path)
+	runtimeConfig, err := runtimepkg.LoadBindConfig(home.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 		{RelativePath: "auth.json", Required: true, Sensitive: true},
 		{RelativePath: "config.toml", Required: false, Sensitive: false},
 		{RelativePath: "ctgbot-bootstrap.md", Required: false, Sensitive: false},
-		{RelativePath: v5runtime.ConfigFilename, Required: false, Sensitive: false},
+		{RelativePath: runtimepkg.ConfigFilename, Required: false, Sensitive: false},
 		{RelativePath: ComponentConfigFilename, Required: false, Sensitive: false},
 	}
 }
@@ -298,7 +298,7 @@ func (c *Component) turnOptions(ctx context.Context, thread *coremodel.Thread) T
 	return options
 }
 
-func componentBindConfig(config v5runtime.BindConfig, cfg *appstate.Config, imageOverride string, runtimeHomePath string) v5runtime.BindConfig {
+func componentBindConfig(config runtimepkg.BindConfig, cfg *appstate.Config, imageOverride string, runtimeHomePath string) runtimepkg.BindConfig {
 	config = config.Clean()
 	if strings.TrimSpace(config.Image) == "" && cfg != nil {
 		config.Image = strings.TrimSpace(cfg.Docker().Image())
@@ -317,7 +317,7 @@ func (c *Component) logf(format string, args ...any) {
 }
 
 type commandRuntime struct {
-	runtime       v5runtime.Runtime
+	runtime       runtimepkg.Runtime
 	threadID      modeluuid.UUID
 	workspacePath string
 	commands      commandengine.CommandExecutor

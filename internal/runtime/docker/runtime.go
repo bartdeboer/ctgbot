@@ -14,7 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgebridge "github.com/bartdeboer/ctgbot/internal/hostbridge/bridge"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -40,29 +40,29 @@ func (f *Factory) Kind() string {
 	return "docker"
 }
 
-func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+func (f *Factory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
 	hostPath := strings.TrimSpace(registration.HomePath)
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return v5runtime.Home{Path: hostPath}
+	return runtimepkg.Home{Path: hostPath}
 }
 
-func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
 	_ = home
 	return componentRuntimeHomePath(registration)
 }
 
 func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
 	_ = workspacePath
-	return v5runtime.DefaultWorkspaceRuntimePath
+	return runtimepkg.DefaultWorkspaceRuntimePath
 }
 
 func (f *Factory) Bind(
 	registration coremodel.Component,
-	home v5runtime.Home,
-	config v5runtime.BindConfig,
-) v5runtime.Runtime {
+	home runtimepkg.Home,
+	config runtimepkg.BindConfig,
+) runtimepkg.Runtime {
 	return &Runtime{
 		rootDir:      f.rootDir,
 		sandboxes:    f.sandboxes,
@@ -80,7 +80,7 @@ type Runtime struct {
 	sandboxes    sandboxengine.RuntimeManager
 	bridge       *hostbridgebridge.Bridge
 	registration coremodel.Component
-	home         v5runtime.Home
+	home         runtimepkg.Home
 	image        string
 	env          []string
 	gpus         string
@@ -90,7 +90,7 @@ func (r *Runtime) Kind() string {
 	return "docker"
 }
 
-func (r *Runtime) ComponentHome() v5runtime.Home {
+func (r *Runtime) ComponentHome() runtimepkg.Home {
 	return r.home
 }
 
@@ -103,7 +103,7 @@ func (r *Runtime) RuntimeComponentHomePath() string {
 
 func (r *Runtime) RuntimeWorkspacePath(workspacePath string) string {
 	_ = workspacePath
-	return v5runtime.DefaultWorkspaceRuntimePath
+	return runtimepkg.DefaultWorkspaceRuntimePath
 }
 
 func (r *Runtime) Refresh(
@@ -123,14 +123,14 @@ func (r *Runtime) Start(
 	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
-) (v5runtime.Status, error) {
+) (runtimepkg.Status, error) {
 	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, true)
 	if err != nil {
-		return v5runtime.Status{}, err
+		return runtimepkg.Status{}, err
 	}
 	defer cleanup()
 	if _, err := sbx.Ensure(ctx); err != nil {
-		return v5runtime.Status{}, err
+		return runtimepkg.Status{}, err
 	}
 	return r.statusForSandbox(ctx, workspacePath, sbx)
 }
@@ -168,10 +168,10 @@ func (r *Runtime) Status(
 	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
-) (v5runtime.Status, error) {
+) (runtimepkg.Status, error) {
 	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, false)
 	if err != nil {
-		return v5runtime.Status{}, err
+		return runtimepkg.Status{}, err
 	}
 	defer cleanup()
 	return r.statusForSandbox(ctx, workspacePath, sbx)
@@ -320,15 +320,15 @@ func sandboxAddHosts() []string {
 	return []string{"host.docker.internal:host-gateway"}
 }
 
-func (r *Runtime) statusForSandbox(ctx context.Context, workspacePath string, sbx *sandboxengine.Sandbox) (v5runtime.Status, error) {
+func (r *Runtime) statusForSandbox(ctx context.Context, workspacePath string, sbx *sandboxengine.Sandbox) (runtimepkg.Status, error) {
 	if sbx == nil {
-		return v5runtime.Status{}, fmt.Errorf("missing sandbox")
+		return runtimepkg.Status{}, fmt.Errorf("missing sandbox")
 	}
 	state, err := sbx.InspectState(ctx)
 	if err != nil {
-		return v5runtime.Status{}, err
+		return runtimepkg.Status{}, err
 	}
-	status := v5runtime.Status{
+	status := runtimepkg.Status{
 		Name:                 sbx.Name,
 		State:                string(state),
 		RuntimeHomePath:      r.RuntimeComponentHomePath(),
@@ -342,11 +342,11 @@ func (r *Runtime) statusForSandbox(ctx context.Context, workspacePath string, sb
 }
 
 func authSandboxName(registration coremodel.Component) string {
-	return safeName("ctgbot-v5-auth-"+registration.Ref(), "ctgbot-v5-auth")
+	return safeName("ctgbot-auth-"+registration.Ref(), "ctgbot-auth")
 }
 
 func turnSandboxName(registration coremodel.Component, threadID modeluuid.UUID) string {
-	return safeName("ctgbot-v5-"+registration.Ref()+"-"+threadID.String(), "ctgbot-v5-runtime")
+	return safeName("ctgbot-"+registration.Ref()+"-"+threadID.String(), "ctgbot-runtime")
 }
 
 func resolveImage(value string) string {
@@ -365,7 +365,7 @@ func resolveWorkspace(workspacePath string) (string, string, error) {
 	if err := os.MkdirAll(filepath.Join(hostPath, "inbox"), 0o755); err != nil {
 		return "", "", err
 	}
-	return hostPath, v5runtime.DefaultWorkspaceRuntimePath, nil
+	return hostPath, runtimepkg.DefaultWorkspaceRuntimePath, nil
 }
 
 func componentRuntimeHomePath(registration coremodel.Component) string {

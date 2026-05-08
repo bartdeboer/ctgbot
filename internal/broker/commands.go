@@ -68,7 +68,7 @@ func (b *Broker) tryHandleMessageCommand(
 		return true, nil, err
 	}
 	b.logf(
-		"v5 message command handled chat=%s thread=%s argv=%q result_chars=%d",
+		"message command handled chat=%s thread=%s argv=%q result_chars=%d",
 		chat.ID,
 		thread.ID,
 		strings.Join(argv, " "),

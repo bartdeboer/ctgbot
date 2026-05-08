@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 func TestComponentManagedFiles(t *testing.T) {
@@ -15,8 +15,8 @@ func TestComponentManagedFiles(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("len(ManagedFiles) = %d, want 2", len(got))
 	}
-	if got[0].RelativePath != v5runtime.ConfigFilename {
-		t.Fatalf("ManagedFiles[0] = %q, want %q", got[0].RelativePath, v5runtime.ConfigFilename)
+	if got[0].RelativePath != runtimepkg.ConfigFilename {
+		t.Fatalf("ManagedFiles[0] = %q, want %q", got[0].RelativePath, runtimepkg.ConfigFilename)
 	}
 	if got[1].RelativePath != ComponentConfigFilename {
 		t.Fatalf("ManagedFiles[1] = %q, want %q", got[1].RelativePath, ComponentConfigFilename)

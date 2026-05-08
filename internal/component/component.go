@@ -12,7 +12,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 type Component interface {
@@ -22,15 +22,15 @@ type Component interface {
 type Constructor func(
 	ctx context.Context,
 	registration coremodel.Component,
-	runtime v5runtime.Factory,
-	home v5runtime.Home,
+	runtime runtimepkg.Factory,
+	home runtimepkg.Home,
 	storage repository.Storage,
 ) (Component, error)
 
 type Loaded struct {
 	Registration coremodel.Component
-	Home         v5runtime.Home
-	Runtime      v5runtime.Factory
+	Home         runtimepkg.Home
+	Runtime      runtimepkg.Factory
 	Component    Component
 }
 
@@ -74,8 +74,8 @@ func (r *Registry) Has(componentType string) bool {
 func (r *Registry) Build(
 	ctx context.Context,
 	registration coremodel.Component,
-	runtime v5runtime.Factory,
-	home v5runtime.Home,
+	runtime runtimepkg.Factory,
+	home runtimepkg.Home,
 	storage repository.Storage,
 ) (*Loaded, error) {
 	if r == nil {
@@ -201,7 +201,7 @@ type TurnRuntime interface {
 	Send(ctx context.Context, payload message.OutboundPayload) error
 	StartChatAction(ctx context.Context, action message.ChatAction) (func(), error)
 	WorkspacePath() string
-	ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool)
+	ComponentHome(componentID modeluuid.UUID) (runtimepkg.Home, bool)
 	ComponentThreadID(componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(componentID modeluuid.UUID, componentThreadID string) error
 }

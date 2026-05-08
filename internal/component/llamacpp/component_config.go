@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 const (
@@ -28,10 +28,10 @@ type ComponentConfig struct {
 	StripReasoning bool    `json:"strip_reasoning"`
 }
 
-func loadRuntimeConfig(homePath string) (v5runtime.BindConfig, error) {
-	config, err := v5runtime.LoadBindConfig(homePath)
+func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
+	config, err := runtimepkg.LoadBindConfig(homePath)
 	if err != nil {
-		return v5runtime.BindConfig{}, err
+		return runtimepkg.BindConfig{}, err
 	}
 	config.Image = firstNonEmpty(config.Image, DefaultImage)
 	config.GPUs = firstNonEmpty(config.GPUs, "all")

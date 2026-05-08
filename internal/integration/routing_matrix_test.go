@@ -8,17 +8,17 @@ import (
 	"strings"
 	"testing"
 
-	v5broker "github.com/bartdeboer/ctgbot/internal/broker"
+	brokerpkg "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
-	v5system "github.com/bartdeboer/ctgbot/internal/system"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 )
 
-func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
+func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 
@@ -89,7 +89,7 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockgmail", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockgmail", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, runtime, home, storage, registration
 			state, ok := gmailStates[registration.Ref()]
 			if !ok {
@@ -102,7 +102,7 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockgmail: %v", err)
 		}
-		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, runtime, home, storage, registration
 			state, ok := relayStates[registration.Ref()]
 			if !ok {
@@ -112,7 +112,7 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockrelay: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _ = ctx, home, storage
 			state, ok := agentStates[registration.Ref()]
 			if !ok {
@@ -120,17 +120,17 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 			}
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
+				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
 				state:       state,
 			}, nil
 		}); err != nil {
 			t.Fatalf("register mockagent: %v", err)
 		}
 
-		system := v5system.New(storage, map[string]v5system.Workspace{
+		system := systempkg.New(storage, map[string]systempkg.Workspace{
 			"work":     {Name: "work", Path: filepath.Join(root, "workspaces", "work-root")},
 			"personal": {Name: "personal", Path: filepath.Join(root, "workspaces", "personal-root")},
-		}, map[string]v5runtime.Factory{
+		}, map[string]runtimepkg.Factory{
 			"local": fakeRuntimeFactory{
 				runtimeKind:    "local",
 				rootDir:        root,
@@ -189,7 +189,7 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		mustBindChatComponent(t, ctx, system, beta.ID, coremodel.ChatComponentRoleRelay, betaRelay.Ref(), "telegram-beta")
 		mustBindChatComponent(t, ctx, system, beta.ID, coremodel.ChatComponentRoleAgent, personalAgent.Ref(), "")
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -285,7 +285,7 @@ func (m *multiEventSource) RunInbound(ctx context.Context, emit component.Inboun
 	return nil
 }
 
-func mustBindChatComponent(t *testing.T, ctx context.Context, system *v5system.System, chatID modeluuid.UUID, role coremodel.ChatComponentRole, ref string, externalChatID string) {
+func mustBindChatComponent(t *testing.T, ctx context.Context, system *systempkg.System, chatID modeluuid.UUID, role coremodel.ChatComponentRole, ref string, externalChatID string) {
 	t.Helper()
 	if _, err := system.BindChatComponent(ctx, chatID, role, ref, externalChatID); err != nil {
 		t.Fatalf("BindChatComponent(%s, %s) error = %v", role, ref, err)

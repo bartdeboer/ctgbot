@@ -13,7 +13,7 @@ import (
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
 
@@ -46,7 +46,7 @@ type ChatRuntime struct {
 	Relays           []RelayBinding
 	MessageCommands  *commandengine.Engine
 	AgentCommands    *commandengine.Engine
-	Homes            map[modeluuid.UUID]v5runtime.Home
+	Homes            map[modeluuid.UUID]runtimepkg.Home
 }
 
 type AgentBinding struct {
@@ -87,7 +87,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		return EventOutcome{}, err
 	}
 	if sourceBinding == nil {
-		b.logf("v5 inbound dropped component=%s external_chat=%q reason=no-source-binding", event.ComponentID, externalChatID)
+		b.logf("inbound dropped component=%s external_chat=%q reason=no-source-binding", event.ComponentID, externalChatID)
 		return EventOutcome{Dropped: true}, nil
 	}
 
@@ -111,7 +111,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		}
 		message, relayErr := b.relaySystemMessage(ctx, runtime, *chat, *thread, text)
 		if relayErr != nil {
-			b.logf("v5 inbound error relay failed chat=%s thread=%s err=%v", chat.ID, thread.ID, relayErr)
+			b.logf("inbound error relay failed chat=%s thread=%s err=%v", chat.ID, thread.ID, relayErr)
 			return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
 		}
 		if message != nil {

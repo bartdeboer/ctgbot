@@ -15,15 +15,15 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clistate"
 )
 
 type testRuntime struct {
-	componentHome v5runtime.Home
+	componentHome runtimepkg.Home
 	runtimeHome   string
-	status        v5runtime.Status
+	status        runtimepkg.Status
 	refreshCalls  int
 	stopCalls     int
 	stopErr       error
@@ -33,11 +33,11 @@ type testRuntime struct {
 }
 
 func (r *testRuntime) Kind() string { return "docker" }
-func (r *testRuntime) ComponentHome() v5runtime.Home {
+func (r *testRuntime) ComponentHome() runtimepkg.Home {
 	if strings.TrimSpace(r.componentHome.Path) != "" {
 		return r.componentHome
 	}
-	return v5runtime.Home{Path: "/tmp/codex-home"}
+	return runtimepkg.Home{Path: "/tmp/codex-home"}
 }
 func (r *testRuntime) RuntimeComponentHomePath() string {
 	if strings.TrimSpace(r.runtimeHome) != "" {
@@ -54,7 +54,7 @@ func (r *testRuntime) Refresh(ctx context.Context, workspacePath string, threadI
 	r.refreshCalls++
 	return nil
 }
-func (r *testRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r *testRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
 	return r.status, nil
 }
@@ -67,7 +67,7 @@ func (r *testRuntime) Interrupt(ctx context.Context, workspacePath string, threa
 	_, _, _ = ctx, workspacePath, threadID
 	return false, nil
 }
-func (r *testRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r *testRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
 	return r.status, nil
 }
@@ -94,8 +94,8 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 		storage := repository.NewMemory()
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		runtime := &testRuntime{
-			status: v5runtime.Status{
-				Name:                 "ctgbot-v5-codex-thread",
+			status: runtimepkg.Status{
+				Name:                 "ctgbot-codex-thread",
 				State:                "running",
 				RuntimeHomePath:      "/profile/components/codex/codex",
 				RuntimeWorkspacePath: "/workspace",
@@ -316,8 +316,8 @@ func TestCodexCommandStartAndStopToggleKeepRunning(t *testing.T) {
 		storage := repository.NewMemory()
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		runtime := &testRuntime{
-			status: v5runtime.Status{
-				Name:                 "ctgbot-v5-codex-thread",
+			status: runtimepkg.Status{
+				Name:                 "ctgbot-codex-thread",
 				State:                "running",
 				RuntimeHomePath:      "/profile/components/codex/codex",
 				RuntimeWorkspacePath: "/workspace",
@@ -357,7 +357,7 @@ func TestCodexCommandStartAndStopToggleKeepRunning(t *testing.T) {
 		if err != nil {
 			t.Fatalf("start error = %v", err)
 		}
-		if got, want := startResult.Text, "container started\nkeep_running: true\ncontainer: ctgbot-v5-codex-thread\nstate: running"; got != want {
+		if got, want := startResult.Text, "container started\nkeep_running: true\ncontainer: ctgbot-codex-thread\nstate: running"; got != want {
 			t.Fatalf("start text = %q, want %q", got, want)
 		}
 		saved, err := storage.Threads().GetByID(ctx, thread.ID)

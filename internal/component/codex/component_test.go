@@ -15,7 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 type stubExecutor struct {
@@ -55,9 +55,9 @@ func (stubTurnRuntime) StartChatAction(ctx context.Context, action message.ChatA
 	return func() {}, nil
 }
 func (stubTurnRuntime) WorkspacePath() string { return "/tmp/workspace" }
-func (stubTurnRuntime) ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool) {
+func (stubTurnRuntime) ComponentHome(componentID modeluuid.UUID) (runtimepkg.Home, bool) {
 	_ = componentID
-	return v5runtime.Home{}, false
+	return runtimepkg.Home{}, false
 }
 func (stubTurnRuntime) ComponentThreadID(componentID modeluuid.UUID) (string, bool, error) {
 	_ = componentID
@@ -274,7 +274,7 @@ func TestAuthStatusRunsComponentScopedLoginStatus(t *testing.T) {
 		componentHome := filepath.Join(root, ".ctgbot", "components", "codex", "work")
 		runtimeHomePath := filepath.Join(root, "runtime-home")
 		runtime := &testRuntime{
-			componentHome: v5runtime.Home{Path: componentHome},
+			componentHome: runtimepkg.Home{Path: componentHome},
 			runtimeHome:   runtimeHomePath,
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "work"}

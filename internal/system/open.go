@@ -13,11 +13,11 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	hostbridgebridge "github.com/bartdeboer/ctgbot/internal/hostbridge/bridge"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5gormstorage "github.com/bartdeboer/ctgbot/internal/repository/gormstorage"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
-	v5backend "github.com/bartdeboer/ctgbot/internal/runtime/backend"
-	v5docker "github.com/bartdeboer/ctgbot/internal/runtime/docker"
-	v5local "github.com/bartdeboer/ctgbot/internal/runtime/local"
+	gormstoragepkg "github.com/bartdeboer/ctgbot/internal/repository/gormstorage"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	backendruntime "github.com/bartdeboer/ctgbot/internal/runtime/backend"
+	dockerruntime "github.com/bartdeboer/ctgbot/internal/runtime/docker"
+	localruntime "github.com/bartdeboer/ctgbot/internal/runtime/local"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/go-clistate"
 	"gorm.io/gorm"
@@ -29,7 +29,7 @@ type System struct {
 	Storage    repository.Storage
 	Registry   *component.Registry
 	Workspaces map[string]Workspace
-	Runtimes   map[string]v5runtime.Factory
+	Runtimes   map[string]runtimepkg.Factory
 	Hostbridge *hostbridgebridge.Bridge
 
 	RootDir   string
@@ -78,7 +78,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 		return nil, err
 	}
 
-	storage := v5gormstorage.New(db)
+	storage := gormstoragepkg.New(db)
 	if err := storage.AutoMigrate(ctx); err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 	}, nil
 }
 
-func New(storage repository.Storage, workspaces map[string]Workspace, runtimes map[string]v5runtime.Factory, registry *component.Registry) *System {
+func New(storage repository.Storage, workspaces map[string]Workspace, runtimes map[string]runtimepkg.Factory, registry *component.Registry) *System {
 	return &System{
 		Storage:    storage,
 		Workspaces: workspaces,
@@ -148,8 +148,8 @@ func resolveComponentsRoot(stateRoot string) string {
 	return filepath.Join(strings.TrimSpace(stateRoot), "components")
 }
 
-func buildRuntimes(rootDir string, stateRoot string, cfg *appstate.Config, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger) (map[string]v5runtime.Factory, *hostbridgebridge.Bridge, error) {
-	runtimes := map[string]v5runtime.Factory{}
+func buildRuntimes(rootDir string, stateRoot string, cfg *appstate.Config, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger) (map[string]runtimepkg.Factory, *hostbridgebridge.Bridge, error) {
+	runtimes := map[string]runtimepkg.Factory{}
 	listenAddress := strings.TrimSpace(os.Getenv("CTGBOT_HOSTBRIDGE_LISTEN_ADDR"))
 	if listenAddress == "" {
 		listenAddress = strings.TrimSpace(cfg.Hostbridge().ConfiguredTCPListenAddr())
@@ -159,15 +159,15 @@ func buildRuntimes(rootDir string, stateRoot string, cfg *appstate.Config, stora
 	}
 	bridge := hostbridgebridge.NewBridge(stateRoot, storage, logger).WithListenAddress(listenAddress)
 	componentsRoot := resolveComponentsRoot(stateRoot)
-	for _, runtimeKind := range []string{"docker", "local", v5backend.Kind} {
-		var runtime v5runtime.Factory
+	for _, runtimeKind := range []string{"docker", "local", backendruntime.Kind} {
+		var runtime runtimepkg.Factory
 		switch runtimeKind {
 		case "docker":
-			runtime = v5docker.New(rootDir, componentsRoot, sandboxes, bridge)
+			runtime = dockerruntime.New(rootDir, componentsRoot, sandboxes, bridge)
 		case "local":
-			runtime = v5local.New(rootDir, componentsRoot)
-		case v5backend.Kind:
-			runtime = v5backend.New(componentsRoot, logger)
+			runtime = localruntime.New(rootDir, componentsRoot)
+		case backendruntime.Kind:
+			runtime = backendruntime.New(componentsRoot, logger)
 		default:
 			return nil, nil, fmt.Errorf("unsupported runtime %q", runtimeKind)
 		}

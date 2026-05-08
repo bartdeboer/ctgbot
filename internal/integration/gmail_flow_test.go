@@ -5,17 +5,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	v5broker "github.com/bartdeboer/ctgbot/internal/broker"
+	brokerpkg "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
-	v5system "github.com/bartdeboer/ctgbot/internal/system"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 )
 
-func TestV5GmailSourceRelaysOutboundElsewhere(t *testing.T) {
+func TestGmailSourceRelaysOutboundElsewhere(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 
@@ -38,7 +38,7 @@ func TestV5GmailSourceRelaysOutboundElsewhere(t *testing.T) {
 		agentState := &agentState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockgmail", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockgmail", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, runtime, home, storage, registration
 			return &mockGmailSource{
 				componentID: registration.ID,
@@ -47,7 +47,7 @@ func TestV5GmailSourceRelaysOutboundElsewhere(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockgmail: %v", err)
 		}
-		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, runtime, home, storage, registration
 			return &mockRelay{
 				state: relayState,
@@ -55,18 +55,18 @@ func TestV5GmailSourceRelaysOutboundElsewhere(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockrelay: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _ = ctx, home, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
+				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
 			t.Fatalf("register mockagent: %v", err)
 		}
 
-		system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+		system := systempkg.New(storage, map[string]systempkg.Workspace{}, map[string]runtimepkg.Factory{
 			"local": fakeRuntimeFactory{
 				runtimeKind:    "local",
 				rootDir:        root,
@@ -108,7 +108,7 @@ func TestV5GmailSourceRelaysOutboundElsewhere(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}

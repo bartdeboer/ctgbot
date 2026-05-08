@@ -11,7 +11,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 const Type = "telegram"
@@ -19,8 +19,8 @@ const Type = "telegram"
 func New(
 	ctx context.Context,
 	registration coremodel.Component,
-	runtime v5runtime.Factory,
-	home v5runtime.Home,
+	runtime runtimepkg.Factory,
+	home runtimepkg.Home,
 	storage repository.Storage,
 	token string,
 	cfg *appstate.Config,

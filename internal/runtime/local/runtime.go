@@ -11,7 +11,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 type Factory struct {
@@ -30,15 +30,15 @@ func (f *Factory) Kind() string {
 	return "local"
 }
 
-func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+func (f *Factory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
 	hostPath := strings.TrimSpace(registration.HomePath)
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return v5runtime.Home{Path: hostPath}
+	return runtimepkg.Home{Path: hostPath}
 }
 
-func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
 	_, _ = registration, home
 	return home.Path
 }
@@ -49,9 +49,9 @@ func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
 
 func (f *Factory) Bind(
 	registration coremodel.Component,
-	home v5runtime.Home,
-	config v5runtime.BindConfig,
-) v5runtime.Runtime {
+	home runtimepkg.Home,
+	config runtimepkg.BindConfig,
+) runtimepkg.Runtime {
 	_ = registration
 	return &Runtime{
 		rootDir: f.rootDir,
@@ -64,7 +64,7 @@ func (f *Factory) Bind(
 
 type Runtime struct {
 	rootDir string
-	home    v5runtime.Home
+	home    runtimepkg.Home
 	image   string
 	env     []string
 	gpus    string
@@ -74,7 +74,7 @@ func (r *Runtime) Kind() string {
 	return "local"
 }
 
-func (r *Runtime) ComponentHome() v5runtime.Home {
+func (r *Runtime) ComponentHome() runtimepkg.Home {
 	return r.home
 }
 
@@ -102,9 +102,9 @@ func (r *Runtime) Start(
 	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
-) (v5runtime.Status, error) {
+) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{}, fmt.Errorf("local runtime is not implemented yet")
+	return runtimepkg.Status{}, fmt.Errorf("local runtime is not implemented yet")
 }
 
 func (r *Runtime) Stop(
@@ -129,9 +129,9 @@ func (r *Runtime) Status(
 	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
-) (v5runtime.Status, error) {
+) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{}, fmt.Errorf("local runtime is not implemented yet")
+	return runtimepkg.Status{}, fmt.Errorf("local runtime is not implemented yet")
 }
 
 func (r *Runtime) Exec(

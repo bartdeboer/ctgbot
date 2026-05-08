@@ -10,7 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	gmailapi "google.golang.org/api/gmail/v1"
 )
@@ -24,8 +24,8 @@ const (
 func New(
 	ctx context.Context,
 	registration coremodel.Component,
-	runtime v5runtime.Factory,
-	home v5runtime.Home,
+	runtime runtimepkg.Factory,
+	home runtimepkg.Home,
 	storage repository.Storage,
 	service *gmailapi.Service,
 ) (component.Component, error) {

@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"strings"
 
-	v5component "github.com/bartdeboer/ctgbot/internal/component"
+	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
-func (c *Component) RunInbound(ctx context.Context, emit v5component.InboundEmitter) error {
+func (c *Component) RunInbound(ctx context.Context, emit componentpkg.InboundEmitter) error {
 	if c == nil {
 		return fmt.Errorf("missing telegram component")
 	}
@@ -35,7 +35,7 @@ func (c *Component) RunInbound(ctx context.Context, emit v5component.InboundEmit
 	return c.api.Run(ctx, telegramCfg.PollTimeout(), handle)
 }
 
-func (c *Component) handleUpdate(ctx context.Context, update TelegramUpdate, emit v5component.InboundEmitter) {
+func (c *Component) handleUpdate(ctx context.Context, update TelegramUpdate, emit componentpkg.InboundEmitter) {
 	text := strings.TrimSpace(update.Text)
 	if text == "" && len(update.Attachments) == 0 {
 		return
@@ -46,7 +46,7 @@ func (c *Component) handleUpdate(ctx context.Context, update TelegramUpdate, emi
 	}
 }
 
-func (c *Component) emitUpdate(ctx context.Context, update TelegramUpdate, text string, emit v5component.InboundEmitter) error {
+func (c *Component) emitUpdate(ctx context.Context, update TelegramUpdate, text string, emit componentpkg.InboundEmitter) error {
 	if emit == nil {
 		return fmt.Errorf("missing inbound emitter")
 	}
@@ -54,7 +54,7 @@ func (c *Component) emitUpdate(ctx context.Context, update TelegramUpdate, text 
 	if err != nil {
 		return err
 	}
-	return emit(ctx, v5component.InboundEvent{
+	return emit(ctx, componentpkg.InboundEvent{
 		ComponentID: c.componentID,
 		ExternalID:  externalIDForPayload(payload),
 		Payload:     payload,

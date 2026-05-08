@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	v5component "github.com/bartdeboer/ctgbot/internal/component"
+	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	gmailapi "google.golang.org/api/gmail/v1"
 )
@@ -94,7 +94,7 @@ func TestInboundEventFromNilMessageUsesDefaults(t *testing.T) {
 
 func TestRunInboundSkeleton(t *testing.T) {
 	component := &Component{}
-	if err := component.RunInbound(context.Background(), func(ctx context.Context, event v5component.InboundEvent) error {
+	if err := component.RunInbound(context.Background(), func(ctx context.Context, event componentpkg.InboundEvent) error {
 		_ = ctx
 		_ = event
 		return nil

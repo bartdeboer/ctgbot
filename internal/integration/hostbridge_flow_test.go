@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	v5broker "github.com/bartdeboer/ctgbot/internal/broker"
+	brokerpkg "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -20,10 +20,10 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	v5system "github.com/bartdeboer/ctgbot/internal/system"
+	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -56,7 +56,7 @@ func isHostbridgeListenerUnavailable(err error) bool {
 		strings.Contains(text, "listen tcp") && strings.Contains(text, "operation not permitted")
 }
 
-func TestV5HostbridgeFlow(t *testing.T) {
+func TestHostbridgeFlow(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 
@@ -85,7 +85,7 @@ func TestV5HostbridgeFlow(t *testing.T) {
 		commandState := &commandState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, runtime, home, storage, registration
 			return &mockMessenger{
 				componentID: registration.ID,
@@ -94,25 +94,25 @@ func TestV5HostbridgeFlow(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockmsg: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
+				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
 				bridge:      bridge,
 				state:       agentState,
 			}, nil
 		}); err != nil {
 			t.Fatalf("register mockagent: %v", err)
 		}
-		if err := registry.Add("mockcmd", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockcmd", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, runtime, home, storage, registration
 			return &mockCommandComponent{state: commandState}, nil
 		}); err != nil {
 			t.Fatalf("register mockcmd: %v", err)
 		}
 
-		system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+		system := systempkg.New(storage, map[string]systempkg.Workspace{}, map[string]runtimepkg.Factory{
 			"local": fakeRuntimeFactory{
 				runtimeKind:    "local",
 				rootDir:        root,
@@ -160,7 +160,7 @@ func TestV5HostbridgeFlow(t *testing.T) {
 			t.Fatalf("BindChatComponent(command) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -201,7 +201,7 @@ func TestV5HostbridgeFlow(t *testing.T) {
 	})
 }
 
-func TestV5HostbridgeSendMediaFlow(t *testing.T) {
+func TestHostbridgeSendMediaFlow(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 
@@ -229,7 +229,7 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 		agentState := &agentState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, runtime, home, storage, registration
 			return &mockMessenger{
 				componentID: registration.ID,
@@ -238,11 +238,11 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockmsg: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeMediaAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
+				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
 				bridge:      bridge,
 				state:       agentState,
 			}, nil
@@ -250,7 +250,7 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 			t.Fatalf("register mockagent: %v", err)
 		}
 
-		system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+		system := systempkg.New(storage, map[string]systempkg.Workspace{}, map[string]runtimepkg.Factory{
 			"local": fakeRuntimeFactory{
 				runtimeKind:    "local",
 				rootDir:        root,
@@ -291,7 +291,7 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -355,7 +355,7 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 	})
 }
 
-func TestV5HostbridgeRunCommandFlow(t *testing.T) {
+func TestHostbridgeRunCommandFlow(t *testing.T) {
 	if _, ok := hostbridgeserver.DefaultAllowedCommands()["pwd"]; !ok {
 		t.Skip("default hostbridge command pwd is unavailable on this platform")
 	}
@@ -386,7 +386,7 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 		agentState := &agentState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, runtime, home, storage, registration
 			return &mockMessenger{
 				componentID: registration.ID,
@@ -395,11 +395,11 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockmsg: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeRunAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
+				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
 				bridge:      bridge,
 				command:     "pwd",
 				state:       agentState,
@@ -408,7 +408,7 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 			t.Fatalf("register mockagent: %v", err)
 		}
 
-		system := v5system.New(storage, map[string]v5system.Workspace{}, map[string]v5runtime.Factory{
+		system := systempkg.New(storage, map[string]systempkg.Workspace{}, map[string]runtimepkg.Factory{
 			"local": fakeRuntimeFactory{
 				runtimeKind:    "local",
 				rootDir:        root,
@@ -449,7 +449,7 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -472,7 +472,7 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 	})
 }
 
-func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
+func TestHostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 
@@ -500,7 +500,7 @@ func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 		agentState := &agentState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, runtime, home, storage, registration
 			return &mockMessenger{
 				componentID: registration.ID,
@@ -509,11 +509,11 @@ func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockmsg: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeRunAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, v5runtime.BindConfig{}),
+				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
 				bridge:      bridge,
 				command:     "echo-workspace",
 				state:       agentState,
@@ -522,7 +522,7 @@ func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 			t.Fatalf("register mockagent: %v", err)
 		}
 
-		system := v5system.New(storage, map[string]v5system.Workspace{
+		system := systempkg.New(storage, map[string]systempkg.Workspace{
 			"work": {
 				Name: "work",
 				Path: filepath.Join(root, "workspaces", "work"),
@@ -533,7 +533,7 @@ func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 					},
 				},
 			},
-		}, map[string]v5runtime.Factory{
+		}, map[string]runtimepkg.Factory{
 			"local": fakeRuntimeFactory{
 				runtimeKind:    "local",
 				rootDir:        root,
@@ -575,7 +575,7 @@ func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := v5broker.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -636,21 +636,21 @@ func (c *mockCommandComponent) RegisterCommandHandlers(registry *commandengine.R
 
 type hostbridgeAgent struct {
 	componentID modeluuid.UUID
-	runtime     v5runtime.Runtime
+	runtime     runtimepkg.Runtime
 	bridge      *hostbridgebridge.Bridge
 	state       *agentState
 }
 
 type hostbridgeMediaAgent struct {
 	componentID modeluuid.UUID
-	runtime     v5runtime.Runtime
+	runtime     runtimepkg.Runtime
 	bridge      *hostbridgebridge.Bridge
 	state       *agentState
 }
 
 type hostbridgeRunAgent struct {
 	componentID modeluuid.UUID
-	runtime     v5runtime.Runtime
+	runtime     runtimepkg.Runtime
 	bridge      *hostbridgebridge.Bridge
 	command     string
 	state       *agentState

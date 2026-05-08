@@ -17,8 +17,8 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5gormstorage "github.com/bartdeboer/ctgbot/internal/repository/gormstorage"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	gormstoragepkg "github.com/bartdeboer/ctgbot/internal/repository/gormstorage"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -76,15 +76,15 @@ func (f fakeRuntimeFactory) Kind() string {
 	return strings.TrimSpace(f.runtimeKind)
 }
 
-func (f fakeRuntimeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+func (f fakeRuntimeFactory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
 	hostPath := strings.TrimSpace(registration.HomePath)
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return v5runtime.Home{Path: hostPath}
+	return runtimepkg.Home{Path: hostPath}
 }
 
-func (f fakeRuntimeFactory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+func (f fakeRuntimeFactory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
 	_, _ = registration, home
 	return home.Path
 }
@@ -93,7 +93,7 @@ func (f fakeRuntimeFactory) RuntimeWorkspacePath(workspacePath string) string {
 	return strings.TrimSpace(workspacePath)
 }
 
-func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home v5runtime.Home, config v5runtime.BindConfig) v5runtime.Runtime {
+func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.Runtime {
 	_, _, _ = registration, home, config
 	return &fakeRuntime{
 		rootDir: f.rootDir,
@@ -106,7 +106,7 @@ func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home v5runtim
 type fakeRuntime struct {
 	rootDir string
 	kind    string
-	home    v5runtime.Home
+	home    runtimepkg.Home
 	state   *runtimeState
 }
 
@@ -117,7 +117,7 @@ func (r *fakeRuntime) Kind() string {
 	return strings.TrimSpace(r.kind)
 }
 
-func (r *fakeRuntime) ComponentHome() v5runtime.Home {
+func (r *fakeRuntime) ComponentHome() runtimepkg.Home {
 	return r.home
 }
 
@@ -132,9 +132,9 @@ func (r *fakeRuntime) Refresh(ctx context.Context, workspacePath string, threadI
 	_, _, _ = ctx, workspacePath, threadID
 	return nil
 }
-func (r *fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r *fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{
+	return runtimepkg.Status{
 		Name:                 "fake-runtime",
 		State:                "running",
 		RuntimeHomePath:      r.home.Path,
@@ -152,9 +152,9 @@ func (r *fakeRuntime) Interrupt(ctx context.Context, workspacePath string, threa
 	_, _, _ = ctx, workspacePath, threadID
 	return false, nil
 }
-func (r *fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r *fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{
+	return runtimepkg.Status{
 		Name:                 "fake-runtime",
 		State:                "missing",
 		RuntimeHomePath:      r.home.Path,
@@ -251,7 +251,7 @@ func newSQLiteStorage(t *testing.T) repository.Storage {
 	}
 	sqlDB.SetMaxOpenConns(1)
 	sqlDB.SetMaxIdleConns(1)
-	storage := v5gormstorage.New(db)
+	storage := gormstoragepkg.New(db)
 	if err := storage.AutoMigrate(context.Background()); err != nil {
 		t.Fatalf("AutoMigrate() error = %v", err)
 	}

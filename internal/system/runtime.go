@@ -11,7 +11,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 func (s *System) ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error) {
@@ -71,7 +71,7 @@ func (s *System) Workspace(name string) (Workspace, error) {
 	return workspace, nil
 }
 
-func (s *System) Runtime(runtimeKind string) (v5runtime.Factory, error) {
+func (s *System) Runtime(runtimeKind string) (runtimepkg.Factory, error) {
 	if s == nil {
 		return nil, fmt.Errorf("missing system")
 	}

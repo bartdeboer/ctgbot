@@ -264,13 +264,13 @@ func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, e
 	go func() {
 		err := hostbridgeserver.ServeCommandListener(runCtx, ln, srv)
 		if err != nil && runCtx.Err() == nil {
-			b.logf("v5 hostbridge serve error: %v", err)
+			b.logf("hostbridge serve error: %v", err)
 		}
 	}()
 
 	containerAddress = net.JoinHostPort(hostbridgetls.ServerName, port)
 	hostAddress = net.JoinHostPort("127.0.0.1", port)
-	b.logf("v5 hostbridge listening host=%s container=%s", hostAddress, containerAddress)
+	b.logf("hostbridge listening host=%s container=%s", hostAddress, containerAddress)
 
 	b.mu.Lock()
 	defer b.mu.Unlock()

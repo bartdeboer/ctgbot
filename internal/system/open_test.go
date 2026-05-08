@@ -11,7 +11,7 @@ import (
 	"github.com/bartdeboer/go-clistate"
 )
 
-func TestV5HostbridgeUsesConfiguredListenAddr(t *testing.T) {
+func TestHostbridgeUsesConfiguredListenAddr(t *testing.T) {
 	root := t.TempDir()
 	prev, err := os.Getwd()
 	if err != nil {

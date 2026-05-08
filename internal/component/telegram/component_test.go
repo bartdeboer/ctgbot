@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	v5component "github.com/bartdeboer/ctgbot/internal/component"
+	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -167,7 +167,7 @@ func newTelegramTestConfig(t *testing.T) (*appstate.Config, *clistate.Store) {
 	return appstate.New(filepath.Join(root, ".ctgbot"), store), store
 }
 
-func TestRunInboundEmitsV5EventAndRelaysResponse(t *testing.T) {
+func TestRunInboundEmitsInboundEventAndRelaysResponse(t *testing.T) {
 	cfg, store := newTelegramTestConfig(t)
 	if err := store.PersistInt("telegram.defaults.debounce_ms", 0); err != nil {
 		t.Fatalf("PersistInt debounce: %v", err)
@@ -184,8 +184,8 @@ func TestRunInboundEmitsV5EventAndRelaysResponse(t *testing.T) {
 	componentID := modeluuid.New()
 	c := &Component{componentID: componentID, api: api, cfg: cfg}
 
-	var events []v5component.InboundEvent
-	err := c.RunInbound(context.Background(), func(ctx context.Context, event v5component.InboundEvent) error {
+	var events []componentpkg.InboundEvent
+	err := c.RunInbound(context.Background(), func(ctx context.Context, event componentpkg.InboundEvent) error {
 		events = append(events, event)
 		return c.Send(ctx, message.OutboundPayload{
 			ProviderChatID:   event.Payload.ProviderChatID,
@@ -225,7 +225,7 @@ func TestRunInboundDoesNotReturnEmitError(t *testing.T) {
 	c := &Component{componentID: modeluuid.New(), api: api, cfg: cfg}
 
 	errBoom := errors.New("boom")
-	if err := c.RunInbound(context.Background(), func(ctx context.Context, event v5component.InboundEvent) error { return errBoom }); err != nil {
+	if err := c.RunInbound(context.Background(), func(ctx context.Context, event componentpkg.InboundEvent) error { return errBoom }); err != nil {
 		t.Fatalf("RunInbound() error = %v", err)
 	}
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 const Kind = "backend"
@@ -33,8 +33,8 @@ type ServiceSpec struct {
 }
 
 type Binder interface {
-	v5runtime.Factory
-	BindBackend(registration coremodel.Component, home v5runtime.Home, config v5runtime.BindConfig, service ServiceSpec) *Runtime
+	runtimepkg.Factory
+	BindBackend(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig, service ServiceSpec) *Runtime
 }
 
 func New(componentsRoot string, logger *log.Logger) *Factory {
@@ -48,15 +48,15 @@ func (f *Factory) Kind() string {
 	return Kind
 }
 
-func (f *Factory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+func (f *Factory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
 	hostPath := strings.TrimSpace(registration.HomePath)
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return v5runtime.Home{Path: hostPath}
+	return runtimepkg.Home{Path: hostPath}
 }
 
-func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
 	_, _ = registration, home
 	return strings.TrimSpace(home.Path)
 }
@@ -67,9 +67,9 @@ func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
 
 func (f *Factory) Bind(
 	registration coremodel.Component,
-	home v5runtime.Home,
-	config v5runtime.BindConfig,
-) v5runtime.Runtime {
+	home runtimepkg.Home,
+	config runtimepkg.BindConfig,
+) runtimepkg.Runtime {
 	return &unsupportedRuntime{
 		registration: registration,
 		home:         home,
@@ -79,8 +79,8 @@ func (f *Factory) Bind(
 
 func (f *Factory) BindBackend(
 	registration coremodel.Component,
-	home v5runtime.Home,
-	config v5runtime.BindConfig,
+	home runtimepkg.Home,
+	config runtimepkg.BindConfig,
 	service ServiceSpec,
 ) *Runtime {
 	return &Runtime{
@@ -94,15 +94,15 @@ func (f *Factory) BindBackend(
 
 type Runtime struct {
 	registration coremodel.Component
-	home         v5runtime.Home
-	config       v5runtime.BindConfig
+	home         runtimepkg.Home
+	config       runtimepkg.BindConfig
 	service      ServiceSpec
 	containers   *containerengine.Manager
 }
 
-func (r *Runtime) ComponentHome() v5runtime.Home {
+func (r *Runtime) ComponentHome() runtimepkg.Home {
 	if r == nil {
-		return v5runtime.Home{}
+		return runtimepkg.Home{}
 	}
 	return r.home
 }
@@ -114,25 +114,25 @@ func (r *Runtime) BaseURL() string {
 	return strings.TrimSpace(r.service.BaseURL)
 }
 
-func (r *Runtime) Start(ctx context.Context) (v5runtime.Status, error) {
+func (r *Runtime) Start(ctx context.Context) (runtimepkg.Status, error) {
 	container := r.container()
 	state, err := container.InspectState(ctx)
 	if err != nil {
-		return v5runtime.Status{}, err
+		return runtimepkg.Status{}, err
 	}
 	if state == containerengine.StateMissing {
 		if _, err := r.containers.Create(ctx, r.containerSpec()); err != nil {
-			return v5runtime.Status{}, err
+			return runtimepkg.Status{}, err
 		}
 		state = containerengine.StateCreated
 	}
 	if state != containerengine.StateRunning {
 		if err := container.Start(ctx); err != nil {
-			return v5runtime.Status{}, err
+			return runtimepkg.Status{}, err
 		}
 	}
 	if err := r.waitReady(ctx); err != nil {
-		return v5runtime.Status{}, err
+		return runtimepkg.Status{}, err
 	}
 	return r.Status(ctx)
 }
@@ -145,12 +145,12 @@ func (r *Runtime) Refresh(ctx context.Context) error {
 	return r.container().Remove(ctx)
 }
 
-func (r *Runtime) Status(ctx context.Context) (v5runtime.Status, error) {
+func (r *Runtime) Status(ctx context.Context) (runtimepkg.Status, error) {
 	state, err := r.container().InspectState(ctx)
 	if err != nil {
-		return v5runtime.Status{}, err
+		return runtimepkg.Status{}, err
 	}
-	return v5runtime.Status{
+	return runtimepkg.Status{
 		Name:            r.containerName(),
 		State:           string(state),
 		RuntimeHomePath: strings.TrimSpace(r.home.Path),
@@ -204,18 +204,18 @@ func (r *Runtime) waitReady(ctx context.Context) error {
 }
 
 func (r *Runtime) containerName() string {
-	return "ctgbot-v5-backend-" + safeName(r.registration.Ref())
+	return "ctgbot-backend-" + safeName(r.registration.Ref())
 }
 
 type unsupportedRuntime struct {
 	registration coremodel.Component
-	home         v5runtime.Home
-	config       v5runtime.BindConfig
+	home         runtimepkg.Home
+	config       runtimepkg.BindConfig
 }
 
 func (r *unsupportedRuntime) Kind() string { return Kind }
 
-func (r *unsupportedRuntime) ComponentHome() v5runtime.Home { return r.home }
+func (r *unsupportedRuntime) ComponentHome() runtimepkg.Home { return r.home }
 
 func (r *unsupportedRuntime) RuntimeComponentHomePath() string {
 	return strings.TrimSpace(r.home.Path)
@@ -230,9 +230,9 @@ func (r *unsupportedRuntime) Refresh(ctx context.Context, workspacePath string, 
 	return fmt.Errorf("backend runtime does not support thread sandbox refresh")
 }
 
-func (r *unsupportedRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r *unsupportedRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{}, fmt.Errorf("backend runtime does not support thread sandbox start")
+	return runtimepkg.Status{}, fmt.Errorf("backend runtime does not support thread sandbox start")
 }
 
 func (r *unsupportedRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
@@ -245,9 +245,9 @@ func (r *unsupportedRuntime) Interrupt(ctx context.Context, workspacePath string
 	return false, fmt.Errorf("backend runtime does not support thread sandbox interrupt")
 }
 
-func (r *unsupportedRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r *unsupportedRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{}, fmt.Errorf("backend runtime does not support thread sandbox status")
+	return runtimepkg.Status{}, fmt.Errorf("backend runtime does not support thread sandbox status")
 }
 
 func (r *unsupportedRuntime) Exec(

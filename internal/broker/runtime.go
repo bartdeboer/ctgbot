@@ -16,7 +16,7 @@ import (
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
@@ -32,7 +32,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 
 	resolved := map[modeluuid.UUID]*component.Loaded{}
-	homes := map[modeluuid.UUID]v5runtime.Home{}
+	homes := map[modeluuid.UUID]runtimepkg.Home{}
 	var (
 		components       []*component.Loaded
 		agents           []AgentBinding
@@ -278,9 +278,9 @@ func (r *agentTurnRuntime) WorkspacePath() string {
 	return r.runtime.Workspace
 }
 
-func (r *agentTurnRuntime) ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool) {
+func (r *agentTurnRuntime) ComponentHome(componentID modeluuid.UUID) (runtimepkg.Home, bool) {
 	if r == nil || r.runtime == nil {
-		return v5runtime.Home{}, false
+		return runtimepkg.Home{}, false
 	}
 	home, ok := r.runtime.Homes[componentID]
 	return home, ok

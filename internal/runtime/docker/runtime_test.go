@@ -9,7 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgebridge "github.com/bartdeboer/ctgbot/internal/hostbridge/bridge"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -27,7 +27,7 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 		Runtime: "docker",
 	}
 	home := factory.ComponentHome(registration)
-	runtime := factory.Bind(registration, home, v5runtime.BindConfig{}).(*Runtime)
+	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
 
 	threadID := modeluuid.New()
 	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, nil, true)
@@ -75,7 +75,7 @@ func TestSandboxPropagatesConfiguredGPUs(t *testing.T) {
 		Runtime: "docker",
 	}
 	home := factory.ComponentHome(registration)
-	runtime := factory.Bind(registration, home, v5runtime.BindConfig{GPUs: "all"}).(*Runtime)
+	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{GPUs: "all"}).(*Runtime)
 
 	threadID := modeluuid.New()
 	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, nil, false)

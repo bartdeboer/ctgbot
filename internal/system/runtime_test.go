@@ -13,16 +13,16 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 type fakeRuntime struct {
-	home v5runtime.Home
+	home runtimepkg.Home
 	kind string
 }
 
 func (r fakeRuntime) Kind() string { return r.kind }
-func (r fakeRuntime) ComponentHome() v5runtime.Home {
+func (r fakeRuntime) ComponentHome() runtimepkg.Home {
 	return r.home
 }
 func (r fakeRuntime) RuntimeComponentHomePath() string {
@@ -35,9 +35,9 @@ func (r fakeRuntime) Refresh(ctx context.Context, workspacePath string, threadID
 	_, _, _ = ctx, workspacePath, threadID
 	return fmt.Errorf("not implemented")
 }
-func (r fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r fakeRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{}, fmt.Errorf("not implemented")
+	return runtimepkg.Status{}, fmt.Errorf("not implemented")
 }
 func (r fakeRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
 	_, _, _ = ctx, workspacePath, threadID
@@ -47,9 +47,9 @@ func (r fakeRuntime) Interrupt(ctx context.Context, workspacePath string, thread
 	_, _, _ = ctx, workspacePath, threadID
 	return false, fmt.Errorf("not implemented")
 }
-func (r fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (v5runtime.Status, error) {
+func (r fakeRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
 	_, _, _ = ctx, workspacePath, threadID
-	return v5runtime.Status{}, fmt.Errorf("not implemented")
+	return runtimepkg.Status{}, fmt.Errorf("not implemented")
 }
 func (r fakeRuntime) Exec(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	_, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.kind
@@ -70,21 +70,21 @@ type fakeFactory struct {
 }
 
 func (f fakeFactory) Kind() string { return f.kind }
-func (f fakeFactory) ComponentHome(registration coremodel.Component) v5runtime.Home {
+func (f fakeFactory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
 	hostPath := registration.HomePath
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return v5runtime.Home{Path: hostPath}
+	return runtimepkg.Home{Path: hostPath}
 }
-func (f fakeFactory) RuntimeComponentHomePath(registration coremodel.Component, home v5runtime.Home) string {
+func (f fakeFactory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
 	_, _ = registration, home
 	return home.Path
 }
 func (f fakeFactory) RuntimeWorkspacePath(workspacePath string) string {
 	return workspacePath
 }
-func (f fakeFactory) Bind(registration coremodel.Component, home v5runtime.Home, config v5runtime.BindConfig) v5runtime.Runtime {
+func (f fakeFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.Runtime {
 	_, _, _ = registration, home, config
 	return fakeRuntime{home: home, kind: f.kind}
 }
@@ -101,7 +101,7 @@ type fakeAuthenticator struct {
 	authStatusCalls int
 	last            struct {
 		registration coremodel.Component
-		home         v5runtime.Home
+		home         runtimepkg.Home
 		callbackPort int
 		timeout      time.Duration
 	}
@@ -126,14 +126,14 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage) *Syste
 	t.Helper()
 
 	registry := component.NewRegistry()
-	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		_, _, _ = ctx, home, storage
 		return fakeResolved{componentType: registration.Type, runtimeKind: runtime.Kind()}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 	auth := &fakeAuthenticator{}
-	if err := registry.Add("gmail", func(ctx context.Context, registration coremodel.Component, runtime v5runtime.Factory, home v5runtime.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add("gmail", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		_, _, _, _ = ctx, runtime, home, storage
 		auth.last.registration = registration
 		auth.last.home = home
@@ -145,7 +145,7 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage) *Syste
 	workspaces := map[string]Workspace{
 		"work": {Name: "work", Path: filepath.Join(root, "worktree")},
 	}
-	runtimes := map[string]v5runtime.Factory{
+	runtimes := map[string]runtimepkg.Factory{
 		"docker": fakeFactory{kind: "docker", componentsRoot: filepath.Join(root, ".ctgbot", "components")},
 		"local":  fakeFactory{kind: "local", componentsRoot: filepath.Join(root, ".ctgbot", "components")},
 	}

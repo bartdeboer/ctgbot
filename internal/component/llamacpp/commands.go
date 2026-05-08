@@ -7,7 +7,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
@@ -93,7 +93,7 @@ func (c *Component) status(ctx context.Context) (commandengine.Result, error) {
 	return commandengine.Result{Text: c.formatStatus("llama.cpp status", status)}, nil
 }
 
-func (c *Component) formatStatus(title string, status v5runtime.Status) string {
+func (c *Component) formatStatus(title string, status runtimepkg.Status) string {
 	lines := []string{strings.TrimSpace(title)}
 	lines = append(lines,
 		"state: "+status.State,

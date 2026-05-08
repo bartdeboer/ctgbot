@@ -42,7 +42,7 @@ func (b *Broker) Run(ctx context.Context) error {
 			err := source.RunInbound(runCtx, func(eventCtx context.Context, event component.InboundEvent) error {
 				_, handleErr := b.HandleInbound(eventCtx, event)
 				if handleErr != nil {
-					b.logf("v5 inbound handling failed component=%s external_id=%q err=%v", event.ComponentID, event.ExternalID, handleErr)
+					b.logf("inbound handling failed component=%s external_id=%q err=%v", event.ComponentID, event.ExternalID, handleErr)
 				}
 				return nil
 			})

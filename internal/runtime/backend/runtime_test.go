@@ -6,7 +6,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 func TestFactoryComponentHomeDefaultsToComponentsRoot(t *testing.T) {
@@ -25,8 +25,8 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 	factory := New("/state/components", nil)
 	runtime := factory.BindBackend(
 		coremodel.Component{Type: "llamacpp", Name: "qwen3-q5"},
-		v5runtime.Home{Path: "/state/components/llamacpp/qwen3-q5"},
-		v5runtime.BindConfig{
+		runtimepkg.Home{Path: "/state/components/llamacpp/qwen3-q5"},
+		runtimepkg.BindConfig{
 			Image: "llama:test",
 			GPUs:  "all",
 			Env:   []string{"RUNTIME=1"},
@@ -44,7 +44,7 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 	)
 
 	spec := runtime.containerSpec()
-	if got, want := spec.Name, "ctgbot-v5-backend-llamacpp-qwen3-q5"; got != want {
+	if got, want := spec.Name, "ctgbot-backend-llamacpp-qwen3-q5"; got != want {
 		t.Fatalf("Name = %q, want %q", got, want)
 	}
 	if got, want := spec.Image, "llama:test"; got != want {
