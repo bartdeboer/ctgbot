@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
@@ -24,7 +24,7 @@ type TelegramAPI interface {
 	SendPhoto(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
 	SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
 	SendAudio(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
-	SendChatAction(ctx context.Context, chatID int64, threadID int, action messenger.ChatAction) error
+	SendChatAction(ctx context.Context, chatID int64, threadID int, action message.ChatAction) error
 	DownloadFile(ctx context.Context, fileID string) ([]byte, error)
 }
 
@@ -197,7 +197,7 @@ func (a *TelegramAPIV2) SendAudio(ctx context.Context, chatID int64, threadID in
 	return err
 }
 
-func (a *TelegramAPIV2) SendChatAction(ctx context.Context, chatID int64, threadID int, action messenger.ChatAction) error {
+func (a *TelegramAPIV2) SendChatAction(ctx context.Context, chatID int64, threadID int, action message.ChatAction) error {
 	b, err := a.ensureBot()
 	if err != nil {
 		return err

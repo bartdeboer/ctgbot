@@ -9,7 +9,7 @@ import (
 
 	component "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
@@ -57,7 +57,7 @@ func inboundKind(event component.InboundEvent) coremodel.MessageKind {
 	return coremodel.MessageKindEvent
 }
 
-func (b *Broker) storeMessageArtifacts(ctx context.Context, message *coremodel.ThreadMessage, attachments []messenger.Media) error {
+func (b *Broker) storeMessageArtifacts(ctx context.Context, message *coremodel.ThreadMessage, attachments []message.Media) error {
 	if message == nil {
 		return fmt.Errorf("missing message")
 	}
@@ -78,7 +78,7 @@ func (b *Broker) storeMessageArtifacts(ctx context.Context, message *coremodel.T
 	return nil
 }
 
-func (b *Broker) storeOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []messenger.Media) error {
+func (b *Broker) storeOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []message.Media) error {
 	if message == nil {
 		return fmt.Errorf("missing message")
 	}
@@ -88,7 +88,7 @@ func (b *Broker) storeOutboundMessage(ctx context.Context, message *coremodel.Th
 	return b.storeMessageArtifacts(ctx, message, attachments)
 }
 
-func (b *Broker) relayPayloadToRelayBindings(ctx context.Context, relayBindings []RelayBinding, thread coremodel.Thread, payload messenger.OutboundPayload) error {
+func (b *Broker) relayPayloadToRelayBindings(ctx context.Context, relayBindings []RelayBinding, thread coremodel.Thread, payload message.OutboundPayload) error {
 	if len(relayBindings) == 0 || payload.IsZero() {
 		return nil
 	}
@@ -137,31 +137,31 @@ func (b *Broker) resolveRelayBindingsForChat(ctx context.Context, chatID modeluu
 	return relayBindings, nil
 }
 
-func (b *Broker) storeAndRelayMessage(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, message coremodel.ThreadMessage, sourceType string) (*coremodel.ThreadMessage, error) {
-	message.ChatID = chat.ID
-	message.ThreadID = thread.ID
-	message.Direction = coremodel.MessageDirectionOutbound
-	if message.Kind == "" {
-		message.Kind = coremodel.MessageKindAgent
+func (b *Broker) storeAndRelayMessage(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, threadMessage coremodel.ThreadMessage, sourceType string) (*coremodel.ThreadMessage, error) {
+	threadMessage.ChatID = chat.ID
+	threadMessage.ThreadID = thread.ID
+	threadMessage.Direction = coremodel.MessageDirectionOutbound
+	if threadMessage.Kind == "" {
+		threadMessage.Kind = coremodel.MessageKindAgent
 	}
-	if strings.TrimSpace(message.ActorLabel) == "" {
-		message.ActorLabel = sourceType
+	if strings.TrimSpace(threadMessage.ActorLabel) == "" {
+		threadMessage.ActorLabel = sourceType
 	}
-	if err := b.storeOutboundMessage(ctx, &message, nil); err != nil {
+	if err := b.storeOutboundMessage(ctx, &threadMessage, nil); err != nil {
 		return nil, err
 	}
-	payload := messenger.OutboundPayload{
-		Text: messenger.TextMessage{Text: message.Text},
+	payload := message.OutboundPayload{
+		Text: message.TextMessage{Text: threadMessage.Text},
 	}
 	if runtime != nil {
 		if err := b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, payload); err != nil {
 			return nil, err
 		}
 	}
-	return &message, nil
+	return &threadMessage, nil
 }
 
-func (b *Broker) deliverPayload(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, payload messenger.OutboundPayload, componentID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
+func (b *Broker) deliverPayload(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, payload message.OutboundPayload, componentID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
 	if runtime == nil || payload.IsZero() {
 		return nil, nil
 	}
@@ -182,7 +182,7 @@ func (b *Broker) deliverPayload(ctx context.Context, runtime *ChatRuntime, chat 
 	return []coremodel.ThreadMessage{message}, nil
 }
 
-func inboundMetadataJSON(payload messenger.InboundPayload) string {
+func inboundMetadataJSON(payload message.InboundPayload) string {
 	actor := payload.ResolvedActor()
 	var metadata []string
 	if payload.ProviderType != "" {
@@ -218,7 +218,7 @@ func inboundMetadataJSON(payload messenger.InboundPayload) string {
 	return strings.Join(metadata, "\n")
 }
 
-func materializeIncomingAttachments(workspacePath string, runtimeWorkspacePath string, attachments []messenger.Media) ([]string, error) {
+func materializeIncomingAttachments(workspacePath string, runtimeWorkspacePath string, attachments []message.Media) ([]string, error) {
 	if len(attachments) == 0 {
 		return nil, nil
 	}
@@ -288,7 +288,7 @@ func (b *Broker) relaySystemMessage(ctx context.Context, runtime *ChatRuntime, c
 	if text == "" {
 		return nil, nil
 	}
-	message := &coremodel.ThreadMessage{
+	threadMessage := &coremodel.ThreadMessage{
 		ChatID:      chat.ID,
 		ThreadID:    thread.ID,
 		Direction:   coremodel.MessageDirectionOutbound,
@@ -298,10 +298,10 @@ func (b *Broker) relaySystemMessage(ctx context.Context, runtime *ChatRuntime, c
 		Text:        text,
 		ComponentID: modeluuid.UUID{},
 	}
-	if err := b.storeOutboundMessage(ctx, message, nil); err != nil {
+	if err := b.storeOutboundMessage(ctx, threadMessage, nil); err != nil {
 		return nil, err
 	}
-	payload := messenger.OutboundPayload{Text: messenger.TextMessage{Text: text}}
+	payload := message.OutboundPayload{Text: message.TextMessage{Text: text}}
 	relayBindings := []RelayBinding(nil)
 	if runtime != nil {
 		relayBindings = runtime.Relays
@@ -315,7 +315,7 @@ func (b *Broker) relaySystemMessage(ctx context.Context, runtime *ChatRuntime, c
 	if err := b.relayPayloadToRelayBindings(ctx, relayBindings, thread, payload); err != nil {
 		return nil, err
 	}
-	return message, nil
+	return threadMessage, nil
 }
 
 func conversationErrorText(err error) string {

@@ -12,7 +12,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
 const lastMessagePath = "/tmp/ctgbot-last-message.txt"
@@ -24,7 +24,7 @@ type ExecRuntime interface {
 }
 
 type OutputHandler interface {
-	Send(ctx context.Context, payload messenger.OutboundPayload) error
+	Send(ctx context.Context, payload message.OutboundPayload) error
 }
 
 type TurnRequest struct {
@@ -85,7 +85,7 @@ func (r *Runner) RunTurn(ctx context.Context, runtime ExecRuntime, output Output
 		if output == nil {
 			return
 		}
-		if err := output.Send(ctx, messenger.OutboundPayload{Text: messenger.TextMessage{Text: text}}); err != nil {
+		if err := output.Send(ctx, message.OutboundPayload{Text: message.TextMessage{Text: text}}); err != nil {
 			r.logf("send codex agent message failed: %v", err)
 		}
 	})

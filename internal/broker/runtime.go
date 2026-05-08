@@ -14,7 +14,7 @@ import (
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -215,7 +215,7 @@ func hostbridgeControlCommands(runtime *ChatRuntime) []string {
 	return out
 }
 
-func (r *agentTurnRuntime) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+func (r *agentTurnRuntime) Send(ctx context.Context, payload message.OutboundPayload) error {
 	if r == nil || r.broker == nil || r.runtime == nil {
 		return fmt.Errorf("missing turn runtime")
 	}
@@ -237,7 +237,7 @@ func (r *agentTurnRuntime) LastText() string {
 	return r.lastText
 }
 
-func (r *agentTurnRuntime) StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error) {
+func (r *agentTurnRuntime) StartChatAction(ctx context.Context, action message.ChatAction) (func(), error) {
 	if r == nil || r.runtime == nil || r.broker == nil {
 		return func() {}, nil
 	}

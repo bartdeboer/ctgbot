@@ -11,7 +11,7 @@ import (
 	v5broker "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -30,24 +30,24 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 				events: []component.InboundEvent{
 					{
 						ExternalID: "alpha-1",
-						Payload: messenger.InboundPayload{
+						Payload: message.InboundPayload{
 							ProviderType:      "mockgmail",
 							ProviderChatID:    "gmail-alpha",
 							ProviderThreadID:  "shared-thread",
 							ProviderMessageID: "alpha-1",
 							Actor:             actorWithRoles("", "alpha@example.com"),
-							Text:              messenger.TextMessage{Text: "alpha one"},
+							Text:              message.TextMessage{Text: "alpha one"},
 						},
 					},
 					{
 						ExternalID: "alpha-2",
-						Payload: messenger.InboundPayload{
+						Payload: message.InboundPayload{
 							ProviderType:      "mockgmail",
 							ProviderChatID:    "gmail-alpha",
 							ProviderThreadID:  "shared-thread",
 							ProviderMessageID: "alpha-2",
 							Actor:             actorWithRoles("", "alpha@example.com"),
-							Text:              messenger.TextMessage{Text: "alpha two"},
+							Text:              message.TextMessage{Text: "alpha two"},
 						},
 					},
 				},
@@ -56,24 +56,24 @@ func TestV5RoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 				events: []component.InboundEvent{
 					{
 						ExternalID: "beta-1",
-						Payload: messenger.InboundPayload{
+						Payload: message.InboundPayload{
 							ProviderType:      "mockgmail",
 							ProviderChatID:    "gmail-beta",
 							ProviderThreadID:  "shared-thread",
 							ProviderMessageID: "beta-1",
 							Actor:             actorWithRoles("", "beta@example.com"),
-							Text:              messenger.TextMessage{Text: "beta one"},
+							Text:              message.TextMessage{Text: "beta one"},
 						},
 					},
 					{
 						ExternalID: "beta-2",
-						Payload: messenger.InboundPayload{
+						Payload: message.InboundPayload{
 							ProviderType:      "mockgmail",
 							ProviderChatID:    "gmail-beta",
 							ProviderThreadID:  "beta-other-thread",
 							ProviderMessageID: "beta-2",
 							Actor:             actorWithRoles("", "beta@example.com"),
-							Text:              messenger.TextMessage{Text: "beta other"},
+							Text:              message.TextMessage{Text: "beta other"},
 						},
 					},
 				},
@@ -303,7 +303,7 @@ func findExecRecord(t *testing.T, records []execRecord, want string) execRecord 
 	return execRecord{}
 }
 
-func assertRelayTargets(t *testing.T, payloads []messenger.OutboundPayload, wantChatID string) {
+func assertRelayTargets(t *testing.T, payloads []message.OutboundPayload, wantChatID string) {
 	t.Helper()
 	for _, payload := range payloads {
 		if payload.ProviderChatID != wantChatID {
@@ -318,7 +318,7 @@ func assertRelayTargets(t *testing.T, payloads []messenger.OutboundPayload, want
 	}
 }
 
-func assertRelayTexts(t *testing.T, payloads []messenger.OutboundPayload, want []string) {
+func assertRelayTexts(t *testing.T, payloads []message.OutboundPayload, want []string) {
 	t.Helper()
 	if len(payloads) != len(want) {
 		t.Fatalf("relay payload count = %d, want %d", len(payloads), len(want))

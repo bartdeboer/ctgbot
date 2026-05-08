@@ -12,7 +12,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -46,11 +46,11 @@ func (stubTurnRuntime) Instructions() component.TurnInstructions {
 		HostbridgeControlCommands: []string{"hostbridge codex status", "hostbridge config list"},
 	}
 }
-func (stubTurnRuntime) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+func (stubTurnRuntime) Send(ctx context.Context, payload message.OutboundPayload) error {
 	_, _ = ctx, payload
 	return nil
 }
-func (stubTurnRuntime) StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error) {
+func (stubTurnRuntime) StartChatAction(ctx context.Context, action message.ChatAction) (func(), error) {
 	_, _ = ctx, action
 	return func() {}, nil
 }

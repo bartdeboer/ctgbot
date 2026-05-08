@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
 var chatActionRefreshInterval = 4 * time.Second
 
-func (c *Component) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+func (c *Component) Send(ctx context.Context, payload message.OutboundPayload) error {
 	if payload.IsZero() {
 		return nil
 	}
@@ -44,7 +44,7 @@ func (c *Component) Send(ctx context.Context, payload messenger.OutboundPayload)
 	return nil
 }
 
-func (c *Component) StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error) {
+func (c *Component) StartChatAction(ctx context.Context, target message.ChatTarget, action message.ChatAction) (func(), error) {
 	if c == nil || c.api == nil {
 		return nil, fmt.Errorf("missing telegram api")
 	}

@@ -13,7 +13,7 @@ import (
 	v5broker "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -29,13 +29,13 @@ func TestV5MockComponentsEndToEnd(t *testing.T) {
 		messengerState := &messengerState{
 			event: component.InboundEvent{
 				ExternalID: "msg-1",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "hello"},
+					Text:              message.TextMessage{Text: "hello"},
 				},
 			},
 		}
@@ -173,14 +173,14 @@ func TestV5InboundAttachmentsMaterializeIntoWorkspaceInboxAndInjectPrompt(t *tes
 		messengerState := &messengerState{
 			event: component.InboundEvent{
 				ExternalID: "msg-attach",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-attach",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "review this file"},
-					Attachments: []messenger.Media{{
+					Text:              message.TextMessage{Text: "review this file"},
+					Attachments: []message.Media{{
 						Filename:    "note.txt",
 						ContentType: "text/plain",
 						Content:     []byte("hello attachment"),
@@ -311,13 +311,13 @@ func TestV5AttachmentOnlyInboundReturnsUploadSavedMessage(t *testing.T) {
 		messengerState := &messengerState{
 			event: component.InboundEvent{
 				ExternalID: "msg-upload-only",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-upload-only",
 					Actor:             actorWithRoles("", "bart"),
-					Attachments: []messenger.Media{{
+					Attachments: []message.Media{{
 						Filename:    "note.txt",
 						ContentType: "text/plain",
 						Content:     []byte("hello attachment"),
@@ -410,24 +410,24 @@ func TestV5ConversationErrorIsReportedToChatAndDoesNotStopSource(t *testing.T) {
 			events: []component.InboundEvent{
 				{
 					ExternalID: "msg-1",
-					Payload: messenger.InboundPayload{
+					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
 						ProviderChatID:    "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "msg-1",
 						Actor:             actorWithRoles("", "bart"),
-						Text:              messenger.TextMessage{Text: "boom"},
+						Text:              message.TextMessage{Text: "boom"},
 					},
 				},
 				{
 					ExternalID: "msg-2",
-					Payload: messenger.InboundPayload{
+					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
 						ProviderChatID:    "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "msg-2",
 						Actor:             actorWithRoles("", "bart"),
-						Text:              messenger.TextMessage{Text: "hello"},
+						Text:              message.TextMessage{Text: "hello"},
 					},
 				},
 			},

@@ -10,7 +10,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -130,7 +130,7 @@ type capturingOutput struct {
 	messages []string
 }
 
-func (o *capturingOutput) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+func (o *capturingOutput) Send(ctx context.Context, payload message.OutboundPayload) error {
 	_ = ctx
 	o.messages = append(o.messages, payload.Text.Text)
 	return nil

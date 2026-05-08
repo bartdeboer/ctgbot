@@ -8,7 +8,7 @@ import (
 	v5broker "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -24,13 +24,13 @@ func TestV5GmailSourceRelaysOutboundElsewhere(t *testing.T) {
 		gmailState := &gmailSourceState{
 			event: component.InboundEvent{
 				ExternalID: "gmail-msg-1",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockgmail",
 					ProviderChatID:    "gmail-inbox-1",
 					ProviderThreadID:  "gmail-thread-1",
 					ProviderMessageID: "gmail-msg-1",
 					Actor:             actorWithRoles("", "bart@example.com"),
-					Text:              messenger.TextMessage{Text: "hello from gmail"},
+					Text:              message.TextMessage{Text: "hello from gmail"},
 				},
 			},
 		}
@@ -166,7 +166,7 @@ func (m *mockGmailSource) RunInbound(ctx context.Context, emit component.Inbound
 }
 
 type relayState struct {
-	payloads []messenger.OutboundPayload
+	payloads []message.OutboundPayload
 }
 
 type mockRelay struct {
@@ -177,13 +177,13 @@ func (m *mockRelay) Type() string {
 	return "mockrelay"
 }
 
-func (m *mockRelay) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+func (m *mockRelay) Send(ctx context.Context, payload message.OutboundPayload) error {
 	_ = ctx
 	m.state.payloads = append(m.state.payloads, payload)
 	return nil
 }
 
-func (m *mockRelay) StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error) {
+func (m *mockRelay) StartChatAction(ctx context.Context, target message.ChatTarget, action message.ChatAction) (func(), error) {
 	_, _, _ = ctx, target, action
 	return func() {}, nil
 }

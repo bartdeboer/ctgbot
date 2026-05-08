@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 )
@@ -15,7 +15,7 @@ type ThreadComponentMapper interface {
 	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
 	ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) error
-	RelayTarget(ctx context.Context, threadID modeluuid.UUID, binding coremodel.ChatComponent) (*messenger.ChatTarget, bool, error)
+	RelayTarget(ctx context.Context, threadID modeluuid.UUID, binding coremodel.ChatComponent) (*message.ChatTarget, bool, error)
 }
 
 type threadComponentMapper struct {
@@ -119,7 +119,7 @@ func (m *threadComponentMapper) BindComponentThreadID(ctx context.Context, threa
 	return m.storage.ThreadComponentMappings().Save(ctx, mapping)
 }
 
-func (m *threadComponentMapper) RelayTarget(ctx context.Context, threadID modeluuid.UUID, binding coremodel.ChatComponent) (*messenger.ChatTarget, bool, error) {
+func (m *threadComponentMapper) RelayTarget(ctx context.Context, threadID modeluuid.UUID, binding coremodel.ChatComponent) (*message.ChatTarget, bool, error) {
 	componentThreadID, ok, err := m.ComponentThreadID(ctx, threadID, binding.ComponentID)
 	if err != nil {
 		return nil, false, err
@@ -129,11 +129,11 @@ func (m *threadComponentMapper) RelayTarget(ctx context.Context, threadID modelu
 		if externalChatID == "" {
 			return nil, false, nil
 		}
-		return &messenger.ChatTarget{
+		return &message.ChatTarget{
 			ProviderChatID: externalChatID,
 		}, true, nil
 	}
-	return &messenger.ChatTarget{
+	return &message.ChatTarget{
 		ProviderChatID:   strings.TrimSpace(binding.ExternalChatID),
 		ProviderThreadID: componentThreadID,
 	}, true, nil

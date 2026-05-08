@@ -7,7 +7,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	component "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
@@ -77,7 +77,7 @@ func (b *Broker) tryHandleMessageCommand(
 	return true, []coremodel.ThreadMessage{*message}, nil
 }
 
-func messageCommandActor(payload messenger.InboundPayload) commandengine.Actor {
+func messageCommandActor(payload message.InboundPayload) commandengine.Actor {
 	actor := payload.ResolvedActor()
 	actorID := strings.TrimSpace(actor.ID)
 	if actorID == "" {

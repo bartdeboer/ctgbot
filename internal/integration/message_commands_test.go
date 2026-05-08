@@ -12,7 +12,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	v5process "github.com/bartdeboer/ctgbot/internal/component/process"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -29,13 +29,13 @@ func TestV5MessageCommandRunsAndSkipsAgent(t *testing.T) {
 			root,
 			component.InboundEvent{
 				ExternalID: "msg-1",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "/tools ping"},
+					Text:              message.TextMessage{Text: "/tools ping"},
 				},
 			},
 			func(registry *component.Registry) error {
@@ -124,13 +124,13 @@ func TestV5UnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 			root,
 			component.InboundEvent{
 				ExternalID: "msg-1",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "/tools nope"},
+					Text:              message.TextMessage{Text: "/tools nope"},
 				},
 			},
 			func(registry *component.Registry) error {
@@ -213,13 +213,13 @@ func TestV5AgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.
 			root,
 			component.InboundEvent{
 				ExternalID: "msg-agent-surface",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-agent-surface",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "/agentctl ping"},
+					Text:              message.TextMessage{Text: "/agentctl ping"},
 				},
 			},
 			func(registry *component.Registry) error {
@@ -281,13 +281,13 @@ func TestV5MultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
 			root,
 			component.InboundEvent{
 				ExternalID: "msg-agent-full-ref",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-agent-full-ref",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "/agentctl/work ping"},
+					Text:              message.TextMessage{Text: "/agentctl/work ping"},
 				},
 			},
 			func(registry *component.Registry) error {
@@ -356,13 +356,13 @@ func TestV5MultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
 			root,
 			component.InboundEvent{
 				ExternalID: "msg-agent-short",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-agent-short",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "/agentctl ping"},
+					Text:              message.TextMessage{Text: "/agentctl ping"},
 				},
 			},
 			func(registry *component.Registry) error {
@@ -432,13 +432,13 @@ func TestV5ProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 				root,
 				component.InboundEvent{
 					ExternalID: "msg-" + text,
-					Payload: messenger.InboundPayload{
+					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
 						ProviderChatID:    "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "msg-" + text,
 						Actor:             actorWithRoles("", "bart"),
-						Text:              messenger.TextMessage{Text: text},
+						Text:              message.TextMessage{Text: text},
 					},
 				},
 				func(registry *component.Registry) error {
@@ -523,13 +523,13 @@ func TestV5ProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 				root,
 				component.InboundEvent{
 					ExternalID: "operator-" + text,
-					Payload: messenger.InboundPayload{
+					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
 						ProviderChatID:    "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "operator-" + text,
 						Actor:             actorWithRoles("13145044", "bart", simplerbac.RoleUser, simplerbac.RoleRoot),
-						Text:              messenger.TextMessage{Text: text},
+						Text:              message.TextMessage{Text: text},
 					},
 				},
 				func(registry *component.Registry) error {
@@ -628,13 +628,13 @@ func TestV5ProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 				root,
 				component.InboundEvent{
 					ExternalID: "operator-" + tc.text,
-					Payload: messenger.InboundPayload{
+					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
 						ProviderChatID:    "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "operator-" + tc.text,
 						Actor:             actorWithRoles("13145044", "bart", simplerbac.RoleUser, simplerbac.RoleRoot),
-						Text:              messenger.TextMessage{Text: tc.text},
+						Text:              message.TextMessage{Text: tc.text},
 					},
 				},
 				func(registry *component.Registry) error {
@@ -714,13 +714,13 @@ func TestV5HelpListsActiveMessageCommands(t *testing.T) {
 			root,
 			component.InboundEvent{
 				ExternalID: "help",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "help",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "/help"},
+					Text:              message.TextMessage{Text: "/help"},
 				},
 			},
 			func(registry *component.Registry) error {
@@ -799,13 +799,13 @@ func TestV5ConfigMessageCommands(t *testing.T) {
 				root,
 				component.InboundEvent{
 					ExternalID: "cfg-" + strings.ReplaceAll(text, " ", "-"),
-					Payload: messenger.InboundPayload{
+					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
 						ProviderChatID:    "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "cfg-" + strings.ReplaceAll(text, " ", "-"),
 						Actor:             actorWithRoles("13145044", "bart", simplerbac.RoleUser, simplerbac.RoleRoot),
-						Text:              messenger.TextMessage{Text: text},
+						Text:              message.TextMessage{Text: text},
 					},
 				},
 				nil,

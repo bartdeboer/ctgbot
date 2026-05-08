@@ -13,7 +13,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	v5component "github.com/bartdeboer/ctgbot/internal/component"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clistate"
@@ -45,7 +45,7 @@ type sentPhoto struct {
 type sentChatAction struct {
 	chatID   int64
 	threadID int
-	action   messenger.ChatAction
+	action   message.ChatAction
 }
 
 type fakeTelegramAPI struct {
@@ -117,7 +117,7 @@ func (f *fakeTelegramAPI) SendAudio(ctx context.Context, chatID int64, threadID 
 	return nil
 }
 
-func (f *fakeTelegramAPI) SendChatAction(ctx context.Context, chatID int64, threadID int, action messenger.ChatAction) error {
+func (f *fakeTelegramAPI) SendChatAction(ctx context.Context, chatID int64, threadID int, action message.ChatAction) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.actions = append(f.actions, sentChatAction{chatID: chatID, threadID: threadID, action: action})
@@ -187,10 +187,10 @@ func TestRunInboundEmitsV5EventAndRelaysResponse(t *testing.T) {
 	var events []v5component.InboundEvent
 	err := c.RunInbound(context.Background(), func(ctx context.Context, event v5component.InboundEvent) error {
 		events = append(events, event)
-		return c.Send(ctx, messenger.OutboundPayload{
+		return c.Send(ctx, message.OutboundPayload{
 			ProviderChatID:   event.Payload.ProviderChatID,
 			ProviderThreadID: event.Payload.ProviderThreadID,
-			Text:             messenger.TextMessage{Text: " pong "},
+			Text:             message.TextMessage{Text: " pong "},
 		})
 	})
 	if err != nil {
@@ -283,7 +283,7 @@ func TestInboundPayloadDownloadsAttachments(t *testing.T) {
 func TestSendIgnoresZeroPayload(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}
-	if err := c.Send(context.Background(), messenger.OutboundPayload{}); err != nil {
+	if err := c.Send(context.Background(), message.OutboundPayload{}); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
 	if len(api.messageSnapshot()) != 0 {
@@ -299,10 +299,10 @@ func TestSendFallsBackFromMarkdownToHTML(t *testing.T) {
 	api := &fakeTelegramAPI{sendMessageErrs: []error{fmt.Errorf("Bad Request: can't parse entities")}}
 	c := &Component{api: api, cfg: cfg}
 
-	if err := c.Send(context.Background(), messenger.OutboundPayload{
+	if err := c.Send(context.Background(), message.OutboundPayload{
 		ProviderChatID:   "123",
 		ProviderThreadID: "4",
-		Text:             messenger.TextMessage{Text: "*hello*"},
+		Text:             message.TextMessage{Text: "*hello*"},
 	}); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
@@ -318,11 +318,11 @@ func TestSendFallsBackFromMarkdownToHTML(t *testing.T) {
 func TestSendMediaImageUsesPhoto(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}
-	if err := c.Send(context.Background(), messenger.OutboundPayload{
+	if err := c.Send(context.Background(), message.OutboundPayload{
 		ProviderChatID:   "123",
 		ProviderThreadID: "4",
-		Text:             messenger.TextMessage{Text: "caption"},
-		Attachments: []messenger.Media{{
+		Text:             message.TextMessage{Text: "caption"},
+		Attachments: []message.Media{{
 			Filename:    "image.png",
 			ContentType: "image/png",
 			Content:     []byte("png"),
@@ -341,10 +341,10 @@ func TestSendMediaImageUsesPhoto(t *testing.T) {
 func TestSendTextualSourceWithSyntaxUsesRenderedFence(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}
-	if err := c.Send(context.Background(), messenger.OutboundPayload{
+	if err := c.Send(context.Background(), message.OutboundPayload{
 		ProviderChatID: "123",
-		Text:           messenger.TextMessage{Text: "Here"},
-		Attachments: []messenger.Media{{
+		Text:           message.TextMessage{Text: "Here"},
+		Attachments: []message.Media{{
 			Filename:    "main.go",
 			ContentType: "text/plain",
 			Syntax:      "go",
@@ -371,7 +371,7 @@ func TestStartChatActionSendsAndStopsHeartbeat(t *testing.T) {
 	c := &Component{api: api}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	stop, err := c.StartChatAction(ctx, messenger.ChatTarget{ProviderChatID: "123", ProviderThreadID: "4"}, messenger.ChatActionTyping)
+	stop, err := c.StartChatAction(ctx, message.ChatTarget{ProviderChatID: "123", ProviderThreadID: "4"}, message.ChatActionTyping)
 	if err != nil {
 		t.Fatalf("StartChatAction() error = %v", err)
 	}

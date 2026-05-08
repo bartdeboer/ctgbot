@@ -9,7 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -104,7 +104,7 @@ func (r *Registry) Build(
 type InboundEvent struct {
 	ComponentID modeluuid.UUID
 	ExternalID  string
-	Payload     messenger.InboundPayload
+	Payload     message.InboundPayload
 }
 
 type InboundEmitter func(ctx context.Context, event InboundEvent) error
@@ -116,8 +116,8 @@ type InboundSource interface {
 
 type OutboundRelay interface {
 	Component
-	Send(ctx context.Context, payload messenger.OutboundPayload) error
-	StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error)
+	Send(ctx context.Context, payload message.OutboundPayload) error
+	StartChatAction(ctx context.Context, target message.ChatTarget, action message.ChatAction) (func(), error)
 }
 
 type Agent interface {
@@ -198,8 +198,8 @@ type TurnInstructions struct {
 type TurnRuntime interface {
 	Commands() commandengine.CommandExecutor
 	Instructions() TurnInstructions
-	Send(ctx context.Context, payload messenger.OutboundPayload) error
-	StartChatAction(ctx context.Context, action messenger.ChatAction) (func(), error)
+	Send(ctx context.Context, payload message.OutboundPayload) error
+	StartChatAction(ctx context.Context, action message.ChatAction) (func(), error)
 	WorkspacePath() string
 	ComponentHome(componentID modeluuid.UUID) (v5runtime.Home, bool)
 	ComponentThreadID(componentID modeluuid.UUID) (string, bool, error)

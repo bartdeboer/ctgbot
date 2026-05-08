@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
 func (b *Broker) SendPayload(
 	ctx context.Context,
 	threadID modeluuid.UUID,
-	payload messenger.OutboundPayload,
+	payload message.OutboundPayload,
 ) error {
 	if err := b.ensureReady(); err != nil {
 		return err

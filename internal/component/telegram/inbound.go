@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	v5component "github.com/bartdeboer/ctgbot/internal/component"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
@@ -61,7 +61,7 @@ func (c *Component) emitUpdate(ctx context.Context, update TelegramUpdate, text 
 	})
 }
 
-func (c *Component) inboundPayload(ctx context.Context, update TelegramUpdate, text string) (messenger.InboundPayload, error) {
+func (c *Component) inboundPayload(ctx context.Context, update TelegramUpdate, text string) (message.InboundPayload, error) {
 	operator := false
 	if c.cfg != nil && update.UserID != 0 {
 		for _, userID := range c.cfg.Telegram().OperatorUserIDs() {
@@ -72,18 +72,18 @@ func (c *Component) inboundPayload(ctx context.Context, update TelegramUpdate, t
 		}
 	}
 
-	payload := messenger.InboundPayload{
+	payload := message.InboundPayload{
 		ProviderType:      Type,
 		ProviderChatID:    fmt.Sprintf("%d", update.ChatID),
 		ProviderThreadID:  fmt.Sprintf("%d", update.ThreadID),
 		ProviderMessageID: fmt.Sprintf("%d", update.MessageID),
 		ChatLabel:         strings.TrimSpace(update.ChatTitle),
-		Actor: messenger.Actor{
+		Actor: message.Actor{
 			ID:    strconv.FormatInt(update.UserID, 10),
 			Label: update.UserLabel(),
 			Roles: telegramActorRoles(operator),
 		},
-		Text: messenger.TextMessage{Text: text},
+		Text: message.TextMessage{Text: text},
 	}
 
 	c.logf("telegram update chat=%d thread=%d msg=%d user=%q user_id=%d text=%q attachments=%d", update.ChatID, update.ThreadID, update.MessageID, update.UserLabel(), update.UserID, text, len(update.Attachments))
@@ -91,14 +91,14 @@ func (c *Component) inboundPayload(ctx context.Context, update TelegramUpdate, t
 	if len(update.Attachments) > 0 {
 		attachments, err := c.loadIncomingAttachments(ctx, update.Attachments)
 		if err != nil {
-			return messenger.InboundPayload{}, fmt.Errorf("load incoming attachments: %w", err)
+			return message.InboundPayload{}, fmt.Errorf("load incoming attachments: %w", err)
 		}
 		payload.Attachments = attachments
 	}
 	return payload, nil
 }
 
-func externalIDForPayload(payload messenger.InboundPayload) string {
+func externalIDForPayload(payload message.InboundPayload) string {
 	externalID := strings.TrimSpace(payload.ProviderMessageID)
 	if externalID != "" {
 		return externalID

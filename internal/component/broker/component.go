@@ -8,7 +8,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -18,7 +18,7 @@ import (
 const Type = "broker"
 
 type Actions interface {
-	SendPayload(ctx context.Context, threadID modeluuid.UUID, payload messenger.OutboundPayload) error
+	SendPayload(ctx context.Context, threadID modeluuid.UUID, payload message.OutboundPayload) error
 	RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error)
 	MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string, error)
 }
@@ -123,11 +123,11 @@ func (c *Component) sendMedia(
 	return c.Actions.SendPayload(
 		ctx,
 		threadID,
-		messenger.OutboundPayload{
-			Text: messenger.TextMessage{
+		message.OutboundPayload{
+			Text: message.TextMessage{
 				Text: cmd.Caption,
 			},
-			Attachments: []messenger.Media{{
+			Attachments: []message.Media{{
 				Filename:    cmd.Filename,
 				ContentType: cmd.ContentType,
 				Syntax:      cmd.Syntax,

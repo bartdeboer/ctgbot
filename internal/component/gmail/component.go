@@ -7,7 +7,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -80,14 +80,14 @@ func (c *Component) GetMessage(ctx context.Context, messageID string) (*gmailapi
 	return c.Service.Users.Messages.Get(c.userID(), messageID).Format("full").Context(ctx).Do()
 }
 
-func (c *Component) InboundEventFromMessage(message *gmailapi.Message) component.InboundEvent {
-	if message == nil {
+func (c *Component) InboundEventFromMessage(gmailMessage *gmailapi.Message) component.InboundEvent {
+	if gmailMessage == nil {
 		return component.InboundEvent{
 			ComponentID: c.componentID,
-			Payload: messenger.InboundPayload{
+			Payload: message.InboundPayload{
 				ProviderType:   Type,
 				ProviderChatID: c.userID(),
-				Actor: messenger.Actor{
+				Actor: message.Actor{
 					ID:    "email",
 					Label: "Email",
 					Roles: []simplerbac.Role{simplerbac.RoleUser},
@@ -96,26 +96,26 @@ func (c *Component) InboundEventFromMessage(message *gmailapi.Message) component
 		}
 	}
 
-	sender := senderLabel(message)
+	sender := senderLabel(gmailMessage)
 	if sender == "" {
 		sender = "Email"
 	}
 
 	return component.InboundEvent{
 		ComponentID: c.componentID,
-		ExternalID:  strings.TrimSpace(message.Id),
-		Payload: messenger.InboundPayload{
+		ExternalID:  strings.TrimSpace(gmailMessage.Id),
+		Payload: message.InboundPayload{
 			ProviderType:      Type,
 			ProviderChatID:    c.userID(),
-			ProviderThreadID:  strings.TrimSpace(message.ThreadId),
-			ProviderMessageID: strings.TrimSpace(message.Id),
-			Actor: messenger.Actor{
+			ProviderThreadID:  strings.TrimSpace(gmailMessage.ThreadId),
+			ProviderMessageID: strings.TrimSpace(gmailMessage.Id),
+			Actor: message.Actor{
 				ID:    sender,
 				Label: sender,
 				Roles: []simplerbac.Role{simplerbac.RoleUser},
 			},
-			Text: messenger.TextMessage{
-				Text: strings.TrimSpace(message.Snippet),
+			Text: message.TextMessage{
+				Text: strings.TrimSpace(gmailMessage.Snippet),
 			},
 		},
 	}

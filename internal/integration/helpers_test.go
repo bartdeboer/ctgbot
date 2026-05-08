@@ -14,7 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5gormstorage "github.com/bartdeboer/ctgbot/internal/repository/gormstorage"
@@ -34,7 +34,7 @@ type runtimeState struct {
 	execs        []execRecord
 }
 
-func actorWithRoles(id string, label string, roles ...simplerbac.Role) messenger.Actor {
+func actorWithRoles(id string, label string, roles ...simplerbac.Role) message.Actor {
 	id = strings.TrimSpace(id)
 	label = strings.TrimSpace(label)
 	if id == "" {
@@ -46,7 +46,7 @@ func actorWithRoles(id string, label string, roles ...simplerbac.Role) messenger
 	if len(roles) == 0 {
 		roles = []simplerbac.Role{simplerbac.RoleUser}
 	}
-	return messenger.Actor{
+	return message.Actor{
 		ID:    id,
 		Label: label,
 		Roles: append([]simplerbac.Role(nil), roles...),
@@ -195,7 +195,7 @@ type messengerState struct {
 	mu            sync.Mutex
 	runCalls      int
 	event         component.InboundEvent
-	relayPayloads []messenger.OutboundPayload
+	relayPayloads []message.OutboundPayload
 }
 
 type mockMessenger struct {
@@ -217,7 +217,7 @@ func (m *mockMessenger) RunInbound(ctx context.Context, emit component.InboundEm
 	return emit(ctx, event)
 }
 
-func (m *mockMessenger) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+func (m *mockMessenger) Send(ctx context.Context, payload message.OutboundPayload) error {
 	_ = ctx
 	m.state.mu.Lock()
 	defer m.state.mu.Unlock()
@@ -225,7 +225,7 @@ func (m *mockMessenger) Send(ctx context.Context, payload messenger.OutboundPayl
 	return nil
 }
 
-func (m *mockMessenger) StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error) {
+func (m *mockMessenger) StartChatAction(ctx context.Context, target message.ChatTarget, action message.ChatAction) (func(), error) {
 	_, _, _ = ctx, target, action
 	return func() {}, nil
 }

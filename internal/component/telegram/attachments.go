@@ -4,17 +4,17 @@ import (
 	"context"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
-func (c *Component) loadIncomingAttachments(ctx context.Context, attachments []TelegramAttachment) ([]messenger.Media, error) {
-	out := make([]messenger.Media, 0, len(attachments))
+func (c *Component) loadIncomingAttachments(ctx context.Context, attachments []TelegramAttachment) ([]message.Media, error) {
+	out := make([]message.Media, 0, len(attachments))
 	for _, attachment := range attachments {
 		content, err := c.api.DownloadFile(ctx, attachment.FileID)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, messenger.Media{
+		out = append(out, message.Media{
 			Kind:     strings.TrimSpace(attachment.Kind),
 			Filename: strings.TrimSpace(attachment.Filename),
 			Content:  content,
@@ -23,7 +23,7 @@ func (c *Component) loadIncomingAttachments(ctx context.Context, attachments []T
 	return out, nil
 }
 
-func (c *Component) sendAttachment(ctx context.Context, chatID int64, threadID int, caption string, media messenger.Media) error {
+func (c *Component) sendAttachment(ctx context.Context, chatID int64, threadID int, caption string, media message.Media) error {
 	contentType := strings.TrimSpace(strings.ToLower(media.ContentType))
 	switch {
 	case contentType == "text/markdown":
@@ -68,7 +68,7 @@ func isTelegramTextualAttachment(contentType string) bool {
 	}
 }
 
-func renderTelegramTextAttachment(caption string, media messenger.Media) (string, bool) {
+func renderTelegramTextAttachment(caption string, media message.Media) (string, bool) {
 	body := string(media.Content)
 	var b strings.Builder
 	if strings.TrimSpace(caption) != "" {

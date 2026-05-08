@@ -19,7 +19,7 @@ The project’s main responsibilities are:
 - `cmd/hostbridge`: container-side hostbridge client
 - `cmd/pack`: generates the embedded Docker build context tarball
 - `internal/appstate`: typed config access and local/global state helpers
-- `internal/messenger`: shared inbound/outbound transport types
+- `internal/message`: shared inbound/outbound transport types
 - `internal/commandengine`: typed command registry, router, authorization, and execution
 - `internal/configengine`: config registry/get/set enforcement
 - `internal/schema`: shared command and config definitions
@@ -126,7 +126,7 @@ For the more detailed design model, see:
 - Keep `cmd/` files focused on `clir` routing and small orchestration.
 - Keep standalone helper logic in honest packages like `internal/ctgbotimage`.
 - Keep runtime behavior in `internal/broker`, `internal/component`, `internal/system`, and `internal/runtime`.
-- Keep messenger transport types in `internal/messenger`.
+- Keep message transport types in `internal/message`.
 - Keep config/state access in `internal/appstate`.
 - Prefer updating the embedded build-context source files and then regenerating `internal/containerassets/assets/src.tar.gz`.
 - Do not commit local runtime data from `./.ctgbot/`.

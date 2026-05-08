@@ -17,7 +17,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgebridge "github.com/bartdeboer/ctgbot/internal/hostbridge/bridge"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -71,13 +71,13 @@ func TestV5HostbridgeFlow(t *testing.T) {
 		messengerState := &messengerState{
 			event: component.InboundEvent{
 				ExternalID: "msg-1",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "hello"},
+					Text:              message.TextMessage{Text: "hello"},
 				},
 			},
 		}
@@ -216,13 +216,13 @@ func TestV5HostbridgeSendMediaFlow(t *testing.T) {
 		messengerState := &messengerState{
 			event: component.InboundEvent{
 				ExternalID: "msg-1",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "hello"},
+					Text:              message.TextMessage{Text: "hello"},
 				},
 			},
 		}
@@ -373,13 +373,13 @@ func TestV5HostbridgeRunCommandFlow(t *testing.T) {
 		messengerState := &messengerState{
 			event: component.InboundEvent{
 				ExternalID: "msg-run",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-run",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "hello"},
+					Text:              message.TextMessage{Text: "hello"},
 				},
 			},
 		}
@@ -487,13 +487,13 @@ func TestV5HostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 		messengerState := &messengerState{
 			event: component.InboundEvent{
 				ExternalID: "msg-run-workspace",
-				Payload: messenger.InboundPayload{
+				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
 					ProviderChatID:    "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-run-workspace",
 					Actor:             actorWithRoles("", "bart"),
-					Text:              messenger.TextMessage{Text: "hello"},
+					Text:              message.TextMessage{Text: "hello"},
 				},
 			},
 		}

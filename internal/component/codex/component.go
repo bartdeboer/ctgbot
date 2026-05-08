@@ -15,7 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -200,7 +200,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		return nil, err
 	}
 
-	stopTyping, err := turn.Runtime.StartChatAction(ctx, messenger.ChatActionTyping)
+	stopTyping, err := turn.Runtime.StartChatAction(ctx, message.ChatActionTyping)
 	if err == nil && stopTyping != nil {
 		defer stopTyping()
 	}
@@ -355,7 +355,7 @@ type outputHandler struct {
 	runtime component.TurnRuntime
 }
 
-func (h outputHandler) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+func (h outputHandler) Send(ctx context.Context, payload message.OutboundPayload) error {
 	if h.runtime == nil {
 		return nil
 	}

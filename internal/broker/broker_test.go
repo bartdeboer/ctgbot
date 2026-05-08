@@ -14,7 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	v5process "github.com/bartdeboer/ctgbot/internal/component/process"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messenger"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	v5runtime "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -103,7 +103,7 @@ func (f fakeFactory) Bind(registration coremodel.Component, home v5runtime.Home,
 }
 
 type fakeMessengerRecorder struct {
-	payloads []messenger.OutboundPayload
+	payloads []message.OutboundPayload
 }
 
 type fakeMessenger struct {
@@ -122,12 +122,12 @@ func (c *fakeMessenger) RunInbound(ctx context.Context, emit component.InboundEm
 	}
 	return nil
 }
-func (c *fakeMessenger) Send(ctx context.Context, payload messenger.OutboundPayload) error {
+func (c *fakeMessenger) Send(ctx context.Context, payload message.OutboundPayload) error {
 	_ = ctx
 	c.recorder.payloads = append(c.recorder.payloads, payload)
 	return nil
 }
-func (c *fakeMessenger) StartChatAction(ctx context.Context, target messenger.ChatTarget, action messenger.ChatAction) (func(), error) {
+func (c *fakeMessenger) StartChatAction(ctx context.Context, target message.ChatTarget, action message.ChatAction) (func(), error) {
 	_, _, _ = ctx, target, action
 	return func() {}, nil
 }
@@ -155,8 +155,8 @@ func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if streamText == "" {
 		streamText = "working..."
 	}
-	if err := turn.Runtime.Send(context.Background(), messenger.OutboundPayload{
-		Text: messenger.TextMessage{Text: streamText},
+	if err := turn.Runtime.Send(context.Background(), message.OutboundPayload{
+		Text: message.TextMessage{Text: streamText},
 	}); err != nil {
 		return nil, err
 	}
@@ -235,17 +235,17 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
 		ComponentID: telegram.ID,
 		ExternalID:  "msg-1",
-		Payload: messenger.InboundPayload{
+		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
 			ProviderChatID:    "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
-			Actor: messenger.Actor{
+			Actor: message.Actor{
 				ID:    "bart",
 				Label: "bart",
 				Roles: []simplerbac.Role{simplerbac.RoleUser},
 			},
-			Text: messenger.TextMessage{Text: "hello"},
+			Text: message.TextMessage{Text: "hello"},
 		},
 	})
 	if err != nil {
@@ -312,17 +312,17 @@ func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T)
 	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
 		ComponentID: telegram.ID,
 		ExternalID:  "msg-1",
-		Payload: messenger.InboundPayload{
+		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
 			ProviderChatID:    "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
-			Actor: messenger.Actor{
+			Actor: message.Actor{
 				ID:    "bart",
 				Label: "bart",
 				Roles: []simplerbac.Role{simplerbac.RoleUser},
 			},
-			Text: messenger.TextMessage{Text: "hello"},
+			Text: message.TextMessage{Text: "hello"},
 		},
 	})
 	if err != nil {
@@ -395,17 +395,17 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
 		ComponentID: telegram.ID,
 		ExternalID:  "msg-1",
-		Payload: messenger.InboundPayload{
+		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
 			ProviderChatID:    "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
-			Actor: messenger.Actor{
+			Actor: message.Actor{
 				ID:    "bart",
 				Label: "bart",
 				Roles: []simplerbac.Role{simplerbac.RoleUser},
 			},
-			Text: messenger.TextMessage{Text: "/tools ping"},
+			Text: message.TextMessage{Text: "/tools ping"},
 		},
 	})
 	if err != nil {
@@ -496,17 +496,17 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 		outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
 			ComponentID: telegram.ID,
 			ExternalID:  "msg-" + strings.ReplaceAll(text, " ", "-"),
-			Payload: messenger.InboundPayload{
+			Payload: message.InboundPayload{
 				ProviderType:      "telegram",
 				ProviderChatID:    "chat-1",
 				ProviderThreadID:  "thread-7",
 				ProviderMessageID: "msg-" + strings.ReplaceAll(text, " ", "-"),
-				Actor: messenger.Actor{
+				Actor: message.Actor{
 					ID:    "bart",
 					Label: "bart",
 					Roles: []simplerbac.Role{simplerbac.RoleUser},
 				},
-				Text: messenger.TextMessage{Text: text},
+				Text: message.TextMessage{Text: text},
 			},
 		})
 		if err != nil {
@@ -551,17 +551,17 @@ func TestRunStartsEnabledInboundSources(t *testing.T) {
 	agentRecorder := &fakeAgentRecorder{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, []component.InboundEvent{{
 		ExternalID: "msg-2",
-		Payload: messenger.InboundPayload{
+		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
 			ProviderChatID:    "chat-2",
 			ProviderThreadID:  "thread-9",
 			ProviderMessageID: "msg-2",
-			Actor: messenger.Actor{
+			Actor: message.Actor{
 				ID:    "bart",
 				Label: "bart",
 				Roles: []simplerbac.Role{simplerbac.RoleUser},
 			},
-			Text: messenger.TextMessage{Text: "ping"},
+			Text: message.TextMessage{Text: "ping"},
 		},
 	}})
 	b := broker.New(storage, system, nil)
