@@ -287,7 +287,12 @@ func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, pro
 }
 
 func turnOptionsFromSettings(settings resolvedThreadSettings) TurnOptions {
-	options := TurnOptions{}
+	options := TurnOptions{
+		SandboxMode: DefaultSandboxMode,
+	}
+	if mode := strings.TrimSpace(settings.SandboxMode); mode != "" {
+		options.SandboxMode = mode
+	}
 	if settings.ModelSource != "codex" {
 		options.Model = settings.Model
 	}

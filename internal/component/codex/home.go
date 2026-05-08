@@ -63,7 +63,7 @@ func writeConfig(hostHome string, runtimeHome string, runtimeWorkspace string) e
 	runtimeWorkspace = cleanRuntimePath(runtimeWorkspace, "/workspace")
 	configPath := filepath.Join(hostHome, "config.toml")
 	configBody := strings.TrimSpace(fmt.Sprintf(`
-sandbox_mode = "workspace-write"
+sandbox_mode = %q
 approval_policy = "never"
 project_root_markers = []
 model_instructions_file = %q
@@ -76,7 +76,7 @@ exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 writable_roots = [%q, %q, %q]
 network_access = true
-`, path.Join(runtimeHome, "ctgbot-bootstrap.md"), runtimeWorkspace, runtimeHome, "/tmp")) + "\n"
+`, DefaultSandboxMode, path.Join(runtimeHome, "ctgbot-bootstrap.md"), runtimeWorkspace, runtimeHome, "/tmp")) + "\n"
 	return os.WriteFile(configPath, []byte(configBody), 0o600)
 }
 
