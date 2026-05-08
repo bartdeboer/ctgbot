@@ -9,10 +9,12 @@ import (
 )
 
 const ComponentConfigFilename = "component.json"
+const DefaultSandboxMode = "danger-full-access"
 
 type ComponentConfig struct {
 	Model           string `json:"model"`
 	ReasoningEffort string `json:"reasoning_effort"`
+	SandboxMode     string `json:"sandbox_mode"`
 }
 
 func loadComponentConfig(homePath string) (ComponentConfig, error) {
@@ -34,6 +36,10 @@ func loadComponentConfig(homePath string) (ComponentConfig, error) {
 func (c ComponentConfig) withDefaults() ComponentConfig {
 	c.Model = strings.TrimSpace(c.Model)
 	c.ReasoningEffort = strings.TrimSpace(c.ReasoningEffort)
+	c.SandboxMode = strings.TrimSpace(c.SandboxMode)
+	if c.SandboxMode == "" {
+		c.SandboxMode = DefaultSandboxMode
+	}
 	return c
 }
 

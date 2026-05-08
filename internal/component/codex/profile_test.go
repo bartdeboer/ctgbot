@@ -81,7 +81,8 @@ func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 		}
 		if err := os.WriteFile(filepath.Join(homePath, ComponentConfigFilename), []byte(`{
   "model": "gpt-5.5",
-  "reasoning_effort": "high"
+  "reasoning_effort": "high",
+  "sandbox_mode": "workspace-write"
 }`), 0o644); err != nil {
 			t.Fatalf("WriteFile(component.json) error = %v", err)
 		}
@@ -122,6 +123,12 @@ func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 		}
 		if got, want := settings.ReasoningEffort, "high"; got != want {
 			t.Fatalf("settings.ReasoningEffort = %q, want %q", got, want)
+		}
+		if got, want := settings.SandboxMode, "workspace-write"; got != want {
+			t.Fatalf("settings.SandboxMode = %q, want %q", got, want)
+		}
+		if got, want := componentValue.componentConfig.SandboxMode, "workspace-write"; got != want {
+			t.Fatalf("componentConfig.SandboxMode = %q, want %q", got, want)
 		}
 		if got, want := factory.config.Env[0], "FOO=bar"; got != want {
 			t.Fatalf("first env = %q, want %q", got, want)

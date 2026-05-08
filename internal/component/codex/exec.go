@@ -36,6 +36,7 @@ type TurnRequest struct {
 type TurnOptions struct {
 	Model           string
 	ReasoningEffort string
+	SandboxMode     string
 }
 
 type TurnResult struct {
@@ -143,10 +144,14 @@ func BuildExecArgs(request ExecArgs) []string {
 	if outputPath == "" {
 		outputPath = lastMessagePath
 	}
+	sandboxMode := strings.TrimSpace(request.Options.SandboxMode)
+	if sandboxMode == "" {
+		sandboxMode = DefaultSandboxMode
+	}
 	innerArgs := []string{
 		"codex",
 		"-a", "never",
-		"-s", "workspace-write",
+		"-s", sandboxMode,
 		"exec",
 		"--json",
 		"--skip-git-repo-check",

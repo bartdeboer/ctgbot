@@ -19,6 +19,7 @@ type threadState struct {
 
 type resolvedThreadSettings struct {
 	KeepRunning           bool
+	SandboxMode           string
 	Model                 string
 	ModelSource           string
 	ReasoningEffort       string
@@ -86,6 +87,7 @@ func (c *Component) saveThreadState(ctx context.Context, storage repository.Stor
 
 func (c *Component) resolveThreadSettings(ctx context.Context, thread *coremodel.Thread) (resolvedThreadSettings, error) {
 	settings := resolvedThreadSettings{
+		SandboxMode:           DefaultSandboxMode,
 		Model:                 "(codex default)",
 		ModelSource:           "codex",
 		ReasoningEffort:       "(codex default)",
@@ -100,6 +102,11 @@ func (c *Component) resolveThreadSettings(ctx context.Context, thread *coremodel
 	}
 	if state.KeepRunning != nil && *state.KeepRunning {
 		settings.KeepRunning = true
+	}
+	if c != nil {
+		if mode := strings.TrimSpace(c.componentConfig.SandboxMode); mode != "" {
+			settings.SandboxMode = mode
+		}
 	}
 	if model := strings.TrimSpace(state.Model); model != "" {
 		settings.Model = model

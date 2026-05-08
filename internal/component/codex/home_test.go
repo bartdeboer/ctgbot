@@ -83,6 +83,9 @@ func TestPrepareHomeWritesPosixModelInstructionsPath(t *testing.T) {
 		if !strings.Contains(text, `model_instructions_file = "/profile/components/codex/codex/ctgbot-bootstrap.md"`) {
 			t.Fatalf("config.toml missing model instructions path:\n%s", text)
 		}
+		if !strings.Contains(text, `sandbox_mode = "danger-full-access"`) {
+			t.Fatalf("config.toml missing default sandbox mode:\n%s", text)
+		}
 		if strings.Contains(text, `\\profile`) {
 			t.Fatalf("config.toml still contains windows-style paths:\n%s", text)
 		}

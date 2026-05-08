@@ -54,12 +54,30 @@ func TestBuildExecArgsIncludesModelEffortAndResume(t *testing.T) {
 	})
 	want := []string{
 		"sh", "-lc", "rm -f " + containerengine.ActivePIDFile + "; echo $$ > " + containerengine.ActivePIDFile + "; exec \"$@\"", "sh",
-		"codex", "-a", "never", "-s", "workspace-write", "exec", "--json", "--skip-git-repo-check",
+		"codex", "-a", "never", "-s", "danger-full-access", "exec", "--json", "--skip-git-repo-check",
 		"--add-dir", "/workspace", "--output-last-message", "/tmp/out.txt", "-C", "/workspace",
 		"-m", "thread-model", "-c", `model_reasoning_effort="high"`, "resume", "thread-1", "hello",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("BuildExecArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildExecArgsAllowsSandboxModeOverride(t *testing.T) {
+	got := BuildExecArgs(ExecArgs{
+		Workspace:  "/workspace",
+		OutputPath: "/tmp/out.txt",
+		Prompt:     "hello",
+		Options: TurnOptions{
+			SandboxMode: "workspace-write",
+		},
+	})
+	wantPrefix := []string{
+		"sh", "-lc", "rm -f " + containerengine.ActivePIDFile + "; echo $$ > " + containerengine.ActivePIDFile + "; exec \"$@\"", "sh",
+		"codex", "-a", "never", "-s", "workspace-write",
+	}
+	if len(got) < len(wantPrefix) || !reflect.DeepEqual(got[:len(wantPrefix)], wantPrefix) {
+		t.Fatalf("BuildExecArgs() prefix = %#v, want %#v", got, wantPrefix)
 	}
 }
 
