@@ -26,7 +26,7 @@ The project’s main responsibilities are:
 - `internal/hostbridge`: hostbridge request/response transport, client, and server
 - `internal/containerassets`: embedded Docker build context tarball source
 - `internal/ctgbotimage`: standalone image build helpers
-- `internal/v5`: the real runtime path
+- `internal/broker`, `internal/component`, `internal/system`, `internal/runtime`: the real runtime path
 - `docker/Dockerfile`: source Dockerfile for the embedded image build context
 
 ## Main Commands
@@ -102,7 +102,7 @@ forms remain as compatibility aliases.
 
 For the more detailed design model, see:
 
-- [internal/v5/README.md](/Users/bart/src/go/ctgbot/internal/v5/README.md)
+- [internal/README.md](/Users/bart/src/go/ctgbot/internal/README.md)
 - [V5DESIGN.md](/Users/bart/src/go/WORKSPACE-DOCS/ctgbot/V5DESIGN.md)
 
 ## Known Operational Notes
@@ -125,7 +125,7 @@ For the more detailed design model, see:
 
 - Keep `cmd/` files focused on `clir` routing and small orchestration.
 - Keep standalone helper logic in honest packages like `internal/ctgbotimage`.
-- Keep runtime behavior in `internal/v5`.
+- Keep runtime behavior in `internal/broker`, `internal/component`, `internal/system`, and `internal/runtime`.
 - Keep messenger transport types in `internal/messenger`.
 - Keep config/state access in `internal/appstate`.
 - Prefer updating the embedded build-context source files and then regenerating `internal/containerassets/assets/src.tar.gz`.

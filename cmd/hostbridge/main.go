@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	clientpkg "github.com/bartdeboer/ctgbot/internal/hostbridge/client"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge/cmdsurface"
+	_ "github.com/bartdeboer/ctgbot/internal/hostbridge/gobregister"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	"github.com/bartdeboer/ctgbot/internal/v5/commandset"
-	"github.com/bartdeboer/ctgbot/internal/v5/hostbridgecmd"
-	_ "github.com/bartdeboer/ctgbot/internal/v5/hostbridgegob"
 )
 
 func main() {
@@ -60,7 +60,7 @@ func normalizedArgs(args []string, componentRef string) []string {
 	if isDirectHostbridgeCommand(args[0], componentRef) {
 		return args
 	}
-	if hostbridgecmd.LegacyCodexShorthandEnabled(componentRef) && isLegacyCodexShorthand(args[0]) {
+	if cmdsurface.LegacyCodexShorthandEnabled(componentRef) && isLegacyCodexShorthand(args[0]) {
 		return append([]string{"codex"}, args...)
 	}
 	return append([]string{"run"}, args...)
@@ -71,7 +71,7 @@ func isDirectHostbridgeCommand(arg string, componentRef string) bool {
 	case "", "run", "sendfile", "sendstdin", "config", "help":
 		return true
 	}
-	for _, prefix := range hostbridgecmd.DirectPrefixes(componentRef) {
+	for _, prefix := range cmdsurface.DirectPrefixes(componentRef) {
 		if arg == prefix {
 			return true
 		}
@@ -122,7 +122,7 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_TLS_DIR  Optional directory containing ca.crt, client.crt, client.key")
 	fmt.Fprintln(os.Stdout, "  CTGBOT_SANDBOX_ID   Sandbox/thread id for outbound/config commands")
 	fmt.Fprintln(os.Stdout, "  CTGBOT_COMPONENT_REF  Current component ref for bound command routing (default codex)")
-	resolved := hostbridgecmd.Resolve(currentComponentRef())
+	resolved := cmdsurface.Resolve(currentComponentRef())
 	if !resolved.Supported {
 		fmt.Fprintln(os.Stdout, "")
 		fmt.Fprintf(os.Stdout, "note: no component-specific hostbridge commands are registered for %s\n", resolved.ComponentRef)
@@ -133,7 +133,7 @@ func hostbridgeRouter() (*commandengine.Router, error) {
 	return commandset.NewBoundRouterForSource(
 		commandengine.SourceHostbridge,
 		hostbridgeBoundSurfaces(),
-		hostbridgecmd.GlobalSurfaces()...,
+		cmdsurface.GlobalSurfaces()...,
 	)
 }
 
@@ -141,19 +141,19 @@ func hostbridgeDefinitions() []commandengine.Definition {
 	return commandset.DefinitionsForBoundSource(
 		commandengine.SourceHostbridge,
 		hostbridgeBoundSurfaces(),
-		hostbridgecmd.GlobalSurfaces()...,
+		cmdsurface.GlobalSurfaces()...,
 	)
 }
 
 func hostbridgeBoundSurfaces() []commandset.BoundSurface {
-	return hostbridgecmd.BoundSurfaces(currentComponentRef())
+	return cmdsurface.BoundSurfaces(currentComponentRef())
 }
 
 func currentComponentRef() string {
 	if ref := strings.TrimSpace(os.Getenv("CTGBOT_COMPONENT_REF")); ref != "" {
 		return ref
 	}
-	return hostbridgecmd.DefaultComponentType
+	return cmdsurface.DefaultComponentType
 }
 
 func printDefinitionHelp(definitions []commandengine.Definition) {

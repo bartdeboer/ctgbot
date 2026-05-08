@@ -31,7 +31,7 @@ func TestBuildContextTarContainsDockerfiles(t *testing.T) {
 		"slim.Dockerfile",
 		"cuda.Dockerfile",
 		"cmd/hostbridge/main.go",
-		"internal/v5/commandset/commandset.go",
+		"internal/commandset/commandset.go",
 	} {
 		if !found[name] {
 			t.Fatalf("build context tar does not contain %s", name)

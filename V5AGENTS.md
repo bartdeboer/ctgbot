@@ -100,5 +100,5 @@ forms remain as compatibility aliases.
 
 For the fuller design model, see:
 
-- `/Users/bart/src/go/ctgbot/internal/v5/README.md`
+- `/Users/bart/src/go/ctgbot/internal/README.md`
 - `/Users/bart/src/go/WORKSPACE-DOCS/ctgbot/V5DESIGN.md`

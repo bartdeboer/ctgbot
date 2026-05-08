@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	v5system "github.com/bartdeboer/ctgbot/internal/v5/system"
+	v5system "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
