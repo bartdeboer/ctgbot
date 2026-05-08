@@ -25,7 +25,6 @@ func main() {
 	registerMaintenanceRoutes(r, globalStore)
 	registerConfigRoutes(r, store, globalStore)
 	registerImageRoutes(r, store)
-	registerCodexRoutes(r, store)
 	registerHostbridgeRoutes(r, store)
 	registerV5Routes(r, store, globalStore)
 

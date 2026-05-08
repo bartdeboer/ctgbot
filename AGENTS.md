@@ -2,13 +2,16 @@
 
 ## Purpose
 
-`ctgbot` is a Telegram bot that runs Codex inside Docker.
+`ctgbot` now centers on the `v5` runtime path.
 
-The project has three major responsibilities:
+The project’s main responsibilities are:
 
-- run Codex in a reusable standalone Docker profile via `ctgbot codex`
-- run Codex conversations per Telegram chat/thread via `ctgbot telegram monitor`
+- run chat-bound component graphs through `ctgbot v5 run`
 - provide a host-command bridge via `hostbridge` and `ctgbot hostbridge serve`
+- support a small operator CLI surface:
+  - `ctgbot v5 component auth <component>`
+  - `ctgbot v5 component auth-status <component>`
+  - `ctgbot image build`
 
 ## Repo Shape
 
@@ -16,129 +19,121 @@ The project has three major responsibilities:
 - `cmd/hostbridge`: container-side hostbridge client
 - `cmd/pack`: generates the embedded Docker build context tarball
 - `internal/appstate`: typed config access and local/global state helpers
-- `internal/chatmodel`: shared conversation and Telegram update types
-- `internal/messenger`: messenger plugin contracts and shared transport types
-- `internal/messenger/telegramengine`: Telegram messenger implementation, API integration, and event logging
-- `internal/agent`: agent plugin contracts
-- `internal/agent/codexengine`: Codex runtime, Docker session execution, image builder, and Codex chat-session state
-- `internal/commandengine`: shared typed command registry, router, authorization, and execution
-- `internal/configengine`: shared config registry/get/set enforcement
-- `internal/schema`: shared command, config, and router definitions
+- `internal/messenger`: shared inbound/outbound transport types
+- `internal/commandengine`: typed command registry, router, authorization, and execution
+- `internal/configengine`: config registry/get/set enforcement
+- `internal/schema`: shared command and config definitions
 - `internal/hostbridge`: hostbridge request/response transport, client, and server
-- `internal/containerassets`: embeds an optional `assets/src.tar.gz` for Docker image builds
+- `internal/containerassets`: embedded Docker build context tarball source
+- `internal/ctgbotimage`: standalone image build helpers
+- `internal/v5`: the real runtime path
 - `docker/Dockerfile`: source Dockerfile for the embedded image build context
 
 ## Main Commands
 
-- `go run ./cmd/ctgbot codex`
-  Runs normal Codex inside the bot Docker image.
+- `go run ./cmd/ctgbot v5 run`
+  Runs the live `v5` runtime.
 
-- `go run ./cmd/ctgbot codex signin`
-  Runs containerized Codex login and persists auth on the host under `~/.ctgbot/.codex`.
+- `go run ./cmd/ctgbot v5 workspace list`
+  Lists configured `v5` workspaces.
 
-- `go run ./cmd/ctgbot codex status`
-  Shows login status using the standalone Codex home.
+- `go run ./cmd/ctgbot v5 component list`
+  Lists registered `v5` components.
 
-- `go run ./cmd/ctgbot telegram monitor`
-  Starts the Telegram bot loop.
-  This also starts an in-process TCP hostbridge server for Telegram conversations.
+- `go run ./cmd/ctgbot v5 component auth codex`
+  Runs the component-scoped auth flow for the default Codex registration.
+
+- `go run ./cmd/ctgbot v5 component auth-status codex`
+  Shows authentication status for the default Codex registration.
 
 - `go run ./cmd/ctgbot hostbridge serve`
   Starts the hostbridge server over TCP.
 
+- `go run ./cmd/ctgbot process install`
+- `go run ./cmd/ctgbot process upgrade`
+- `go run ./cmd/ctgbot process quit`
 - `go run ./cmd/ctgbot image build --no-cache`
-  Rebuilds the Docker image.
-
 - `go run ./cmd/ctgbot go-generate`
-  Runs `go generate ./internal/containerassets`.
 
-- `go run ./cmd/ctgbot config`
-  Shows current config and discovered Telegram chats.
+The top-level `install`, `upgrade`, and `quit` commands are CLI aliases for:
+
+- `process install`
+- `process upgrade`
+- `process quit`
 
 ## Runtime Layout
 
 There are three important state locations:
 
-- `~/.ctgbot/.codex`
-  Standalone Codex home used by `ctgbot codex` and `ctgbot codex signin`.
-  This is a full Codex home, not just auth storage.
-
 - `./.ctgbot`
-  Local bot control state for the current project directory.
-  Contains `config.json` and `ctgbot.db`.
+  Local runtime state for the current project directory.
+  Contains:
+  - `config.json`
+  - `ctgbot.db`
+  - component homes under `components/<type>/<name>`
+  - chat-local fallback workspaces under `chats/<chatID>/workspace`
+  - hostbridge TLS state
 
-- `./chats/<chat_id>-<thread_id>`
-  Per Telegram chat runtime.
-  Each chat gets:
-  - `.codex/` as its Codex home
-  - `workspace/` as its default writable project directory
-  - `logs/` for chat-local logs if needed
+- configured named workspaces
+  Loaded from root config and pointed at real host folders.
 
-`chats/` and `./.ctgbot/` are runtime data and are gitignored.
+`./.ctgbot` is runtime data and should not be committed.
 
-The SQLite DB now has two distinct responsibilities:
+## v5 Model
 
-- Telegram-side event logging for inbound messages and bot responses/errors
-- Codex-side chat session tracking for active runtime/container state
+The important `v5` concepts are:
 
-## Telegram Model
+- `Workspace`
+- `Component`
+- `Runtime`
+- `Chat`
+- `ChatComponent`
+- `ThreadComponentMapping`
+- `ThreadComponentState`
+- `Broker`
 
-- All chats are disabled by default until explicitly enabled in config.
-- First contact from a chat records the chat ID into local config.
-- Enable a chat with:
-  - `go run ./cmd/ctgbot config --enable-chat-id <chat-id>`
-- `/new` starts a fresh Docker container for that Telegram chat/thread.
-- `/new` does not wipe the chat `.codex` home or `workspace/`.
-- The default Telegram workspace is `./chats/<chat_id>-<thread_id>/workspace`.
-- `workspace/` is initialized as a tiny Git repo so Codex treats it as a writable project.
+Static runtime settings come from component-home `runtime.json`.
+Static component settings come from component-home `component.json`.
+Mutable per-thread component settings belong in `ThreadComponentState`.
+Component-scoped authentication flows resolve through registered component refs.
 
-## Codex Sandbox Notes
+For the more detailed design model, see:
 
-Telegram conversations currently rely on:
+- [internal/v5/README.md](/Users/bart/src/go/ctgbot/internal/v5/README.md)
+- [V5DESIGN.md](/Users/bart/src/go/WORKSPACE-DOCS/ctgbot/V5DESIGN.md)
 
-- Docker as the outer sandbox boundary
-- Codex `workspace-write` mode inside the container
-- explicit chat `config.toml` written into `./chats/<id>/.codex/config.toml`
-- `writable_roots = ["/workspace"]`
-- TCP hostbridge access via `HOSTBRIDGE_ADDR=host.docker.internal:4567`
-- `network_access = true` so the TCP hostbridge path can be reached from Telegram sessions
-- the container installs `hostbridge` in `/usr/bin/hostbridge` because that location works with Codex's shell runner
+## Known Operational Notes
 
-The conversation container currently runs with:
-
-- `--security-opt seccomp=unconfined`
-
-This was needed to get Codex file writes working in the Dockerized Telegram setup.
-
-## Known Quirks
-
-- Codex may create an empty `workspace/.codex` file during use.
-  Treat this as an upstream Codex bug for now, not project state.
-  There is a recent upstream issue for similar behavior:
-  - `openai/codex#16088`
-
-- `codex signin` depends on the host-side callback relay implemented in `internal/agent/codexengine/signin_relay.go`.
-  The callback port is fixed at `127.0.0.1:1455`.
+- Codex component auth uses the callback relay opened by the runtime.
+  The default callback port is `127.0.0.1:1455`.
 
 - After changing `docker/Dockerfile` or anything under the embedded build context, regenerate and rebuild:
   1. `go run ./cmd/ctgbot go-generate`
   2. `go run ./cmd/ctgbot image build --no-cache`
 
+- The process command surface is global bot-process control, not a component surface.
+  In chat it appears as:
+  - `/install`
+  - `/upgrade`
+  - `/quit`
+  - `/process ...`
+
 ## Editing Guidance
 
-- Keep `cmd/` files focused on `clir` routing.
-- Put messenger transport logic in `internal/messenger`.
-- Put agent runtime logic in `internal/agent`.
-- Keep config/state access in `internal/appstate` and shared conversation types in `internal/chatmodel`.
+- Keep `cmd/` files focused on `clir` routing and small orchestration.
+- Keep standalone helper logic in honest packages like `internal/ctgbotimage`.
+- Keep runtime behavior in `internal/v5`.
+- Keep messenger transport types in `internal/messenger`.
+- Keep config/state access in `internal/appstate`.
 - Prefer updating the embedded build-context source files and then regenerating `internal/containerassets/assets/src.tar.gz`.
-- Do not commit runtime chat data from `chats/` or local control data from `./.ctgbot/`.
+- Do not commit local runtime data from `./.ctgbot/`.
 
 ## Good First Checks
 
 If something breaks, check these first:
 
 1. `go run ./cmd/ctgbot config`
-2. `go run ./cmd/ctgbot codex status`
-3. `go run ./cmd/ctgbot image build --no-cache`
-4. whether the chat is enabled
-5. whether the Docker image is stale after changing the Dockerfile or embedded assets
+2. `go run ./cmd/ctgbot v5 component list`
+3. `go run ./cmd/ctgbot v5 component auth-status codex`
+4. `go run ./cmd/ctgbot image build --no-cache`
+5. whether the Docker image is stale after changing Dockerfile or embedded assets

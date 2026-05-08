@@ -131,7 +131,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		"codex.profile-host-path",
 		"codex.session-timeout",
 		"codex.shared-home-path",
-		"docker.cli-container-name",
 		"docker.container-hostbridge-tcp-addr",
 		"docker.image",
 		"docker.workspace-host-path",
@@ -158,7 +157,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 	}{
 		{key: "telegram.render-format", value: "markdown", wantReply: "telegram.render-format=markdown_v2"},
 		{key: "codex.model", value: "gpt-test", wantReply: "codex.model=gpt-test"},
-		{key: "docker.cli-container-name", value: "ctgbot-dev", wantReply: "docker.cli-container-name=ctgbot-dev"},
 		{key: "hostbridge.tcp-listen-addr", value: "127.0.0.1:9999", wantReply: "hostbridge.tcp-listen-addr=127.0.0.1:9999"},
 		{key: "chat.process-tools-enabled", value: "true", wantReply: "chat.process-tools-enabled=true"},
 		{key: "chat.interactive-interrupt-enabled", value: "false", wantReply: "chat.interactive-interrupt-enabled=false"},

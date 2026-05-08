@@ -146,6 +146,32 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 	)
 }
 
+func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.Writer) error {
+	if c == nil || c.runtime == nil {
+		return fmt.Errorf("missing component runtime")
+	}
+	home := c.runtime.ComponentHome()
+	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
+	if err := PrepareHome(c.config, HomeSpec{
+		HostHome:         home.Path,
+		RuntimeHome:      runtimeHomePath,
+		RuntimeWorkspace: runtimeHomePath,
+	}); err != nil {
+		return err
+	}
+	return c.runtime.Exec(
+		ctx,
+		"",
+		modeluuid.UUID{},
+		nil,
+		writerOrDiscard(stdout),
+		writerOrDiscard(stderr),
+		"codex",
+		"login",
+		"status",
+	)
+}
+
 func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
 	if c == nil || c.runner == nil {
 		return nil, fmt.Errorf("missing codex runner")

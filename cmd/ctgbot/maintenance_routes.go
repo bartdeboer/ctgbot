@@ -16,12 +16,25 @@ func registerMaintenanceRoutes(r *clir.Router, globalStore *clistate.Store) {
 			return actions.GitPull(req.Context())
 		})
 
-		b.Handle("install", "Install ctgbot from project_dir", func(req *clir.Request) error {
+		b.Handle("process install", "Install ctgbot from project_dir", func(req *clir.Request) error {
+			return actions.Install(req.Context())
+		})
+		b.Handle("install", "Alias for process install", func(req *clir.Request) error {
 			return actions.Install(req.Context())
 		})
 
-		b.Handle("upgrade", "Update ctgbot from project_dir and rebuild the Docker image", func(req *clir.Request) error {
+		b.Handle("process upgrade", "Update ctgbot from project_dir and rebuild the Docker image", func(req *clir.Request) error {
 			return actions.Upgrade(req.Context())
+		})
+		b.Handle("upgrade", "Alias for process upgrade", func(req *clir.Request) error {
+			return actions.Upgrade(req.Context())
+		})
+
+		b.Handle("process quit", "Stop the running ctgbot process", func(req *clir.Request) error {
+			return actions.Quit(req.Context())
+		})
+		b.Handle("quit", "Alias for process quit", func(req *clir.Request) error {
+			return actions.Quit(req.Context())
 		})
 	})
 }

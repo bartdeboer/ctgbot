@@ -57,7 +57,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 	definitions = append(definitions, processCommandDefinitions(
 		"quit",
 		"process quit",
-		"Restart ctgbot",
+		"Stop ctgbot",
 		buildQuitCommand,
 		[]commandengine.Route{{Pattern: "quit", Absolute: true}},
 	)...)

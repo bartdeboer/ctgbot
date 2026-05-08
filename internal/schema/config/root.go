@@ -105,14 +105,6 @@ func Dockerfile(cfg *appstate.Config) configengine.Item {
 	)
 }
 
-func DockerCLIContainerName(cfg *appstate.Config) configengine.Item {
-	return rootString("docker.cli-container-name", "Docker container name used by ctgbot codex", configengine.ValueString, cfg,
-		func(cfg *appstate.Config) string { return cfg.Docker().CLIContainerName() },
-		func(cfg *appstate.Config, value string) error { return cfg.Docker().SetCLIContainerName(value) },
-		rootOnly(), rootOnly(),
-	)
-}
-
 func DockerWorkspaceHostPath(cfg *appstate.Config) configengine.Item {
 	return rootString("docker.workspace-host-path", "Default workspace host path", configengine.ValueString, cfg,
 		func(cfg *appstate.Config) string { return cfg.Docker().DefaultWorkspaceHostPath() },

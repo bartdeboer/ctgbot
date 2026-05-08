@@ -221,3 +221,8 @@ type Authenticator interface {
 	Component
 	Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error
 }
+
+type AuthStatusReporter interface {
+	Component
+	AuthStatus(ctx context.Context, stdout io.Writer, stderr io.Writer) error
+}

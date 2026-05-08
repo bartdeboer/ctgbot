@@ -3,6 +3,8 @@ package codex
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -260,6 +262,43 @@ func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 		}
 		if got, want := runtime.stopCalls, 1; got != want {
 			t.Fatalf("stop calls = %d, want %d", got, want)
+		}
+	})
+}
+
+func TestAuthStatusRunsComponentScopedLoginStatus(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		cfg := newTestConfig(t, root)
+		storage := repository.NewMemory()
+		componentHome := filepath.Join(root, ".ctgbot", "components", "codex", "work")
+		runtimeHomePath := filepath.Join(root, "runtime-home")
+		runtime := &testRuntime{
+			componentHome: v5runtime.Home{Path: componentHome},
+			runtimeHome:   runtimeHomePath,
+		}
+		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "work"}
+		c := &Component{
+			registration: registration,
+			runtime:      runtime,
+			storage:      storage,
+			config:       cfg,
+		}
+
+		if err := c.AuthStatus(ctx, io.Discard, io.Discard); err != nil {
+			t.Fatalf("AuthStatus() error = %v", err)
+		}
+		if got, want := runtime.execCalls, 1; got != want {
+			t.Fatalf("exec calls = %d, want %d", got, want)
+		}
+		if got, want := runtime.execName, "codex"; got != want {
+			t.Fatalf("exec name = %q, want %q", got, want)
+		}
+		if got, want := strings.Join(runtime.execArgs, " "), "login status"; got != want {
+			t.Fatalf("exec args = %q, want %q", got, want)
+		}
+		if _, err := os.Stat(filepath.Join(componentHome, "config.toml")); err != nil {
+			t.Fatalf("expected config.toml: %v", err)
 		}
 	})
 }

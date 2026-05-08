@@ -97,8 +97,9 @@ type fakeResolved struct {
 func (f fakeResolved) Type() string { return f.componentType }
 
 type fakeAuthenticator struct {
-	calls int
-	last  struct {
+	authCalls       int
+	authStatusCalls int
+	last            struct {
 		registration coremodel.Component
 		home         v5runtime.Home
 		callbackPort int
@@ -109,9 +110,15 @@ type fakeAuthenticator struct {
 func (f *fakeAuthenticator) Type() string { return "gmail" }
 func (f *fakeAuthenticator) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	_, _, _ = ctx, stdout, stderr
-	f.calls++
+	f.authCalls++
 	f.last.callbackPort = callbackPort
 	f.last.timeout = callbackTimeout
+	return nil
+}
+
+func (f *fakeAuthenticator) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.Writer) error {
+	_, _, _ = ctx, stdout, stderr
+	f.authStatusCalls++
 	return nil
 }
 
@@ -254,8 +261,39 @@ func TestAuthComponentUsesResolvedHomeAndRegistration(t *testing.T) {
 	if !ok {
 		t.Fatalf("resolved component = %#v", loaded.Component)
 	}
-	if auth.calls != 1 {
-		t.Fatalf("auth calls = %d, want 1", auth.calls)
+	if auth.authCalls != 1 {
+		t.Fatalf("auth calls = %d, want 1", auth.authCalls)
+	}
+	if auth.last.registration.Ref() != "gmail/work" {
+		t.Fatalf("auth registration = %q", auth.last.registration.Ref())
+	}
+	if got, want := auth.last.home.Path, filepath.Join(root, ".ctgbot", "components", "gmail", "work"); got != want {
+		t.Fatalf("auth home = %q, want %q", got, want)
+	}
+}
+
+func TestCheckComponentAuthUsesResolvedHomeAndRegistration(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	system := newTestSystem(t, root, storage)
+
+	if _, err := system.EnsureComponent(context.Background(), "gmail/work", "local", ""); err != nil {
+		t.Fatalf("EnsureComponent() error = %v", err)
+	}
+	if err := system.CheckComponentAuth(context.Background(), "gmail/work", "", "", io.Discard, io.Discard); err != nil {
+		t.Fatalf("CheckComponentAuth() error = %v", err)
+	}
+
+	loaded, err := system.ResolveComponent(context.Background(), mustResolveComponentID(t, storage, "gmail", "work"))
+	if err != nil {
+		t.Fatalf("ResolveComponent() error = %v", err)
+	}
+	auth, ok := loaded.Component.(*fakeAuthenticator)
+	if !ok {
+		t.Fatalf("resolved component = %#v", loaded.Component)
+	}
+	if auth.authStatusCalls != 1 {
+		t.Fatalf("auth status calls = %d, want 1", auth.authStatusCalls)
 	}
 	if auth.last.registration.Ref() != "gmail/work" {
 		t.Fatalf("auth registration = %q", auth.last.registration.Ref())

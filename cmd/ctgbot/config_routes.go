@@ -144,7 +144,6 @@ func printConfigSummary(cfg *appstate.Config, store *clistate.Store, globalStore
 	fmt.Printf("  telegram.operators: %#v\n", cfg.Telegram().OperatorUserIDs())
 	fmt.Printf("  docker.image: %q\n", cfg.Docker().Image())
 	fmt.Printf("  docker.dockerfile: %q\n", cfg.Docker().Dockerfile())
-	fmt.Printf("  docker.cli_container_name: %q\n", cfg.Docker().CLIContainerName())
 	fmt.Printf("  docker.workspace_host_path: %q\n", cfg.Docker().DefaultWorkspaceHostPath())
 	fmt.Printf("  hostbridge.tcp_listen_addr: %q\n", cfg.Hostbridge().TCPListenAddr())
 	fmt.Printf("  docker.container_hostbridge_tcp_addr: %q\n", cfg.Docker().ContainerHostbridgeTCPAddr())

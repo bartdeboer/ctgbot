@@ -41,18 +41,6 @@ func (d DockerConfig) SetDockerfile(name string) error {
 	return d.cfg.persistString("docker.dockerfile", name)
 }
 
-func (d DockerConfig) CLIContainerName() string {
-	name := d.cfg.string("docker.cli_container_name", "ctgbot")
-	if name == "" {
-		return "ctgbot"
-	}
-	return name
-}
-
-func (d DockerConfig) SetCLIContainerName(name string) error {
-	return d.cfg.persistString("docker.cli_container_name", strings.TrimSpace(name))
-}
-
 func (d DockerConfig) DefaultWorkspaceHostPath() string {
 	return absOrEmpty(d.cfg.string("docker.workspace_host_path", ""))
 }

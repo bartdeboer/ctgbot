@@ -189,6 +189,26 @@ func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clista
 			return nil
 		})
 
+		b.Handle("v5 component auth-status <component>", "Show authentication status for a v5 component instance", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("v5 component auth-status", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "v5 SQLite DB path")
+			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
+			image := fs.String("image", "", "Runtime image override")
+			runtimeKind := fs.String("runtime", "", "Runtime kind for this component registration (default: preserve existing)")
+			homePath := fs.String("home", "", "Optional host component home override")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			system, err := openV5SystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *image, nil)
+			if err != nil {
+				return err
+			}
+			return system.CheckComponentAuth(req.Context(), strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*runtimeKind), strings.TrimSpace(*homePath), os.Stdout, os.Stderr)
+		})
+
 		b.Handle("v5 component list", "List registered v5 components", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 component list", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)

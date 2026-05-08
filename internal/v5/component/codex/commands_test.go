@@ -21,17 +21,28 @@ import (
 )
 
 type testRuntime struct {
-	status       v5runtime.Status
-	refreshCalls int
-	stopCalls    int
-	stopErr      error
+	componentHome v5runtime.Home
+	runtimeHome   string
+	status        v5runtime.Status
+	refreshCalls  int
+	stopCalls     int
+	stopErr       error
+	execCalls     int
+	execName      string
+	execArgs      []string
 }
 
 func (r *testRuntime) Kind() string { return "docker" }
 func (r *testRuntime) ComponentHome() v5runtime.Home {
+	if strings.TrimSpace(r.componentHome.Path) != "" {
+		return r.componentHome
+	}
 	return v5runtime.Home{Path: "/tmp/codex-home"}
 }
 func (r *testRuntime) RuntimeComponentHomePath() string {
+	if strings.TrimSpace(r.runtimeHome) != "" {
+		return r.runtimeHome
+	}
 	return "/profile/components/codex/codex"
 }
 func (r *testRuntime) RuntimeWorkspacePath(workspacePath string) string {
@@ -62,6 +73,9 @@ func (r *testRuntime) Status(ctx context.Context, workspacePath string, threadID
 }
 func (r *testRuntime) Exec(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	_, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args
+	r.execCalls++
+	r.execName = name
+	r.execArgs = append([]string(nil), args...)
 	return nil
 }
 func (r *testRuntime) CombinedOutput(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {

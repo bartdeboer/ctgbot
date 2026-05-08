@@ -25,7 +25,6 @@ func Items(cfg *appstate.Config) []configengine.Item {
 		CodexProfileHostPath(cfg),
 		CodexSessionTimeout(cfg),
 		CodexSharedHomePath(cfg),
-		DockerCLIContainerName(cfg),
 		DockerContainerHostbridgeTCPAddr(cfg),
 		Dockerfile(cfg),
 		DockerImage(cfg),
