@@ -148,7 +148,11 @@ type Artifact struct {
 	Filename     string
 	ContentType  string
 	Syntax       string
-	Content      []byte
+	Content      []byte `gorm:"-"`
+	StorageKind  string
+	StoragePath  string
+	Size         int64
+	SHA256       string
 	MetadataJSON string
 
 	CreatedAt time.Time
