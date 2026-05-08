@@ -15,7 +15,7 @@ import (
 	hostbridgeclient "github.com/bartdeboer/ctgbot/internal/hostbridge/client"
 	_ "github.com/bartdeboer/ctgbot/internal/hostbridge/gobregister"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
-	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	hostbridgetls "github.com/bartdeboer/ctgbot/internal/hostbridge/tls"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"

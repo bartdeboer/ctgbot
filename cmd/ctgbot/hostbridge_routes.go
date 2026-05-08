@@ -13,7 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
-	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	hostbridgetls "github.com/bartdeboer/ctgbot/internal/hostbridge/tls"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"

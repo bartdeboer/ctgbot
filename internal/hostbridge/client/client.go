@@ -6,7 +6,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/hostbridgetls"
+	hostbridgetls "github.com/bartdeboer/ctgbot/internal/hostbridge/tls"
 )
 
 func Connect(ctx context.Context, address string, tlsDir string) (net.Conn, error) {
