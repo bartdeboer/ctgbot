@@ -2,6 +2,7 @@ package gormstorage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -38,7 +39,7 @@ func New(db *gorm.DB) *GORMStorage {
 }
 
 func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
-	return s.db.WithContext(ctx).AutoMigrate(
+	if err := s.db.WithContext(ctx).AutoMigrate(
 		&coremodel.Chat{},
 		&coremodel.Thread{},
 		&coremodel.Component{},
@@ -47,7 +48,10 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.ThreadComponentState{},
 		&coremodel.ThreadMessage{},
 		&coremodel.Artifact{},
-	)
+	); err != nil {
+		return err
+	}
+	return s.migrateLegacyCodexThreadState(ctx)
 }
 
 func (s *GORMStorage) Transaction(ctx context.Context, fn func(repository.Storage) error) error {
@@ -102,10 +106,199 @@ type gormThreads struct{ db *gorm.DB }
 
 func (r *gormThreads) Save(ctx context.Context, thread *coremodel.Thread) error {
 	thread.Label = strings.TrimSpace(thread.Label)
-	thread.CodexModel = clean(thread.CodexModel)
-	thread.CodexReasoningEffort = clean(thread.CodexReasoningEffort)
 	ensureID(&thread.ID)
 	return r.db.WithContext(ctx).Save(thread).Error
+}
+
+type legacyCodexThreadRow struct {
+	ThreadID             modeluuid.UUID `gorm:"column:thread_id"`
+	ChatID               modeluuid.UUID `gorm:"column:chat_id"`
+	KeepRunning          bool           `gorm:"column:keep_running"`
+	CodexModel           string         `gorm:"column:codex_model"`
+	CodexReasoningEffort string         `gorm:"column:codex_reasoning_effort"`
+}
+
+type legacyCodexBindingRow struct {
+	ComponentID modeluuid.UUID `gorm:"column:component_id"`
+}
+
+type legacyCodexThreadState struct {
+	KeepRunning     *bool  `json:"keep_running,omitempty"`
+	Model           string `json:"model,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+}
+
+func (s *GORMStorage) migrateLegacyCodexThreadState(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	tx := s.db.WithContext(ctx)
+	if !tx.Migrator().HasTable("threads") {
+		return nil
+	}
+	hasKeepRunning := tx.Migrator().HasColumn("threads", "keep_running")
+	hasModel := tx.Migrator().HasColumn("threads", "codex_model")
+	hasEffort := tx.Migrator().HasColumn("threads", "codex_reasoning_effort")
+	if !hasKeepRunning && !hasModel && !hasEffort {
+		return nil
+	}
+	selectCols := []string{"id AS thread_id", "chat_id"}
+	whereClauses := make([]string, 0, 3)
+	if hasKeepRunning {
+		selectCols = append(selectCols, "keep_running")
+		whereClauses = append(whereClauses, "keep_running = TRUE")
+	} else {
+		selectCols = append(selectCols, "FALSE AS keep_running")
+	}
+	if hasModel {
+		selectCols = append(selectCols, "codex_model")
+		whereClauses = append(whereClauses, "TRIM(IFNULL(codex_model, '')) <> ''")
+	} else {
+		selectCols = append(selectCols, "'' AS codex_model")
+	}
+	if hasEffort {
+		selectCols = append(selectCols, "codex_reasoning_effort")
+		whereClauses = append(whereClauses, "TRIM(IFNULL(codex_reasoning_effort, '')) <> ''")
+	} else {
+		selectCols = append(selectCols, "'' AS codex_reasoning_effort")
+	}
+
+	var legacyRows []legacyCodexThreadRow
+	legacyRowsQuery := fmt.Sprintf(
+		"SELECT %s FROM threads WHERE %s",
+		strings.Join(selectCols, ", "),
+		strings.Join(whereClauses, " OR "),
+	)
+	if err := tx.Raw(legacyRowsQuery).Scan(&legacyRows).Error; err != nil {
+		return err
+	}
+	if len(legacyRows) == 0 {
+		return nil
+	}
+
+	return tx.Transaction(func(tx *gorm.DB) error {
+		storage := New(tx)
+		for _, legacy := range legacyRows {
+			componentIDs, err := codexComponentIDsByChat(tx, legacy.ChatID)
+			if err != nil {
+				return err
+			}
+			if len(componentIDs) == 0 {
+				continue
+			}
+			updateAssignments := make([]string, 0, 3)
+			updateArgs := make([]any, 0, 4)
+			if hasKeepRunning {
+				updateAssignments = append(updateAssignments, "keep_running = ?")
+				updateArgs = append(updateArgs, false)
+			}
+			if hasModel {
+				updateAssignments = append(updateAssignments, "codex_model = ?")
+				updateArgs = append(updateArgs, "")
+			}
+			if hasEffort {
+				updateAssignments = append(updateAssignments, "codex_reasoning_effort = ?")
+				updateArgs = append(updateArgs, "")
+			}
+			updateArgs = append(updateArgs, legacy.ThreadID)
+			for _, componentID := range componentIDs {
+				row, err := storage.ThreadComponentStates().GetByThreadAndComponent(ctx, legacy.ThreadID, componentID)
+				if err != nil {
+					return err
+				}
+				state, err := decodeLegacyCodexThreadState(row)
+				if err != nil {
+					return err
+				}
+				if legacy.KeepRunning && state.KeepRunning == nil {
+					state.KeepRunning = boolPtr(true)
+				}
+				if state.Model == "" {
+					state.Model = clean(legacy.CodexModel)
+				}
+				if state.ReasoningEffort == "" {
+					state.ReasoningEffort = clean(legacy.CodexReasoningEffort)
+				}
+				if state.isZero() {
+					continue
+				}
+				data, err := json.Marshal(state.clean())
+				if err != nil {
+					return err
+				}
+				if row == nil {
+					row = &coremodel.ThreadComponentState{
+						ThreadID:    legacy.ThreadID,
+						ComponentID: componentID,
+					}
+				}
+				row.ThreadID = legacy.ThreadID
+				row.ComponentID = componentID
+				row.StateJSON = string(data)
+				if err := storage.ThreadComponentStates().Save(ctx, row); err != nil {
+					return err
+				}
+			}
+			if err := tx.Exec(
+				"UPDATE threads SET "+strings.Join(updateAssignments, ", ")+" WHERE id = ?",
+				updateArgs...,
+			).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func codexComponentIDsByChat(tx *gorm.DB, chatID modeluuid.UUID) ([]modeluuid.UUID, error) {
+	var rows []legacyCodexBindingRow
+	err := tx.
+		Table("chat_components").
+		Select("DISTINCT chat_components.component_id AS component_id").
+		Joins("JOIN components ON components.id = chat_components.component_id").
+		Where("chat_components.chat_id = ? AND chat_components.enabled = ? AND components.enabled = ? AND components.type = ?", chatID, true, true, "codex").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := make([]modeluuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		if row.ComponentID.IsNull() {
+			continue
+		}
+		out = append(out, row.ComponentID)
+	}
+	return out, nil
+}
+
+func decodeLegacyCodexThreadState(row *coremodel.ThreadComponentState) (legacyCodexThreadState, error) {
+	if row == nil || strings.TrimSpace(row.StateJSON) == "" {
+		return legacyCodexThreadState{}, nil
+	}
+	var state legacyCodexThreadState
+	if err := json.Unmarshal([]byte(row.StateJSON), &state); err != nil {
+		return legacyCodexThreadState{}, fmt.Errorf("decode codex thread state thread=%s component=%s: %w", row.ThreadID, row.ComponentID, err)
+	}
+	return state.clean(), nil
+}
+
+func (s legacyCodexThreadState) clean() legacyCodexThreadState {
+	s.Model = clean(s.Model)
+	s.ReasoningEffort = clean(s.ReasoningEffort)
+	if s.KeepRunning != nil && !*s.KeepRunning {
+		s.KeepRunning = nil
+	}
+	return s
+}
+
+func (s legacyCodexThreadState) isZero() bool {
+	s = s.clean()
+	return s.KeepRunning == nil && s.Model == "" && s.ReasoningEffort == ""
+}
+
+func boolPtr(value bool) *bool {
+	v := value
+	return &v
 }
 
 func (r *gormThreads) GetByID(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error) {

@@ -209,6 +209,10 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if err != nil {
 		return nil, err
 	}
+	settings, err := c.resolveThreadSettings(ctx, &turn.Thread)
+	if err != nil {
+		return nil, err
+	}
 
 	result, runErr := c.runner.RunTurn(ctx, commandRuntime{
 		runtime:       c.runtime,
@@ -218,10 +222,10 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}, outputHandler{runtime: turn.Runtime}, TurnRequest{
 		ProviderThreadID: providerThreadID,
 		Prompt:           prompt,
-		Options:          c.turnOptions(ctx, &turn.Thread),
+		Options:          turnOptionsFromSettings(settings),
 	})
 
-	if !turn.Thread.KeepRunning {
+	if !settings.KeepRunning {
 		c.stopAfterTurn(workspacePath, turn.Thread.ID)
 	}
 	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && runErr == nil {
@@ -282,12 +286,7 @@ func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, pro
 	return turnRuntime.BindComponentThreadID(c.registration.ID, providerThreadID)
 }
 
-func (c *Component) turnOptions(ctx context.Context, thread *coremodel.Thread) TurnOptions {
-	settings, err := c.resolveThreadSettings(ctx, thread)
-	if err != nil {
-		c.logf("resolve codex thread settings failed thread=%s err=%v", thread.ID, err)
-		return TurnOptions{}
-	}
+func turnOptionsFromSettings(settings resolvedThreadSettings) TurnOptions {
 	options := TurnOptions{}
 	if settings.ModelSource != "codex" {
 		options.Model = settings.Model

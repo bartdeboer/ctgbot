@@ -162,8 +162,6 @@ func (r memoryThreads) Save(ctx context.Context, thread *coremodel.Thread) error
 		return nil
 	}
 	thread.Label = strings.TrimSpace(thread.Label)
-	thread.CodexModel = strings.TrimSpace(thread.CodexModel)
-	thread.CodexReasoningEffort = strings.TrimSpace(thread.CodexReasoningEffort)
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
 	now := time.Now()

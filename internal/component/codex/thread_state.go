@@ -12,11 +12,13 @@ import (
 )
 
 type threadState struct {
+	KeepRunning     *bool  `json:"keep_running,omitempty"`
 	Model           string `json:"model,omitempty"`
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
 type resolvedThreadSettings struct {
+	KeepRunning           bool
 	Model                 string
 	ModelSource           string
 	ReasoningEffort       string
@@ -24,6 +26,9 @@ type resolvedThreadSettings struct {
 }
 
 func (s threadState) clean() threadState {
+	if s.KeepRunning != nil && !*s.KeepRunning {
+		s.KeepRunning = nil
+	}
 	s.Model = strings.TrimSpace(s.Model)
 	s.ReasoningEffort = strings.TrimSpace(s.ReasoningEffort)
 	return s
@@ -31,7 +36,7 @@ func (s threadState) clean() threadState {
 
 func (s threadState) isZero() bool {
 	s = s.clean()
-	return s.Model == "" && s.ReasoningEffort == ""
+	return s.KeepRunning == nil && s.Model == "" && s.ReasoningEffort == ""
 }
 
 func (c *Component) loadThreadState(ctx context.Context, threadID modeluuid.UUID) (*coremodel.ThreadComponentState, threadState, error) {
@@ -52,16 +57,16 @@ func (c *Component) loadThreadState(ctx context.Context, threadID modeluuid.UUID
 	return row, state.clean(), nil
 }
 
-func (c *Component) saveThreadState(ctx context.Context, storage repository.Storage, thread *coremodel.Thread, row *coremodel.ThreadComponentState, state threadState) error {
+func (c *Component) saveThreadState(ctx context.Context, storage repository.Storage, threadID modeluuid.UUID, row *coremodel.ThreadComponentState, state threadState) error {
 	if storage == nil {
 		return fmt.Errorf("missing storage")
 	}
-	if thread == nil {
-		return fmt.Errorf("missing thread")
+	if threadID.IsNull() {
+		return fmt.Errorf("missing thread id")
 	}
 	state = state.clean()
 	if state.isZero() {
-		return storage.ThreadComponentStates().DeleteByThreadAndComponent(ctx, thread.ID, c.registration.ID)
+		return storage.ThreadComponentStates().DeleteByThreadAndComponent(ctx, threadID, c.registration.ID)
 	}
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -69,11 +74,11 @@ func (c *Component) saveThreadState(ctx context.Context, storage repository.Stor
 	}
 	if row == nil {
 		row = &coremodel.ThreadComponentState{
-			ThreadID:    thread.ID,
+			ThreadID:    threadID,
 			ComponentID: c.registration.ID,
 		}
 	}
-	row.ThreadID = thread.ID
+	row.ThreadID = threadID
 	row.ComponentID = c.registration.ID
 	row.StateJSON = string(data)
 	return storage.ThreadComponentStates().Save(ctx, row)
@@ -93,12 +98,12 @@ func (c *Component) resolveThreadSettings(ctx context.Context, thread *coremodel
 	if err != nil {
 		return resolvedThreadSettings{}, err
 	}
+	if state.KeepRunning != nil && *state.KeepRunning {
+		settings.KeepRunning = true
+	}
 	if model := strings.TrimSpace(state.Model); model != "" {
 		settings.Model = model
 		settings.ModelSource = "thread_component_state"
-	} else if model := strings.TrimSpace(thread.CodexModel); model != "" {
-		settings.Model = model
-		settings.ModelSource = "legacy_thread"
 	} else if c != nil {
 		if model := strings.TrimSpace(c.componentConfig.Model); model != "" {
 			settings.Model = model
@@ -113,9 +118,6 @@ func (c *Component) resolveThreadSettings(ctx context.Context, thread *coremodel
 	if effort := strings.TrimSpace(state.ReasoningEffort); effort != "" {
 		settings.ReasoningEffort = effort
 		settings.ReasoningEffortSource = "thread_component_state"
-	} else if effort := strings.TrimSpace(thread.CodexReasoningEffort); effort != "" {
-		settings.ReasoningEffort = effort
-		settings.ReasoningEffortSource = "legacy_thread"
 	} else if c != nil {
 		if effort := strings.TrimSpace(c.componentConfig.ReasoningEffort); effort != "" {
 			settings.ReasoningEffort = effort
@@ -128,7 +130,6 @@ func (c *Component) resolveThreadSettings(ctx context.Context, thread *coremodel
 func (c *Component) updateThreadState(
 	ctx context.Context,
 	thread *coremodel.Thread,
-	clearLegacy func(thread *coremodel.Thread),
 	mutate func(state *threadState),
 ) error {
 	if thread == nil {
@@ -142,12 +143,11 @@ func (c *Component) updateThreadState(
 		mutate(&state)
 	}
 	return c.storage.Transaction(ctx, func(tx repository.Storage) error {
-		if clearLegacy != nil {
-			clearLegacy(thread)
-		}
-		if err := tx.Threads().Save(ctx, thread); err != nil {
-			return err
-		}
-		return c.saveThreadState(ctx, tx, thread, row, state)
+		return c.saveThreadState(ctx, tx, thread.ID, row, state)
 	})
+}
+
+func boolPtr(value bool) *bool {
+	v := value
+	return &v
 }

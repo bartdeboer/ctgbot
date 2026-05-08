@@ -174,8 +174,9 @@ func (c *Component) start(ctx context.Context, req commandengine.Request) (comma
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	thread.KeepRunning = true
-	if err := c.storage.Threads().Save(ctx, thread); err != nil {
+	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
+		state.KeepRunning = boolPtr(true)
+	}); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: fmt.Sprintf("container started\nkeep_running: true\ncontainer: %s\nstate: %s", status.Name, status.State)}, nil
@@ -189,8 +190,9 @@ func (c *Component) stop(ctx context.Context, req commandengine.Request) (comman
 	if err := c.runtime.Stop(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
-	thread.KeepRunning = false
-	if err := c.storage.Threads().Save(ctx, thread); err != nil {
+	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
+		state.KeepRunning = nil
+	}); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "container stopped\nkeep_running: false"}, nil
@@ -204,8 +206,9 @@ func (c *Component) purge(ctx context.Context, req commandengine.Request) (comma
 	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
-	thread.KeepRunning = false
-	if err := c.storage.Threads().Save(ctx, thread); err != nil {
+	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
+		state.KeepRunning = nil
+	}); err != nil {
 		return commandengine.Result{}, err
 	}
 	if err := c.storage.ThreadComponentMappings().DeleteByThreadAndComponent(ctx, thread.ID, c.registration.ID); err != nil {
@@ -256,7 +259,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 	lines := []string{
 		"chat_id: " + thread.ChatID.String(),
 		"thread_id: " + thread.ID.String(),
-		fmt.Sprintf("keep_running: %t", thread.KeepRunning),
+		fmt.Sprintf("keep_running: %t", settings.KeepRunning),
 		"runtime: " + c.runtime.Kind(),
 		"container: " + status.Name,
 		"container_state: " + status.State,
@@ -301,9 +304,7 @@ func (c *Component) modelSet(ctx context.Context, req commandengine.Request, cmd
 	if model == "" {
 		return commandengine.Result{}, fmt.Errorf("missing model")
 	}
-	if err := c.updateThreadState(ctx, thread, func(thread *coremodel.Thread) {
-		thread.CodexModel = ""
-	}, func(state *threadState) {
+	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
 		state.Model = model
 	}); err != nil {
 		return commandengine.Result{}, err
@@ -316,9 +317,7 @@ func (c *Component) modelClear(ctx context.Context, req commandengine.Request) (
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.updateThreadState(ctx, thread, func(thread *coremodel.Thread) {
-		thread.CodexModel = ""
-	}, func(state *threadState) {
+	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
 		state.Model = ""
 	}); err != nil {
 		return commandengine.Result{}, err
@@ -356,9 +355,7 @@ func (c *Component) modelEffortSet(ctx context.Context, req commandengine.Reques
 	if effort == "" {
 		return commandengine.Result{}, fmt.Errorf("missing reasoning effort")
 	}
-	if err := c.updateThreadState(ctx, thread, func(thread *coremodel.Thread) {
-		thread.CodexReasoningEffort = ""
-	}, func(state *threadState) {
+	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
 		state.ReasoningEffort = effort
 	}); err != nil {
 		return commandengine.Result{}, err
@@ -371,9 +368,7 @@ func (c *Component) modelEffortClear(ctx context.Context, req commandengine.Requ
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.updateThreadState(ctx, thread, func(thread *coremodel.Thread) {
-		thread.CodexReasoningEffort = ""
-	}, func(state *threadState) {
+	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
 		state.ReasoningEffort = ""
 	}); err != nil {
 		return commandengine.Result{}, err

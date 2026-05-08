@@ -96,9 +96,8 @@ func TestHandleTurnStopsRuntimeWhenKeepRunningDisabled(t *testing.T) {
 		result, err := c.HandleTurn(ctx, component.Turn{
 			Chat: coremodel.Chat{ID: modeluuid.New(), Enabled: true},
 			Thread: coremodel.Thread{
-				ID:          modeluuid.New(),
-				ChatID:      modeluuid.New(),
-				KeepRunning: false,
+				ID:     modeluuid.New(),
+				ChatID: modeluuid.New(),
 			},
 			Inbound: coremodel.ThreadMessage{ID: modeluuid.New(), Text: "hello"},
 			Runtime: stubTurnRuntime{},
@@ -131,6 +130,14 @@ func TestHandleTurnKeepsRuntimeRunningWhenEnabled(t *testing.T) {
 			},
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
+		threadID := modeluuid.New()
+		if err := storage.ThreadComponentStates().Save(ctx, &coremodel.ThreadComponentState{
+			ThreadID:    threadID,
+			ComponentID: registration.ID,
+			StateJSON:   `{"keep_running":true}`,
+		}); err != nil {
+			t.Fatalf("ThreadComponentStates().Save() error = %v", err)
+		}
 		c := &Component{
 			registration: registration,
 			runtime:      runtime,
@@ -146,9 +153,8 @@ func TestHandleTurnKeepsRuntimeRunningWhenEnabled(t *testing.T) {
 		_, err := c.HandleTurn(ctx, component.Turn{
 			Chat: coremodel.Chat{ID: modeluuid.New(), Enabled: true},
 			Thread: coremodel.Thread{
-				ID:          modeluuid.New(),
-				ChatID:      modeluuid.New(),
-				KeepRunning: true,
+				ID:     threadID,
+				ChatID: modeluuid.New(),
 			},
 			Inbound: coremodel.ThreadMessage{ID: modeluuid.New(), Text: "hello"},
 			Runtime: stubTurnRuntime{},
@@ -198,9 +204,8 @@ func TestHandleTurnUsesThreadComponentStateOptions(t *testing.T) {
 		_, err := c.HandleTurn(ctx, component.Turn{
 			Chat: coremodel.Chat{ID: modeluuid.New(), Enabled: true},
 			Thread: coremodel.Thread{
-				ID:          threadID,
-				ChatID:      modeluuid.New(),
-				KeepRunning: false,
+				ID:     threadID,
+				ChatID: modeluuid.New(),
 			},
 			Inbound: coremodel.ThreadMessage{ID: modeluuid.New(), Text: "hello"},
 			Runtime: stubTurnRuntime{},
@@ -247,9 +252,8 @@ func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 		result, err := c.HandleTurn(ctx, component.Turn{
 			Chat: coremodel.Chat{ID: modeluuid.New(), Enabled: true},
 			Thread: coremodel.Thread{
-				ID:          modeluuid.New(),
-				ChatID:      modeluuid.New(),
-				KeepRunning: false,
+				ID:     modeluuid.New(),
+				ChatID: modeluuid.New(),
 			},
 			Inbound: coremodel.ThreadMessage{ID: modeluuid.New(), Text: "hello"},
 			Runtime: stubTurnRuntime{},

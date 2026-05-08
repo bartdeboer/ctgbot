@@ -138,24 +138,7 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 		if got, want := result.Text, "codex model=gpt-test"; got != want {
 			t.Fatalf("model set text = %q, want %q", got, want)
 		}
-
-		saved, err := storage.Threads().GetByID(ctx, thread.ID)
-		if err != nil {
-			t.Fatalf("Threads().GetByID() error = %v", err)
-		}
-		if got := saved.CodexModel; got != "" {
-			t.Fatalf("stored legacy thread model = %q, want empty", got)
-		}
-		stateRow, err := storage.ThreadComponentStates().GetByThreadAndComponent(ctx, thread.ID, registration.ID)
-		if err != nil {
-			t.Fatalf("ThreadComponentStates().GetByThreadAndComponent() error = %v", err)
-		}
-		if stateRow == nil {
-			t.Fatal("expected thread component state row")
-		}
-		if got, want := stateRow.StateJSON, `{"model":"gpt-test"}`; got != want {
-			t.Fatalf("state json = %q, want %q", got, want)
-		}
+		assertThreadState(t, c, ctx, thread.ID, threadState{Model: "gpt-test"})
 
 		statusResult, err := engine.Run(ctx, base, []string{"codex", "status"})
 		if err != nil {
@@ -175,7 +158,7 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 	})
 }
 
-func TestCodexCommandModelStatusFallsBackToLegacyThreadStateUntilTouched(t *testing.T) {
+func TestCodexCommandModelClearRemovesThreadComponentState(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 		cfg := newTestConfig(t, root)
@@ -196,9 +179,16 @@ func TestCodexCommandModelStatusFallsBackToLegacyThreadStateUntilTouched(t *test
 		if err := storage.Chats().Save(ctx, chat); err != nil {
 			t.Fatalf("Chats().Save() error = %v", err)
 		}
-		thread := &coremodel.Thread{ID: modeluuid.New(), ChatID: chat.ID, CodexModel: "legacy-model"}
+		thread := &coremodel.Thread{ID: modeluuid.New(), ChatID: chat.ID}
 		if err := storage.Threads().Save(ctx, thread); err != nil {
 			t.Fatalf("Threads().Save() error = %v", err)
+		}
+		if err := storage.ThreadComponentStates().Save(ctx, &coremodel.ThreadComponentState{
+			ThreadID:    thread.ID,
+			ComponentID: registration.ID,
+			StateJSON:   `{"model":"legacy-model"}`,
+		}); err != nil {
+			t.Fatalf("ThreadComponentStates().Save() error = %v", err)
 		}
 
 		engine := newCodexCommandEngine(t, c, commandengine.SourceMessage)
@@ -217,7 +207,7 @@ func TestCodexCommandModelStatusFallsBackToLegacyThreadStateUntilTouched(t *test
 		}
 		for _, want := range []string{
 			"codex model: legacy-model",
-			"source: legacy_thread",
+			"source: thread_component_state",
 		} {
 			if !strings.Contains(statusResult.Text, want) {
 				t.Fatalf("model status missing %q:\n%s", want, statusResult.Text)
@@ -236,20 +226,7 @@ func TestCodexCommandModelStatusFallsBackToLegacyThreadStateUntilTouched(t *test
 				t.Fatalf("model clear missing %q:\n%s", want, clearResult.Text)
 			}
 		}
-		saved, err := storage.Threads().GetByID(ctx, thread.ID)
-		if err != nil {
-			t.Fatalf("Threads().GetByID() error = %v", err)
-		}
-		if got := saved.CodexModel; got != "" {
-			t.Fatalf("legacy thread model = %q, want empty after clear", got)
-		}
-		stateRow, err := storage.ThreadComponentStates().GetByThreadAndComponent(ctx, thread.ID, registration.ID)
-		if err != nil {
-			t.Fatalf("ThreadComponentStates().GetByThreadAndComponent() error = %v", err)
-		}
-		if stateRow != nil {
-			t.Fatalf("expected no thread component state row after clear, got %#v", stateRow)
-		}
+		assertNoThreadState(t, c, ctx, thread.ID)
 	})
 }
 
@@ -296,16 +273,7 @@ func TestCodexCommandModelEffortSetUsesThreadComponentState(t *testing.T) {
 		if got, want := result.Text, "codex reasoning effort=high"; got != want {
 			t.Fatalf("model effort text = %q, want %q", got, want)
 		}
-		stateRow, err := storage.ThreadComponentStates().GetByThreadAndComponent(ctx, thread.ID, registration.ID)
-		if err != nil {
-			t.Fatalf("ThreadComponentStates().GetByThreadAndComponent() error = %v", err)
-		}
-		if stateRow == nil {
-			t.Fatal("expected thread component state row")
-		}
-		if got, want := stateRow.StateJSON, `{"reasoning_effort":"high"}`; got != want {
-			t.Fatalf("state json = %q, want %q", got, want)
-		}
+		assertThreadState(t, c, ctx, thread.ID, threadState{ReasoningEffort: "high"})
 	})
 }
 
@@ -360,13 +328,7 @@ func TestCodexCommandStartAndStopToggleKeepRunning(t *testing.T) {
 		if got, want := startResult.Text, "container started\nkeep_running: true\ncontainer: ctgbot-codex-thread\nstate: running"; got != want {
 			t.Fatalf("start text = %q, want %q", got, want)
 		}
-		saved, err := storage.Threads().GetByID(ctx, thread.ID)
-		if err != nil {
-			t.Fatalf("Threads().GetByID() after start error = %v", err)
-		}
-		if !saved.KeepRunning {
-			t.Fatal("KeepRunning = false, want true after start")
-		}
+		assertThreadState(t, c, ctx, thread.ID, threadState{KeepRunning: boolPtr(true)})
 
 		stopResult, err := engine.Run(ctx, base, []string{"codex", "container", "stop"})
 		if err != nil {
@@ -375,13 +337,7 @@ func TestCodexCommandStartAndStopToggleKeepRunning(t *testing.T) {
 		if got, want := stopResult.Text, "container stopped\nkeep_running: false"; got != want {
 			t.Fatalf("stop text = %q, want %q", got, want)
 		}
-		saved, err = storage.Threads().GetByID(ctx, thread.ID)
-		if err != nil {
-			t.Fatalf("Threads().GetByID() after stop error = %v", err)
-		}
-		if saved.KeepRunning {
-			t.Fatal("KeepRunning = true, want false after stop")
-		}
+		assertNoThreadState(t, c, ctx, thread.ID)
 		if got, want := runtime.stopCalls, 1; got != want {
 			t.Fatalf("stop calls = %d, want %d", got, want)
 		}
@@ -422,6 +378,13 @@ func TestCodexCommandPurgeClearsProviderThreadMapping(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("ThreadComponentMappings().Save() error = %v", err)
 		}
+		if err := storage.ThreadComponentStates().Save(ctx, &coremodel.ThreadComponentState{
+			ThreadID:    thread.ID,
+			ComponentID: registration.ID,
+			StateJSON:   `{"keep_running":true}`,
+		}); err != nil {
+			t.Fatalf("ThreadComponentStates().Save() error = %v", err)
+		}
 
 		engine := newCodexCommandEngine(t, c, commandengine.SourceMessage)
 		base := commandengine.Request{
@@ -450,6 +413,7 @@ func TestCodexCommandPurgeClearsProviderThreadMapping(t *testing.T) {
 		if mapping != nil {
 			t.Fatalf("expected mapping to be cleared, got %#v", mapping)
 		}
+		assertNoThreadState(t, c, ctx, thread.ID)
 	})
 }
 
@@ -491,4 +455,35 @@ func withTempCwd(t *testing.T, fn func(root string)) {
 		}
 	})
 	fn(root)
+}
+
+func assertThreadState(t *testing.T, c *Component, ctx context.Context, threadID modeluuid.UUID, want threadState) {
+	t.Helper()
+	row, got, err := c.loadThreadState(ctx, threadID)
+	if err != nil {
+		t.Fatalf("loadThreadState() error = %v", err)
+	}
+	if row == nil {
+		t.Fatal("expected thread component state row")
+	}
+	got = got.clean()
+	want = want.clean()
+	if boolValue(got.KeepRunning) != boolValue(want.KeepRunning) || got.Model != want.Model || got.ReasoningEffort != want.ReasoningEffort {
+		t.Fatalf("thread state = %#v, want %#v", got, want)
+	}
+}
+
+func assertNoThreadState(t *testing.T, c *Component, ctx context.Context, threadID modeluuid.UUID) {
+	t.Helper()
+	row, got, err := c.loadThreadState(ctx, threadID)
+	if err != nil {
+		t.Fatalf("loadThreadState() error = %v", err)
+	}
+	if row != nil || !got.isZero() {
+		t.Fatalf("expected no thread component state, got row=%#v state=%#v", row, got)
+	}
+}
+
+func boolValue(v *bool) bool {
+	return v != nil && *v
 }
