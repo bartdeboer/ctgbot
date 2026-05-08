@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -100,22 +99,6 @@ func MergeNamedAllowedCommands(extra map[string]AllowedCommand) map[string]Allow
 		if normalized, ok := normalizeAllowedCommand(spec); ok {
 			allowed[name] = normalized
 		}
-	}
-	return allowed
-}
-
-func AllowedCommandsFromSpecs(specs []string) map[string]AllowedCommand {
-	allowed := map[string]AllowedCommand{}
-	for _, spec := range specs {
-		spec = strings.TrimSpace(spec)
-		if spec == "" {
-			continue
-		}
-		name := strings.TrimSpace(filepath.Base(spec))
-		if name == "" || name == "." || name == string(filepath.Separator) {
-			continue
-		}
-		allowed[name] = AllowedCommand{Name: spec}
 	}
 	return allowed
 }

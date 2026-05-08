@@ -175,6 +175,22 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	}
 }
 
+func TestChatHostbridgeIgnoresLegacyAllowedCommandSpecs(t *testing.T) {
+	cfg, store := newTestConfig(t)
+	chatID := modeluuid.New()
+
+	if err := store.PersistStruct(cfg.Chat(chatID).Hostbridge().key("allowed_commands"), []string{"/usr/bin/git"}); err != nil {
+		t.Fatalf("persist legacy allowed commands: %v", err)
+	}
+
+	if got := cfg.Chat(chatID).Hostbridge().AllowedCommands(); got != nil {
+		t.Fatalf("AllowedCommands() = %#v, want nil", got)
+	}
+	if got := cfg.Chat(chatID).Hostbridge().ConfiguredAllowedCommands(); got != nil {
+		t.Fatalf("ConfiguredAllowedCommands() = %#v, want nil", got)
+	}
+}
+
 func TestChatWorkspaceFallbacksStayExplicit(t *testing.T) {
 	cfg, store := newTestConfig(t)
 	chatID := modeluuid.New()

@@ -19,7 +19,7 @@ func (c *Config) EnsurePaths() error {
 			return err
 		}
 	}
-	return c.migrateLegacyLocalLayout()
+	return nil
 }
 
 func (c *Config) EnsureChatRuntimePaths(chatID modeluuid.UUID) (string, error) {
@@ -28,54 +28,6 @@ func (c *Config) EnsureChatRuntimePaths(chatID modeluuid.UUID) (string, error) {
 		return "", err
 	}
 	return profile.RuntimeName(), nil
-}
-
-func (c *Config) migrateLegacyLocalLayout() error {
-	legacyRoot := filepath.Join(c.RootDir(), "conversations")
-	entries, err := os.ReadDir(legacyRoot)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	if err := os.MkdirAll(c.ChatsRoot(), 0o755); err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		key := strings.TrimPrefix(name, "ctgbot-")
-		if key == name {
-			continue
-		}
-		srcRoot := filepath.Join(legacyRoot, name)
-		dstRoot := filepath.Join(c.ChatsRoot(), key)
-		if !pathExists(dstRoot) {
-			if err := os.Rename(srcRoot, dstRoot); err != nil {
-				return err
-			}
-		}
-		oldHome := filepath.Join(dstRoot, "home")
-		newHome := filepath.Join(dstRoot, ".codex")
-		if pathExists(oldHome) && !pathExists(newHome) {
-			if err := os.Rename(oldHome, newHome); err != nil {
-				return err
-			}
-		}
-		if err := os.MkdirAll(filepath.Join(dstRoot, "workspace"), 0o755); err != nil {
-			return err
-		}
-	}
-	remaining, err := os.ReadDir(legacyRoot)
-	if err == nil && len(remaining) == 0 {
-		if err := os.Remove(legacyRoot); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
 }
 
 func (c *Config) ResolveWorkspaceHostPath(raw string) (string, error) {

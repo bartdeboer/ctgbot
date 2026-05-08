@@ -40,5 +40,5 @@ func (p ProfileConfig) EnsurePaths() error {
 			return err
 		}
 	}
-	return p.cfg.migrateLegacyLocalLayout()
+	return nil
 }

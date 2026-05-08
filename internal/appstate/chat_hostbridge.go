@@ -16,12 +16,6 @@ func (h ChatHostbridgeConfig) AllowedCommands() map[string]hostbridgeserver.Allo
 	if h.chat.cfg.structValue(h.key("allowed_commands"), &current) {
 		return normalizeAllowedCommands(current)
 	}
-
-	var legacySpecs []string
-	if h.chat.cfg.structValue(h.key("allowed_commands"), &legacySpecs) {
-		return hostbridgeserver.AllowedCommandsFromSpecs(legacySpecs)
-	}
-
 	return nil
 }
 
@@ -30,12 +24,6 @@ func (h ChatHostbridgeConfig) ConfiguredAllowedCommands() map[string]hostbridges
 	if h.chat.cfg.structValue(h.key("allowed_commands"), &current) {
 		return normalizeConfiguredAllowedCommands(current)
 	}
-
-	var legacySpecs []string
-	if h.chat.cfg.structValue(h.key("allowed_commands"), &legacySpecs) {
-		return hostbridgeserver.AllowedCommandsFromSpecs(legacySpecs)
-	}
-
 	return nil
 }
 
