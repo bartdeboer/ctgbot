@@ -77,7 +77,7 @@ The canonical CLI form is `component <component> ...`.
 - `component codex auth status` checks authentication state for that registration.
 - `process upgrade` runs:
   - `git pull --ff-only`
-  - `go generate ./internal/containerassets`
+  - `go generate ./internal/runtime/imageassets`
   - `go install ./cmd/ctgbot ./cmd/hostbridge`
   - `ctgbot image build --no-cache`
 - `process quit` requests a clean process shutdown so the supervisor or operator

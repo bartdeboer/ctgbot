@@ -23,7 +23,7 @@ func (p *projectProcessActions) GoGenerate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return runProjectCommand(ctx, projectDir, nil, "go", "generate", "./internal/containerassets")
+	return runProjectCommand(ctx, projectDir, nil, "go", "generate", "./internal/runtime/imageassets")
 }
 
 func (p *projectProcessActions) GitPull(ctx context.Context) error {
@@ -41,7 +41,7 @@ func (p *projectProcessActions) Install(ctx context.Context) error {
 		return err
 	}
 	env := buildInstallEnv(p.globalStore)
-	if err := runProjectCommand(ctx, projectDir, env, "go", "generate", "./internal/containerassets"); err != nil {
+	if err := runProjectCommand(ctx, projectDir, env, "go", "generate", "./internal/runtime/imageassets"); err != nil {
 		return err
 	}
 	return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge")
@@ -61,7 +61,7 @@ func (p *projectProcessActions) Upgrade(ctx context.Context) error {
 		return err
 	}
 	if err := runUpgradeStep(ctx, "go generate", func(ctx context.Context) error {
-		return runProjectCommand(ctx, projectDir, env, "go", "generate", "./internal/containerassets")
+		return runProjectCommand(ctx, projectDir, env, "go", "generate", "./internal/runtime/imageassets")
 	}); err != nil {
 		return err
 	}

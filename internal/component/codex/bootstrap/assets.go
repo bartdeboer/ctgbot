@@ -1,4 +1,4 @@
-package bootstrapassets
+package bootstrap
 
 import (
 	"bytes"

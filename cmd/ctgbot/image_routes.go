@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/ctgbotimage"
+	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -26,7 +26,7 @@ func registerImageRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			builder := &ctgbotimage.Builder{Config: cfg, Logger: logger}
+			builder := &runtimeimage.Builder{Config: cfg, Logger: logger}
 			return builder.Build(req.Context(), *noCache)
 		})
 	})

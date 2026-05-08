@@ -1,4 +1,4 @@
-package containerassets
+package imageassets
 
 import (
 	"archive/tar"
@@ -114,7 +114,7 @@ func shouldSkipTarget(target string) bool {
 	switch {
 	case strings.HasPrefix(target, ".git/"):
 		return true
-	case strings.HasPrefix(target, "internal/containerassets/assets/"):
+	case strings.HasPrefix(target, "internal/runtime/imageassets/assets/"):
 		return true
 	default:
 		return false

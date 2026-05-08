@@ -1,4 +1,4 @@
-package containerassets
+package imageassets
 
 import (
 	"embed"

@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/bootstrapassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	codexbootstrap "github.com/bartdeboer/ctgbot/internal/component/codex/bootstrap"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -400,7 +400,7 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 	if strings.TrimSpace(allowedCommandsText) == "" {
 		allowedCommandsText = "<none>"
 	}
-	text, err := bootstrapassets.Text(bootstrapassets.TemplateData{
+	text, err := codexbootstrap.Text(codexbootstrap.TemplateData{
 		Workspace:                 workspace,
 		WorkspaceInbox:            workspace + "/inbox",
 		CodexHome:                 home,

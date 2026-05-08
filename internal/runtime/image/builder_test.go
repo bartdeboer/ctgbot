@@ -1,4 +1,4 @@
-package ctgbotimage
+package runtimeimage
 
 import (
 	"os"

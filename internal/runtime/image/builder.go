@@ -1,4 +1,4 @@
-package ctgbotimage
+package runtimeimage
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"runtime"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/containerassets"
+	"github.com/bartdeboer/ctgbot/internal/runtime/imageassets"
 )
 
 type Builder struct {
@@ -31,7 +31,7 @@ func (b *Builder) Build(ctx context.Context, noCache bool) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
-	buildContext, err := containerassets.BuildContextTar()
+	buildContext, err := imageassets.BuildContextTar()
 	if err != nil {
 		return err
 	}
