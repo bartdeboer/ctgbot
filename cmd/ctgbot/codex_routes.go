@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/codexcli"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -19,7 +19,7 @@ func registerCodexRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			manager := &codexengine.CodexManager{Config: cfg, Logger: logger}
+			manager := &codexcli.Manager{Config: cfg, Logger: logger}
 			return manager.RunCLI(req.Context(), "", req.Extra)
 		})
 
@@ -37,7 +37,7 @@ func registerCodexRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			manager := &codexengine.CodexManager{Config: cfg, Logger: logger}
+			manager := &codexcli.Manager{Config: cfg, Logger: logger}
 			return manager.SignIn(req.Context(), *deviceAuth, *withAPIKey)
 		})
 
@@ -47,7 +47,7 @@ func registerCodexRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			manager := &codexengine.CodexManager{Config: cfg, Logger: logger}
+			manager := &codexcli.Manager{Config: cfg, Logger: logger}
 			return manager.LoginStatus(req.Context())
 		})
 	})

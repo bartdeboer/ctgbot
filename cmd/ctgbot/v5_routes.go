@@ -29,7 +29,7 @@ import (
 	"github.com/bartdeboer/go-clistate"
 )
 
-func registerV5Routes(r *clir.Router, store *clistate.Store) {
+func registerV5Routes(r *clir.Router, store *clistate.Store, globalStore *clistate.Store) {
 	r.Routes(func(b *clir.Builder) {
 		b.Handle("v5 run", "Run the v5 ctgbot runtime", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("v5 run", flag.ContinueOnError)
@@ -52,11 +52,7 @@ func registerV5Routes(r *clir.Router, store *clistate.Store) {
 				*dbPath,
 				resolveTelegramToken(*telegramToken, store),
 				*codexImage,
-				&runtimeProcessActions{
-					stop:    stop,
-					install: func(ctx context.Context) error { return runInstalledCtgbotCommand(ctx, "install") },
-					upgrade: func(ctx context.Context) error { return runInstalledCtgbotCommand(ctx, "upgrade") },
-				},
+				newRuntimeProcessActions(globalStore, stop, nil),
 			)
 			if err != nil {
 				return err

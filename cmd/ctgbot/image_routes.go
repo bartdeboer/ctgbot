@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/bartdeboer/ctgbot/internal/agent/codexengine"
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/ctgbotimage"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -26,7 +26,7 @@ func registerImageRoutes(r *clir.Router, store *clistate.Store) {
 				return err
 			}
 			logger := log.New(os.Stdout, "", log.LstdFlags)
-			builder := &codexengine.ImageBuilder{Config: cfg, Logger: logger}
+			builder := &ctgbotimage.Builder{Config: cfg, Logger: logger}
 			return builder.Build(req.Context(), *noCache)
 		})
 	})

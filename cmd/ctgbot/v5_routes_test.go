@@ -21,7 +21,7 @@ func TestV5WorkspaceSetAndComponentRegister(t *testing.T) {
 		}
 
 		router := clir.New()
-		registerV5Routes(router, store)
+		registerV5Routes(router, store, nil)
 
 		workspaceOutput := captureStdout(t, func() {
 			if err := router.Run(context.Background(), []string{"v5", "workspace", "set", "work", "--path", "workspaces/work-root"}); err != nil {
@@ -70,7 +70,7 @@ func TestV5ChatComponentAddBindsExternalChatID(t *testing.T) {
 		}
 
 		router := clir.New()
-		registerV5Routes(router, store)
+		registerV5Routes(router, store, nil)
 
 		if err := router.Run(context.Background(), []string{"v5", "component", "register", "telegram", "--runtime", "local"}); err != nil {
 			t.Fatalf("component register: %v", err)

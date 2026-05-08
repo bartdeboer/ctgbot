@@ -1,4 +1,4 @@
-package codexengine
+package codexcli
 
 import (
 	"bufio"

@@ -1,4 +1,4 @@
-package codexengine
+package ctgbotimage
 
 import (
 	"context"
@@ -12,12 +12,12 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/containerassets"
 )
 
-type ImageBuilder struct {
+type Builder struct {
 	Config *appstate.Config
 	Logger *log.Logger
 }
 
-func (b *ImageBuilder) EnsureImage(ctx context.Context) error {
+func (b *Builder) EnsureImage(ctx context.Context) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -27,7 +27,7 @@ func (b *ImageBuilder) EnsureImage(ctx context.Context) error {
 	return b.Build(ctx, false)
 }
 
-func (b *ImageBuilder) Build(ctx context.Context, noCache bool) error {
+func (b *Builder) Build(ctx context.Context, noCache bool) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -65,7 +65,7 @@ func dockerBuildArgs(cfg *appstate.Config, noCache bool) []string {
 	return args
 }
 
-func (b *ImageBuilder) logf(format string, args ...any) {
+func (b *Builder) logf(format string, args ...any) {
 	if b.Logger != nil {
 		b.Logger.Printf(format, args...)
 	}

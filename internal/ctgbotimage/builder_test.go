@@ -1,4 +1,4 @@
-package codexengine
+package ctgbotimage
 
 import (
 	"os"

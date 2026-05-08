@@ -1,4 +1,4 @@
-package codexengine
+package codexcli
 
 import (
 	"context"
@@ -9,14 +9,15 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/ctgbotimage"
 )
 
-type CodexManager struct {
+type Manager struct {
 	Config *appstate.Config
 	Logger *log.Logger
 }
 
-func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey bool) error {
+func (m *Manager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey bool) error {
 	if m == nil || m.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -24,7 +25,7 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 		return err
 	}
 
-	builder := &ImageBuilder{Config: m.Config, Logger: m.Logger}
+	builder := &ctgbotimage.Builder{Config: m.Config, Logger: m.Logger}
 	if err := builder.EnsureImage(ctx); err != nil {
 		return err
 	}
@@ -64,7 +65,7 @@ func (m *CodexManager) SignIn(ctx context.Context, deviceAuth bool, withAPIKey b
 	return cmd.Run()
 }
 
-func (m *CodexManager) LoginStatus(ctx context.Context) error {
+func (m *Manager) LoginStatus(ctx context.Context) error {
 	if m == nil || m.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -72,7 +73,7 @@ func (m *CodexManager) LoginStatus(ctx context.Context) error {
 		return err
 	}
 
-	builder := &ImageBuilder{Config: m.Config, Logger: m.Logger}
+	builder := &ctgbotimage.Builder{Config: m.Config, Logger: m.Logger}
 	if err := builder.EnsureImage(ctx); err != nil {
 		return err
 	}
@@ -94,7 +95,7 @@ func (m *CodexManager) LoginStatus(ctx context.Context) error {
 	return cmd.Run()
 }
 
-func (m *CodexManager) RunCLI(ctx context.Context, workdir string, args []string) error {
+func (m *Manager) RunCLI(ctx context.Context, workdir string, args []string) error {
 	if m == nil || m.Config == nil {
 		return fmt.Errorf("missing config")
 	}
@@ -102,7 +103,7 @@ func (m *CodexManager) RunCLI(ctx context.Context, workdir string, args []string
 		return err
 	}
 
-	builder := &ImageBuilder{Config: m.Config, Logger: m.Logger}
+	builder := &ctgbotimage.Builder{Config: m.Config, Logger: m.Logger}
 	if err := builder.EnsureImage(ctx); err != nil {
 		return err
 	}
@@ -151,7 +152,7 @@ func (m *CodexManager) RunCLI(ctx context.Context, workdir string, args []string
 	return cmd.Run()
 }
 
-func (m *CodexManager) logf(format string, args ...any) {
+func (m *Manager) logf(format string, args ...any) {
 	if m.Logger != nil {
 		m.Logger.Printf(format, args...)
 	}
