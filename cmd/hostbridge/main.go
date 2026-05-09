@@ -71,6 +71,11 @@ func isDirectHostbridgeCommand(arg string, componentRef string) bool {
 	case "", "run", "sendfile", "sendstdin", "config", "help":
 		return true
 	}
+	for _, prefix := range cmdsurface.GlobalDirectPrefixes() {
+		if arg == prefix {
+			return true
+		}
+	}
 	for _, prefix := range cmdsurface.DirectPrefixes(componentRef) {
 		if arg == prefix {
 			return true
@@ -114,7 +119,7 @@ func getenv(key, fallback string) string {
 func printHelp() {
 	fmt.Fprintln(os.Stdout, "usage: hostbridge <command> [args...]")
 	fmt.Fprintln(os.Stdout, "")
-	fmt.Fprintln(os.Stdout, "Commands for Telegram-attached ctgbot hostbridge:")
+	fmt.Fprintln(os.Stdout, "Commands for ctgbot hostbridge:")
 	printDefinitionHelp(hostbridgeDefinitions())
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "environment:")

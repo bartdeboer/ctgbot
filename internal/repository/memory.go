@@ -576,6 +576,12 @@ func (r memoryMessages) ListByThreadID(ctx context.Context, threadID modeluuid.U
 			out = append(out, message)
 		}
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].ID.String() < out[j].ID.String()
+		}
+		return out[i].CreatedAt.Before(out[j].CreatedAt)
+	})
 	return out, nil
 }
 

@@ -36,7 +36,10 @@ type MessagePage struct {
 }
 
 type SendMessageRequest struct {
-	Text string `json:"text"`
+	Text           string         `json:"text"`
+	SourceThreadID modeluuid.UUID `json:"-"`
+	ExternalID     string         `json:"-"`
+	ComponentID    modeluuid.UUID `json:"-"`
 }
 
 type SendMessageResult struct {

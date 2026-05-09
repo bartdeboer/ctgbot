@@ -15,6 +15,7 @@ import (
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -133,12 +134,12 @@ func (c *fakeMessenger) StartChatAction(ctx context.Context, target message.Chat
 }
 
 type fakeAgentRecorder struct {
-	prompts    []string
-	homes      []runtimepkg.Home
-	streamText string
-	finalText  string
-	entered    chan struct{}
-	release    <-chan struct{}
+	prompts     []string
+	homes       []runtimepkg.Home
+	streamText  string
+	finalText   string
+	entered     chan struct{}
+	release     <-chan struct{}
 	interrupted chan struct{}
 }
 
@@ -527,6 +528,88 @@ func TestHandleInboundInterruptCommandBypassesTurnGate(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("first HandleInbound() did not complete")
+	}
+}
+
+func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentRecorder := &fakeAgentRecorder{finalText: "ack"}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := broker.New(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Components().Save(context.Background(), codex); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+	thread := &coremodel.Thread{ChatID: chat.ID, Label: "alpha"}
+	if err := storage.Threads().Save(context.Background(), thread); err != nil {
+		t.Fatal(err)
+	}
+
+	actor := coremodel.Actor{ID: "thread:source", Label: "source thread"}
+	result, err := b.SendMessage(context.Background(), actor, thread.ID, messaging.SendMessageRequest{
+		Text: "hello from another thread",
+	})
+	if err != nil {
+		t.Fatalf("SendMessage() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("SendMessage() result = nil")
+	}
+	if got := strings.TrimSpace(result.Message.Text); got != "hello from another thread" {
+		t.Fatalf("result message text = %q, want %q", got, "hello from another thread")
+	}
+
+	messages, err := storage.Messages().ListByThreadID(context.Background(), thread.ID)
+	if err != nil {
+		t.Fatalf("ListByThreadID() error = %v", err)
+	}
+	if got, want := len(messages), 3; got != want {
+		t.Fatalf("thread message count = %d, want %d", got, want)
+	}
+	var sawInbound, sawAck bool
+	for _, stored := range messages {
+		switch strings.TrimSpace(stored.Text) {
+		case "hello from another thread":
+			if stored.Direction == coremodel.MessageDirectionInbound {
+				sawInbound = true
+			}
+		case "ack":
+			if stored.Direction == coremodel.MessageDirectionOutbound {
+				sawAck = true
+			}
+		}
+	}
+	if !sawInbound {
+		t.Fatalf("did not find inbound message %q", "hello from another thread")
+	}
+	if !sawAck {
+		t.Fatalf("did not find final outbound message %q", "ack")
+	}
+	if got, want := len(agentRecorder.prompts), 1; got != want {
+		t.Fatalf("agent prompts = %d, want %d", got, want)
+	}
+	if got := agentRecorder.prompts[0]; got != "hello from another thread" {
+		t.Fatalf("agent prompt = %q, want %q", got, "hello from another thread")
 	}
 }
 

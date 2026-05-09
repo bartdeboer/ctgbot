@@ -132,6 +132,7 @@ Messaging groundwork owns:
 - actor-oriented thread message fetch/send contracts
 - a shared service shape for:
   - hostbridge adapters
+  - local `thread` commands
   - remote HTTP clients
   - future web clients
 

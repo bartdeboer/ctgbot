@@ -38,6 +38,7 @@ The intended layering is:
 1. `internal/messaging`
    - actor model
    - service contract
+   - local in-proc implementation
    - request/response types
 2. `internal/messaging/server`
    - HTTP + JSON transport
@@ -45,8 +46,8 @@ The intended layering is:
    - path/query decoding
 3. adapters
    - hostbridge commands
+   - `thread` command surface
    - future `ctgbotmessaging` companion CLI
-   - possible agent/component command surface later
 
 ## Actor Model
 
@@ -73,6 +74,10 @@ The command shape we are grounding this around is:
 
 Those commands should be thin adapters over the same core service used by
 the HTTP API.
+
+Today, the local `thread` command surface is already wired through broker
+message commands and hostbridge commands. The remote HTTP API is still
+groundwork only.
 
 ## Current HTTP Shape
 
@@ -104,7 +109,6 @@ This groundwork does **not** try to solve:
 - reply routing between instances
 - mailbox replication
 - websocket streaming
-- component command surfaces
 - UI design
 
 Those can follow once the core service shape feels right.

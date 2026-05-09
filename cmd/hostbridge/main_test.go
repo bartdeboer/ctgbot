@@ -26,6 +26,7 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 		{name: "run alias", ref: "codex", in: []string{"whoami"}, want: []string{"run", "whoami"}},
 		{name: "direct hostbridge", ref: "codex", in: []string{"sendstdin"}, want: []string{"sendstdin"}},
 		{name: "config", ref: "codex", in: []string{"config", "list"}, want: []string{"config", "list"}},
+		{name: "thread global direct", ref: "codex", in: []string{"thread", "list"}, want: []string{"thread", "list"}},
 	}
 
 	for _, tc := range tests {
