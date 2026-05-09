@@ -1,4 +1,4 @@
-package server
+package httpapi
 
 import (
 	"encoding/json"
@@ -22,11 +22,11 @@ type Authenticator interface {
 }
 
 type Server struct {
-	Service       messaging.Service
+	Service       *messaging.Service
 	Authenticator Authenticator
 }
 
-func New(service messaging.Service, auth Authenticator) *Server {
+func New(service *messaging.Service, auth Authenticator) *Server {
 	return &Server{
 		Service:       service,
 		Authenticator: auth,

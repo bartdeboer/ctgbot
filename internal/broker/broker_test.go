@@ -566,7 +566,7 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 	}
 
 	actor := coremodel.Actor{ID: "thread:source", Label: "source thread"}
-	service := messaging.NewLocalService(storage, b)
+	service := messaging.New(storage, b)
 	result, err := service.SendMessage(context.Background(), actor, thread.ID, messaging.SendMessageRequest{
 		Text: "hello from another thread",
 	})

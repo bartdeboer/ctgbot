@@ -1,4 +1,4 @@
-package thread
+package messagingcomponent
 
 import (
 	"context"
@@ -12,20 +12,16 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messaging"
+	messagingdomain "github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
-const Type = "thread"
-
-type Actions interface {
-	messaging.LocalActions
-}
+const Type = "messaging"
 
 type Component struct {
-	Actions Actions
+	Service *messagingdomain.Service
 }
 
 var _ component.Component = (*Component)(nil)
@@ -53,8 +49,8 @@ func RegisterGobTypes(register func(any)) {
 	register(messageSendCommand{})
 }
 
-func New(actions Actions) *Component {
-	return &Component{Actions: actions}
+func New(service *messagingdomain.Service) *Component {
+	return &Component{Service: service}
 }
 
 func (c *Component) Type() string { return Type }
@@ -99,10 +95,10 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 }
 
 func (c *Component) handleList(ctx context.Context, req commandengine.Request, cmd listCommand) (commandengine.Result, error) {
-	if c == nil || c.Actions == nil {
-		return commandengine.Result{}, fmt.Errorf("missing thread actions")
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
 	}
-	threads, err := c.Actions.ListThreads(ctx, req.Context.Actor, messaging.ListThreadsRequest{
+	threads, err := c.Service.ListThreads(ctx, req.Context.Actor, messagingdomain.ListThreadsRequest{
 		Limit: cmd.Limit,
 		Query: cmd.Query,
 	})
@@ -115,14 +111,14 @@ func (c *Component) handleList(ctx context.Context, req commandengine.Request, c
 }
 
 func (c *Component) handleMessageList(ctx context.Context, req commandengine.Request, cmd messageListCommand) (commandengine.Result, error) {
-	if c == nil || c.Actions == nil {
-		return commandengine.Result{}, fmt.Errorf("missing thread actions")
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
 	}
 	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	page, err := c.Actions.ListMessages(ctx, req.Context.Actor, threadID, messaging.ListMessagesRequest{
+	page, err := c.Service.ListMessages(ctx, req.Context.Actor, threadID, messagingdomain.ListMessagesRequest{
 		Cursor: cmd.Cursor,
 		Limit:  cmd.Limit,
 	})
@@ -135,8 +131,8 @@ func (c *Component) handleMessageList(ctx context.Context, req commandengine.Req
 }
 
 func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Request, cmd messageSendCommand) (commandengine.Result, error) {
-	if c == nil || c.Actions == nil {
-		return commandengine.Result{}, fmt.Errorf("missing thread actions")
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
 	}
 	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
 	if err != nil {
@@ -145,14 +141,14 @@ func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Req
 	actor := req.Context.Actor.Resolved()
 	sourceThreadID := requestThreadID(req)
 	if !sourceThreadID.IsNull() {
-		threadActor, err := c.Actions.ActorForThread(ctx, sourceThreadID)
+		threadActor, err := c.Service.ActorForThread(ctx, sourceThreadID)
 		if err != nil {
 			return commandengine.Result{}, err
 		}
 		threadActor.Roles = append([]simplerbac.Role(nil), actor.Roles...)
 		actor = threadActor
 	}
-	result, err := c.Actions.SendMessage(ctx, actor, threadID, messaging.SendMessageRequest{
+	result, err := c.Service.SendMessage(ctx, actor, threadID, messagingdomain.SendMessageRequest{
 		Text:           cmd.Text,
 		SourceThreadID: sourceThreadID,
 	})
@@ -176,7 +172,7 @@ func (c *Component) resolveThreadID(ctx context.Context, req commandengine.Reque
 		}
 		return threadID, nil
 	}
-	return c.Actions.ResolveThreadRef(ctx, ref)
+	return c.Service.ResolveThreadRef(ctx, ref)
 }
 
 func requestThreadID(req commandengine.Request) modeluuid.UUID {
@@ -234,11 +230,11 @@ func buildMessageSendCommand(req *clir.Request) (any, error) {
 	}, nil
 }
 
-func formatThreadList(threads []messaging.ThreadSummary, currentThreadID modeluuid.UUID) string {
+func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID modeluuid.UUID) string {
 	if len(threads) == 0 {
 		return "no recent threads"
 	}
-	threads = append([]messaging.ThreadSummary(nil), threads...)
+	threads = append([]messagingdomain.ThreadSummary(nil), threads...)
 	sort.SliceStable(threads, func(i, j int) bool {
 		if threads[i].LastMessageAt.Equal(threads[j].LastMessageAt) {
 			return threads[i].ID.String() < threads[j].ID.String()
@@ -274,7 +270,7 @@ func formatThreadList(threads []messaging.ThreadSummary, currentThreadID modeluu
 	return strings.Join(lines, "\n")
 }
 
-func formatMessagePage(threadID modeluuid.UUID, page messaging.MessagePage) string {
+func formatMessagePage(threadID modeluuid.UUID, page messagingdomain.MessagePage) string {
 	if len(page.Messages) == 0 {
 		return "no messages for thread " + threadID.String()
 	}

@@ -11,7 +11,6 @@ import (
 	componentbroker "github.com/bartdeboer/ctgbot/internal/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
-	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -112,7 +111,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	if err != nil {
 		return EventOutcome{}, err
 	}
-	result, err := b.HandleResolvedInbound(ctx, messaging.ResolvedInbound{
+	result, err := b.HandleResolvedInbound(ctx, ResolvedInbound{
 		Chat:        *chat,
 		Thread:      *thread,
 		ComponentID: event.ComponentID,
@@ -133,19 +132,19 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 
 // HandleResolvedInbound runs the common inbound turn path when chat/thread
 // routing is already known.
-func (b *Broker) HandleResolvedInbound(ctx context.Context, inbound messaging.ResolvedInbound) (messaging.DeliveryResult, error) {
+func (b *Broker) HandleResolvedInbound(ctx context.Context, inbound ResolvedInbound) (DeliveryResult, error) {
 	if err := b.ensureReady(); err != nil {
-		return messaging.DeliveryResult{}, err
+		return DeliveryResult{}, err
 	}
 	if inbound.Chat.ID.IsNull() {
-		return messaging.DeliveryResult{}, fmt.Errorf("missing inbound chat id")
+		return DeliveryResult{}, fmt.Errorf("missing inbound chat id")
 	}
 	if inbound.Thread.ID.IsNull() {
-		return messaging.DeliveryResult{}, fmt.Errorf("missing inbound thread id")
+		return DeliveryResult{}, fmt.Errorf("missing inbound thread id")
 	}
 
 	var runtime *ChatRuntime
-	failConversation := func(result messaging.DeliveryResult, turnErr error) (messaging.DeliveryResult, error) {
+	failConversation := func(result DeliveryResult, turnErr error) (DeliveryResult, error) {
 		text := conversationErrorText(turnErr)
 		if text == "" {
 			return result, nil
@@ -166,14 +165,14 @@ func (b *Broker) HandleResolvedInbound(ctx context.Context, inbound messaging.Re
 		var err error
 		runtime, err = b.runtimeForChat(ctx, inbound.Chat)
 		if err != nil {
-			return failConversation(messaging.DeliveryResult{}, err)
+			return failConversation(DeliveryResult{}, err)
 		}
 		handled, commandOutbound, err := b.tryHandleMessageCommand(ctx, inbound, inbound.Chat, inbound.Thread, runtime)
 		if err != nil {
-			return failConversation(messaging.DeliveryResult{Outbound: commandOutbound}, err)
+			return failConversation(DeliveryResult{Outbound: commandOutbound}, err)
 		}
 		if handled {
-			return messaging.DeliveryResult{Outbound: commandOutbound}, nil
+			return DeliveryResult{Outbound: commandOutbound}, nil
 		}
 	}
 
@@ -183,12 +182,12 @@ func (b *Broker) HandleResolvedInbound(ctx context.Context, inbound messaging.Re
 		outcome, runErr = b.handleResolvedInboundTurn(ctx, inbound, runtime)
 		return runErr
 	}); err != nil {
-		return messaging.DeliveryResult{
+		return DeliveryResult{
 			Inbound:  outcome.Inbound,
 			Outbound: outcome.Outbound,
 		}, err
 	}
-	return messaging.DeliveryResult{
+	return DeliveryResult{
 		Inbound:  outcome.Inbound,
 		Outbound: outcome.Outbound,
 	}, nil
@@ -196,7 +195,7 @@ func (b *Broker) HandleResolvedInbound(ctx context.Context, inbound messaging.Re
 
 func (b *Broker) handleResolvedInboundTurn(
 	ctx context.Context,
-	inbound messaging.ResolvedInbound,
+	inbound ResolvedInbound,
 	runtime *ChatRuntime,
 ) (EventOutcome, error) {
 	var err error

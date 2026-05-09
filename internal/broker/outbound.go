@@ -10,11 +10,10 @@ import (
 	component "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
-	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
-func (b *Broker) storeInboundMessage(ctx context.Context, inbound messaging.ResolvedInbound) (*coremodel.ThreadMessage, error) {
+func (b *Broker) storeInboundMessage(ctx context.Context, inbound ResolvedInbound) (*coremodel.ThreadMessage, error) {
 	actor := inbound.Payload.ResolvedActor()
 	metadata := inboundMetadataJSON(inbound.Payload)
 	if len(inbound.Metadata) > 0 {
@@ -58,7 +57,7 @@ func (b *Broker) storeInboundMessage(ctx context.Context, inbound messaging.Reso
 	return message, nil
 }
 
-func inboundKind(inbound messaging.ResolvedInbound) coremodel.MessageKind {
+func inboundKind(inbound ResolvedInbound) coremodel.MessageKind {
 	if strings.TrimSpace(inbound.Payload.Text.Text) != "" {
 		return coremodel.MessageKindUser
 	}

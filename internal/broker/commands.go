@@ -7,13 +7,12 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
-	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 func (b *Broker) tryHandleMessageCommand(
 	ctx context.Context,
-	inbound messaging.ResolvedInbound,
+	inbound ResolvedInbound,
 	chat coremodel.Chat,
 	thread coremodel.Thread,
 	runtime *ChatRuntime,

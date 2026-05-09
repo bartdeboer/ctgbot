@@ -37,11 +37,10 @@ The intended layering is:
 
 1. `internal/messaging`
    - actor model
-   - service contract
-   - local in-proc implementation
+   - concrete domain service
    - thread CRUD/query/ref helpers
    - request/response types
-2. `internal/messaging/server`
+2. `internal/httpapi`
    - HTTP + JSON transport
    - request authentication
    - path/query decoding
@@ -84,7 +83,7 @@ The local split is now:
 
 - `internal/messaging`
   - list/query/cursor/ref logic
-  - local send logic
+  - send logic
 - broker
   - resolved inbound delivery
   - message commands

@@ -7,27 +7,13 @@ import (
 	"sort"
 	"strings"
 
+	brokerpkg "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	"github.com/bartdeboer/ctgbot/internal/repository"
 )
 
-type LocalService struct {
-	Storage   repository.Storage
-	Deliverer Deliverer
-}
-
-var _ LocalActions = (*LocalService)(nil)
-
-func NewLocalService(storage repository.Storage, deliverer Deliverer) *LocalService {
-	return &LocalService{
-		Storage:   storage,
-		Deliverer: deliverer,
-	}
-}
-
-func (s *LocalService) ListThreads(ctx context.Context, actor coremodel.Actor, req ListThreadsRequest) ([]ThreadSummary, error) {
+func (s *Service) ListThreads(ctx context.Context, actor coremodel.Actor, req ListThreadsRequest) ([]ThreadSummary, error) {
 	if err := s.ensureStorage(); err != nil {
 		return nil, err
 	}
@@ -64,7 +50,7 @@ func (s *LocalService) ListThreads(ctx context.Context, actor coremodel.Actor, r
 	return threads, nil
 }
 
-func (s *LocalService) ListMessages(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req ListMessagesRequest) (MessagePage, error) {
+func (s *Service) ListMessages(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req ListMessagesRequest) (MessagePage, error) {
 	if err := s.ensureStorage(); err != nil {
 		return MessagePage{}, err
 	}
@@ -126,11 +112,11 @@ func (s *LocalService) ListMessages(ctx context.Context, actor coremodel.Actor, 
 	return page, nil
 }
 
-func (s *LocalService) SendMessage(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req SendMessageRequest) (*SendMessageResult, error) {
+func (s *Service) SendMessage(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req SendMessageRequest) (*SendMessageResult, error) {
 	if err := s.ensureStorage(); err != nil {
 		return nil, err
 	}
-	if err := s.ensureDeliverer(); err != nil {
+	if err := s.ensureBroker(); err != nil {
 		return nil, err
 	}
 	actor = ResolveActor(actor)
@@ -153,7 +139,7 @@ func (s *LocalService) SendMessage(ctx context.Context, actor coremodel.Actor, t
 		return nil, fmt.Errorf("cannot send thread message to the current thread")
 	}
 
-	inbound := ResolvedInbound{
+	inbound := brokerpkg.ResolvedInbound{
 		Chat:        *targetChat,
 		Thread:      *targetThread,
 		ComponentID: req.ComponentID,
@@ -168,7 +154,7 @@ func (s *LocalService) SendMessage(ctx context.Context, actor coremodel.Actor, t
 		inbound.Metadata = append(inbound.Metadata, "source_thread_id="+req.SourceThreadID.String())
 	}
 
-	result, err := s.Deliverer.HandleResolvedInbound(ctx, inbound)
+	result, err := s.Broker.HandleResolvedInbound(ctx, inbound)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +164,7 @@ func (s *LocalService) SendMessage(ctx context.Context, actor coremodel.Actor, t
 	return &SendMessageResult{Message: *result.Inbound}, nil
 }
 
-func (s *LocalService) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
+func (s *Service) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
 	if err := s.ensureStorage(); err != nil {
 		return modeluuid.Nil, err
 	}
@@ -219,7 +205,7 @@ func (s *LocalService) ResolveThreadRef(ctx context.Context, ref string) (modelu
 	}
 }
 
-func (s *LocalService) ActorForThread(ctx context.Context, threadID modeluuid.UUID) (coremodel.Actor, error) {
+func (s *Service) ActorForThread(ctx context.Context, threadID modeluuid.UUID) (coremodel.Actor, error) {
 	thread, chat, err := s.loadThreadAndChat(ctx, threadID)
 	if err != nil {
 		return coremodel.Actor{}, err
@@ -230,16 +216,16 @@ func (s *LocalService) ActorForThread(ctx context.Context, threadID modeluuid.UU
 	}, nil
 }
 
-func (s *LocalService) ensureStorage() error {
+func (s *Service) ensureStorage() error {
 	if s == nil || s.Storage == nil {
 		return fmt.Errorf("missing messaging storage")
 	}
 	return nil
 }
 
-func (s *LocalService) ensureDeliverer() error {
-	if s == nil || s.Deliverer == nil {
-		return fmt.Errorf("missing messaging deliverer")
+func (s *Service) ensureBroker() error {
+	if s == nil || s.Broker == nil {
+		return fmt.Errorf("missing messaging broker")
 	}
 	return nil
 }
@@ -252,7 +238,7 @@ func requireActor(actor coremodel.Actor) error {
 	return nil
 }
 
-func (s *LocalService) threadSummaries(ctx context.Context, activeOnly bool) ([]ThreadSummary, error) {
+func (s *Service) threadSummaries(ctx context.Context, activeOnly bool) ([]ThreadSummary, error) {
 	chats, err := s.Storage.Chats().List(ctx)
 	if err != nil {
 		return nil, err
@@ -324,7 +310,7 @@ func ambiguousThreadRefError(ref string, matches []ThreadSummary) error {
 	return errors.New(strings.Join(lines, "\n"))
 }
 
-func (s *LocalService) loadThreadAndChat(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, *coremodel.Chat, error) {
+func (s *Service) loadThreadAndChat(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, *coremodel.Chat, error) {
 	thread, err := s.Storage.Threads().GetByID(ctx, threadID)
 	if err != nil {
 		return nil, nil, err
