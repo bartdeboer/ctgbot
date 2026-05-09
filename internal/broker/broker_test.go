@@ -573,6 +573,7 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 			Text:         message.TextMessage{Text: "hello from another thread"},
 			Actor:        actor,
 		},
+		Metadata: []string{"source_thread_id=11111111-2222-3333-4444-555555555555"},
 	})
 	if err != nil {
 		t.Fatalf("HandleResolvedInbound() error = %v", err)
@@ -613,8 +614,16 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 	if got, want := len(agentRecorder.prompts), 1; got != want {
 		t.Fatalf("agent prompts = %d, want %d", got, want)
 	}
-	if got := agentRecorder.prompts[0]; got != "hello from another thread" {
-		t.Fatalf("agent prompt = %q, want %q", got, "hello from another thread")
+	prompt := agentRecorder.prompts[0]
+	for _, want := range []string{
+		"[Internal thread message]",
+		"From: source thread",
+		"Reply path: hostbridge thread 11111111-2222-3333-4444-555555555555 message send <message>",
+		"hello from another thread",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("agent prompt = %q, want to contain %q", prompt, want)
+		}
 	}
 }
 

@@ -252,9 +252,11 @@ func (b *Broker) handleResolvedInboundTurn(
 		return EventOutcome{Inbound: storedInbound, Outbound: outbound}, nil
 	}
 	turnInbound := *storedInbound
+	turnPrompt := rawText
 	if len(savedPaths) > 0 {
-		turnInbound.Text = injectFilesIntoPrompt(savedPaths, rawText)
+		turnPrompt = injectFilesIntoPrompt(savedPaths, rawText)
 	}
+	turnInbound.Text = prepareTurnInbound(inbound, turnPrompt)
 
 	if runtime == nil {
 		runtime, err = b.runtimeForChat(ctx, chat)
