@@ -23,7 +23,11 @@ import (
 
 const DefaultCallbackPort = 1455
 
-var errMissingAuthMaterial = errors.New("missing gmail auth material")
+var (
+	errMissingAuthMaterial      = errors.New("missing gmail auth material")
+	errMissingGmailToken        = errors.New("gmail token not found")
+	errMissingOAuthClientConfig = errors.New("gmail oauth client config not found")
+)
 
 func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	if c == nil {
@@ -116,7 +120,7 @@ func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.
 	service, err := c.serviceFromStoredToken(ctx)
 	if err != nil {
 		if isMissingAuthMaterial(err) {
-			fmt.Fprintf(stdout, "gmail auth: not authenticated\n%s\n", gmailOAuthConfigHelp(c))
+			fmt.Fprintf(stdout, "gmail auth: not authenticated\n%s\n", gmailMissingAuthHelp(c, err))
 			return nil
 		}
 		return err
@@ -141,7 +145,7 @@ func (c *Component) serviceFromStoredToken(ctx context.Context) (*gmailapi.Servi
 
 func (c *Component) serviceFromToken(ctx context.Context, token *oauth2.Token) (*gmailapi.Service, error) {
 	if token == nil {
-		return nil, fmt.Errorf("%w: missing gmail token", errMissingAuthMaterial)
+		return nil, fmt.Errorf("%w: %w", errMissingAuthMaterial, errMissingGmailToken)
 	}
 	oauthConfig, _, err := c.loadOAuthConfig()
 	if err != nil {
@@ -170,7 +174,7 @@ func (c *Component) loadOAuthConfig() (*oauth2.Config, string, error) {
 		}
 		return config, path, nil
 	}
-	return nil, "", fmt.Errorf("%w: gmail oauth client config not found", errMissingAuthMaterial)
+	return nil, "", fmt.Errorf("%w: %w", errMissingAuthMaterial, errMissingOAuthClientConfig)
 }
 
 func (c *Component) oauthConfigPaths() []string {
@@ -191,7 +195,7 @@ func (c *Component) loadToken() (*oauth2.Token, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%w: gmail token not found", errMissingAuthMaterial)
+			return nil, fmt.Errorf("%w: %w", errMissingAuthMaterial, errMissingGmailToken)
 		}
 		return nil, fmt.Errorf("read gmail token %s: %w", path, err)
 	}
@@ -275,6 +279,21 @@ func gmailOAuthConfigHelp(c *Component) string {
 		paths = OAuthClientFilename
 	}
 	return "gmail oauth client config missing; create a Google OAuth Desktop client and save its JSON at " + paths
+}
+
+func gmailMissingAuthHelp(c *Component, err error) string {
+	switch {
+	case errors.Is(err, errMissingGmailToken):
+		ref := "gmail/<name>"
+		if c != nil && strings.TrimSpace(c.registration.Ref()) != "" {
+			ref = c.registration.Ref()
+		}
+		return fmt.Sprintf("%s missing; run `ctgbot component %s auth` from the host CLI", TokenFilename, ref)
+	case errors.Is(err, errMissingOAuthClientConfig):
+		return gmailOAuthConfigHelp(c)
+	default:
+		return "gmail auth material missing; run auth status again after installing managed files"
+	}
 }
 
 func isMissingAuthMaterial(err error) bool {
