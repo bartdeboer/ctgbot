@@ -181,13 +181,26 @@ func (c *Component) providerChatID() string {
 	if c == nil {
 		return DefaultUserID
 	}
-	if value := strings.TrimSpace(c.mailboxEmail); value != "" {
-		return value
-	}
-	if value := strings.TrimSpace(c.componentConfig.MailboxEmail); value != "" {
+	if value, ok := c.localProviderChatID(); ok {
 		return value
 	}
 	return c.userID()
+}
+
+func (c *Component) localProviderChatID() (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	if value := strings.TrimSpace(c.mailboxEmail); value != "" {
+		return value, true
+	}
+	if value := strings.TrimSpace(c.componentConfig.MailboxEmail); value != "" {
+		return value, true
+	}
+	if value := c.userID(); !strings.EqualFold(value, DefaultUserID) {
+		return value, true
+	}
+	return "", false
 }
 
 func senderLabel(message *gmailapi.Message) string {

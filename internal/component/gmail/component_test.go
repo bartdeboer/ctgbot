@@ -172,6 +172,47 @@ func TestLoadComponentConfigIncludeSpamTrashStillSkipsSentAndDraft(t *testing.T)
 	}
 }
 
+func TestDefaultSourceExternalChatIDUsesMailboxEmailWithoutAuth(t *testing.T) {
+	component := testComponent(t)
+	component.mailboxEmail = ""
+	component.componentConfig = ComponentConfig{
+		UserID:       DefaultUserID,
+		MailboxEmail: "work@example.com",
+	}.withDefaults()
+	got, err := component.DefaultSourceExternalChatID(context.Background())
+	if err != nil {
+		t.Fatalf("DefaultSourceExternalChatID() error = %v", err)
+	}
+	if got != "work@example.com" {
+		t.Fatalf("DefaultSourceExternalChatID() = %q, want work@example.com", got)
+	}
+}
+
+func TestDefaultSourceExternalChatIDUsesExplicitUserIDWithoutAuth(t *testing.T) {
+	component := testComponent(t)
+	component.mailboxEmail = ""
+	component.componentConfig = ComponentConfig{UserID: "personal@example.com"}.withDefaults()
+	component.UserID = component.componentConfig.UserID
+	got, err := component.DefaultSourceExternalChatID(context.Background())
+	if err != nil {
+		t.Fatalf("DefaultSourceExternalChatID() error = %v", err)
+	}
+	if got != "personal@example.com" {
+		t.Fatalf("DefaultSourceExternalChatID() = %q, want personal@example.com", got)
+	}
+}
+
+func TestDefaultSourceExternalChatIDRequiresStableIdentityBeforeAuth(t *testing.T) {
+	component := testComponent(t)
+	component.mailboxEmail = ""
+	component.componentConfig = ComponentConfig{}.withDefaults()
+	component.UserID = DefaultUserID
+	_, err := component.DefaultSourceExternalChatID(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "needs auth or component.json mailbox_email") {
+		t.Fatalf("DefaultSourceExternalChatID() error = %v, want stable identity error", err)
+	}
+}
+
 func TestEnsureStateBaselineDoesNotEmitBacklog(t *testing.T) {
 	component := testComponent(t)
 	client := &fakeGmailClient{profile: &gmailapi.Profile{EmailAddress: "work@example.com", HistoryId: 42}}

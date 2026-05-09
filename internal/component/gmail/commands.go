@@ -89,20 +89,23 @@ func (c *Component) DefaultSourceExternalChatID(ctx context.Context) (string, er
 	if c == nil {
 		return "", fmt.Errorf("missing gmail component")
 	}
-	if value := strings.TrimSpace(c.mailboxEmail); value != "" {
+	if value, ok := c.localProviderChatID(); ok {
 		return value, nil
 	}
 	service, err := c.serviceFromStoredToken(ctx)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("gmail source binding needs auth or component.json mailbox_email: %w", err)
 	}
 	profile, err := service.Users.GetProfile(c.userID()).Context(ctx).Do()
 	if err != nil {
-		return "", fmt.Errorf("get gmail profile: %w", err)
+		return "", fmt.Errorf("gmail source binding needs auth or component.json mailbox_email: get gmail profile: %w", err)
 	}
 	c.mailboxEmail = strings.TrimSpace(profile.EmailAddress)
 	if c.mailboxEmail == "" {
-		return c.userID(), nil
+		if value, ok := c.localProviderChatID(); ok {
+			return value, nil
+		}
+		return "", fmt.Errorf("gmail source binding needs auth or component.json mailbox_email")
 	}
 	state, _ := c.loadState()
 	state.MailboxEmail = c.mailboxEmail
