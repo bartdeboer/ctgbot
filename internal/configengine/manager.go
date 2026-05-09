@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
-	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 type Manager struct {
@@ -21,13 +20,12 @@ func (m *Manager) List(ctx commandengine.Context) []Item {
 	if len(items) == 0 {
 		return nil
 	}
-	actor := simplerbac.Actor{Roles: ctx.Actor.Roles}
 	out := make([]Item, 0, len(items))
 	for _, item := range items {
 		if err := requireScope(ctx, item); err != nil {
 			continue
 		}
-		if item.ReadPolicy.Allows(actor) {
+		if item.ReadPolicy.Allows(ctx.Actor) {
 			out = append(out, item)
 		}
 	}
@@ -39,8 +37,7 @@ func (m *Manager) Get(ctx commandengine.Context, key string) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	actor := simplerbac.Actor{Roles: ctx.Actor.Roles}
-	if err := item.ReadPolicy.Check(actor); err != nil {
+	if err := item.ReadPolicy.Check(ctx.Actor); err != nil {
 		return Value{}, fmt.Errorf("get %s denied: %w", item.Name(), err)
 	}
 	if err := requireScope(ctx, item); err != nil {
@@ -54,8 +51,7 @@ func (m *Manager) Set(ctx commandengine.Context, key string, value any) (Value, 
 	if err != nil {
 		return Value{}, err
 	}
-	actor := simplerbac.Actor{Roles: ctx.Actor.Roles}
-	if err := item.WritePolicy.Check(actor); err != nil {
+	if err := item.WritePolicy.Check(ctx.Actor); err != nil {
 		return Value{}, fmt.Errorf("set %s denied: %w", item.Name(), err)
 	}
 	if err := requireScope(ctx, item); err != nil {

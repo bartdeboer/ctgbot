@@ -16,7 +16,7 @@ later, but they should not own the protocol or the core access model.
 
 It should also prefer the existing repo vocabulary where possible:
 
-- reuse `message.Actor` for authenticated caller identity
+- reuse `coremodel.Actor` for authenticated caller identity
 - reuse `coremodel.ThreadMessage` for persisted thread messages
 - introduce new types only where we genuinely need a new service-level shape,
   such as `ThreadSummary`

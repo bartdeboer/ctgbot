@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
@@ -18,7 +18,7 @@ const (
 )
 
 type Authenticator interface {
-	Authenticate(r *http.Request) (message.Actor, error)
+	Authenticate(r *http.Request) (coremodel.Actor, error)
 }
 
 type Server struct {
@@ -140,19 +140,19 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request, threa
 	writeJSON(w, http.StatusAccepted, result)
 }
 
-func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (message.Actor, bool) {
+func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (coremodel.Actor, bool) {
 	if s.Service == nil {
 		writeError(w, http.StatusNotImplemented, "messaging service not configured")
-		return message.Actor{}, false
+		return coremodel.Actor{}, false
 	}
 	if s.Authenticator == nil {
 		writeError(w, http.StatusUnauthorized, "missing authenticator")
-		return message.Actor{}, false
+		return coremodel.Actor{}, false
 	}
 	actor, err := s.Authenticator.Authenticate(r)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, err.Error())
-		return message.Actor{}, false
+		return coremodel.Actor{}, false
 	}
 	return messaging.ResolveActor(actor), true
 }
@@ -199,19 +199,19 @@ func writeError(w http.ResponseWriter, status int, text string) {
 
 type StaticTokenAuthenticator struct {
 	Token string
-	Actor message.Actor
+	Actor coremodel.Actor
 }
 
-func (a StaticTokenAuthenticator) Authenticate(r *http.Request) (message.Actor, error) {
+func (a StaticTokenAuthenticator) Authenticate(r *http.Request) (coremodel.Actor, error) {
 	if r == nil {
-		return message.Actor{}, fmt.Errorf("missing request")
+		return coremodel.Actor{}, fmt.Errorf("missing request")
 	}
 	token := bearerToken(r.Header.Get("Authorization"))
 	if strings.TrimSpace(a.Token) == "" {
-		return message.Actor{}, fmt.Errorf("messaging auth not configured")
+		return coremodel.Actor{}, fmt.Errorf("messaging auth not configured")
 	}
 	if token != strings.TrimSpace(a.Token) {
-		return message.Actor{}, fmt.Errorf("unauthorized")
+		return coremodel.Actor{}, fmt.Errorf("unauthorized")
 	}
 	return messaging.ResolveActor(a.Actor), nil
 }

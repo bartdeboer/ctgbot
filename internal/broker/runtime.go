@@ -195,7 +195,7 @@ func hostbridgeControlCommands(runtime *ChatRuntime) []string {
 	}
 	patterns := commandset.CanonicalRoutePatterns(
 		runtime.AgentCommands.Definitions(),
-		simplerbac.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
 	)
 	out := make([]string, 0, len(patterns))
 	for _, pattern := range patterns {

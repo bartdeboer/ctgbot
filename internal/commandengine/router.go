@@ -3,8 +3,6 @@ package commandengine
 import (
 	"context"
 	"fmt"
-
-	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -117,8 +115,7 @@ func (r *Router) Authorize(req Request) error {
 	if !definition.AllowsSource(req.Context.Source) {
 		return fmt.Errorf("command %s unavailable from source %s", definition.CanonicalPattern(), req.Context.Source)
 	}
-	actor := simplerbac.Actor{Roles: req.Context.Actor.Roles}
-	if err := definition.Policy.Check(actor); err != nil {
+	if err := definition.Policy.Check(req.Context.Actor); err != nil {
 		return fmt.Errorf("command %s denied: %w", definition.CanonicalPattern(), err)
 	}
 	return nil

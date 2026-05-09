@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 type ChatComponentRole string
@@ -31,6 +32,34 @@ const (
 	MessageKindSystem MessageKind = "system"
 	MessageKindEvent  MessageKind = "event"
 )
+
+type Actor struct {
+	ID    string
+	Label string
+	Roles []simplerbac.Role
+}
+
+func (a Actor) Resolved() Actor {
+	if strings.TrimSpace(a.ID) == "" {
+		a.ID = strings.TrimSpace(a.Label)
+	}
+	if strings.TrimSpace(a.Label) == "" {
+		a.Label = strings.TrimSpace(a.ID)
+	}
+	return a
+}
+
+func (a Actor) HasRole(role simplerbac.Role) bool {
+	if role == "" {
+		return false
+	}
+	for _, candidate := range a.Roles {
+		if candidate == role {
+			return true
+		}
+	}
+	return false
+}
 
 type Chat struct {
 	ID        modeluuid.UUID `gorm:"primaryKey"`

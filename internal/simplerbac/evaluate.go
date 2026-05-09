@@ -2,35 +2,26 @@ package simplerbac
 
 import "fmt"
 
-type Actor struct {
-	Roles []Role
+type Subject interface {
+	HasRole(role Role) bool
 }
 
-func (a Actor) Has(role Role) bool {
-	if role == "" {
-		return false
-	}
-	for _, candidate := range a.Roles {
-		if candidate == role {
-			return true
-		}
-	}
-	return false
-}
-
-func (r Rule) Allows(actor Actor) bool {
+func (r Rule) Allows(actor Subject) bool {
 	if len(r.AnyRole) == 0 {
 		return true
 	}
+	if actor == nil {
+		return false
+	}
 	for _, role := range r.AnyRole {
-		if actor.Has(role) {
+		if actor.HasRole(role) {
 			return true
 		}
 	}
 	return false
 }
 
-func (r Rule) Check(actor Actor) error {
+func (r Rule) Check(actor Subject) error {
 	if r.Allows(actor) {
 		return nil
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
@@ -31,23 +32,7 @@ type ChatTarget struct {
 	ProviderThreadID string
 }
 
-type Actor struct {
-	ID    string
-	Label string
-	Roles []simplerbac.Role
-}
-
-func (a Actor) HasRole(role simplerbac.Role) bool {
-	if role == "" {
-		return false
-	}
-	for _, candidate := range a.Roles {
-		if candidate == role {
-			return true
-		}
-	}
-	return false
-}
+type Actor = coremodel.Actor
 
 type InboundPayload struct {
 	ProviderType      string
@@ -61,13 +46,7 @@ type InboundPayload struct {
 }
 
 func (p InboundPayload) ResolvedActor() Actor {
-	actor := p.Actor
-	if strings.TrimSpace(actor.ID) == "" {
-		actor.ID = strings.TrimSpace(actor.Label)
-	}
-	if strings.TrimSpace(actor.Label) == "" {
-		actor.Label = strings.TrimSpace(actor.ID)
-	}
+	actor := p.Actor.Resolved()
 	if len(actor.Roles) == 0 {
 		actor.Roles = []simplerbac.Role{simplerbac.RoleUser}
 	}

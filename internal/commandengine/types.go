@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
@@ -17,10 +18,7 @@ const (
 	SourceHostbridge Source = "hostbridge"
 )
 
-type Actor struct {
-	ID    string
-	Roles []simplerbac.Role
-}
+type Actor = coremodel.Actor
 
 type Context struct {
 	Source    Source

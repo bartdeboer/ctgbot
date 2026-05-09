@@ -615,7 +615,7 @@ func boundCLIComponentSurfaces(loaded *component.Loaded) []commandset.BoundSurfa
 }
 
 func printComponentCLIHelp(definitions []commandengine.Definition) {
-	patterns := commandset.CanonicalRoutePatterns(definitions, simplerbac.Actor{
+	patterns := commandset.CanonicalRoutePatterns(definitions, coremodel.Actor{
 		Roles: []simplerbac.Role{simplerbac.RoleRoot},
 	})
 	if len(patterns) == 0 {

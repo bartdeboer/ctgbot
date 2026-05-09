@@ -6,7 +6,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
-	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 )
 
 type BoundSurface struct {
@@ -237,7 +237,7 @@ func filterDefinitionsBySource(definitions []commandengine.Definition, source co
 	return out
 }
 
-func CanonicalRoutePatterns(definitions []commandengine.Definition, actor simplerbac.Actor) []string {
+func CanonicalRoutePatterns(definitions []commandengine.Definition, actor coremodel.Actor) []string {
 	out := make([]string, 0, len(definitions))
 	seen := map[string]struct{}{}
 	for _, definition := range definitions {

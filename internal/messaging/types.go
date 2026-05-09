@@ -1,26 +1,14 @@
 package messaging
 
 import (
-	"strings"
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
-func ResolveActor(actor message.Actor) message.Actor {
-	if strings.TrimSpace(actor.ID) == "" {
-		actor.ID = strings.TrimSpace(actor.Label)
-	}
-	if strings.TrimSpace(actor.Label) == "" {
-		actor.Label = strings.TrimSpace(actor.ID)
-	}
-	if len(actor.Roles) == 0 {
-		actor.Roles = []simplerbac.Role{simplerbac.RoleUser}
-	}
-	return actor
+func ResolveActor(actor coremodel.Actor) coremodel.Actor {
+	return actor.Resolved()
 }
 
 type ThreadSummary struct {
