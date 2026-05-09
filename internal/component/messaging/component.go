@@ -23,7 +23,7 @@ const Type = "messaging"
 
 type Component struct {
 	Service *messagingdomain.Service
-	Inbound component.ResolvedInboundAsyncHandler
+	Inbound component.ResolvedInboundQueuer
 }
 
 var _ component.Component = (*Component)(nil)
@@ -51,7 +51,7 @@ func RegisterGobTypes(register func(any)) {
 	register(messageSendCommand{})
 }
 
-func New(service *messagingdomain.Service, inbound component.ResolvedInboundAsyncHandler) *Component {
+func New(service *messagingdomain.Service, inbound component.ResolvedInboundQueuer) *Component {
 	return &Component{Service: service, Inbound: inbound}
 }
 
@@ -181,7 +181,7 @@ func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Req
 		inbound.Metadata = append(inbound.Metadata, "source_thread_id="+sourceThreadID.String())
 		inbound.PromptContext.ReplyHint = "hostbridge thread " + sourceThreadID.String() + " message send <message>"
 	}
-	if err := c.Inbound.HandleResolvedInboundAsync(ctx, inbound); err != nil {
+	if err := c.Inbound.QueueResolvedInbound(ctx, inbound); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "message queued"}, nil

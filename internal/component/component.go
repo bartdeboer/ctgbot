@@ -135,8 +135,8 @@ type ResolvedInboundHandler interface {
 	HandleResolvedInbound(ctx context.Context, inbound ResolvedInbound) (DeliveryResult, error)
 }
 
-type ResolvedInboundAsyncHandler interface {
-	HandleResolvedInboundAsync(ctx context.Context, inbound ResolvedInbound) error
+type ResolvedInboundQueuer interface {
+	QueueResolvedInbound(ctx context.Context, inbound ResolvedInbound) error
 }
 
 type InboundSource interface {

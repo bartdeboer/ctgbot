@@ -26,10 +26,10 @@ type Authenticator interface {
 type Server struct {
 	Service       *messaging.Service
 	Authenticator Authenticator
-	Inbound       component.ResolvedInboundAsyncHandler
+	Inbound       component.ResolvedInboundQueuer
 }
 
-func New(service *messaging.Service, auth Authenticator, inbound component.ResolvedInboundAsyncHandler) *Server {
+func New(service *messaging.Service, auth Authenticator, inbound component.ResolvedInboundQueuer) *Server {
 	return &Server{
 		Service:       service,
 		Authenticator: auth,
@@ -151,7 +151,7 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request, threa
 		writeError(w, http.StatusBadRequest, "target chat is disabled: "+targetChat.ID.String())
 		return
 	}
-	if err := s.Inbound.HandleResolvedInboundAsync(r.Context(), component.ResolvedInbound{
+	if err := s.Inbound.QueueResolvedInbound(r.Context(), component.ResolvedInbound{
 		Chat:   *targetChat,
 		Thread: *targetThread,
 		Payload: message.InboundPayload{

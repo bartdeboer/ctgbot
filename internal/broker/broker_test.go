@@ -633,7 +633,7 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 	}
 }
 
-func TestHandleResolvedInboundAsyncQueuesWhileThreadBusy(t *testing.T) {
+func TestQueueResolvedInboundQueuesWhileThreadBusy(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	messengerRecorder := &fakeMessengerRecorder{}
@@ -684,7 +684,7 @@ func TestHandleResolvedInboundAsyncQueuesWhileThreadBusy(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	start := time.Now()
-	err = b.HandleResolvedInboundAsync(ctx, component.ResolvedInbound{
+	err = b.QueueResolvedInbound(ctx, component.ResolvedInbound{
 		Chat:   *chat,
 		Thread: *thread,
 		Payload: message.InboundPayload{
@@ -699,10 +699,10 @@ func TestHandleResolvedInboundAsyncQueuesWhileThreadBusy(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("HandleResolvedInboundAsync() error = %v", err)
+		t.Fatalf("QueueResolvedInbound() error = %v", err)
 	}
 	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
-		t.Fatalf("HandleResolvedInboundAsync() took %v, want immediate return", elapsed)
+		t.Fatalf("QueueResolvedInbound() took %v, want immediate return", elapsed)
 	}
 	cancel()
 
