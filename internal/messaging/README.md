@@ -14,6 +14,13 @@ This is intentionally **not** a component package.
 The messaging service is a core ctgbot subsystem. Components may expose it
 later, but they should not own the protocol or the core access model.
 
+It should also prefer the existing repo vocabulary where possible:
+
+- reuse `message.Actor` for authenticated caller identity
+- reuse `coremodel.ThreadMessage` for persisted thread messages
+- introduce new types only where we genuinely need a new service-level shape,
+  such as `ThreadSummary`
+
 ## Scope
 
 The first stable service shape is intentionally small:

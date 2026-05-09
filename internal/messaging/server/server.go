@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
@@ -17,7 +18,7 @@ const (
 )
 
 type Authenticator interface {
-	Authenticate(r *http.Request) (messaging.Actor, error)
+	Authenticate(r *http.Request) (message.Actor, error)
 }
 
 type Server struct {
@@ -139,21 +140,21 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request, threa
 	writeJSON(w, http.StatusAccepted, result)
 }
 
-func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (messaging.Actor, bool) {
+func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (message.Actor, bool) {
 	if s.Service == nil {
 		writeError(w, http.StatusNotImplemented, "messaging service not configured")
-		return messaging.Actor{}, false
+		return message.Actor{}, false
 	}
 	if s.Authenticator == nil {
 		writeError(w, http.StatusUnauthorized, "missing authenticator")
-		return messaging.Actor{}, false
+		return message.Actor{}, false
 	}
 	actor, err := s.Authenticator.Authenticate(r)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, err.Error())
-		return messaging.Actor{}, false
+		return message.Actor{}, false
 	}
-	return actor.Resolved(), true
+	return messaging.ResolveActor(actor), true
 }
 
 func splitThreadPath(path string) (modeluuid.UUID, string, error) {
@@ -198,21 +199,21 @@ func writeError(w http.ResponseWriter, status int, text string) {
 
 type StaticTokenAuthenticator struct {
 	Token string
-	Actor messaging.Actor
+	Actor message.Actor
 }
 
-func (a StaticTokenAuthenticator) Authenticate(r *http.Request) (messaging.Actor, error) {
+func (a StaticTokenAuthenticator) Authenticate(r *http.Request) (message.Actor, error) {
 	if r == nil {
-		return messaging.Actor{}, fmt.Errorf("missing request")
+		return message.Actor{}, fmt.Errorf("missing request")
 	}
 	token := bearerToken(r.Header.Get("Authorization"))
 	if strings.TrimSpace(a.Token) == "" {
-		return messaging.Actor{}, fmt.Errorf("messaging auth not configured")
+		return message.Actor{}, fmt.Errorf("messaging auth not configured")
 	}
 	if token != strings.TrimSpace(a.Token) {
-		return messaging.Actor{}, fmt.Errorf("unauthorized")
+		return message.Actor{}, fmt.Errorf("unauthorized")
 	}
-	return a.Actor.Resolved(), nil
+	return messaging.ResolveActor(a.Actor), nil
 }
 
 func bearerToken(authorization string) string {

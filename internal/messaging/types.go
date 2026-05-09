@@ -5,36 +5,22 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
-type ActorKind string
-
-const (
-	ActorKindHuman  ActorKind = "human"
-	ActorKindAgent  ActorKind = "agent"
-	ActorKindClient ActorKind = "client"
-)
-
-type Actor struct {
-	ID    string
-	Label string
-	Kind  ActorKind
-	Roles []simplerbac.Role
-}
-
-func (a Actor) Resolved() Actor {
-	if strings.TrimSpace(a.ID) == "" {
-		a.ID = strings.TrimSpace(a.Label)
+func ResolveActor(actor message.Actor) message.Actor {
+	if strings.TrimSpace(actor.ID) == "" {
+		actor.ID = strings.TrimSpace(actor.Label)
 	}
-	if strings.TrimSpace(a.Label) == "" {
-		a.Label = strings.TrimSpace(a.ID)
+	if strings.TrimSpace(actor.Label) == "" {
+		actor.Label = strings.TrimSpace(actor.ID)
 	}
-	if strings.TrimSpace(string(a.Kind)) == "" {
-		a.Kind = ActorKindClient
+	if len(actor.Roles) == 0 {
+		actor.Roles = []simplerbac.Role{simplerbac.RoleUser}
 	}
-	return a
+	return actor
 }
 
 type ThreadSummary struct {
@@ -44,19 +30,6 @@ type ThreadSummary struct {
 	ThreadLabel     string         `json:"thread_label"`
 	LastMessageAt   time.Time      `json:"last_message_at"`
 	LastMessageText string         `json:"last_message_text"`
-}
-
-type MessageRecord struct {
-	ID          modeluuid.UUID             `json:"id"`
-	ChatID      modeluuid.UUID             `json:"chat_id"`
-	ThreadID    modeluuid.UUID             `json:"thread_id"`
-	ComponentID modeluuid.UUID             `json:"component_id"`
-	Direction   coremodel.MessageDirection `json:"direction"`
-	Kind        coremodel.MessageKind      `json:"kind"`
-	ActorID     string                     `json:"actor_id"`
-	ActorLabel  string                     `json:"actor_label"`
-	Text        string                     `json:"text"`
-	CreatedAt   time.Time                  `json:"created_at"`
 }
 
 type ListThreadsRequest struct {
@@ -70,8 +43,8 @@ type ListMessagesRequest struct {
 }
 
 type MessagePage struct {
-	Messages   []MessageRecord `json:"messages"`
-	NextCursor string          `json:"next_cursor,omitempty"`
+	Messages   []coremodel.ThreadMessage `json:"messages"`
+	NextCursor string                    `json:"next_cursor,omitempty"`
 }
 
 type SendMessageRequest struct {
@@ -79,5 +52,5 @@ type SendMessageRequest struct {
 }
 
 type SendMessageResult struct {
-	Message MessageRecord `json:"message"`
+	Message coremodel.ThreadMessage `json:"message"`
 }
