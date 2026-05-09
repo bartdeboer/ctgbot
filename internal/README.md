@@ -14,6 +14,7 @@ The current direction is:
 - chats carry workspace context
 - broker wires source, relay, agent, and command roles per chat
 - mutable per-thread component settings belong in `ThreadComponentState`
+- thread-oriented remote/local client groundwork lives in `internal/messaging`
 
 ## Core model
 
@@ -124,6 +125,15 @@ Broker owns:
 - handing turns to agent components
 - relaying outbound payloads
 - resolving the effective workspace for a chat turn
+
+Messaging groundwork owns:
+
+- actor-oriented thread listing
+- actor-oriented thread message fetch/send contracts
+- a shared service shape for:
+  - hostbridge adapters
+  - remote HTTP clients
+  - future web clients
 
 Broker does not own:
 

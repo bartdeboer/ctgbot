@@ -1,0 +1,103 @@
+# Messaging Groundwork
+
+This package is the groundwork for thread-oriented messaging clients.
+
+The main idea is:
+
+- a remote client acts like a regular ctgbot thread participant
+- a local hostbridge client can use the same service shape in-proc
+- future web clients can use the same HTTP API
+- agent-facing command surfaces can be thin adapters over the same service
+
+This is intentionally **not** a component package.
+
+The messaging service is a core ctgbot subsystem. Components may expose it
+later, but they should not own the protocol or the core access model.
+
+## Scope
+
+The first stable service shape is intentionally small:
+
+- `ListThreads`
+- `ListMessages`
+- `SendMessage`
+
+Everything else should build on top of that.
+
+## Layers
+
+The intended layering is:
+
+1. `internal/messaging`
+   - actor model
+   - service contract
+   - request/response types
+2. `internal/messaging/server`
+   - HTTP + JSON transport
+   - request authentication
+   - path/query decoding
+3. adapters
+   - hostbridge commands
+   - future `ctgbotmessaging` companion CLI
+   - possible agent/component command surface later
+
+## Actor Model
+
+Messaging clients should be modeled as authenticated actors.
+
+Examples:
+
+- human operator
+- local agent
+- remote agent
+- future web client
+
+The service should not care whether a caller arrived through hostbridge,
+HTTP, or a browser session. It should only care about the resolved actor
+identity and permissions.
+
+## Current Command Shape
+
+The command shape we are grounding this around is:
+
+- `thread list`
+- `thread <threadID> message list [--cursor <cursor>]`
+- `thread <threadID> message send <message>`
+
+Those commands should be thin adapters over the same core service used by
+the HTTP API.
+
+## Current HTTP Shape
+
+The first HTTP shape is:
+
+- `GET /v1/threads`
+- `GET /v1/threads/<threadID>/messages?cursor=<cursor>&limit=<limit>`
+- `POST /v1/threads/<threadID>/messages`
+
+The API is deliberately thread-centric rather than component-centric.
+
+## Authentication
+
+The likely first authentication shape is bearer tokens.
+
+That is enough groundwork for:
+
+- local companion clients
+- remote LAN clients
+- future web session backends
+
+OAuth or browser login can be added later on top of the same service.
+
+## Non-goals for this pass
+
+This groundwork does **not** try to solve:
+
+- push delivery
+- reply routing between instances
+- mailbox replication
+- websocket streaming
+- component command surfaces
+- UI design
+
+Those can follow once the core service shape feels right.
