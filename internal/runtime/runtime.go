@@ -15,9 +15,10 @@ type Home struct {
 }
 
 type BindConfig struct {
-	Image string   `json:"image"`
-	Env   []string `json:"env"`
-	GPUs  string   `json:"gpus"`
+	Image   string   `json:"image"`
+	Env     []string `json:"env"`
+	GPUs    string   `json:"gpus"`
+	Seccomp string   `json:"seccomp"`
 }
 
 type Status struct {

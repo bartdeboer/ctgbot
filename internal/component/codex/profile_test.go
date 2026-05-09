@@ -75,6 +75,7 @@ func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(homePath, runtimepkg.ConfigFilename), []byte(`{
   "image": "ctgbot-codex:gpu",
   "gpus": "all",
+  "seccomp": "unconfined",
   "env": ["FOO=bar"]
 }`), 0o644); err != nil {
 			t.Fatalf("WriteFile(runtime.json) error = %v", err)
@@ -113,6 +114,9 @@ func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 		}
 		if got, want := factory.config.GPUs, "all"; got != want {
 			t.Fatalf("bind gpus = %q, want %q", got, want)
+		}
+		if got, want := factory.config.Seccomp, "unconfined"; got != want {
+			t.Fatalf("bind seccomp = %q, want %q", got, want)
 		}
 		settings, err := componentValue.resolveThreadSettings(context.Background(), &coremodel.Thread{})
 		if err != nil {

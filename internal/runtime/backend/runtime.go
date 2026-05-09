@@ -121,7 +121,11 @@ func (r *Runtime) Start(ctx context.Context) (runtimepkg.Status, error) {
 		return runtimepkg.Status{}, err
 	}
 	if state == containerengine.StateMissing {
-		if _, err := r.containers.Create(ctx, r.containerSpec()); err != nil {
+		spec, err := r.containerSpec()
+		if err != nil {
+			return runtimepkg.Status{}, err
+		}
+		if _, err := r.containers.Create(ctx, spec); err != nil {
 			return runtimepkg.Status{}, err
 		}
 		state = containerengine.StateCreated
@@ -164,18 +168,23 @@ func (r *Runtime) container() *containerengine.Container {
 	return r.containers.Container(r.containerName())
 }
 
-func (r *Runtime) containerSpec() containerengine.ContainerSpec {
+func (r *Runtime) containerSpec() (containerengine.ContainerSpec, error) {
+	securityOpts, err := containerengine.SeccompSecurityOpts(r.config.Seccomp)
+	if err != nil {
+		return containerengine.ContainerSpec{}, err
+	}
 	env := append([]string{}, r.config.Env...)
 	env = append(env, r.service.Env...)
 	return containerengine.ContainerSpec{
-		Name:   r.containerName(),
-		Image:  strings.TrimSpace(r.config.Image),
-		GPUs:   strings.TrimSpace(r.config.GPUs),
-		Ports:  append([]string{}, r.service.Ports...),
-		Env:    env,
-		Mounts: append([]containerengine.Mount{}, r.service.Mounts...),
-		Cmd:    append([]string{}, r.service.Cmd...),
-	}
+		Name:         r.containerName(),
+		Image:        strings.TrimSpace(r.config.Image),
+		GPUs:         strings.TrimSpace(r.config.GPUs),
+		Ports:        append([]string{}, r.service.Ports...),
+		Env:          env,
+		Mounts:       append([]containerengine.Mount{}, r.service.Mounts...),
+		SecurityOpts: securityOpts,
+		Cmd:          append([]string{}, r.service.Cmd...),
+	}, nil
 }
 
 func (r *Runtime) waitReady(ctx context.Context) error {

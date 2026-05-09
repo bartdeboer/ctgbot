@@ -71,8 +71,8 @@ instead.
 Each component home may contain:
 
 - auth and local state owned by the component
-- `runtime.json` for generic runtime settings such as `image`, `gpus`, and
-  `env`
+- `runtime.json` for generic runtime settings such as `image`, `gpus`,
+  `seccomp`, and `env`
 - `component.json` for component-specific static config
 
 When a component is resolved:
