@@ -159,6 +159,11 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request, threa
 			Text:         message.TextMessage{Text: req.Text},
 			Actor:        messaging.ResolveActor(actor),
 		},
+		PromptContext: &component.InboundPromptContext{
+			Kind:      "Remote thread message",
+			FromLabel: actor.Label,
+			FromID:    actor.ID,
+		},
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

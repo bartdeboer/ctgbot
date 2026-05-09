@@ -574,6 +574,12 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 			Actor:        actor,
 		},
 		Metadata: []string{"source_thread_id=11111111-2222-3333-4444-555555555555"},
+		PromptContext: &component.InboundPromptContext{
+			Kind:      "Internal thread message",
+			FromLabel: actor.Label,
+			FromID:    actor.ID,
+			ReplyHint: "hostbridge thread 11111111-2222-3333-4444-555555555555 message send <message>",
+		},
 	})
 	if err != nil {
 		t.Fatalf("HandleResolvedInbound() error = %v", err)

@@ -171,9 +171,15 @@ func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Req
 			Text:         message.TextMessage{Text: strings.TrimSpace(cmd.Text)},
 			Actor:        actor,
 		},
+		PromptContext: &component.InboundPromptContext{
+			Kind:      "Internal thread message",
+			FromLabel: actor.Label,
+			FromID:    actor.ID,
+		},
 	}
 	if !sourceThreadID.IsNull() {
 		inbound.Metadata = append(inbound.Metadata, "source_thread_id="+sourceThreadID.String())
+		inbound.PromptContext.ReplyHint = "hostbridge thread " + sourceThreadID.String() + " message send <message>"
 	}
 	result, err := c.Inbound.HandleResolvedInbound(ctx, inbound)
 	if err != nil {

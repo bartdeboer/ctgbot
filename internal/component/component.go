@@ -109,13 +109,21 @@ type InboundEvent struct {
 
 type InboundEmitter func(ctx context.Context, event InboundEvent) error
 
+type InboundPromptContext struct {
+	Kind      string
+	FromLabel string
+	FromID    string
+	ReplyHint string
+}
+
 type ResolvedInbound struct {
-	Chat        coremodel.Chat
-	Thread      coremodel.Thread
-	ComponentID modeluuid.UUID
-	ExternalID  string
-	Payload     message.InboundPayload
-	Metadata    []string
+	Chat          coremodel.Chat
+	Thread        coremodel.Thread
+	ComponentID   modeluuid.UUID
+	ExternalID    string
+	Payload       message.InboundPayload
+	Metadata      []string
+	PromptContext *InboundPromptContext
 }
 
 type DeliveryResult struct {
