@@ -29,6 +29,7 @@ func LoadBindConfig(homePath string) (BindConfig, error) {
 func (c BindConfig) Clean() BindConfig {
 	c.Image = strings.TrimSpace(c.Image)
 	c.GPUs = strings.TrimSpace(c.GPUs)
+	c.Seccomp = strings.ToLower(strings.TrimSpace(c.Seccomp))
 	c.Env = cleanEnv(c.Env)
 	return c
 }

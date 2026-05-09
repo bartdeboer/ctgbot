@@ -89,6 +89,58 @@ func TestSandboxPropagatesConfiguredGPUs(t *testing.T) {
 	}
 }
 
+func TestSandboxUsesDockerDefaultSeccompByDefault(t *testing.T) {
+	root := t.TempDir()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
+	registration := coremodel.Component{Type: "mockagent", Name: "default", Runtime: "docker"}
+	home := factory.ComponentHome(registration)
+	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
+
+	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+
+	if len(sandbox.SecurityOpts) != 0 {
+		t.Fatalf("SecurityOpts = %#v, want Docker default", sandbox.SecurityOpts)
+	}
+}
+
+func TestSandboxPropagatesConfiguredUnconfinedSeccomp(t *testing.T) {
+	root := t.TempDir()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
+	registration := coremodel.Component{Type: "mockagent", Name: "default", Runtime: "docker"}
+	home := factory.ComponentHome(registration)
+	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{Seccomp: "unconfined"}).(*Runtime)
+
+	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+
+	if got := sandbox.SecurityOpts; len(got) != 1 || got[0] != "seccomp=unconfined" {
+		t.Fatalf("SecurityOpts = %#v, want seccomp=unconfined", got)
+	}
+}
+
+func TestSandboxRejectsUnsupportedSeccompMode(t *testing.T) {
+	root := t.TempDir()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
+	registration := coremodel.Component{Type: "mockagent", Name: "default", Runtime: "docker"}
+	home := factory.ComponentHome(registration)
+	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{Seccomp: "strict"}).(*Runtime)
+
+	_, _, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	if err == nil {
+		t.Fatal("sandbox() error = nil, want unsupported seccomp error")
+	}
+	if !strings.Contains(err.Error(), "unsupported docker seccomp mode") {
+		t.Fatalf("sandbox() error = %v, want unsupported seccomp mode", err)
+	}
+}
+
 type fakeSandboxManager struct{}
 
 func (fakeSandboxManager) CreateSandbox(spec *sandboxengine.SandboxSpec) *sandboxengine.Sandbox {

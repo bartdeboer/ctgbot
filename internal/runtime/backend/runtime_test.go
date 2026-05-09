@@ -27,9 +27,10 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 		coremodel.Component{Type: "llamacpp", Name: "qwen3-q5"},
 		runtimepkg.Home{Path: "/state/components/llamacpp/qwen3-q5"},
 		runtimepkg.BindConfig{
-			Image: "llama:test",
-			GPUs:  "all",
-			Env:   []string{"RUNTIME=1"},
+			Image:   "llama:test",
+			GPUs:    "all",
+			Env:     []string{"RUNTIME=1"},
+			Seccomp: "unconfined",
 		},
 		ServiceSpec{
 			BaseURL:   "http://127.0.0.1:18080",
@@ -43,7 +44,10 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 		},
 	)
 
-	spec := runtime.containerSpec()
+	spec, err := runtime.containerSpec()
+	if err != nil {
+		t.Fatalf("containerSpec() error = %v", err)
+	}
 	if got, want := spec.Name, "ctgbot-backend-llamacpp-qwen3-q5"; got != want {
 		t.Fatalf("Name = %q, want %q", got, want)
 	}
@@ -55,6 +59,9 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 	}
 	if !slices.Equal(spec.Env, []string{"RUNTIME=1", "SERVICE=1"}) {
 		t.Fatalf("Env = %#v", spec.Env)
+	}
+	if !slices.Equal(spec.SecurityOpts, []string{"seccomp=unconfined"}) {
+		t.Fatalf("SecurityOpts = %#v", spec.SecurityOpts)
 	}
 	if !slices.Equal(spec.Ports, []string{"127.0.0.1:18080:8080"}) {
 		t.Fatalf("Ports = %#v", spec.Ports)

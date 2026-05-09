@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgebridge "github.com/bartdeboer/ctgbot/internal/hostbridge/bridge"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -63,6 +64,7 @@ func (f *Factory) Bind(
 	home runtimepkg.Home,
 	config runtimepkg.BindConfig,
 ) runtimepkg.Runtime {
+	config = config.Clean()
 	return &Runtime{
 		rootDir:      f.rootDir,
 		sandboxes:    f.sandboxes,
@@ -72,6 +74,7 @@ func (f *Factory) Bind(
 		image:        resolveImage(config.Image),
 		env:          append([]string{}, config.Env...),
 		gpus:         strings.TrimSpace(config.GPUs),
+		seccomp:      strings.TrimSpace(config.Seccomp),
 	}
 }
 
@@ -84,6 +87,7 @@ type Runtime struct {
 	image        string
 	env          []string
 	gpus         string
+	seccomp      string
 }
 
 func (r *Runtime) Kind() string {
@@ -255,6 +259,10 @@ func (r *Runtime) sandbox(
 	if r == nil || r.sandboxes == nil {
 		return nil, nil, fmt.Errorf("missing docker runtime")
 	}
+	securityOpts, err := containerengine.SeccompSecurityOpts(r.seccomp)
+	if err != nil {
+		return nil, nil, err
+	}
 	if threadID.IsNull() {
 		runtimeHomePath := r.RuntimeComponentHomePath()
 		spec := sandboxengine.NewBuilder(authSandboxName(r.registration)).
@@ -265,7 +273,7 @@ func (r *Runtime) sandbox(
 			GPUs(r.gpus).
 			Env(append([]string{}, r.env...)).
 			Mounts([]sandboxengine.Mount{{Source: r.home.Path, Target: runtimeHomePath}}).
-			SecurityOpts([]string{"seccomp=unconfined"}).
+			SecurityOpts(securityOpts).
 			AddHosts(sandboxAddHosts()).
 			Cmd([]string{"tail", "-f", "/dev/null"}).
 			Build()
@@ -306,7 +314,7 @@ func (r *Runtime) sandbox(
 		GPUs(r.gpus).
 		Env(env).
 		Mounts(mounts).
-		SecurityOpts([]string{"seccomp=unconfined"}).
+		SecurityOpts(securityOpts).
 		AddHosts(sandboxAddHosts()).
 		Cmd([]string{"tail", "-f", "/dev/null"}).
 		Build()
