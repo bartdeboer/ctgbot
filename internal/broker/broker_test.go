@@ -15,7 +15,6 @@ import (
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
-	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -566,17 +565,22 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 	}
 
 	actor := coremodel.Actor{ID: "thread:source", Label: "source thread"}
-	service := messaging.New(storage, b)
-	result, err := service.SendMessage(context.Background(), actor, thread.ID, messaging.SendMessageRequest{
-		Text: "hello from another thread",
+	result, err := b.HandleResolvedInbound(context.Background(), component.ResolvedInbound{
+		Chat:   *chat,
+		Thread: *thread,
+		Payload: message.InboundPayload{
+			ProviderType: "thread",
+			Text:         message.TextMessage{Text: "hello from another thread"},
+			Actor:        actor,
+		},
 	})
 	if err != nil {
-		t.Fatalf("SendMessage() error = %v", err)
+		t.Fatalf("HandleResolvedInbound() error = %v", err)
 	}
-	if result == nil {
-		t.Fatal("SendMessage() result = nil")
+	if result.Inbound == nil {
+		t.Fatal("HandleResolvedInbound() inbound = nil")
 	}
-	if got := strings.TrimSpace(result.Message.Text); got != "hello from another thread" {
+	if got := strings.TrimSpace(result.Inbound.Text); got != "hello from another thread" {
 		t.Fatalf("result message text = %q, want %q", got, "hello from another thread")
 	}
 

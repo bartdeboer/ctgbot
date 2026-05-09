@@ -7,9 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	brokerpkg "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
@@ -112,58 +110,6 @@ func (s *Service) ListMessages(ctx context.Context, actor coremodel.Actor, threa
 	return page, nil
 }
 
-func (s *Service) SendMessage(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req SendMessageRequest) (*SendMessageResult, error) {
-	if err := s.ensureStorage(); err != nil {
-		return nil, err
-	}
-	if err := s.ensureBroker(); err != nil {
-		return nil, err
-	}
-	actor = ResolveActor(actor)
-	if err := requireActor(actor); err != nil {
-		return nil, err
-	}
-	text := strings.TrimSpace(req.Text)
-	if text == "" {
-		return nil, fmt.Errorf("missing message")
-	}
-
-	targetThread, targetChat, err := s.loadThreadAndChat(ctx, threadID)
-	if err != nil {
-		return nil, err
-	}
-	if !targetChat.Enabled {
-		return nil, fmt.Errorf("target chat is disabled: %s", targetChat.ID)
-	}
-	if !req.SourceThreadID.IsNull() && req.SourceThreadID == targetThread.ID {
-		return nil, fmt.Errorf("cannot send thread message to the current thread")
-	}
-
-	inbound := brokerpkg.ResolvedInbound{
-		Chat:        *targetChat,
-		Thread:      *targetThread,
-		ComponentID: req.ComponentID,
-		ExternalID:  strings.TrimSpace(req.ExternalID),
-		Payload: message.InboundPayload{
-			ProviderType: "thread",
-			Text:         message.TextMessage{Text: text},
-			Actor:        actor,
-		},
-	}
-	if !req.SourceThreadID.IsNull() {
-		inbound.Metadata = append(inbound.Metadata, "source_thread_id="+req.SourceThreadID.String())
-	}
-
-	result, err := s.Broker.HandleResolvedInbound(ctx, inbound)
-	if err != nil {
-		return nil, err
-	}
-	if result.Inbound == nil {
-		return nil, nil
-	}
-	return &SendMessageResult{Message: *result.Inbound}, nil
-}
-
 func (s *Service) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
 	if err := s.ensureStorage(); err != nil {
 		return modeluuid.Nil, err
@@ -216,16 +162,17 @@ func (s *Service) ActorForThread(ctx context.Context, threadID modeluuid.UUID) (
 	}, nil
 }
 
+func (s *Service) ThreadTarget(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Chat, *coremodel.Thread, error) {
+	thread, chat, err := s.loadThreadAndChat(ctx, threadID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return chat, thread, nil
+}
+
 func (s *Service) ensureStorage() error {
 	if s == nil || s.Storage == nil {
 		return fmt.Errorf("missing messaging storage")
-	}
-	return nil
-}
-
-func (s *Service) ensureBroker() error {
-	if s == nil || s.Broker == nil {
-		return fmt.Errorf("missing messaging broker")
 	}
 	return nil
 }

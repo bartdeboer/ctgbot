@@ -109,6 +109,24 @@ type InboundEvent struct {
 
 type InboundEmitter func(ctx context.Context, event InboundEvent) error
 
+type ResolvedInbound struct {
+	Chat        coremodel.Chat
+	Thread      coremodel.Thread
+	ComponentID modeluuid.UUID
+	ExternalID  string
+	Payload     message.InboundPayload
+	Metadata    []string
+}
+
+type DeliveryResult struct {
+	Inbound  *coremodel.ThreadMessage
+	Outbound []coremodel.ThreadMessage
+}
+
+type ResolvedInboundHandler interface {
+	HandleResolvedInbound(ctx context.Context, inbound ResolvedInbound) (DeliveryResult, error)
+}
+
 type InboundSource interface {
 	Component
 	RunInbound(ctx context.Context, emit InboundEmitter) error

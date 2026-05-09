@@ -27,8 +27,9 @@ The first stable service shape is intentionally small:
 
 - `ListThreads`
 - `ListMessages`
-- `SendMessage`
+- thread target/ref resolution for adapters
 
+Thread-targeted writes still enter through broker resolved-inbound delivery.
 Everything else should build on top of that.
 
 ## Layers
@@ -37,7 +38,7 @@ The intended layering is:
 
 1. `internal/messaging`
    - actor model
-   - concrete domain service
+   - concrete read/query domain service
    - thread CRUD/query/ref helpers
    - request/response types
 2. `internal/httpapi`
@@ -83,12 +84,14 @@ The local split is now:
 
 - `internal/messaging`
   - list/query/cursor/ref logic
-  - send logic
 - broker
   - resolved inbound delivery
   - message commands
   - agent turn execution
   - relay of thread outputs
+- adapters
+  - build resolved inbound messages
+  - hand them to broker
 
 ## Current HTTP Shape
 

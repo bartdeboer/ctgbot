@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
@@ -24,12 +26,14 @@ type Authenticator interface {
 type Server struct {
 	Service       *messaging.Service
 	Authenticator Authenticator
+	Inbound       component.ResolvedInboundHandler
 }
 
-func New(service *messaging.Service, auth Authenticator) *Server {
+func New(service *messaging.Service, auth Authenticator, inbound component.ResolvedInboundHandler) *Server {
 	return &Server{
 		Service:       service,
 		Authenticator: auth,
+		Inbound:       inbound,
 	}
 }
 
@@ -122,7 +126,13 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request, threa
 	if !ok {
 		return
 	}
-	var req messaging.SendMessageRequest
+	if s.Inbound == nil {
+		writeError(w, http.StatusNotImplemented, "resolved inbound handler not configured")
+		return
+	}
+	var req struct {
+		Text string `json:"text"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "decode request body: "+err.Error())
 		return
@@ -132,12 +142,31 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request, threa
 		writeError(w, http.StatusBadRequest, "missing text")
 		return
 	}
-	result, err := s.Service.SendMessage(r.Context(), actor, threadID, req)
+	targetChat, targetThread, err := s.Service.ThreadTarget(r.Context(), threadID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusAccepted, result)
+	if !targetChat.Enabled {
+		writeError(w, http.StatusBadRequest, "target chat is disabled: "+targetChat.ID.String())
+		return
+	}
+	result, err := s.Inbound.HandleResolvedInbound(r.Context(), component.ResolvedInbound{
+		Chat:   *targetChat,
+		Thread: *targetThread,
+		Payload: message.InboundPayload{
+			ProviderType: "thread",
+			Text:         message.TextMessage{Text: req.Text},
+			Actor:        messaging.ResolveActor(actor),
+		},
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"message": result.Inbound,
+	})
 }
 
 func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (coremodel.Actor, bool) {

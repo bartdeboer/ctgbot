@@ -34,14 +34,3 @@ type MessagePage struct {
 	Messages   []coremodel.ThreadMessage `json:"messages"`
 	NextCursor string                    `json:"next_cursor,omitempty"`
 }
-
-type SendMessageRequest struct {
-	Text           string         `json:"text"`
-	SourceThreadID modeluuid.UUID `json:"-"`
-	ExternalID     string         `json:"-"`
-	ComponentID    modeluuid.UUID `json:"-"`
-}
-
-type SendMessageResult struct {
-	Message coremodel.ThreadMessage `json:"message"`
-}

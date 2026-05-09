@@ -1,11 +1,10 @@
 package messaging
 
 import (
-	brokerpkg "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 )
 
-// Service is the core thread-oriented messaging domain service.
+// Service is the core thread-oriented messaging read/query domain service.
 //
 // Different adapters should call this same service:
 //
@@ -15,12 +14,10 @@ import (
 // - future web clients
 type Service struct {
 	Storage repository.Storage
-	Broker  *brokerpkg.Broker
 }
 
-func New(storage repository.Storage, broker *brokerpkg.Broker) *Service {
+func New(storage repository.Storage) *Service {
 	return &Service{
 		Storage: storage,
-		Broker:  broker,
 	}
 }

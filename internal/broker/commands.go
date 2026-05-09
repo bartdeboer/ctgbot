@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	component "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -12,7 +13,7 @@ import (
 
 func (b *Broker) tryHandleMessageCommand(
 	ctx context.Context,
-	inbound ResolvedInbound,
+	inbound component.ResolvedInbound,
 	chat coremodel.Chat,
 	thread coremodel.Thread,
 	runtime *ChatRuntime,

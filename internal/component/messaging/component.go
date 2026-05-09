@@ -12,6 +12,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	messagingdomain "github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -22,6 +23,7 @@ const Type = "messaging"
 
 type Component struct {
 	Service *messagingdomain.Service
+	Inbound component.ResolvedInboundHandler
 }
 
 var _ component.Component = (*Component)(nil)
@@ -49,8 +51,8 @@ func RegisterGobTypes(register func(any)) {
 	register(messageSendCommand{})
 }
 
-func New(service *messagingdomain.Service) *Component {
-	return &Component{Service: service}
+func New(service *messagingdomain.Service, inbound component.ResolvedInboundHandler) *Component {
+	return &Component{Service: service, Inbound: inbound}
 }
 
 func (c *Component) Type() string { return Type }
@@ -134,13 +136,26 @@ func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Req
 	if c == nil || c.Service == nil {
 		return commandengine.Result{}, fmt.Errorf("missing messaging service")
 	}
+	if c.Inbound == nil {
+		return commandengine.Result{}, fmt.Errorf("missing resolved inbound handler")
+	}
 	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
+	targetChat, targetThread, err := c.Service.ThreadTarget(ctx, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if !targetChat.Enabled {
+		return commandengine.Result{}, fmt.Errorf("target chat is disabled: %s", targetChat.ID)
+	}
 	actor := req.Context.Actor.Resolved()
 	sourceThreadID := requestThreadID(req)
 	if !sourceThreadID.IsNull() {
+		if sourceThreadID == threadID {
+			return commandengine.Result{}, fmt.Errorf("cannot send thread message to the current thread")
+		}
 		threadActor, err := c.Service.ActorForThread(ctx, sourceThreadID)
 		if err != nil {
 			return commandengine.Result{}, err
@@ -148,18 +163,27 @@ func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Req
 		threadActor.Roles = append([]simplerbac.Role(nil), actor.Roles...)
 		actor = threadActor
 	}
-	result, err := c.Service.SendMessage(ctx, actor, threadID, messagingdomain.SendMessageRequest{
-		Text:           cmd.Text,
-		SourceThreadID: sourceThreadID,
-	})
+	inbound := component.ResolvedInbound{
+		Chat:   *targetChat,
+		Thread: *targetThread,
+		Payload: message.InboundPayload{
+			ProviderType: "thread",
+			Text:         message.TextMessage{Text: strings.TrimSpace(cmd.Text)},
+			Actor:        actor,
+		},
+	}
+	if !sourceThreadID.IsNull() {
+		inbound.Metadata = append(inbound.Metadata, "source_thread_id="+sourceThreadID.String())
+	}
+	result, err := c.Inbound.HandleResolvedInbound(ctx, inbound)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if result == nil {
+	if result.Inbound == nil {
 		return commandengine.Result{Text: "message sent"}, nil
 	}
 	return commandengine.Result{
-		Text: "message sent\nmessage_id: " + result.Message.ID.String(),
+		Text: "message sent\nmessage_id: " + result.Inbound.ID.String(),
 	}, nil
 }
 

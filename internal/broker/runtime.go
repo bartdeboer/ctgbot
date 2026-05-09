@@ -6,21 +6,21 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	component "github.com/bartdeboer/ctgbot/internal/component"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
+	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
+	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
-
-type GlobalSurfaceResolver interface {
-	ResolveGlobalCommandSurfaces(ctx context.Context, b *Broker) ([]component.CommandSurface, error)
-}
 
 func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*ChatRuntime, error) {
 	workspace, err := b.Resolver.ResolveChatWorkspace(ctx, chat)
@@ -110,14 +110,18 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		runtimeWorkspace = workspace
 	}
 
-	if provider, ok := b.Resolver.(GlobalSurfaceResolver); ok {
-		surfaces, err := provider.ResolveGlobalCommandSurfaces(ctx, b)
+	globalSurfaces = append(globalSurfaces,
+		brokercomponent.New(b),
+		messagingcomponent.New(messaging.New(b.Storage), b),
+	)
+	if provider, ok := b.Resolver.(interface{ AppConfig() *appstate.Config }); ok {
+		configSurface, err := configcomponent.New(provider.AppConfig())
 		if err != nil {
 			return nil, err
 		}
-		globalSurfaces = append(globalSurfaces, surfaces...)
-	} else {
-		globalSurfaces = append(globalSurfaces, brokercomponent.New(b))
+		if configSurface != nil {
+			globalSurfaces = append(globalSurfaces, configSurface)
+		}
 	}
 
 	messageCommands, err := commandset.NewBoundEngineForSource(commandengine.SourceMessage, boundSurfaces, globalSurfaces...)

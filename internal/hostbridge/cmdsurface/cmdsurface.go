@@ -40,7 +40,7 @@ func Resolve(ref string) ResolvedSurfaceSet {
 func GlobalSurfaces() []componentpkg.CommandSurface {
 	return []componentpkg.CommandSurface{
 		brokercomponent.New(nil),
-		messagingcomponent.New(nil),
+		messagingcomponent.New(nil, nil),
 		(*configcomponent.Component)(nil),
 	}
 }

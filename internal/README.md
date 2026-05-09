@@ -129,12 +129,18 @@ Broker owns:
 Messaging groundwork owns:
 
 - actor-oriented thread listing
-- actor-oriented thread message fetch/send contracts
+- actor-oriented thread message fetch contracts
 - a shared service shape for:
   - hostbridge adapters
   - local `thread` commands
   - remote HTTP clients
   - future web clients
+
+Broker continues to own:
+
+- resolved inbound delivery for thread-targeted sends
+- message-command execution
+- agent turn execution
 
 Broker does not own:
 
