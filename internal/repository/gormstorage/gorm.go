@@ -21,6 +21,7 @@ type GORMStorage struct {
 	threads        *gormThreads
 	components     *gormComponents
 	chatComponents *gormChatComponents
+	inboundDrops   *gormInboundDrops
 	threadMappings *gormThreadComponentMappings
 	threadStates   *gormThreadComponentStates
 	messages       *gormMessages
@@ -38,6 +39,7 @@ func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
 		threads:        &gormThreads{db: db},
 		components:     &gormComponents{db: db},
 		chatComponents: &gormChatComponents{db: db},
+		inboundDrops:   &gormInboundDrops{db: db},
 		threadMappings: &gormThreadComponentMappings{db: db},
 		threadStates:   &gormThreadComponentStates{db: db},
 		messages:       &gormMessages{db: db},
@@ -51,6 +53,7 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.Thread{},
 		&coremodel.Component{},
 		&coremodel.ChatComponent{},
+		&coremodel.InboundDrop{},
 		&coremodel.ThreadComponentMapping{},
 		&coremodel.ThreadComponentState{},
 		&coremodel.ThreadMessage{},
@@ -74,6 +77,7 @@ func (s *GORMStorage) Chats() repository.ChatRepository                   { retu
 func (s *GORMStorage) Threads() repository.ThreadRepository               { return s.threads }
 func (s *GORMStorage) Components() repository.ComponentRepository         { return s.components }
 func (s *GORMStorage) ChatComponents() repository.ChatComponentRepository { return s.chatComponents }
+func (s *GORMStorage) InboundDrops() repository.InboundDropRepository     { return s.inboundDrops }
 func (s *GORMStorage) ThreadComponentMappings() repository.ThreadComponentMappingRepository {
 	return s.threadMappings
 }
@@ -248,6 +252,60 @@ func (r *gormChatComponents) FindByComponentRoleAndExternalChatID(ctx context.Co
 		return nil, nil
 	}
 	return &binding, nil
+}
+
+type gormInboundDrops struct{ db *gorm.DB }
+
+func (r *gormInboundDrops) Save(ctx context.Context, drop *coremodel.InboundDrop) error {
+	drop.ExternalChatID = clean(drop.ExternalChatID)
+	drop.ExternalThreadID = clean(drop.ExternalThreadID)
+	drop.ChatLabel = strings.TrimSpace(drop.ChatLabel)
+	drop.ActorID = clean(drop.ActorID)
+	drop.ActorLabel = strings.TrimSpace(drop.ActorLabel)
+	drop.LastTextPreview = strings.TrimSpace(drop.LastTextPreview)
+	if drop.ID.IsNull() {
+		existing, err := r.GetByComponentAndExternalChatID(ctx, drop.ComponentID, drop.ExternalChatID)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			drop.ID = existing.ID
+			if drop.FirstSeenAt.IsZero() {
+				drop.FirstSeenAt = existing.FirstSeenAt
+			}
+		}
+	}
+	ensureID(&drop.ID)
+	return r.db.WithContext(ctx).Save(drop).Error
+}
+
+func (r *gormInboundDrops) GetByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) (*coremodel.InboundDrop, error) {
+	var drop coremodel.InboundDrop
+	if err := first(r.db.WithContext(ctx).
+		Where("component_id = ? AND external_chat_id = ?", componentID, clean(externalChatID)).
+		First(&drop)); err != nil {
+		return nil, err
+	}
+	if drop.ID.IsNull() {
+		return nil, nil
+	}
+	return &drop, nil
+}
+
+func (r *gormInboundDrops) List(ctx context.Context) ([]coremodel.InboundDrop, error) {
+	var drops []coremodel.InboundDrop
+	err := r.db.WithContext(ctx).
+		Order("last_seen_at DESC").
+		Order("first_seen_at DESC").
+		Find(&drops).Error
+	return drops, err
+}
+
+func (r *gormInboundDrops) DeleteByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) error {
+	return r.db.WithContext(ctx).
+		Where("component_id = ? AND external_chat_id = ?", componentID, clean(externalChatID)).
+		Delete(&coremodel.InboundDrop{}).
+		Error
 }
 
 type gormThreadComponentMappings struct{ db *gorm.DB }

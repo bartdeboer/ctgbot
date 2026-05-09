@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
@@ -139,6 +141,133 @@ func TestComponentCommandRouteUsesBoundCLISurface(t *testing.T) {
 		})
 		if !strings.Contains(output, "quit requested") {
 			t.Fatalf("unexpected component command output: %q", output)
+		}
+	})
+}
+
+func TestChatDroppedListsUnresolvedInboundChats(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		_ = root
+		store, err := clistate.NewCwd("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("NewCwd: %v", err)
+		}
+
+		router := clir.New()
+		registerRuntimeRoutes(router, store, nil)
+
+		if err := router.Run(context.Background(), []string{"component", "register", "gmail", "--runtime", "local"}); err != nil {
+			t.Fatalf("component register: %v", err)
+		}
+
+		system, err := systempkg.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
+		if err != nil {
+			t.Fatalf("open runtime: %v", err)
+		}
+		registration, err := system.Storage.Components().GetByTypeAndName(context.Background(), "gmail", "gmail")
+		if err != nil {
+			t.Fatalf("GetByTypeAndName: %v", err)
+		}
+		if registration == nil {
+			t.Fatal("expected gmail registration")
+		}
+		if err := system.Storage.InboundDrops().Save(context.Background(), &coremodel.InboundDrop{
+			ComponentID:     registration.ID,
+			ExternalChatID:  "me",
+			ChatLabel:       "Inbox",
+			ActorLabel:      "Email",
+			LastTextPreview: "hello",
+			MessageCount:    1,
+			FirstSeenAt:     time.Now().Add(-time.Minute),
+			LastSeenAt:      time.Now(),
+		}); err != nil {
+			t.Fatalf("Save drop: %v", err)
+		}
+
+		output := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", "dropped"}); err != nil {
+				t.Fatalf("chat dropped: %v", err)
+			}
+		})
+		if !strings.Contains(output, "gmail") || !strings.Contains(output, "external_chat_id=me") || !strings.Contains(output, "preview=hello") {
+			t.Fatalf("unexpected dropped output: %q", output)
+		}
+	})
+}
+
+func TestChatBindCreatesEnabledChatAndAutoBindsSupportedRoles(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		_ = root
+		store, err := clistate.NewCwd("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("NewCwd: %v", err)
+		}
+		if err := store.PersistString("telegram.token", "test-token"); err != nil {
+			t.Fatalf("PersistString: %v", err)
+		}
+
+		router := clir.New()
+		registerRuntimeRoutes(router, store, nil)
+
+		if err := router.Run(context.Background(), []string{"component", "register", "telegram", "--runtime", "local"}); err != nil {
+			t.Fatalf("component register: %v", err)
+		}
+
+		system, err := systempkg.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
+		if err != nil {
+			t.Fatalf("open runtime: %v", err)
+		}
+		registration, err := system.Storage.Components().GetByTypeAndName(context.Background(), "telegram", "telegram")
+		if err != nil {
+			t.Fatalf("GetByTypeAndName: %v", err)
+		}
+		if registration == nil {
+			t.Fatal("expected telegram registration")
+		}
+		if err := system.Storage.InboundDrops().Save(context.Background(), &coremodel.InboundDrop{
+			ComponentID:     registration.ID,
+			ExternalChatID:  "chat-1",
+			ChatLabel:       "Team room",
+			LastTextPreview: "hello",
+			MessageCount:    1,
+			FirstSeenAt:     time.Now().Add(-time.Minute),
+			LastSeenAt:      time.Now(),
+		}); err != nil {
+			t.Fatalf("Save drop: %v", err)
+		}
+
+		output := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", "bind", "telegram", "chat-1"}); err != nil {
+				t.Fatalf("chat bind: %v", err)
+			}
+		})
+		if !strings.Contains(output, "chat bound") || !strings.Contains(output, "role=source") || !strings.Contains(output, "role=relay") {
+			t.Fatalf("unexpected bind output: %q", output)
+		}
+
+		chats, err := system.Storage.Chats().List(context.Background())
+		if err != nil {
+			t.Fatalf("list chats: %v", err)
+		}
+		if len(chats) != 1 {
+			t.Fatalf("chat count = %d, want 1", len(chats))
+		}
+		if got, want := chats[0].Label, "Team room"; got != want {
+			t.Fatalf("chat label = %q, want %q", got, want)
+		}
+		bindings, err := system.Storage.ChatComponents().ListEnabledByChatID(context.Background(), chats[0].ID)
+		if err != nil {
+			t.Fatalf("list bindings: %v", err)
+		}
+		if len(bindings) != 2 {
+			t.Fatalf("binding count = %d, want 2", len(bindings))
+		}
+		drops, err := system.Storage.InboundDrops().List(context.Background())
+		if err != nil {
+			t.Fatalf("list drops: %v", err)
+		}
+		if len(drops) != 0 {
+			t.Fatalf("drop count = %d, want 0", len(drops))
 		}
 	})
 }

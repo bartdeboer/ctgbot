@@ -303,6 +303,106 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			return nil
 		})
 
+		b.Handle("chat dropped", "List unresolved dropped inbound chats", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat dropped", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			system, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, "", "", nil)
+			if err != nil {
+				return err
+			}
+			drops, err := system.Storage.InboundDrops().List(req.Context())
+			if err != nil {
+				return err
+			}
+			if len(drops) == 0 {
+				fmt.Println("no dropped chats")
+				return nil
+			}
+			for _, drop := range drops {
+				ref := drop.ComponentID.String()
+				registration, err := system.Storage.Components().GetByID(req.Context(), drop.ComponentID)
+				if err != nil {
+					return err
+				}
+				if registration != nil {
+					ref = registration.Ref()
+				}
+				fmt.Printf("%s\texternal_chat_id=%s\tmessages=%d\tlast_seen=%s\tlabel=%s\tactor=%s\tpreview=%s\n",
+					ref,
+					drop.ExternalChatID,
+					drop.MessageCount,
+					drop.LastSeenAt.Format(time.RFC3339),
+					drop.ChatLabel,
+					displayActor(drop.ActorLabel, drop.ActorID),
+					drop.LastTextPreview,
+				)
+			}
+			return nil
+		})
+
+		b.Handle("chat bind <component> <externalChatID>", "Create an enabled chat for a dropped inbound external chat and bind the inbound component", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat bind", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
+			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
+			roleFlag := fs.String("role", "", "Binding role override (source, relay, or all)")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			system, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), "", nil)
+			if err != nil {
+				return err
+			}
+			componentRef := strings.TrimSpace(req.Params["component"])
+			externalChatID := strings.TrimSpace(req.Params["externalChatID"])
+			if externalChatID == "" {
+				return fmt.Errorf("missing external chat id")
+			}
+			registration, err := system.ResolveComponentRef(req.Context(), componentRef)
+			if err != nil {
+				return err
+			}
+			loaded, err := system.ResolveComponent(req.Context(), registration.ID)
+			if err != nil {
+				return err
+			}
+			roles, err := resolveChatBindRoles(loaded, strings.TrimSpace(*roleFlag))
+			if err != nil {
+				return err
+			}
+			label := strings.TrimSpace(strings.Join(fs.Args(), " "))
+			drop, err := system.Storage.InboundDrops().GetByComponentAndExternalChatID(req.Context(), registration.ID, externalChatID)
+			if err != nil {
+				return err
+			}
+			if label == "" && drop != nil {
+				label = strings.TrimSpace(drop.ChatLabel)
+			}
+			if label == "" {
+				label = externalChatID
+			}
+
+			chat, bindings, err := bindInboundChat(req.Context(), system.Storage, *registration, externalChatID, label, roles)
+			if err != nil {
+				return err
+			}
+			fmt.Println("chat bound")
+			fmt.Printf("chat_id: %s\n", chat.ID)
+			fmt.Printf("label: %s\n", chat.Label)
+			for _, binding := range bindings {
+				fmt.Printf("binding: role=%s component=%s external_chat_id=%s\n", binding.Role, registration.Ref(), binding.ExternalChatID)
+			}
+			return nil
+		})
+
 		b.Handle("chat <chatID> workspace set <workspace>", "Assign a named workspace to a chat", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("chat workspace set", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
@@ -525,6 +625,116 @@ func printComponentCLIHelp(definitions []commandengine.Definition) {
 	fmt.Println("available component commands:")
 	for _, pattern := range patterns {
 		fmt.Printf("  %s\n", pattern)
+	}
+}
+
+func resolveChatBindRoles(loaded *component.Loaded, roleFlag string) ([]coremodel.ChatComponentRole, error) {
+	if loaded == nil || loaded.Component == nil {
+		return nil, fmt.Errorf("missing loaded component")
+	}
+	_, hasSource := loaded.Component.(component.InboundSource)
+	_, hasRelay := loaded.Component.(component.OutboundRelay)
+
+	switch strings.TrimSpace(roleFlag) {
+	case "", "auto":
+		switch {
+		case hasSource && hasRelay:
+			return []coremodel.ChatComponentRole{coremodel.ChatComponentRoleSource, coremodel.ChatComponentRoleRelay}, nil
+		case hasSource:
+			return []coremodel.ChatComponentRole{coremodel.ChatComponentRoleSource}, nil
+		case hasRelay:
+			return []coremodel.ChatComponentRole{coremodel.ChatComponentRoleRelay}, nil
+		default:
+			return nil, fmt.Errorf("component %s does not support source or relay chat bindings", loaded.Registration.Ref())
+		}
+	case string(coremodel.ChatComponentRoleSource):
+		if !hasSource {
+			return nil, fmt.Errorf("component %s does not support source chat bindings", loaded.Registration.Ref())
+		}
+		return []coremodel.ChatComponentRole{coremodel.ChatComponentRoleSource}, nil
+	case string(coremodel.ChatComponentRoleRelay):
+		if !hasRelay {
+			return nil, fmt.Errorf("component %s does not support relay chat bindings", loaded.Registration.Ref())
+		}
+		return []coremodel.ChatComponentRole{coremodel.ChatComponentRoleRelay}, nil
+	case "all":
+		if !hasSource || !hasRelay {
+			return nil, fmt.Errorf("component %s does not support binding both source and relay roles", loaded.Registration.Ref())
+		}
+		return []coremodel.ChatComponentRole{coremodel.ChatComponentRoleSource, coremodel.ChatComponentRoleRelay}, nil
+	default:
+		return nil, fmt.Errorf("invalid bind role %q", roleFlag)
+	}
+}
+
+func bindInboundChat(ctx context.Context, storage repository.Storage, registration coremodel.Component, externalChatID string, label string, roles []coremodel.ChatComponentRole) (*coremodel.Chat, []coremodel.ChatComponent, error) {
+	if storage == nil {
+		return nil, nil, fmt.Errorf("missing storage")
+	}
+	externalChatID = strings.TrimSpace(externalChatID)
+	label = strings.TrimSpace(label)
+	if externalChatID == "" {
+		return nil, nil, fmt.Errorf("missing external chat id")
+	}
+	if label == "" {
+		label = externalChatID
+	}
+	if len(roles) == 0 {
+		return nil, nil, fmt.Errorf("missing chat bind roles")
+	}
+
+	var chat coremodel.Chat
+	var bindings []coremodel.ChatComponent
+	err := storage.Transaction(ctx, func(tx repository.Storage) error {
+		for _, role := range roles {
+			existing, err := tx.ChatComponents().FindByComponentRoleAndExternalChatID(ctx, registration.ID, role, externalChatID)
+			if err != nil {
+				return err
+			}
+			if existing != nil {
+				return fmt.Errorf("external chat %q is already bound to chat %s as %s", externalChatID, existing.ChatID, role)
+			}
+		}
+
+		chat = coremodel.Chat{
+			Label:   label,
+			Enabled: true,
+		}
+		if err := tx.Chats().Save(ctx, &chat); err != nil {
+			return err
+		}
+		bindings = make([]coremodel.ChatComponent, 0, len(roles))
+		for _, role := range roles {
+			binding := coremodel.ChatComponent{
+				ChatID:         chat.ID,
+				ComponentID:    registration.ID,
+				Role:           role,
+				ExternalChatID: externalChatID,
+				Enabled:        true,
+			}
+			if err := tx.ChatComponents().Save(ctx, &binding); err != nil {
+				return err
+			}
+			bindings = append(bindings, binding)
+		}
+		return tx.InboundDrops().DeleteByComponentAndExternalChatID(ctx, registration.ID, externalChatID)
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return &chat, bindings, nil
+}
+
+func displayActor(label string, id string) string {
+	label = strings.TrimSpace(label)
+	id = strings.TrimSpace(id)
+	switch {
+	case label != "" && id != "" && label != id:
+		return label + " (" + id + ")"
+	case label != "":
+		return label
+	default:
+		return id
 	}
 }
 

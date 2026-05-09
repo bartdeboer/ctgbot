@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ type MemoryStorage struct {
 	threads             map[modeluuid.UUID]coremodel.Thread
 	components          map[modeluuid.UUID]coremodel.Component
 	chatComponents      map[modeluuid.UUID]coremodel.ChatComponent
+	inboundDrops        map[modeluuid.UUID]coremodel.InboundDrop
 	threadComponentMaps map[modeluuid.UUID]coremodel.ThreadComponentMapping
 	threadComponentRows map[modeluuid.UUID]coremodel.ThreadComponentState
 	messages            map[modeluuid.UUID]coremodel.ThreadMessage
@@ -29,6 +31,7 @@ func NewMemory() *MemoryStorage {
 		threads:             map[modeluuid.UUID]coremodel.Thread{},
 		components:          map[modeluuid.UUID]coremodel.Component{},
 		chatComponents:      map[modeluuid.UUID]coremodel.ChatComponent{},
+		inboundDrops:        map[modeluuid.UUID]coremodel.InboundDrop{},
 		threadComponentMaps: map[modeluuid.UUID]coremodel.ThreadComponentMapping{},
 		threadComponentRows: map[modeluuid.UUID]coremodel.ThreadComponentState{},
 		messages:            map[modeluuid.UUID]coremodel.ThreadMessage{},
@@ -58,6 +61,7 @@ func (s *MemoryStorage) Chats() ChatRepository                   { return memory
 func (s *MemoryStorage) Threads() ThreadRepository               { return memoryThreads{s} }
 func (s *MemoryStorage) Components() ComponentRepository         { return memoryComponents{s} }
 func (s *MemoryStorage) ChatComponents() ChatComponentRepository { return memoryChatComponents{s} }
+func (s *MemoryStorage) InboundDrops() InboundDropRepository     { return memoryInboundDrops{s} }
 func (s *MemoryStorage) ThreadComponentMappings() ThreadComponentMappingRepository {
 	return memoryThreadMappings{s}
 }
@@ -80,6 +84,9 @@ func (s *MemoryStorage) cloneLocked() *MemoryStorage {
 	}
 	for k, v := range s.chatComponents {
 		clone.chatComponents[k] = v
+	}
+	for k, v := range s.inboundDrops {
+		clone.inboundDrops[k] = v
 	}
 	for k, v := range s.threadComponentMaps {
 		clone.threadComponentMaps[k] = v
@@ -104,6 +111,7 @@ func (s *MemoryStorage) replaceLocked(next *MemoryStorage) {
 	s.threads = next.threads
 	s.components = next.components
 	s.chatComponents = next.chatComponents
+	s.inboundDrops = next.inboundDrops
 	s.threadComponentMaps = next.threadComponentMaps
 	s.threadComponentRows = next.threadComponentRows
 	s.messages = next.messages
@@ -335,6 +343,92 @@ func (r memoryChatComponents) FindByComponentRoleAndExternalChatID(ctx context.C
 		}
 	}
 	return nil, nil
+}
+
+type memoryInboundDrops struct{ s *MemoryStorage }
+
+func (r memoryInboundDrops) Save(ctx context.Context, drop *coremodel.InboundDrop) error {
+	_ = ctx
+	if drop == nil {
+		return nil
+	}
+	drop.ExternalChatID = strings.TrimSpace(drop.ExternalChatID)
+	drop.ExternalThreadID = strings.TrimSpace(drop.ExternalThreadID)
+	drop.ChatLabel = strings.TrimSpace(drop.ChatLabel)
+	drop.ActorID = strings.TrimSpace(drop.ActorID)
+	drop.ActorLabel = strings.TrimSpace(drop.ActorLabel)
+	drop.LastTextPreview = strings.TrimSpace(drop.LastTextPreview)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	now := time.Now()
+	if drop.ID.IsNull() {
+		for id, existing := range r.s.inboundDrops {
+			if existing.ComponentID == drop.ComponentID && strings.TrimSpace(existing.ExternalChatID) == drop.ExternalChatID {
+				drop.ID = id
+				if drop.FirstSeenAt.IsZero() {
+					drop.FirstSeenAt = existing.FirstSeenAt
+				}
+				break
+			}
+		}
+	}
+	if drop.ID.IsNull() {
+		drop.ID = modeluuid.New()
+		if drop.FirstSeenAt.IsZero() {
+			drop.FirstSeenAt = now
+		}
+	} else if existing, ok := r.s.inboundDrops[drop.ID]; ok && drop.FirstSeenAt.IsZero() {
+		drop.FirstSeenAt = existing.FirstSeenAt
+	}
+	if drop.LastSeenAt.IsZero() {
+		drop.LastSeenAt = now
+	}
+	r.s.inboundDrops[drop.ID] = *drop
+	return nil
+}
+
+func (r memoryInboundDrops) GetByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) (*coremodel.InboundDrop, error) {
+	_ = ctx
+	externalChatID = strings.TrimSpace(externalChatID)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for _, drop := range r.s.inboundDrops {
+		if drop.ComponentID == componentID && strings.TrimSpace(drop.ExternalChatID) == externalChatID {
+			copy := drop
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r memoryInboundDrops) List(ctx context.Context) ([]coremodel.InboundDrop, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	out := make([]coremodel.InboundDrop, 0, len(r.s.inboundDrops))
+	for _, drop := range r.s.inboundDrops {
+		out = append(out, drop)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].LastSeenAt.Equal(out[j].LastSeenAt) {
+			return out[i].FirstSeenAt.After(out[j].FirstSeenAt)
+		}
+		return out[i].LastSeenAt.After(out[j].LastSeenAt)
+	})
+	return out, nil
+}
+
+func (r memoryInboundDrops) DeleteByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) error {
+	_ = ctx
+	externalChatID = strings.TrimSpace(externalChatID)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for id, drop := range r.s.inboundDrops {
+		if drop.ComponentID == componentID && strings.TrimSpace(drop.ExternalChatID) == externalChatID {
+			delete(r.s.inboundDrops, id)
+		}
+	}
+	return nil
 }
 
 type memoryThreadMappings struct{ s *MemoryStorage }

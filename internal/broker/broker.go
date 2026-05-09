@@ -82,22 +82,28 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		return EventOutcome{}, fmt.Errorf("missing inbound provider chat id")
 	}
 
-	sourceBinding, err := b.Storage.ChatComponents().FindByComponentRoleAndExternalChatID(ctx, event.ComponentID, coremodel.ChatComponentRoleSource, externalChatID)
+	decision, err := b.checkInboundFirewall(ctx, event)
 	if err != nil {
 		return EventOutcome{}, err
 	}
-	if sourceBinding == nil {
-		b.logf("inbound dropped component=%s external_chat=%q reason=no-source-binding", event.ComponentID, externalChatID)
+	if !decision.Allowed {
+		actor := event.Payload.ResolvedActor()
+		b.logf(
+			"inbound dropped component=%s external_chat=%q external_thread=%q reason=%s actor_id=%q actor_label=%q chat_label=%q preview=%q",
+			event.ComponentID,
+			externalChatID,
+			strings.TrimSpace(event.Payload.ProviderThreadID),
+			decision.Reason,
+			strings.TrimSpace(actor.ID),
+			strings.TrimSpace(actor.Label),
+			strings.TrimSpace(event.Payload.ChatLabel),
+			inboundPreview(event.Payload.Text.Text),
+		)
+		b.maybeHandleInboundFirewallInit(ctx, event, decision)
 		return EventOutcome{Dropped: true}, nil
 	}
-
-	chat, err := b.Storage.Chats().GetByID(ctx, sourceBinding.ChatID)
-	if err != nil {
-		return EventOutcome{}, err
-	}
-	if chat == nil || !chat.Enabled {
-		return EventOutcome{Dropped: true}, nil
-	}
+	sourceBinding := decision.SourceBinding
+	chat := decision.Chat
 
 	thread, err := b.Mapper.EnsureThread(ctx, *sourceBinding, strings.TrimSpace(event.Payload.ProviderThreadID))
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -167,6 +168,62 @@ func TestArtifactsAppendFailsWithoutArtifactDir(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "artifact storage directory is not configured") {
 		t.Fatalf("Artifacts().Append() error = %v", err)
+	}
+}
+
+func TestInboundDropsSaveListGetDelete(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	componentID := modeluuid.New()
+	now := time.Now()
+
+	drop := &coremodel.InboundDrop{
+		ComponentID:      componentID,
+		ExternalChatID:   "chat-1",
+		ExternalThreadID: "thread-9",
+		ChatLabel:        "New chat",
+		ActorID:          "bart",
+		ActorLabel:       "Bart",
+		LastTextPreview:  "hello",
+		MessageCount:     2,
+		FirstSeenAt:      now.Add(-time.Minute),
+		LastSeenAt:       now,
+	}
+	if err := store.InboundDrops().Save(ctx, drop); err != nil {
+		t.Fatalf("InboundDrops().Save() error = %v", err)
+	}
+	if drop.ID.IsNull() {
+		t.Fatal("InboundDrops().Save() did not assign ID")
+	}
+
+	loaded, err := store.InboundDrops().GetByComponentAndExternalChatID(ctx, componentID, "chat-1")
+	if err != nil {
+		t.Fatalf("InboundDrops().GetByComponentAndExternalChatID() error = %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("InboundDrops().GetByComponentAndExternalChatID() = nil, want row")
+	}
+	if got, want := loaded.MessageCount, int64(2); got != want {
+		t.Fatalf("MessageCount = %d, want %d", got, want)
+	}
+
+	list, err := store.InboundDrops().List(ctx)
+	if err != nil {
+		t.Fatalf("InboundDrops().List() error = %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("InboundDrops().List() len = %d, want 1", len(list))
+	}
+
+	if err := store.InboundDrops().DeleteByComponentAndExternalChatID(ctx, componentID, "chat-1"); err != nil {
+		t.Fatalf("InboundDrops().DeleteByComponentAndExternalChatID() error = %v", err)
+	}
+	loaded, err = store.InboundDrops().GetByComponentAndExternalChatID(ctx, componentID, "chat-1")
+	if err != nil {
+		t.Fatalf("InboundDrops().GetByComponentAndExternalChatID() after delete error = %v", err)
+	}
+	if loaded != nil {
+		t.Fatalf("InboundDrops().GetByComponentAndExternalChatID() after delete = %#v, want nil", loaded)
 	}
 }
 

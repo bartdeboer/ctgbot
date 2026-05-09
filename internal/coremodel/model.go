@@ -101,6 +101,20 @@ type ChatComponent struct {
 	UpdatedAt time.Time
 }
 
+type InboundDrop struct {
+	ID               modeluuid.UUID `gorm:"primaryKey"`
+	ComponentID      modeluuid.UUID `gorm:"index;uniqueIndex:idx_inbound_drop_external_chat"`
+	ExternalChatID   string         `gorm:"uniqueIndex:idx_inbound_drop_external_chat"`
+	ExternalThreadID string
+	ChatLabel        string
+	ActorID          string
+	ActorLabel       string
+	LastTextPreview  string
+	MessageCount     int64
+	FirstSeenAt      time.Time
+	LastSeenAt       time.Time
+}
+
 type ThreadComponentMapping struct {
 	ID                modeluuid.UUID `gorm:"primaryKey"`
 	ThreadID          modeluuid.UUID `gorm:"index;uniqueIndex:idx_thread_component_binding"`

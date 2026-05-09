@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -46,6 +47,61 @@ func TestMemoryThreadComponentStatesSaveGetDelete(t *testing.T) {
 	}
 	if loaded != nil {
 		t.Fatalf("GetByThreadAndComponent() after delete = %#v, want nil", loaded)
+	}
+}
+
+func TestMemoryInboundDropsSaveListGetDelete(t *testing.T) {
+	ctx := context.Background()
+	storage := NewMemory()
+	componentID := modeluuid.New()
+
+	drop := &coremodel.InboundDrop{
+		ComponentID:      componentID,
+		ExternalChatID:   "chat-1",
+		ExternalThreadID: "thread-9",
+		ChatLabel:        "New chat",
+		ActorID:          "bart",
+		ActorLabel:       "Bart",
+		LastTextPreview:  "hello",
+		MessageCount:     1,
+		FirstSeenAt:      time.Now().Add(-time.Minute),
+		LastSeenAt:       time.Now(),
+	}
+	if err := storage.InboundDrops().Save(ctx, drop); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	if drop.ID.IsNull() {
+		t.Fatal("Save() did not assign ID")
+	}
+
+	loaded, err := storage.InboundDrops().GetByComponentAndExternalChatID(ctx, componentID, "chat-1")
+	if err != nil {
+		t.Fatalf("GetByComponentAndExternalChatID() error = %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("GetByComponentAndExternalChatID() = nil, want row")
+	}
+	if got, want := loaded.ChatLabel, "New chat"; got != want {
+		t.Fatalf("ChatLabel = %q, want %q", got, want)
+	}
+
+	list, err := storage.InboundDrops().List(ctx)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("List() len = %d, want 1", len(list))
+	}
+
+	if err := storage.InboundDrops().DeleteByComponentAndExternalChatID(ctx, componentID, "chat-1"); err != nil {
+		t.Fatalf("DeleteByComponentAndExternalChatID() error = %v", err)
+	}
+	loaded, err = storage.InboundDrops().GetByComponentAndExternalChatID(ctx, componentID, "chat-1")
+	if err != nil {
+		t.Fatalf("GetByComponentAndExternalChatID() after delete error = %v", err)
+	}
+	if loaded != nil {
+		t.Fatalf("GetByComponentAndExternalChatID() after delete = %#v, want nil", loaded)
 	}
 }
 

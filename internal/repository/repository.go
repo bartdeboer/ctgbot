@@ -13,6 +13,7 @@ type Storage interface {
 	Threads() ThreadRepository
 	Components() ComponentRepository
 	ChatComponents() ChatComponentRepository
+	InboundDrops() InboundDropRepository
 	ThreadComponentMappings() ThreadComponentMappingRepository
 	ThreadComponentStates() ThreadComponentStateRepository
 	Messages() MessageRepository
@@ -44,6 +45,13 @@ type ChatComponentRepository interface {
 	GetByChatComponentRole(ctx context.Context, chatID modeluuid.UUID, componentID modeluuid.UUID, role coremodel.ChatComponentRole) (*coremodel.ChatComponent, error)
 	ListEnabledByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
 	FindByComponentRoleAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChatID string) (*coremodel.ChatComponent, error)
+}
+
+type InboundDropRepository interface {
+	Save(ctx context.Context, drop *coremodel.InboundDrop) error
+	GetByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) (*coremodel.InboundDrop, error)
+	List(ctx context.Context) ([]coremodel.InboundDrop, error)
+	DeleteByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) error
 }
 
 type ThreadComponentMappingRepository interface {

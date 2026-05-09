@@ -544,6 +544,185 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 	}
 }
 
+func TestHandleInboundDropsUnknownChatAndRecordsDrop(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentRecorder := &fakeAgentRecorder{}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	var logs []string
+	b := broker.New(storage, system, func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	})
+
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
+		ComponentID: telegram.ID,
+		ExternalID:  "msg-unknown",
+		Payload: message.InboundPayload{
+			ProviderType:      "telegram",
+			ProviderChatID:    "chat-new",
+			ProviderThreadID:  "thread-new",
+			ProviderMessageID: "msg-unknown",
+			ChatLabel:         "New chat",
+			Actor: message.Actor{
+				ID:    "bart",
+				Label: "Bart",
+				Roles: []simplerbac.Role{simplerbac.RoleUser},
+			},
+			Text: message.TextMessage{Text: "hello from new chat"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("HandleInbound() error = %v", err)
+	}
+	if !outcome.Dropped {
+		t.Fatal("expected unknown inbound chat to be dropped")
+	}
+	drops, err := storage.InboundDrops().List(context.Background())
+	if err != nil {
+		t.Fatalf("InboundDrops().List() error = %v", err)
+	}
+	if len(drops) != 1 {
+		t.Fatalf("drop count = %d, want 1", len(drops))
+	}
+	drop := drops[0]
+	if got, want := drop.ExternalChatID, "chat-new"; got != want {
+		t.Fatalf("ExternalChatID = %q, want %q", got, want)
+	}
+	if got, want := drop.MessageCount, int64(1); got != want {
+		t.Fatalf("MessageCount = %d, want %d", got, want)
+	}
+	if got, want := drop.LastTextPreview, "hello from new chat"; got != want {
+		t.Fatalf("LastTextPreview = %q, want %q", got, want)
+	}
+	if got := len(messengerRecorder.payloads); got != 0 {
+		t.Fatalf("relay payloads = %d, want 0", got)
+	}
+	if got := len(logs); got == 0 {
+		t.Fatal("expected drop log")
+	}
+	if logLine := logs[len(logs)-1]; !strings.Contains(logLine, `reason=no-source-binding`) || !strings.Contains(logLine, `external_chat="chat-new"`) || !strings.Contains(logLine, `preview="hello from new chat"`) {
+		t.Fatalf("drop log = %q", logLine)
+	}
+}
+
+func TestHandleInboundInitReplyGuidesUnknownChatActivation(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentRecorder := &fakeAgentRecorder{}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := broker.New(storage, system, nil)
+
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
+		ComponentID: telegram.ID,
+		ExternalID:  "msg-init",
+		Payload: message.InboundPayload{
+			ProviderType:      "telegram",
+			ProviderChatID:    "chat-new",
+			ProviderThreadID:  "thread-new",
+			ProviderMessageID: "msg-init",
+			ChatLabel:         "New chat",
+			Actor: message.Actor{
+				ID:    "bart",
+				Label: "Bart",
+				Roles: []simplerbac.Role{simplerbac.RoleUser},
+			},
+			Text: message.TextMessage{Text: "/init"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("HandleInbound() error = %v", err)
+	}
+	if !outcome.Dropped {
+		t.Fatal("expected /init from unknown chat to be dropped")
+	}
+	if got, want := len(messengerRecorder.payloads), 1; got != want {
+		t.Fatalf("relay payloads = %d, want %d", got, want)
+	}
+	reply := messengerRecorder.payloads[0].Text.Text
+	for _, want := range []string{
+		"chat is not bound",
+		"component: telegram",
+		"external_chat_id: chat-new",
+		`ctgbot chat bind telegram chat-new "New chat"`,
+	} {
+		if !strings.Contains(reply, want) {
+			t.Fatalf("init reply missing %q:\n%s", want, reply)
+		}
+	}
+}
+
+func TestHandleInboundInitReplyGuidesDisabledChatEnable(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentRecorder := &fakeAgentRecorder{}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := broker.New(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: false}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
+		ComponentID: telegram.ID,
+		ExternalID:  "msg-disabled",
+		Payload: message.InboundPayload{
+			ProviderType:      "telegram",
+			ProviderChatID:    "chat-1",
+			ProviderThreadID:  "thread-1",
+			ProviderMessageID: "msg-disabled",
+			Text:              message.TextMessage{Text: "/init"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("HandleInbound() error = %v", err)
+	}
+	if !outcome.Dropped {
+		t.Fatal("expected /init from disabled chat to be dropped")
+	}
+	if got, want := len(messengerRecorder.payloads), 1; got != want {
+		t.Fatalf("relay payloads = %d, want %d", got, want)
+	}
+	reply := messengerRecorder.payloads[0].Text.Text
+	want := "ctgbot config chat " + chat.ID.String() + " set chat.enabled true"
+	if !strings.Contains(reply, want) {
+		t.Fatalf("init reply missing %q:\n%s", want, reply)
+	}
+	drops, err := storage.InboundDrops().List(context.Background())
+	if err != nil {
+		t.Fatalf("InboundDrops().List() error = %v", err)
+	}
+	if len(drops) != 0 {
+		t.Fatalf("drop count = %d, want 0 for disabled known chat", len(drops))
+	}
+}
+
 func TestRunStartsEnabledInboundSources(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
