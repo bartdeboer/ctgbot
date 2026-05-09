@@ -2,12 +2,62 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
+
+func fixedUUID(last byte) modeluuid.UUID {
+	var id modeluuid.UUID
+	id[6] = last
+	return id
+}
+
+func TestMemoryThreadsShortIDs(t *testing.T) {
+	ctx := context.Background()
+	storage := NewMemory()
+	chatID := modeluuid.New()
+	first := fixedUUID(1)
+	second := fixedUUID(2)
+
+	for _, thread := range []*coremodel.Thread{
+		{ID: first, ChatID: chatID, Label: "first"},
+		{ID: second, ChatID: chatID, Label: "second"},
+	} {
+		if err := storage.Threads().Save(ctx, thread); err != nil {
+			t.Fatalf("Threads().Save() error = %v", err)
+		}
+	}
+
+	shortID, err := storage.Threads().GetShortID(ctx, first, 1)
+	if err != nil {
+		t.Fatalf("Threads().GetShortID() error = %v", err)
+	}
+	if !strings.HasPrefix(first.String(), shortID) {
+		t.Fatalf("short ID %q is not a prefix of %s", shortID, first)
+	}
+	if shortID == first.String() {
+		t.Fatalf("short ID = full ID %q, want shortest unique prefix", shortID)
+	}
+
+	resolved, err := storage.Threads().ResolveShortID(ctx, shortID)
+	if err != nil {
+		t.Fatalf("Threads().ResolveShortID() error = %v", err)
+	}
+	if resolved != first {
+		t.Fatalf("resolved = %s, want %s", resolved, first)
+	}
+
+	_, err = storage.Threads().ResolveShortID(ctx, "0")
+	var ambiguous *ShortIDAmbiguousError
+	if !errors.As(err, &ambiguous) {
+		t.Fatalf("ResolveShortID(\"0\") error = %v, want ambiguous", err)
+	}
+}
 
 func TestMemoryThreadComponentStatesSaveGetDelete(t *testing.T) {
 	ctx := context.Background()

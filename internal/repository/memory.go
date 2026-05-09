@@ -209,6 +209,28 @@ func (r memoryThreads) ListByChatID(ctx context.Context, chatID modeluuid.UUID) 
 	return out, nil
 }
 
+func (r memoryThreads) GetShortID(ctx context.Context, threadID modeluuid.UUID, minLength int) (string, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	return ShortIDFor(threadID, memoryThreadIDs(r.s.threads), minLength)
+}
+
+func (r memoryThreads) ResolveShortID(ctx context.Context, ref string) (modeluuid.UUID, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	return ResolveShortID(ref, memoryThreadIDs(r.s.threads))
+}
+
+func memoryThreadIDs(threads map[modeluuid.UUID]coremodel.Thread) []modeluuid.UUID {
+	ids := make([]modeluuid.UUID, 0, len(threads))
+	for id := range threads {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 type memoryComponents struct{ s *MemoryStorage }
 
 func (r memoryComponents) Save(ctx context.Context, component *coremodel.Component) error {

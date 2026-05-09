@@ -13,6 +13,7 @@ func ResolveActor(actor coremodel.Actor) coremodel.Actor {
 
 type ThreadSummary struct {
 	ID              modeluuid.UUID `json:"id"`
+	ShortID         string         `json:"short_id"`
 	ChatID          modeluuid.UUID `json:"chat_id"`
 	ChatLabel       string         `json:"chat_label"`
 	ThreadLabel     string         `json:"thread_label"`

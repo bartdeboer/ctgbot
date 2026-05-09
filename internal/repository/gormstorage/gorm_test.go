@@ -81,6 +81,48 @@ func TestTransactionCommitsOnSuccess(t *testing.T) {
 	}
 }
 
+func TestThreadsShortIDs(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	first := fixedUUID(1)
+	second := fixedUUID(2)
+
+	for _, thread := range []*coremodel.Thread{
+		{ID: first, ChatID: chatID, Label: "first"},
+		{ID: second, ChatID: chatID, Label: "second"},
+	} {
+		if err := store.Threads().Save(ctx, thread); err != nil {
+			t.Fatalf("Threads().Save() error = %v", err)
+		}
+	}
+
+	shortID, err := store.Threads().GetShortID(ctx, first, 1)
+	if err != nil {
+		t.Fatalf("Threads().GetShortID() error = %v", err)
+	}
+	if !strings.HasPrefix(first.String(), shortID) {
+		t.Fatalf("short ID %q is not a prefix of %s", shortID, first)
+	}
+	if shortID == first.String() {
+		t.Fatalf("short ID = full ID %q, want shortest unique prefix", shortID)
+	}
+
+	resolved, err := store.Threads().ResolveShortID(ctx, shortID)
+	if err != nil {
+		t.Fatalf("Threads().ResolveShortID() error = %v", err)
+	}
+	if resolved != first {
+		t.Fatalf("resolved = %s, want %s", resolved, first)
+	}
+
+	_, err = store.Threads().ResolveShortID(ctx, "0")
+	var ambiguous *repository.ShortIDAmbiguousError
+	if !errors.As(err, &ambiguous) {
+		t.Fatalf("ResolveShortID(\"0\") error = %v, want ambiguous", err)
+	}
+}
+
 func TestArtifactsStoreContentOnDiskOnly(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStoreWithArtifactDir(t)
@@ -240,6 +282,12 @@ func newTestStore(t *testing.T) *GORMStorage {
 		t.Fatalf("AutoMigrate() error = %v", err)
 	}
 	return store
+}
+
+func fixedUUID(last byte) modeluuid.UUID {
+	var id modeluuid.UUID
+	id[6] = last
+	return id
 }
 
 func newTestStoreWithArtifactDir(t *testing.T) *GORMStorage {

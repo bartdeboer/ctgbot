@@ -267,6 +267,10 @@ func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID m
 	})
 	lines := []string{"Recent threads:"}
 	for _, thread := range threads {
+		threadRef := strings.TrimSpace(thread.ShortID)
+		if threadRef == "" {
+			threadRef = thread.ID.String()
+		}
 		label := strings.TrimSpace(thread.ChatLabel)
 		if thread.ThreadLabel != "" {
 			if label != "" {
@@ -286,10 +290,10 @@ func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID m
 			last = last[:80]
 		}
 		if last == "" {
-			lines = append(lines, fmt.Sprintf("%s%s - %s", thread.ID.String(), marker, label))
+			lines = append(lines, fmt.Sprintf("%s%s - %s", threadRef, marker, label))
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("%s%s - %s - %s", thread.ID.String(), marker, label, last))
+		lines = append(lines, fmt.Sprintf("%s%s - %s - %s", threadRef, marker, label, last))
 	}
 	return strings.Join(lines, "\n")
 }

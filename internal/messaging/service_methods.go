@@ -9,6 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/repository"
 )
 
 func (s *Service) ListThreads(ctx context.Context, actor coremodel.Actor, req ListThreadsRequest) ([]ThreadSummary, error) {
@@ -131,24 +132,15 @@ func (s *Service) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.U
 		}
 	}
 
-	threads, err := s.threadSummaries(ctx, false)
-	if err != nil {
-		return modeluuid.Nil, err
+	threadID, err := s.Storage.Threads().ResolveShortID(ctx, ref)
+	if err == nil {
+		return threadID, nil
 	}
-	var matches []ThreadSummary
-	for _, thread := range threads {
-		if strings.HasPrefix(thread.ID.String(), ref) {
-			matches = append(matches, thread)
-		}
+	var ambiguous *repository.ShortIDAmbiguousError
+	if errors.As(err, &ambiguous) {
+		return modeluuid.Nil, s.ambiguousThreadRefError(ctx, ref, ambiguous.Candidates)
 	}
-	switch len(matches) {
-	case 0:
-		return modeluuid.Nil, fmt.Errorf("thread not found: %s", ref)
-	case 1:
-		return matches[0].ID, nil
-	default:
-		return modeluuid.Nil, ambiguousThreadRefError(ref, matches)
-	}
+	return modeluuid.Nil, fmt.Errorf("thread not found: %s", ref)
 }
 
 func (s *Service) ActorForThread(ctx context.Context, threadID modeluuid.UUID) (coremodel.Actor, error) {
@@ -213,6 +205,7 @@ func (s *Service) threadSummaries(ctx context.Context, activeOnly bool) ([]Threa
 				ChatLabel:   chat.Label,
 				ThreadLabel: thread.Label,
 			}
+			summary.ShortID = s.threadShortID(ctx, thread.ID)
 			if len(messages) > 0 {
 				last := messages[len(messages)-1]
 				summary.LastMessageAt = last.CreatedAt
@@ -235,7 +228,23 @@ func sortThreadSummaries(threads []ThreadSummary) {
 	})
 }
 
-func ambiguousThreadRefError(ref string, matches []ThreadSummary) error {
+func (s *Service) ambiguousThreadRefError(ctx context.Context, ref string, candidates []modeluuid.UUID) error {
+	threads, err := s.threadSummaries(ctx, false)
+	if err != nil {
+		return err
+	}
+	byID := map[modeluuid.UUID]ThreadSummary{}
+	for _, thread := range threads {
+		byID[thread.ID] = thread
+	}
+	matches := make([]ThreadSummary, 0, len(candidates))
+	for _, candidate := range candidates {
+		summary, ok := byID[candidate]
+		if !ok {
+			summary = ThreadSummary{ID: candidate, ShortID: candidate.String()}
+		}
+		matches = append(matches, summary)
+	}
 	sortThreadSummaries(matches)
 	lines := []string{
 		fmt.Sprintf("short thread ID %s is ambiguous", ref),
@@ -255,6 +264,14 @@ func ambiguousThreadRefError(ref string, matches []ThreadSummary) error {
 		lines = append(lines, fmt.Sprintf("  %s thread %s", match.ID.String(), label))
 	}
 	return errors.New(strings.Join(lines, "\n"))
+}
+
+func (s *Service) threadShortID(ctx context.Context, threadID modeluuid.UUID) string {
+	shortID, err := s.Storage.Threads().GetShortID(ctx, threadID, 6)
+	if err != nil {
+		return threadID.String()
+	}
+	return shortID
 }
 
 func (s *Service) loadThreadAndChat(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, *coremodel.Chat, error) {
