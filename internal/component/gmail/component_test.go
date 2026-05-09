@@ -2,45 +2,63 @@ package gmail
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	gmailapi "google.golang.org/api/gmail/v1"
 )
 
 func TestManagedFiles(t *testing.T) {
 	component := &Component{}
 	files := component.ManagedFiles()
-	if len(files) != 1 {
-		t.Fatalf("managed files len = %d, want 1", len(files))
+	if len(files) != 4 {
+		t.Fatalf("managed files len = %d, want 4", len(files))
 	}
-	if got, want := files[0].RelativePath, "token.json"; got != want {
-		t.Fatalf("RelativePath = %q, want %q", got, want)
+	paths := map[string]componentpkg.ManagedFile{}
+	for _, file := range files {
+		paths[file.RelativePath] = file
 	}
-	if !files[0].Required || !files[0].Sensitive {
-		t.Fatalf("unexpected managed file flags: %#v", files[0])
+	if !paths[TokenFilename].Required || !paths[TokenFilename].Sensitive {
+		t.Fatalf("token managed file flags = %#v", paths[TokenFilename])
+	}
+	if !paths[OAuthClientFilename].Sensitive {
+		t.Fatalf("oauth client managed file flags = %#v", paths[OAuthClientFilename])
+	}
+	if paths[ComponentConfigFilename].Required || paths[StateFilename].Required {
+		t.Fatalf("optional managed file flags: config=%#v state=%#v", paths[ComponentConfigFilename], paths[StateFilename])
 	}
 }
 
 func TestGetMessageRequiresServiceAndMessageID(t *testing.T) {
-	component := &Component{}
-	if _, err := component.GetMessage(context.Background(), "message-1"); err == nil {
-		t.Fatal("GetMessage() with nil service succeeded, want error")
+	component := &Component{registration: testRegistration()}
+	if _, err := component.GetMessage(context.Background(), "message-1"); err == nil || !isMissingAuthMaterial(err) {
+		t.Fatalf("GetMessage() error = %v, want missing auth material", err)
 	}
 }
 
 func TestInboundEventFromMessage(t *testing.T) {
-	component := &Component{componentID: modeluuid.New()}
+	component := &Component{componentID: modeluuid.New(), componentConfig: ComponentConfig{MailboxEmail: "work@example.com"}.withDefaults()}
 	message := &gmailapi.Message{
 		Id:       " msg-123 ",
 		ThreadId: " thread-456 ",
 		Snippet:  " hello from gmail ",
 		Payload: &gmailapi.MessagePart{
+			MimeType: "multipart/alternative",
 			Headers: []*gmailapi.MessagePartHeader{
 				{Name: "From", Value: " sender@example.com "},
+				{Name: "Subject", Value: " Test subject "},
 			},
+			Parts: []*gmailapi.MessagePart{{
+				MimeType: "text/plain",
+				Body:     &gmailapi.MessagePartBody{Data: base64.RawURLEncoding.EncodeToString([]byte("plain body"))},
+			}},
 		},
 	}
 
@@ -55,7 +73,7 @@ func TestInboundEventFromMessage(t *testing.T) {
 	if got, want := payload.ProviderType, Type; got != want {
 		t.Fatalf("ProviderType = %q, want %q", got, want)
 	}
-	if got, want := payload.ProviderChatID, DefaultUserID; got != want {
+	if got, want := payload.ProviderChatID, "work@example.com"; got != want {
 		t.Fatalf("ProviderChatID = %q, want %q", got, want)
 	}
 	if got, want := payload.ProviderThreadID, "thread-456"; got != want {
@@ -64,8 +82,10 @@ func TestInboundEventFromMessage(t *testing.T) {
 	if got, want := payload.ProviderMessageID, "msg-123"; got != want {
 		t.Fatalf("ProviderMessageID = %q, want %q", got, want)
 	}
-	if got, want := payload.Text.Text, "hello from gmail"; got != want {
-		t.Fatalf("Text = %q, want %q", got, want)
+	for _, want := range []string{"Subject: Test subject", "From: sender@example.com", "plain body"} {
+		if !strings.Contains(payload.Text.Text, want) {
+			t.Fatalf("Text = %q, want contains %q", payload.Text.Text, want)
+		}
 	}
 	actor := payload.ResolvedActor()
 	if got, want := actor.Label, "sender@example.com"; got != want {
@@ -92,14 +112,17 @@ func TestInboundEventFromNilMessageUsesDefaults(t *testing.T) {
 	}
 }
 
-func TestRunInboundSkeleton(t *testing.T) {
-	component := &Component{}
-	if err := component.RunInbound(context.Background(), func(ctx context.Context, event componentpkg.InboundEvent) error {
+func TestRunInboundUnauthenticatedWaitsForCancel(t *testing.T) {
+	component := &Component{registration: testRegistration()}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := component.RunInbound(ctx, func(ctx context.Context, event componentpkg.InboundEvent) error {
 		_ = ctx
 		_ = event
 		return nil
-	}); err == nil || !strings.Contains(err.Error(), "missing gmail service") {
-		t.Fatalf("RunInbound() error = %v, want missing gmail service", err)
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RunInbound() error = %v, want context.Canceled", err)
 	}
 }
 
@@ -119,4 +142,192 @@ func TestResolvedPayloadActorDefaultsToUserRole(t *testing.T) {
 	if len(actor.Roles) != 1 {
 		t.Fatalf("roles = %#v", actor.Roles)
 	}
+}
+
+func TestLoadComponentConfigDefaults(t *testing.T) {
+	config, err := loadComponentConfig(t.TempDir())
+	if err != nil {
+		t.Fatalf("loadComponentConfig() error = %v", err)
+	}
+	if got, want := config.UserID, DefaultUserID; got != want {
+		t.Fatalf("UserID = %q, want %q", got, want)
+	}
+	if got, want := config.pollInterval(), DefaultPollInterval; got != want {
+		t.Fatalf("pollInterval = %s, want %s", got, want)
+	}
+	for _, want := range []string{"SENT", "DRAFT", "SPAM", "TRASH"} {
+		if !contains(config.SkipLabels, want) {
+			t.Fatalf("SkipLabels = %#v, missing %s", config.SkipLabels, want)
+		}
+	}
+}
+
+func TestLoadComponentConfigIncludeSpamTrashStillSkipsSentAndDraft(t *testing.T) {
+	config := ComponentConfig{IncludeSpamTrash: true}.withDefaults()
+	if !contains(config.SkipLabels, "SENT") || !contains(config.SkipLabels, "DRAFT") {
+		t.Fatalf("SkipLabels = %#v, want SENT and DRAFT", config.SkipLabels)
+	}
+	if contains(config.SkipLabels, "SPAM") || contains(config.SkipLabels, "TRASH") {
+		t.Fatalf("SkipLabels = %#v, did not expect SPAM/TRASH", config.SkipLabels)
+	}
+}
+
+func TestEnsureStateBaselineDoesNotEmitBacklog(t *testing.T) {
+	component := testComponent(t)
+	client := &fakeGmailClient{profile: &gmailapi.Profile{EmailAddress: "work@example.com", HistoryId: 42}}
+	state, err := component.ensureStateBaseline(context.Background(), client)
+	if err != nil {
+		t.Fatalf("ensureStateBaseline() error = %v", err)
+	}
+	if got, want := state.HistoryID, uint64(42); got != want {
+		t.Fatalf("HistoryID = %d, want %d", got, want)
+	}
+	loaded, err := component.loadState()
+	if err != nil {
+		t.Fatalf("loadState() error = %v", err)
+	}
+	if got, want := loaded.MailboxEmail, "work@example.com"; got != want {
+		t.Fatalf("MailboxEmail = %q, want %q", got, want)
+	}
+}
+
+func TestPollOnceEmitsNewMessages(t *testing.T) {
+	component := testComponent(t)
+	client := &fakeGmailClient{
+		profile: &gmailapi.Profile{EmailAddress: "work@example.com", HistoryId: 42},
+		history: []*gmailapi.ListHistoryResponse{{
+			HistoryId: 43,
+			History: []*gmailapi.History{{
+				MessagesAdded: []*gmailapi.HistoryMessageAdded{{Message: &gmailapi.Message{Id: "m1"}}},
+			}},
+		}},
+		messages: map[string]*gmailapi.Message{
+			"m1": {Id: "m1", ThreadId: "t1", Snippet: "hello", Payload: &gmailapi.MessagePart{Headers: []*gmailapi.MessagePartHeader{{Name: "From", Value: "sender@example.com"}}}},
+		},
+	}
+	state := mailboxState{MailboxEmail: "work@example.com", HistoryID: 42}
+	var events []componentpkg.InboundEvent
+	if err := component.pollOnce(context.Background(), client, &state, func(ctx context.Context, event componentpkg.InboundEvent) error {
+		_ = ctx
+		events = append(events, event)
+		return nil
+	}); err != nil {
+		t.Fatalf("pollOnce() error = %v", err)
+	}
+	if got, want := len(events), 1; got != want {
+		t.Fatalf("events len = %d, want %d", got, want)
+	}
+	if got, want := events[0].ExternalID, "m1"; got != want {
+		t.Fatalf("ExternalID = %q, want %q", got, want)
+	}
+	if got, want := state.HistoryID, uint64(43); got != want {
+		t.Fatalf("HistoryID = %d, want %d", got, want)
+	}
+}
+
+func TestRunInboundRetriesAfterBaselineError(t *testing.T) {
+	component := testComponent(t)
+	component.componentConfig.PollInterval = time.Millisecond.String()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	historyCalled := make(chan struct{})
+	component.clientOverride = &fakeGmailClient{
+		profileErrors: []error{errors.New("temporary profile failure")},
+		profile:       &gmailapi.Profile{EmailAddress: "work@example.com", HistoryId: 42},
+		history: []*gmailapi.ListHistoryResponse{{
+			HistoryId: 43,
+		}},
+		onListHistory: func() {
+			select {
+			case historyCalled <- struct{}{}:
+			default:
+			}
+			cancel()
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- component.RunInbound(ctx, func(ctx context.Context, event componentpkg.InboundEvent) error {
+			_ = ctx
+			_ = event
+			return nil
+		})
+	}()
+
+	select {
+	case <-historyCalled:
+	case <-time.After(time.Second):
+		t.Fatal("RunInbound did not retry after baseline error")
+	}
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("RunInbound() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("RunInbound did not stop after context cancellation")
+	}
+}
+
+func testComponent(t *testing.T) *Component {
+	t.Helper()
+	return &Component{
+		registration:    testRegistration(),
+		componentID:     modeluuid.New(),
+		home:            runtimepkg.Home{Path: t.TempDir()},
+		UserID:          DefaultUserID,
+		componentConfig: ComponentConfig{}.withDefaults(),
+		mailboxEmail:    "work@example.com",
+	}
+}
+
+func testRegistration() coremodel.Component {
+	return coremodel.Component{Type: Type, Name: "work", ID: modeluuid.New()}
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+type fakeGmailClient struct {
+	profile       *gmailapi.Profile
+	profileErrors []error
+	history       []*gmailapi.ListHistoryResponse
+	messages      map[string]*gmailapi.Message
+	onListHistory func()
+}
+
+func (c *fakeGmailClient) GetProfile(ctx context.Context, userID string) (*gmailapi.Profile, error) {
+	_, _ = ctx, userID
+	if len(c.profileErrors) > 0 {
+		err := c.profileErrors[0]
+		c.profileErrors = c.profileErrors[1:]
+		return nil, err
+	}
+	return c.profile, nil
+}
+
+func (c *fakeGmailClient) ListHistory(ctx context.Context, userID string, startHistoryID uint64, pageToken string) (*gmailapi.ListHistoryResponse, error) {
+	_, _, _, _ = ctx, userID, startHistoryID, pageToken
+	if c.onListHistory != nil {
+		c.onListHistory()
+	}
+	if len(c.history) == 0 {
+		return &gmailapi.ListHistoryResponse{}, nil
+	}
+	response := c.history[0]
+	c.history = c.history[1:]
+	return response, nil
+}
+
+func (c *fakeGmailClient) GetMessage(ctx context.Context, userID string, messageID string) (*gmailapi.Message, error) {
+	_, _ = ctx, userID
+	return c.messages[messageID], nil
 }

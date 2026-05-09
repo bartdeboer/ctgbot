@@ -51,6 +51,30 @@ For a fresh runtime root, the normal shape is:
 7. Start the bot with:
    - `ctgbot run`
 
+## Gmail OAuth
+
+Gmail auth uses a deployment-provided Google OAuth Desktop client config at:
+
+```text
+<state-root>/google/oauth_client.json
+```
+
+Each Gmail component registration stores its own mailbox token and poll state in
+its component home, for example:
+
+```text
+<state-root>/components/gmail/work/token.json
+<state-root>/components/gmail/personal/token.json
+```
+
+Typical flow:
+
+```bash
+ctgbot component register gmail/work
+ctgbot component gmail/work auth
+ctgbot chat <chatID> component add source gmail/work
+```
+
 ## Component Homes
 
 Static per-component config now belongs in the component home:

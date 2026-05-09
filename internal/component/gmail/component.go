@@ -3,6 +3,7 @@ package gmail
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
@@ -21,6 +22,12 @@ const (
 	DefaultUserID        = "me"
 )
 
+type Options struct {
+	Service               *gmailapi.Service
+	OAuthClientConfigPath string
+	Logger                *log.Logger
+}
+
 func New(
 	ctx context.Context,
 	registration coremodel.Component,
@@ -29,55 +36,95 @@ func New(
 	storage repository.Storage,
 	service *gmailapi.Service,
 ) (component.Component, error) {
-	_, _, _, _, _ = ctx, runtime, home, storage, registration
-	return &Component{
-		componentID: registration.ID,
-		Service:     service,
-		UserID:      DefaultUserID,
-	}, nil
+	return NewWithOptions(ctx, registration, runtime, home, storage, Options{Service: service})
+}
+
+func NewWithOptions(
+	ctx context.Context,
+	registration coremodel.Component,
+	runtime runtimepkg.Factory,
+	home runtimepkg.Home,
+	storage repository.Storage,
+	options Options,
+) (component.Component, error) {
+	_, _, _ = ctx, runtime, storage
+	config, err := loadComponentConfig(home.Path)
+	if err != nil {
+		return nil, err
+	}
+	c := &Component{
+		registration:          registration,
+		componentID:           registration.ID,
+		home:                  home,
+		storage:               storage,
+		Service:               options.Service,
+		UserID:                config.UserID,
+		componentConfig:       config,
+		oauthClientConfigPath: strings.TrimSpace(options.OAuthClientConfigPath),
+		logger:                options.Logger,
+	}
+	if strings.TrimSpace(c.UserID) == "" {
+		c.UserID = DefaultUserID
+	}
+	if c.Service == nil {
+		service, err := c.serviceFromStoredToken(ctx)
+		if err != nil && !isMissingAuthMaterial(err) {
+			return nil, err
+		}
+		c.Service = service
+	}
+	if state, err := c.loadState(); err == nil {
+		c.mailboxEmail = strings.TrimSpace(state.MailboxEmail)
+	}
+	return c, nil
 }
 
 type Component struct {
-	componentID modeluuid.UUID
-	Service     *gmailapi.Service
-	UserID      string
+	registration coremodel.Component
+	componentID  modeluuid.UUID
+	home         runtimepkg.Home
+	storage      repository.Storage
+
+	Service *gmailapi.Service
+	UserID  string
+
+	componentConfig       ComponentConfig
+	oauthClientConfigPath string
+	mailboxEmail          string
+	logger                *log.Logger
+	clientOverride        gmailClient
 }
 
 var _ component.Component = (*Component)(nil)
 var _ component.InboundSource = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
+var _ component.Authenticator = (*Component)(nil)
+var _ component.AuthStatusReporter = (*Component)(nil)
+var _ component.SourceBindingDefaults = (*Component)(nil)
 
 func (c *Component) Type() string {
 	return Type
 }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {
-	return []component.ManagedFile{{
-		RelativePath: "token.json",
-		Required:     true,
-		Sensitive:    true,
-	}}
-}
-
-func (c *Component) RunInbound(ctx context.Context, emit component.InboundEmitter) error {
-	if c == nil || c.Service == nil {
-		return fmt.Errorf("missing gmail service")
+	return []component.ManagedFile{
+		{RelativePath: OAuthClientFilename, Required: false, Sensitive: true},
+		{RelativePath: TokenFilename, Required: true, Sensitive: true},
+		{RelativePath: ComponentConfigFilename, Required: false, Sensitive: false},
+		{RelativePath: StateFilename, Required: false, Sensitive: false},
 	}
-	if emit == nil {
-		return fmt.Errorf("missing inbound emitter")
-	}
-	return fmt.Errorf("gmail event polling is not implemented yet")
 }
 
 func (c *Component) GetMessage(ctx context.Context, messageID string) (*gmailapi.Message, error) {
-	if c == nil || c.Service == nil {
-		return nil, fmt.Errorf("missing gmail service")
+	client, err := c.client(ctx)
+	if err != nil {
+		return nil, err
 	}
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
 		return nil, fmt.Errorf("missing gmail message id")
 	}
-	return c.Service.Users.Messages.Get(c.userID(), messageID).Format("full").Context(ctx).Do()
+	return client.GetMessage(ctx, c.userID(), messageID)
 }
 
 func (c *Component) InboundEventFromMessage(gmailMessage *gmailapi.Message) component.InboundEvent {
@@ -86,7 +133,8 @@ func (c *Component) InboundEventFromMessage(gmailMessage *gmailapi.Message) comp
 			ComponentID: c.componentID,
 			Payload: message.InboundPayload{
 				ProviderType:   Type,
-				ProviderChatID: c.userID(),
+				ProviderChatID: c.providerChatID(),
+				ChatLabel:      c.providerChatID(),
 				Actor: message.Actor{
 					ID:    "email",
 					Label: "Email",
@@ -106,16 +154,17 @@ func (c *Component) InboundEventFromMessage(gmailMessage *gmailapi.Message) comp
 		ExternalID:  strings.TrimSpace(gmailMessage.Id),
 		Payload: message.InboundPayload{
 			ProviderType:      Type,
-			ProviderChatID:    c.userID(),
+			ProviderChatID:    c.providerChatID(),
 			ProviderThreadID:  strings.TrimSpace(gmailMessage.ThreadId),
 			ProviderMessageID: strings.TrimSpace(gmailMessage.Id),
+			ChatLabel:         c.providerChatID(),
 			Actor: message.Actor{
 				ID:    sender,
 				Label: sender,
 				Roles: []simplerbac.Role{simplerbac.RoleUser},
 			},
 			Text: message.TextMessage{
-				Text: strings.TrimSpace(gmailMessage.Snippet),
+				Text: emailPromptText(gmailMessage),
 			},
 		},
 	}
@@ -128,14 +177,25 @@ func (c *Component) userID() string {
 	return strings.TrimSpace(c.UserID)
 }
 
+func (c *Component) providerChatID() string {
+	if c == nil {
+		return DefaultUserID
+	}
+	if value := strings.TrimSpace(c.mailboxEmail); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(c.componentConfig.MailboxEmail); value != "" {
+		return value
+	}
+	return c.userID()
+}
+
 func senderLabel(message *gmailapi.Message) string {
-	if message == nil || message.Payload == nil {
-		return ""
+	return headerValue(message, "From")
+}
+
+func (c *Component) logf(format string, args ...any) {
+	if c != nil && c.logger != nil {
+		c.logger.Printf(format, args...)
 	}
-	for _, header := range message.Payload.Headers {
-		if strings.EqualFold(strings.TrimSpace(header.Name), "From") {
-			return strings.TrimSpace(header.Value)
-		}
-	}
-	return ""
 }

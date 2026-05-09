@@ -144,6 +144,14 @@ type InboundSource interface {
 	RunInbound(ctx context.Context, emit InboundEmitter) error
 }
 
+// SourceBindingDefaults lets source components provide their natural provider
+// chat identifier when an operator binds them to a ctgbot chat. Components that
+// cannot infer this value should not implement it.
+type SourceBindingDefaults interface {
+	Component
+	DefaultSourceExternalChatID(ctx context.Context) (string, error)
+}
+
 type OutboundRelay interface {
 	Component
 	Send(ctx context.Context, payload message.OutboundPayload) error

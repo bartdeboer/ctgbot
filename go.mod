@@ -8,6 +8,7 @@ require (
 	github.com/bartdeboer/go-clir v0.0.7
 	github.com/bartdeboer/go-clistate v0.0.6
 	github.com/go-telegram/bot v1.17.0
+	golang.org/x/oauth2 v0.31.0
 	google.golang.org/api v0.250.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
@@ -35,7 +36,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
 	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
-	golang.org/x/oauth2 v0.31.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250908214217-97024824d090 // indirect

@@ -477,7 +477,15 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 				return fmt.Errorf("parse chat id: %w", err)
 			}
 			role := coremodel.ChatComponentRole(strings.TrimSpace(req.Params["role"]))
-			binding, err := system.BindChatComponent(req.Context(), chatID, role, strings.TrimSpace(req.Params["component"]), strings.TrimSpace(*externalChatID))
+			componentRef := strings.TrimSpace(req.Params["component"])
+			externalChatIDValue := strings.TrimSpace(*externalChatID)
+			if externalChatIDValue == "" && role == coremodel.ChatComponentRoleSource {
+				externalChatIDValue, err = defaultSourceExternalChatID(req.Context(), system, componentRef)
+				if err != nil {
+					return err
+				}
+			}
+			binding, err := system.BindChatComponent(req.Context(), chatID, role, componentRef, externalChatIDValue)
 			if err != nil {
 				return err
 			}
@@ -542,6 +550,25 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			return nil
 		})
 	})
+}
+
+func defaultSourceExternalChatID(ctx context.Context, system *systempkg.System, componentRef string) (string, error) {
+	if system == nil {
+		return "", fmt.Errorf("missing system")
+	}
+	registration, err := system.ResolveComponentRef(ctx, componentRef)
+	if err != nil {
+		return "", err
+	}
+	loaded, err := system.ResolveComponent(ctx, registration.ID)
+	if err != nil {
+		return "", err
+	}
+	defaults, ok := loaded.Component.(component.SourceBindingDefaults)
+	if !ok {
+		return "", nil
+	}
+	return defaults.DefaultSourceExternalChatID(ctx)
 }
 
 func runComponentCLI(req *clir.Request, system *systempkg.System, registration *coremodel.Component, argv []string) error {
@@ -765,7 +792,7 @@ func newRuntimeRegistry(rtSystem *systempkg.System, telegramToken string, codexI
 		return nil, err
 	}
 	if err := registry.Add(gmail.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return gmail.New(ctx, registration, runtime, home, storage, nil)
+		return gmail.NewWithOptions(ctx, registration, runtime, home, storage, gmail.Options{OAuthClientConfigPath: filepath.Join(rtSystem.StateRoot, "google", "oauth_client.json"), Logger: rtSystem.Logger})
 	}); err != nil {
 		return nil, err
 	}
