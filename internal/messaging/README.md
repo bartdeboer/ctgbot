@@ -39,6 +39,7 @@ The intended layering is:
    - actor model
    - service contract
    - local in-proc implementation
+   - thread CRUD/query/ref helpers
    - request/response types
 2. `internal/messaging/server`
    - HTTP + JSON transport
@@ -78,6 +79,17 @@ the HTTP API.
 Today, the local `thread` command surface is already wired through broker
 message commands and hostbridge commands. The remote HTTP API is still
 groundwork only.
+
+The local split is now:
+
+- `internal/messaging`
+  - list/query/cursor/ref logic
+  - local send logic
+- broker
+  - resolved inbound delivery
+  - message commands
+  - agent turn execution
+  - relay of thread outputs
 
 ## Current HTTP Shape
 

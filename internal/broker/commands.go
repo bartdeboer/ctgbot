@@ -5,20 +5,20 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
-	component "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 func (b *Broker) tryHandleMessageCommand(
 	ctx context.Context,
-	event component.InboundEvent,
+	inbound messaging.ResolvedInbound,
 	chat coremodel.Chat,
 	thread coremodel.Thread,
 	runtime *ChatRuntime,
 ) (bool, []coremodel.ThreadMessage, error) {
-	argv, ok := commandArgv(event.Payload.Text.Text)
+	argv, ok := commandArgv(inbound.Payload.Text.Text)
 	if !ok {
 		return false, nil, nil
 	}
@@ -30,7 +30,7 @@ func (b *Broker) tryHandleMessageCommand(
 			commandengine.Request{
 				Context: commandengine.Context{
 					Source:   commandengine.SourceMessage,
-					Actor:    messageCommandActor(event.Payload),
+					Actor:    messageCommandActor(inbound.Payload),
 					ChatID:   chat.ID,
 					ThreadID: thread.ID,
 				},

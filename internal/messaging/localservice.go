@@ -1,4 +1,4 @@
-package broker
+package messaging
 
 import (
 	"context"
@@ -8,17 +8,30 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/messaging"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/repository"
 )
 
-var _ messaging.Service = (*Broker)(nil)
+type LocalService struct {
+	Storage   repository.Storage
+	Deliverer Deliverer
+}
 
-func (b *Broker) ListThreads(ctx context.Context, actor coremodel.Actor, req messaging.ListThreadsRequest) ([]messaging.ThreadSummary, error) {
-	if err := b.ensureReady(); err != nil {
+var _ LocalActions = (*LocalService)(nil)
+
+func NewLocalService(storage repository.Storage, deliverer Deliverer) *LocalService {
+	return &LocalService{
+		Storage:   storage,
+		Deliverer: deliverer,
+	}
+}
+
+func (s *LocalService) ListThreads(ctx context.Context, actor coremodel.Actor, req ListThreadsRequest) ([]ThreadSummary, error) {
+	if err := s.ensureStorage(); err != nil {
 		return nil, err
 	}
-	if err := requireMessagingActor(actor); err != nil {
+	if err := requireActor(actor); err != nil {
 		return nil, err
 	}
 
@@ -31,12 +44,12 @@ func (b *Broker) ListThreads(ctx context.Context, actor coremodel.Actor, req mes
 	}
 	query := strings.ToLower(strings.TrimSpace(req.Query))
 
-	threads, err := b.threadSummaries(ctx, true)
+	threads, err := s.threadSummaries(ctx, true)
 	if err != nil {
 		return nil, err
 	}
 	if query != "" {
-		filtered := make([]messaging.ThreadSummary, 0, len(threads))
+		filtered := make([]ThreadSummary, 0, len(threads))
 		for _, thread := range threads {
 			if threadMatchesQuery(thread, query) {
 				filtered = append(filtered, thread)
@@ -51,19 +64,19 @@ func (b *Broker) ListThreads(ctx context.Context, actor coremodel.Actor, req mes
 	return threads, nil
 }
 
-func (b *Broker) ListMessages(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req messaging.ListMessagesRequest) (messaging.MessagePage, error) {
-	if err := b.ensureReady(); err != nil {
-		return messaging.MessagePage{}, err
+func (s *LocalService) ListMessages(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req ListMessagesRequest) (MessagePage, error) {
+	if err := s.ensureStorage(); err != nil {
+		return MessagePage{}, err
 	}
-	if err := requireMessagingActor(actor); err != nil {
-		return messaging.MessagePage{}, err
+	if err := requireActor(actor); err != nil {
+		return MessagePage{}, err
 	}
-	thread, chat, err := b.loadThreadAndChat(ctx, threadID)
+	thread, chat, err := s.loadThreadAndChat(ctx, threadID)
 	if err != nil {
-		return messaging.MessagePage{}, err
+		return MessagePage{}, err
 	}
 	if !chat.Enabled {
-		return messaging.MessagePage{}, fmt.Errorf("thread chat is disabled: %s", chat.ID)
+		return MessagePage{}, fmt.Errorf("thread chat is disabled: %s", chat.ID)
 	}
 
 	limit := req.Limit
@@ -73,12 +86,12 @@ func (b *Broker) ListMessages(ctx context.Context, actor coremodel.Actor, thread
 	if limit > 200 {
 		limit = 200
 	}
-	messages, err := b.Storage.Messages().ListByThreadID(ctx, thread.ID)
+	messages, err := s.Storage.Messages().ListByThreadID(ctx, thread.ID)
 	if err != nil {
-		return messaging.MessagePage{}, err
+		return MessagePage{}, err
 	}
 	if len(messages) == 0 {
-		return messaging.MessagePage{}, nil
+		return MessagePage{}, nil
 	}
 
 	cursor := strings.TrimSpace(req.Cursor)
@@ -87,24 +100,24 @@ func (b *Broker) ListMessages(ctx context.Context, actor coremodel.Actor, thread
 		if len(messages) > limit {
 			start = len(messages) - limit
 		}
-		return messaging.MessagePage{
+		return MessagePage{
 			Messages: cloneThreadMessages(messages[start:]),
 		}, nil
 	}
 
 	index, err := resolveMessageCursor(messages, cursor)
 	if err != nil {
-		return messaging.MessagePage{}, err
+		return MessagePage{}, err
 	}
 	start = index + 1
 	if start >= len(messages) {
-		return messaging.MessagePage{Messages: []coremodel.ThreadMessage{}}, nil
+		return MessagePage{Messages: []coremodel.ThreadMessage{}}, nil
 	}
 	end := start + limit
 	if end > len(messages) {
 		end = len(messages)
 	}
-	page := messaging.MessagePage{
+	page := MessagePage{
 		Messages: cloneThreadMessages(messages[start:end]),
 	}
 	if end < len(messages) && len(page.Messages) > 0 {
@@ -113,12 +126,15 @@ func (b *Broker) ListMessages(ctx context.Context, actor coremodel.Actor, thread
 	return page, nil
 }
 
-func (b *Broker) SendMessage(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req messaging.SendMessageRequest) (*messaging.SendMessageResult, error) {
-	if err := b.ensureReady(); err != nil {
+func (s *LocalService) SendMessage(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req SendMessageRequest) (*SendMessageResult, error) {
+	if err := s.ensureStorage(); err != nil {
 		return nil, err
 	}
-	actor = actor.Resolved()
-	if err := requireMessagingActor(actor); err != nil {
+	if err := s.ensureDeliverer(); err != nil {
+		return nil, err
+	}
+	actor = ResolveActor(actor)
+	if err := requireActor(actor); err != nil {
 		return nil, err
 	}
 	text := strings.TrimSpace(req.Text)
@@ -126,7 +142,7 @@ func (b *Broker) SendMessage(ctx context.Context, actor coremodel.Actor, threadI
 		return nil, fmt.Errorf("missing message")
 	}
 
-	targetThread, targetChat, err := b.loadThreadAndChat(ctx, threadID)
+	targetThread, targetChat, err := s.loadThreadAndChat(ctx, threadID)
 	if err != nil {
 		return nil, err
 	}
@@ -137,19 +153,33 @@ func (b *Broker) SendMessage(ctx context.Context, actor coremodel.Actor, threadI
 		return nil, fmt.Errorf("cannot send thread message to the current thread")
 	}
 
-	var result *messaging.SendMessageResult
-	if err := b.Turns.Run(ctx, targetThread.ID, func() error {
-		var runErr error
-		result, runErr = b.sendMessagingThreadMessage(ctx, actor, *targetThread, *targetChat, req)
-		return runErr
-	}); err != nil {
+	inbound := ResolvedInbound{
+		Chat:        *targetChat,
+		Thread:      *targetThread,
+		ComponentID: req.ComponentID,
+		ExternalID:  strings.TrimSpace(req.ExternalID),
+		Payload: message.InboundPayload{
+			ProviderType: "thread",
+			Text:         message.TextMessage{Text: text},
+			Actor:        actor,
+		},
+	}
+	if !req.SourceThreadID.IsNull() {
+		inbound.Metadata = append(inbound.Metadata, "source_thread_id="+req.SourceThreadID.String())
+	}
+
+	result, err := s.Deliverer.HandleResolvedInbound(ctx, inbound)
+	if err != nil {
 		return nil, err
 	}
-	return result, nil
+	if result.Inbound == nil {
+		return nil, nil
+	}
+	return &SendMessageResult{Message: *result.Inbound}, nil
 }
 
-func (b *Broker) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
-	if err := b.ensureReady(); err != nil {
+func (s *LocalService) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
+	if err := s.ensureStorage(); err != nil {
 		return modeluuid.Nil, err
 	}
 	ref = strings.TrimSpace(ref)
@@ -160,7 +190,7 @@ func (b *Broker) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UU
 		return modeluuid.Nil, fmt.Errorf("current thread ref requires command context")
 	}
 	if parsed, err := modeluuid.Parse(ref); err == nil {
-		thread, err := b.Storage.Threads().GetByID(ctx, parsed)
+		thread, err := s.Storage.Threads().GetByID(ctx, parsed)
 		if err != nil {
 			return modeluuid.Nil, err
 		}
@@ -169,11 +199,11 @@ func (b *Broker) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UU
 		}
 	}
 
-	threads, err := b.threadSummaries(ctx, false)
+	threads, err := s.threadSummaries(ctx, false)
 	if err != nil {
 		return modeluuid.Nil, err
 	}
-	var matches []messaging.ThreadSummary
+	var matches []ThreadSummary
 	for _, thread := range threads {
 		if strings.HasPrefix(thread.ID.String(), ref) {
 			matches = append(matches, thread)
@@ -189,8 +219,8 @@ func (b *Broker) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UU
 	}
 }
 
-func (b *Broker) ActorForThread(ctx context.Context, threadID modeluuid.UUID) (coremodel.Actor, error) {
-	thread, chat, err := b.loadThreadAndChat(ctx, threadID)
+func (s *LocalService) ActorForThread(ctx context.Context, threadID modeluuid.UUID) (coremodel.Actor, error) {
+	thread, chat, err := s.loadThreadAndChat(ctx, threadID)
 	if err != nil {
 		return coremodel.Actor{}, err
 	}
@@ -200,69 +230,51 @@ func (b *Broker) ActorForThread(ctx context.Context, threadID modeluuid.UUID) (c
 	}, nil
 }
 
-func (b *Broker) sendMessagingThreadMessage(
-	ctx context.Context,
-	actor coremodel.Actor,
-	targetThread coremodel.Thread,
-	targetChat coremodel.Chat,
-	req messaging.SendMessageRequest,
-) (*messaging.SendMessageResult, error) {
-	runtime, err := b.runtimeForChat(ctx, targetChat)
-	if err != nil {
-		return nil, err
+func (s *LocalService) ensureStorage() error {
+	if s == nil || s.Storage == nil {
+		return fmt.Errorf("missing messaging storage")
 	}
-
-	inbound := &coremodel.ThreadMessage{
-		ChatID:      targetChat.ID,
-		ThreadID:    targetThread.ID,
-		Direction:   coremodel.MessageDirectionInbound,
-		Kind:        coremodel.MessageKindUser,
-		ActorID:     strings.TrimSpace(actor.ID),
-		ActorLabel:  strings.TrimSpace(actor.Label),
-		Text:        strings.TrimSpace(req.Text),
-		ExternalID:  strings.TrimSpace(req.ExternalID),
-		ComponentID: req.ComponentID,
-	}
-	if req.SourceThreadID.IsNull() {
-		inbound.MetadataJSON = "provider=thread"
-	} else {
-		inbound.MetadataJSON = strings.Join([]string{
-			"provider=thread",
-			"source_thread_id=" + req.SourceThreadID.String(),
-		}, "\n")
-	}
-	if err := b.Storage.Messages().Append(ctx, inbound); err != nil {
-		return nil, err
-	}
-	if _, err := b.runStoredThreadTurn(ctx, runtime, targetChat, targetThread, *inbound); err != nil {
-		return nil, err
-	}
-	return &messaging.SendMessageResult{Message: *inbound}, nil
+	return nil
 }
 
-func (b *Broker) threadSummaries(ctx context.Context, activeOnly bool) ([]messaging.ThreadSummary, error) {
-	chats, err := b.Storage.Chats().List(ctx)
+func (s *LocalService) ensureDeliverer() error {
+	if s == nil || s.Deliverer == nil {
+		return fmt.Errorf("missing messaging deliverer")
+	}
+	return nil
+}
+
+func requireActor(actor coremodel.Actor) error {
+	actor = ResolveActor(actor)
+	if strings.TrimSpace(actor.ID) == "" || strings.TrimSpace(actor.Label) == "" {
+		return fmt.Errorf("missing actor identity")
+	}
+	return nil
+}
+
+func (s *LocalService) threadSummaries(ctx context.Context, activeOnly bool) ([]ThreadSummary, error) {
+	chats, err := s.Storage.Chats().List(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var out []messaging.ThreadSummary
+	var out []ThreadSummary
 	for _, chat := range chats {
 		if !chat.Enabled {
 			continue
 		}
-		threads, err := b.Storage.Threads().ListByChatID(ctx, chat.ID)
+		threads, err := s.Storage.Threads().ListByChatID(ctx, chat.ID)
 		if err != nil {
 			return nil, err
 		}
 		for _, thread := range threads {
-			messages, err := b.Storage.Messages().ListByThreadID(ctx, thread.ID)
+			messages, err := s.Storage.Messages().ListByThreadID(ctx, thread.ID)
 			if err != nil {
 				return nil, err
 			}
 			if activeOnly && len(messages) == 0 {
 				continue
 			}
-			summary := messaging.ThreadSummary{
+			summary := ThreadSummary{
 				ID:          thread.ID,
 				ChatID:      chat.ID,
 				ChatLabel:   chat.Label,
@@ -281,7 +293,7 @@ func (b *Broker) threadSummaries(ctx context.Context, activeOnly bool) ([]messag
 	return out, nil
 }
 
-func sortThreadSummaries(threads []messaging.ThreadSummary) {
+func sortThreadSummaries(threads []ThreadSummary) {
 	sort.SliceStable(threads, func(i, j int) bool {
 		if !threads[i].LastMessageAt.Equal(threads[j].LastMessageAt) {
 			return threads[i].LastMessageAt.After(threads[j].LastMessageAt)
@@ -290,7 +302,7 @@ func sortThreadSummaries(threads []messaging.ThreadSummary) {
 	})
 }
 
-func ambiguousThreadRefError(ref string, matches []messaging.ThreadSummary) error {
+func ambiguousThreadRefError(ref string, matches []ThreadSummary) error {
 	sortThreadSummaries(matches)
 	lines := []string{
 		fmt.Sprintf("short thread ID %s is ambiguous", ref),
@@ -312,15 +324,15 @@ func ambiguousThreadRefError(ref string, matches []messaging.ThreadSummary) erro
 	return errors.New(strings.Join(lines, "\n"))
 }
 
-func (b *Broker) loadThreadAndChat(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, *coremodel.Chat, error) {
-	thread, err := b.Storage.Threads().GetByID(ctx, threadID)
+func (s *LocalService) loadThreadAndChat(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, *coremodel.Chat, error) {
+	thread, err := s.Storage.Threads().GetByID(ctx, threadID)
 	if err != nil {
 		return nil, nil, err
 	}
 	if thread == nil {
 		return nil, nil, fmt.Errorf("thread not found: %s", threadID)
 	}
-	chat, err := b.Storage.Chats().GetByID(ctx, thread.ChatID)
+	chat, err := s.Storage.Chats().GetByID(ctx, thread.ChatID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -345,15 +357,7 @@ func interThreadSourceLabel(chat coremodel.Chat, thread coremodel.Thread) string
 	return label
 }
 
-func requireMessagingActor(actor coremodel.Actor) error {
-	actor = actor.Resolved()
-	if strings.TrimSpace(actor.ID) == "" || strings.TrimSpace(actor.Label) == "" {
-		return fmt.Errorf("missing actor identity")
-	}
-	return nil
-}
-
-func threadMatchesQuery(thread messaging.ThreadSummary, query string) bool {
+func threadMatchesQuery(thread ThreadSummary, query string) bool {
 	if query == "" {
 		return true
 	}

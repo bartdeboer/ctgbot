@@ -10,21 +10,29 @@ import (
 	component "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
-func (b *Broker) storeInboundMessage(ctx context.Context, chat coremodel.Chat, thread coremodel.Thread, event component.InboundEvent) (*coremodel.ThreadMessage, error) {
-	actor := event.Payload.ResolvedActor()
+func (b *Broker) storeInboundMessage(ctx context.Context, inbound messaging.ResolvedInbound) (*coremodel.ThreadMessage, error) {
+	actor := inbound.Payload.ResolvedActor()
+	metadata := inboundMetadataJSON(inbound.Payload)
+	if len(inbound.Metadata) > 0 {
+		if metadata != "" {
+			metadata += "\n"
+		}
+		metadata += strings.Join(inbound.Metadata, "\n")
+	}
 	message := &coremodel.ThreadMessage{
-		ChatID:       chat.ID,
-		ThreadID:     thread.ID,
+		ChatID:       inbound.Chat.ID,
+		ThreadID:     inbound.Thread.ID,
 		Direction:    coremodel.MessageDirectionInbound,
-		Kind:         inboundKind(event),
-		ComponentID:  event.ComponentID,
-		ExternalID:   strings.TrimSpace(event.ExternalID),
+		Kind:         inboundKind(inbound),
+		ComponentID:  inbound.ComponentID,
+		ExternalID:   strings.TrimSpace(inbound.ExternalID),
 		ActorLabel:   strings.TrimSpace(actor.Label),
-		Text:         strings.TrimSpace(event.Payload.Text.Text),
-		MetadataJSON: inboundMetadataJSON(event.Payload),
+		Text:         strings.TrimSpace(inbound.Payload.Text.Text),
+		MetadataJSON: metadata,
 	}
 	if strings.TrimSpace(actor.ID) != "" {
 		message.ActorID = strings.TrimSpace(actor.ID)
@@ -32,12 +40,12 @@ func (b *Broker) storeInboundMessage(ctx context.Context, chat coremodel.Chat, t
 	if err := b.Storage.Messages().Append(ctx, message); err != nil {
 		return nil, err
 	}
-	for _, media := range event.Payload.Attachments {
+	for _, media := range inbound.Payload.Attachments {
 		artifact := &coremodel.Artifact{
-			ChatID:      chat.ID,
-			ThreadID:    thread.ID,
+			ChatID:      inbound.Chat.ID,
+			ThreadID:    inbound.Thread.ID,
 			MessageID:   message.ID,
-			ComponentID: event.ComponentID,
+			ComponentID: inbound.ComponentID,
 			Filename:    strings.TrimSpace(media.Filename),
 			ContentType: strings.TrimSpace(media.ContentType),
 			Syntax:      strings.TrimSpace(media.Syntax),
@@ -50,8 +58,8 @@ func (b *Broker) storeInboundMessage(ctx context.Context, chat coremodel.Chat, t
 	return message, nil
 }
 
-func inboundKind(event component.InboundEvent) coremodel.MessageKind {
-	if strings.TrimSpace(event.Payload.Text.Text) != "" {
+func inboundKind(inbound messaging.ResolvedInbound) coremodel.MessageKind {
+	if strings.TrimSpace(inbound.Payload.Text.Text) != "" {
 		return coremodel.MessageKindUser
 	}
 	return coremodel.MessageKindEvent

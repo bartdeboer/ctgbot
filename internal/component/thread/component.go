@@ -21,9 +21,7 @@ import (
 const Type = "thread"
 
 type Actions interface {
-	messaging.Service
-	ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UUID, error)
-	ActorForThread(ctx context.Context, threadID modeluuid.UUID) (coremodel.Actor, error)
+	messaging.LocalActions
 }
 
 type Component struct {

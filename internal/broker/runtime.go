@@ -16,6 +16,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -110,7 +111,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 
 	globalSurfaces = append(globalSurfaces, brokercomponent.New(b))
-	globalSurfaces = append(globalSurfaces, threadcomponent.New(b))
+	globalSurfaces = append(globalSurfaces, threadcomponent.New(messaging.NewLocalService(b.Storage, b)))
 	if provider, ok := b.Resolver.(interface{ AppConfig() *appstate.Config }); ok {
 		configSurface, err := configcomponent.New(provider.AppConfig())
 		if err != nil {

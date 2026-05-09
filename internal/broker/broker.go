@@ -11,6 +11,7 @@ import (
 	componentbroker "github.com/bartdeboer/ctgbot/internal/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -111,64 +112,97 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	if err != nil {
 		return EventOutcome{}, err
 	}
-	var runtime *ChatRuntime
-	failConversation := func(inbound *coremodel.ThreadMessage, outbound []coremodel.ThreadMessage, turnErr error) (EventOutcome, error) {
-		text := conversationErrorText(turnErr)
-		if text == "" {
-			return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
-		}
-		message, relayErr := b.relaySystemMessage(ctx, runtime, *chat, *thread, text)
-		if relayErr != nil {
-			b.logf("inbound error relay failed chat=%s thread=%s err=%v", chat.ID, thread.ID, relayErr)
-			return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
-		}
-		if message != nil {
-			outbound = append(outbound, *message)
-		}
-		return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+	result, err := b.HandleResolvedInbound(ctx, messaging.ResolvedInbound{
+		Chat:        *chat,
+		Thread:      *thread,
+		ComponentID: event.ComponentID,
+		ExternalID:  strings.TrimSpace(event.ExternalID),
+		Payload:     event.Payload,
+	})
+	if err != nil {
+		return EventOutcome{
+			Inbound:  result.Inbound,
+			Outbound: result.Outbound,
+		}, err
+	}
+	return EventOutcome{
+		Inbound:  result.Inbound,
+		Outbound: result.Outbound,
+	}, nil
+}
+
+// HandleResolvedInbound runs the common inbound turn path when chat/thread
+// routing is already known.
+func (b *Broker) HandleResolvedInbound(ctx context.Context, inbound messaging.ResolvedInbound) (messaging.DeliveryResult, error) {
+	if err := b.ensureReady(); err != nil {
+		return messaging.DeliveryResult{}, err
+	}
+	if inbound.Chat.ID.IsNull() {
+		return messaging.DeliveryResult{}, fmt.Errorf("missing inbound chat id")
+	}
+	if inbound.Thread.ID.IsNull() {
+		return messaging.DeliveryResult{}, fmt.Errorf("missing inbound thread id")
 	}
 
-	rawText := strings.TrimSpace(event.Payload.Text.Text)
-	if _, ok := commandArgv(rawText); ok {
-		runtime, err = b.runtimeForChat(ctx, *chat)
-		if err != nil {
-			return failConversation(nil, nil, err)
+	var runtime *ChatRuntime
+	failConversation := func(result messaging.DeliveryResult, turnErr error) (messaging.DeliveryResult, error) {
+		text := conversationErrorText(turnErr)
+		if text == "" {
+			return result, nil
 		}
-		handled, commandOutbound, err := b.tryHandleMessageCommand(
-			ctx,
-			event,
-			*chat,
-			*thread,
-			runtime,
-		)
+		message, relayErr := b.relaySystemMessage(ctx, runtime, inbound.Chat, inbound.Thread, text)
+		if relayErr != nil {
+			b.logf("inbound error relay failed chat=%s thread=%s err=%v", inbound.Chat.ID, inbound.Thread.ID, relayErr)
+			return result, nil
+		}
+		if message != nil {
+			result.Outbound = append(result.Outbound, *message)
+		}
+		return result, nil
+	}
+
+	rawText := strings.TrimSpace(inbound.Payload.Text.Text)
+	if _, ok := commandArgv(rawText); ok {
+		var err error
+		runtime, err = b.runtimeForChat(ctx, inbound.Chat)
 		if err != nil {
-			return failConversation(nil, commandOutbound, err)
+			return failConversation(messaging.DeliveryResult{}, err)
+		}
+		handled, commandOutbound, err := b.tryHandleMessageCommand(ctx, inbound, inbound.Chat, inbound.Thread, runtime)
+		if err != nil {
+			return failConversation(messaging.DeliveryResult{Outbound: commandOutbound}, err)
 		}
 		if handled {
-			return EventOutcome{Outbound: commandOutbound}, nil
+			return messaging.DeliveryResult{Outbound: commandOutbound}, nil
 		}
 	}
 
 	var outcome EventOutcome
-	if err := b.Turns.Run(ctx, thread.ID, func() error {
+	if err := b.Turns.Run(ctx, inbound.Thread.ID, func() error {
 		var runErr error
-		outcome, runErr = b.handleResolvedInbound(ctx, event, *chat, *thread, runtime)
+		outcome, runErr = b.handleResolvedInboundTurn(ctx, inbound, runtime)
 		return runErr
 	}); err != nil {
-		return outcome, err
+		return messaging.DeliveryResult{
+			Inbound:  outcome.Inbound,
+			Outbound: outcome.Outbound,
+		}, err
 	}
-	return outcome, nil
+	return messaging.DeliveryResult{
+		Inbound:  outcome.Inbound,
+		Outbound: outcome.Outbound,
+	}, nil
 }
 
-func (b *Broker) handleResolvedInbound(
+func (b *Broker) handleResolvedInboundTurn(
 	ctx context.Context,
-	event component.InboundEvent,
-	chat coremodel.Chat,
-	thread coremodel.Thread,
+	inbound messaging.ResolvedInbound,
 	runtime *ChatRuntime,
 ) (EventOutcome, error) {
 	var err error
-	rawText := strings.TrimSpace(event.Payload.Text.Text)
+	chat := inbound.Chat
+	thread := inbound.Thread
+	rawText := strings.TrimSpace(inbound.Payload.Text.Text)
 	failConversation := func(inbound *coremodel.ThreadMessage, outbound []coremodel.ThreadMessage, turnErr error) (EventOutcome, error) {
 		text := conversationErrorText(turnErr)
 		if text == "" {
@@ -186,7 +220,7 @@ func (b *Broker) handleResolvedInbound(
 	}
 
 	var savedPaths []string
-	if len(event.Payload.Attachments) > 0 {
+	if len(inbound.Payload.Attachments) > 0 {
 		if runtime == nil {
 			runtime, err = b.runtimeForChat(ctx, chat)
 			if err != nil {
@@ -197,28 +231,28 @@ func (b *Broker) handleResolvedInbound(
 		if resolveErr != nil {
 			return failConversation(nil, nil, resolveErr)
 		}
-		savedPaths, err = materializeIncomingAttachments(workspacePath, runtime.RuntimeWorkspace, event.Payload.Attachments)
+		savedPaths, err = materializeIncomingAttachments(workspacePath, runtime.RuntimeWorkspace, inbound.Payload.Attachments)
 		if err != nil {
 			return failConversation(nil, nil, err)
 		}
 	}
 
-	inbound, err := b.storeInboundMessage(ctx, chat, thread, event)
+	storedInbound, err := b.storeInboundMessage(ctx, inbound)
 	if err != nil {
 		return failConversation(nil, nil, err)
 	}
 	if rawText == "" && len(savedPaths) > 0 {
 		message, relayErr := b.relaySystemMessage(ctx, runtime, chat, thread, uploadSavedMessage(savedPaths))
 		if relayErr != nil {
-			return failConversation(inbound, nil, relayErr)
+			return failConversation(storedInbound, nil, relayErr)
 		}
 		outbound := []coremodel.ThreadMessage{}
 		if message != nil {
 			outbound = append(outbound, *message)
 		}
-		return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+		return EventOutcome{Inbound: storedInbound, Outbound: outbound}, nil
 	}
-	turnInbound := *inbound
+	turnInbound := *storedInbound
 	if len(savedPaths) > 0 {
 		turnInbound.Text = injectFilesIntoPrompt(savedPaths, rawText)
 	}
@@ -226,15 +260,15 @@ func (b *Broker) handleResolvedInbound(
 	if runtime == nil {
 		runtime, err = b.runtimeForChat(ctx, chat)
 		if err != nil {
-			return failConversation(inbound, nil, err)
+			return failConversation(storedInbound, nil, err)
 		}
 	}
 	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound)
 	if err != nil {
-		return failConversation(inbound, outbound, err)
+		return failConversation(storedInbound, outbound, err)
 	}
 
-	return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+	return EventOutcome{Inbound: storedInbound, Outbound: outbound}, nil
 }
 
 func (b *Broker) runAgentTurn(
