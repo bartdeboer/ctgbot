@@ -27,6 +27,7 @@ type Broker struct {
 	Storage  repository.Storage
 	Resolver InstanceResolver
 	Mapper   ThreadComponentMapper
+	Turns    *ThreadTurnGate
 	Logf     func(format string, args ...any)
 }
 
@@ -66,6 +67,7 @@ func New(storage repository.Storage, resolver InstanceResolver, logf func(format
 		Storage:  storage,
 		Resolver: resolver,
 		Mapper:   NewThreadComponentMapper(storage),
+		Turns:    NewThreadTurnGate(),
 		Logf:     logf,
 	}
 }
@@ -147,15 +149,51 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		}
 	}
 
+	var outcome EventOutcome
+	if err := b.Turns.Run(ctx, thread.ID, func() error {
+		var runErr error
+		outcome, runErr = b.handleResolvedInbound(ctx, event, *chat, *thread, runtime)
+		return runErr
+	}); err != nil {
+		return outcome, err
+	}
+	return outcome, nil
+}
+
+func (b *Broker) handleResolvedInbound(
+	ctx context.Context,
+	event component.InboundEvent,
+	chat coremodel.Chat,
+	thread coremodel.Thread,
+	runtime *ChatRuntime,
+) (EventOutcome, error) {
+	var err error
+	rawText := strings.TrimSpace(event.Payload.Text.Text)
+	failConversation := func(inbound *coremodel.ThreadMessage, outbound []coremodel.ThreadMessage, turnErr error) (EventOutcome, error) {
+		text := conversationErrorText(turnErr)
+		if text == "" {
+			return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+		}
+		message, relayErr := b.relaySystemMessage(ctx, runtime, chat, thread, text)
+		if relayErr != nil {
+			b.logf("inbound error relay failed chat=%s thread=%s err=%v", chat.ID, thread.ID, relayErr)
+			return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+		}
+		if message != nil {
+			outbound = append(outbound, *message)
+		}
+		return EventOutcome{Inbound: inbound, Outbound: outbound}, nil
+	}
+
 	var savedPaths []string
 	if len(event.Payload.Attachments) > 0 {
 		if runtime == nil {
-			runtime, err = b.runtimeForChat(ctx, *chat)
+			runtime, err = b.runtimeForChat(ctx, chat)
 			if err != nil {
 				return failConversation(nil, nil, err)
 			}
 		}
-		workspacePath, resolveErr := b.Resolver.ResolveChatWorkspace(ctx, *chat)
+		workspacePath, resolveErr := b.Resolver.ResolveChatWorkspace(ctx, chat)
 		if resolveErr != nil {
 			return failConversation(nil, nil, resolveErr)
 		}
@@ -165,12 +203,12 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		}
 	}
 
-	inbound, err := b.storeInboundMessage(ctx, *chat, *thread, event)
+	inbound, err := b.storeInboundMessage(ctx, chat, thread, event)
 	if err != nil {
 		return failConversation(nil, nil, err)
 	}
 	if rawText == "" && len(savedPaths) > 0 {
-		message, relayErr := b.relaySystemMessage(ctx, runtime, *chat, *thread, uploadSavedMessage(savedPaths))
+		message, relayErr := b.relaySystemMessage(ctx, runtime, chat, thread, uploadSavedMessage(savedPaths))
 		if relayErr != nil {
 			return failConversation(inbound, nil, relayErr)
 		}
@@ -186,7 +224,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	}
 
 	if runtime == nil {
-		runtime, err = b.runtimeForChat(ctx, *chat)
+		runtime, err = b.runtimeForChat(ctx, chat)
 		if err != nil {
 			return failConversation(inbound, nil, err)
 		}
@@ -196,15 +234,15 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		ctx:     ctx,
 		broker:  b,
 		runtime: runtime,
-		chat:    *chat,
-		thread:  *thread,
+		chat:    chat,
+		thread:  thread,
 	}
 
 	var outbound []coremodel.ThreadMessage
 	for _, agentBinding := range runtime.Agents {
 		turnRuntime.componentID = agentBinding.ComponentID
 		turnRuntime.lastText = ""
-		final, err := b.runAgentTurn(ctx, agentBinding, *chat, *thread, turnInbound, turnRuntime)
+		final, err := b.runAgentTurn(ctx, agentBinding, chat, thread, turnInbound, turnRuntime)
 		outbound = append(outbound, turnRuntime.outputs...)
 		turnRuntime.outputs = nil
 		if err != nil {
@@ -216,7 +254,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		if strings.TrimSpace(final.Text) == turnRuntime.LastText() {
 			continue
 		}
-		message, err := b.storeAndRelayMessage(ctx, runtime, *chat, *thread, *final, agentType(agentBinding))
+		message, err := b.storeAndRelayMessage(ctx, runtime, chat, thread, *final, agentType(agentBinding))
 		if err != nil {
 			return failConversation(inbound, outbound, err)
 		}
@@ -284,6 +322,9 @@ func (b *Broker) ensureReady() error {
 	}
 	if b.Mapper == nil {
 		return fmt.Errorf("missing thread component mapper")
+	}
+	if b.Turns == nil {
+		b.Turns = NewThreadTurnGate()
 	}
 	return nil
 }

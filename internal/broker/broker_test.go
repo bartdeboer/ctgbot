@@ -137,6 +137,8 @@ type fakeAgentRecorder struct {
 	homes      []runtimepkg.Home
 	streamText string
 	finalText  string
+	entered    chan struct{}
+	release    <-chan struct{}
 }
 
 type fakeAgent struct {
@@ -148,6 +150,12 @@ func (c *fakeAgent) Type() string { return "codex" }
 func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
 	_ = ctx
 	c.recorder.prompts = append(c.recorder.prompts, turn.Inbound.Text)
+	if c.recorder.entered != nil {
+		c.recorder.entered <- struct{}{}
+	}
+	if c.recorder.release != nil {
+		<-c.recorder.release
+	}
 	if home, ok := turn.Runtime.ComponentHome(c.componentID); ok {
 		c.recorder.homes = append(c.recorder.homes, home)
 	}
@@ -275,6 +283,115 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	}
 	if got, want := len(messages), 3; got != want {
 		t.Fatalf("stored messages = %d, want %d", got, want)
+	}
+}
+
+func TestHandleInboundSerializesTurnsPerThread(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	release := make(chan struct{})
+	agentRecorder := &fakeAgentRecorder{
+		entered: make(chan struct{}, 2),
+		release: release,
+	}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := broker.New(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Components().Save(context.Background(), codex); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	inbound := func(id string, text string) component.InboundEvent {
+		return component.InboundEvent{
+			ComponentID: telegram.ID,
+			ExternalID:  id,
+			Payload: message.InboundPayload{
+				ProviderType:      "telegram",
+				ProviderChatID:    "chat-1",
+				ProviderThreadID:  "thread-7",
+				ProviderMessageID: id,
+				Actor: message.Actor{
+					ID:    "bart",
+					Label: "bart",
+					Roles: []simplerbac.Role{simplerbac.RoleUser},
+				},
+				Text: message.TextMessage{Text: text},
+			},
+		}
+	}
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := b.HandleInbound(context.Background(), inbound("msg-1", "first"))
+		firstDone <- err
+	}()
+	select {
+	case <-agentRecorder.entered:
+	case <-time.After(time.Second):
+		t.Fatal("first turn did not enter agent")
+	}
+
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := b.HandleInbound(context.Background(), inbound("msg-2", "second"))
+		secondDone <- err
+	}()
+
+	select {
+	case <-agentRecorder.entered:
+		t.Fatal("second turn entered before first was released")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	close(release)
+
+	select {
+	case err := <-firstDone:
+		if err != nil {
+			t.Fatalf("first HandleInbound() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first HandleInbound() did not complete")
+	}
+	select {
+	case <-agentRecorder.entered:
+	case <-time.After(time.Second):
+		t.Fatal("second turn did not enter agent after release")
+	}
+	select {
+	case err := <-secondDone:
+		if err != nil {
+			t.Fatalf("second HandleInbound() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("second HandleInbound() did not complete")
+	}
+
+	if got, want := len(agentRecorder.prompts), 2; got != want {
+		t.Fatalf("agent prompts = %d, want %d", got, want)
+	}
+	if agentRecorder.prompts[0] != "first" || agentRecorder.prompts[1] != "second" {
+		t.Fatalf("agent prompts = %#v, want [first second]", agentRecorder.prompts)
 	}
 }
 
