@@ -139,6 +139,7 @@ type fakeAgentRecorder struct {
 	finalText  string
 	entered    chan struct{}
 	release    <-chan struct{}
+	interrupted chan struct{}
 }
 
 type fakeAgent struct {
@@ -175,6 +176,41 @@ func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{Text: finalText},
 	}, nil
+}
+
+type fakeInterruptCommand struct{}
+
+func (c *fakeAgent) CommandDefinitions() []commandengine.Definition {
+	return []commandengine.Definition{
+		{
+			Pattern: "interrupt",
+			Help:    "Interrupt the active fake turn",
+			Build: func(req *clir.Request) (any, error) {
+				_ = req
+				return fakeInterruptCommand{}, nil
+			},
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+		},
+	}
+}
+
+func (c *fakeAgent) UsesLocalCommandRoutes() bool { return true }
+
+func (c *fakeAgent) RegisterCommandHandlers(registry *commandengine.Registry) error {
+	if registry == nil {
+		return fmt.Errorf("missing command registry")
+	}
+	return commandengine.RegisterPattern[fakeInterruptCommand](registry, "interrupt", func(ctx context.Context, req commandengine.Request, _ fakeInterruptCommand) (commandengine.Result, error) {
+		_, _ = ctx, req
+		if c.recorder != nil && c.recorder.interrupted != nil {
+			select {
+			case c.recorder.interrupted <- struct{}{}:
+			default:
+			}
+		}
+		return commandengine.Result{Text: "interrupt requested"}, nil
+	})
 }
 
 func newTestSystem(t *testing.T, root string, storage repository.Storage, recorder *fakeMessengerRecorder, agentRecorder *fakeAgentRecorder, events []component.InboundEvent, extras ...func(*component.Registry) error) *systempkg.System {
@@ -392,6 +428,105 @@ func TestHandleInboundSerializesTurnsPerThread(t *testing.T) {
 	}
 	if agentRecorder.prompts[0] != "first" || agentRecorder.prompts[1] != "second" {
 		t.Fatalf("agent prompts = %#v, want [first second]", agentRecorder.prompts)
+	}
+}
+
+func TestHandleInboundInterruptCommandBypassesTurnGate(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	release := make(chan struct{})
+	agentRecorder := &fakeAgentRecorder{
+		entered:     make(chan struct{}, 1),
+		release:     release,
+		interrupted: make(chan struct{}, 1),
+	}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := broker.New(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Components().Save(context.Background(), codex); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	inbound := func(id string, text string) component.InboundEvent {
+		return component.InboundEvent{
+			ComponentID: telegram.ID,
+			ExternalID:  id,
+			Payload: message.InboundPayload{
+				ProviderType:      "telegram",
+				ProviderChatID:    "chat-1",
+				ProviderThreadID:  "thread-7",
+				ProviderMessageID: id,
+				Actor: message.Actor{
+					ID:    "bart",
+					Label: "bart",
+					Roles: []simplerbac.Role{simplerbac.RoleUser},
+				},
+				Text: message.TextMessage{Text: text},
+			},
+		}
+	}
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := b.HandleInbound(context.Background(), inbound("msg-1", "first"))
+		firstDone <- err
+	}()
+	select {
+	case <-agentRecorder.entered:
+	case <-time.After(time.Second):
+		t.Fatal("first turn did not enter agent")
+	}
+
+	interruptDone := make(chan error, 1)
+	go func() {
+		_, err := b.HandleInbound(context.Background(), inbound("msg-2", "/codex interrupt"))
+		interruptDone <- err
+	}()
+
+	select {
+	case <-agentRecorder.interrupted:
+	case <-time.After(time.Second):
+		t.Fatal("interrupt command did not execute while first turn was active")
+	}
+
+	select {
+	case err := <-interruptDone:
+		if err != nil {
+			t.Fatalf("interrupt HandleInbound() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("interrupt HandleInbound() did not complete")
+	}
+
+	close(release)
+
+	select {
+	case err := <-firstDone:
+		if err != nil {
+			t.Fatalf("first HandleInbound() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first HandleInbound() did not complete")
 	}
 }
 
