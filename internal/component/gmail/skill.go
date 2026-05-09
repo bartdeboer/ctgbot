@@ -36,10 +36,10 @@ Setup commands:
 3. Optionally install component.json before auth/binding:
    cat component.json | hostbridge component gmail/work managed-file put component.json --type application/json
 
-4. Start OAuth:
-   hostbridge component gmail/work auth
+4. Ask the human/operator to start OAuth from the host CLI:
+   ctgbot component gmail/work auth
 
-5. Check auth and managed files:
+5. After OAuth, check auth and managed files from hostbridge:
    hostbridge component gmail/work auth status
    hostbridge component gmail/work managed-file status
 
@@ -48,6 +48,7 @@ Setup commands:
 
 Safety notes:
 - Never paste OAuth client secrets or token.json into chat.
+- OAuth auth is intentionally a host CLI action; the blocking callback flow is not started through hostbridge.
 - managed-file status only reports present/missing; it does not print sensitive contents.
 - Keep token.json owned by ctgbot; re-run auth if the token needs replacement.`,
 	}

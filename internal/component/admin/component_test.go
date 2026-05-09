@@ -56,6 +56,25 @@ func TestComponentHelpReturnsSkillText(t *testing.T) {
 	}
 }
 
+func TestHostbridgeAuthCommandIsNotRegistered(t *testing.T) {
+	engine, _ := newTestEngine(t, &fakeProfileComponent{typeName: "gmail"})
+
+	if _, err := engine.Run(context.Background(), testRequest(), []string{"component", "gmail/work", "auth"}); err == nil {
+		t.Fatal("Run(component auth) error = nil, want unavailable command")
+	}
+
+	result, err := engine.Run(context.Background(), testRequest(), []string{"component", "help"})
+	if err != nil {
+		t.Fatalf("Run(component help) error = %v", err)
+	}
+	if strings.Contains(result.Text, "component <component> auth - Authenticate") {
+		t.Fatalf("component help still exposes blocking auth command: %q", result.Text)
+	}
+	if !strings.Contains(result.Text, "component <component> auth status") {
+		t.Fatalf("component help = %q, want auth status route", result.Text)
+	}
+}
+
 func TestManagedFilePutRejectsUnknownFile(t *testing.T) {
 	engine, _ := newTestEngine(t, &fakeProfileComponent{
 		typeName: "gmail",

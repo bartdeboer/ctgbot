@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
@@ -39,12 +38,6 @@ type ComponentHelpCommand struct {
 	Component string
 }
 
-type AuthCommand struct {
-	Component       string
-	CallbackPort    int
-	CallbackTimeout time.Duration
-}
-
 type AuthStatusCommand struct {
 	Component string
 }
@@ -68,7 +61,6 @@ func RegisterGobTypes(register func(any)) {
 	register(HelpCommand{})
 	register(ListCommand{})
 	register(ComponentHelpCommand{})
-	register(AuthCommand{})
 	register(AuthStatusCommand{})
 	register(ManagedFileListCommand{})
 	register(ManagedFileStatusCommand{})
@@ -92,7 +84,6 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			return ListCommand{}, nil
 		}, componentReadSources()),
 		componentCommand("component <component> help", "Show component-specific help", buildComponentHelp, componentReadSources()),
-		componentCommand("component <component> auth", "Authenticate a component", buildAuth, []commandengine.Source{commandengine.SourceHostbridge}),
 		componentCommand("component <component> auth status", "Show component auth status", buildAuthStatus, []commandengine.Source{commandengine.SourceHostbridge}),
 		componentCommand("component <component> managed-file list", "List declared managed files", buildManagedFileList, componentReadSources()),
 		componentCommand("component <component> managed-file status", "Show managed file presence", buildManagedFileStatus, componentReadSources()),
@@ -125,9 +116,6 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.Register[ComponentHelpCommand](registry, c.handleComponentHelp); err != nil {
-		return err
-	}
-	if err := commandengine.Register[AuthCommand](registry, c.handleAuth); err != nil {
 		return err
 	}
 	if err := commandengine.Register[AuthStatusCommand](registry, c.handleAuthStatus); err != nil {
@@ -186,27 +174,6 @@ func (c *Component) handleComponentHelp(ctx context.Context, req commandengine.R
 		}
 	}
 	return commandengine.Result{Text: fmt.Sprintf("component %s has no component-specific help", loaded.Registration.Ref())}, nil
-}
-
-func (c *Component) handleAuth(ctx context.Context, req commandengine.Request, cmd AuthCommand) (commandengine.Result, error) {
-	_ = req
-	loaded, err := c.resolveLoaded(ctx, cmd.Component)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	auth, ok := loaded.Component.(component.Authenticator)
-	if !ok {
-		return commandengine.Result{}, fmt.Errorf("component does not support auth: %s", loaded.Registration.Ref())
-	}
-	var stdout, stderr bytes.Buffer
-	if err := auth.Auth(ctx, cmd.CallbackPort, cmd.CallbackTimeout, &stdout, &stderr); err != nil {
-		text := strings.TrimSpace(stderr.String())
-		if text != "" {
-			return commandengine.Result{}, fmt.Errorf("%s: %w", text, err)
-		}
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: strings.TrimSpace(stdout.String())}, nil
 }
 
 func (c *Component) handleAuthStatus(ctx context.Context, req commandengine.Request, cmd AuthStatusCommand) (commandengine.Result, error) {

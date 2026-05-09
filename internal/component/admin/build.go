@@ -54,21 +54,6 @@ func buildComponentHelp(req *clir.Request) (any, error) {
 	return ComponentHelpCommand{Component: componentRef}, nil
 }
 
-func buildAuth(req *clir.Request) (any, error) {
-	componentRef := strings.TrimSpace(req.Params["component"])
-	if componentRef == "" {
-		return nil, fmt.Errorf("missing component")
-	}
-	fs := flag.NewFlagSet("component auth", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	callbackPort := fs.Int("callback-port", 0, "Optional auth callback port")
-	callbackTimeout := fs.Duration("callback-timeout", 0, "Optional auth callback timeout")
-	if err := fs.Parse(req.Extra); err != nil {
-		return nil, err
-	}
-	return AuthCommand{Component: componentRef, CallbackPort: *callbackPort, CallbackTimeout: *callbackTimeout}, nil
-}
-
 func buildAuthStatus(req *clir.Request) (any, error) {
 	componentRef := strings.TrimSpace(req.Params["component"])
 	if componentRef == "" {
