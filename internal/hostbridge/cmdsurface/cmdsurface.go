@@ -5,6 +5,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
+	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
@@ -39,6 +40,7 @@ func Resolve(ref string) ResolvedSurfaceSet {
 
 func GlobalSurfaces() []componentpkg.CommandSurface {
 	return []componentpkg.CommandSurface{
+		componentadmin.New(nil, nil),
 		brokercomponent.New(nil),
 		messagingcomponent.New(nil, nil),
 		(*configcomponent.Component)(nil),
@@ -69,13 +71,14 @@ func LegacyCodexShorthandEnabled(ref string) bool {
 }
 
 func RegisterGobTypes(register func(any)) {
+	componentadmin.RegisterGobTypes(register)
 	codexcomponent.RegisterGobTypes(register)
 	llamacppcomponent.RegisterGobTypes(register)
 	messagingcomponent.RegisterGobTypes(register)
 }
 
 func GlobalDirectPrefixes() []string {
-	return []string{"thread"}
+	return []string{"component", "thread"}
 }
 
 func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {

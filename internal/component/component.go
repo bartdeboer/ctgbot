@@ -179,6 +179,17 @@ type CommandSurface interface {
 	RegisterCommandHandlers(registry *commandengine.Registry) error
 }
 
+type Skill struct {
+	Name        string
+	Description string
+	Text        string
+}
+
+type SkillProvider interface {
+	Component
+	Skill() Skill
+}
+
 type LocalCommandSurface interface {
 	CommandSurface
 	UsesLocalCommandRoutes() bool

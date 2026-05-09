@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	component "github.com/bartdeboer/ctgbot/internal/component"
+	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
@@ -111,6 +112,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 
 	globalSurfaces = append(globalSurfaces,
+		componentadmin.New(b.Storage, b.Resolver),
 		brokercomponent.New(b),
 		messagingcomponent.New(messaging.New(b.Storage), b),
 	)
