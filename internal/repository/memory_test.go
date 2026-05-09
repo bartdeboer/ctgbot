@@ -33,9 +33,15 @@ func TestMemoryThreadsShortIDs(t *testing.T) {
 		}
 	}
 
-	shortID, err := storage.Threads().GetShortID(ctx, first, 1)
+	ids, err := storage.Threads().ListIDs(ctx)
 	if err != nil {
-		t.Fatalf("Threads().GetShortID() error = %v", err)
+		t.Fatalf("Threads().ListIDs() error = %v", err)
+	}
+	resolver := NewShortIDResolver(ids)
+
+	shortID, err := resolver.ShortIDFor(first, 1)
+	if err != nil {
+		t.Fatalf("ShortIDFor() error = %v", err)
 	}
 	if !strings.HasPrefix(first.String(), shortID) {
 		t.Fatalf("short ID %q is not a prefix of %s", shortID, first)
@@ -44,18 +50,18 @@ func TestMemoryThreadsShortIDs(t *testing.T) {
 		t.Fatalf("short ID = full ID %q, want shortest unique prefix", shortID)
 	}
 
-	resolved, err := storage.Threads().ResolveShortID(ctx, shortID)
+	resolved, err := resolver.Resolve(shortID)
 	if err != nil {
-		t.Fatalf("Threads().ResolveShortID() error = %v", err)
+		t.Fatalf("Resolve() error = %v", err)
 	}
 	if resolved != first {
 		t.Fatalf("resolved = %s, want %s", resolved, first)
 	}
 
-	_, err = storage.Threads().ResolveShortID(ctx, "0")
+	_, err = resolver.Resolve("0")
 	var ambiguous *ShortIDAmbiguousError
 	if !errors.As(err, &ambiguous) {
-		t.Fatalf("ResolveShortID(\"0\") error = %v, want ambiguous", err)
+		t.Fatalf("Resolve(\"0\") error = %v, want ambiguous", err)
 	}
 }
 

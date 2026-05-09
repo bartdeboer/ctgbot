@@ -17,7 +17,20 @@ func (e *ShortIDAmbiguousError) Error() string {
 	return fmt.Sprintf("short ID %s is ambiguous", strings.TrimSpace(e.Ref))
 }
 
-func ShortIDFor(id modeluuid.UUID, candidates []modeluuid.UUID, minLength int) (string, error) {
+type ShortIDResolver struct {
+	ids []modeluuid.UUID
+}
+
+func NewShortIDResolver(ids []modeluuid.UUID) *ShortIDResolver {
+	return &ShortIDResolver{
+		ids: append([]modeluuid.UUID(nil), ids...),
+	}
+}
+
+func (r *ShortIDResolver) ShortIDFor(id modeluuid.UUID, minLength int) (string, error) {
+	if r == nil {
+		return "", fmt.Errorf("missing short ID resolver")
+	}
 	if id.IsNull() {
 		return "", fmt.Errorf("missing id")
 	}
@@ -30,7 +43,7 @@ func ShortIDFor(id modeluuid.UUID, candidates []modeluuid.UUID, minLength int) (
 	}
 
 	found := false
-	for _, candidate := range candidates {
+	for _, candidate := range r.ids {
 		if candidate == id {
 			found = true
 			break
@@ -42,20 +55,23 @@ func ShortIDFor(id modeluuid.UUID, candidates []modeluuid.UUID, minLength int) (
 
 	for length := minLength; length <= len(full); length++ {
 		prefix := full[:length]
-		if countIDPrefixMatches(candidates, prefix) == 1 {
+		if countIDPrefixMatches(r.ids, prefix) == 1 {
 			return prefix, nil
 		}
 	}
 	return full, nil
 }
 
-func ResolveShortID(ref string, candidates []modeluuid.UUID) (modeluuid.UUID, error) {
+func (r *ShortIDResolver) Resolve(ref string) (modeluuid.UUID, error) {
+	if r == nil {
+		return modeluuid.Nil, fmt.Errorf("missing short ID resolver")
+	}
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return modeluuid.Nil, fmt.Errorf("missing id")
 	}
 	if parsed, err := modeluuid.Parse(ref); err == nil {
-		for _, candidate := range candidates {
+		for _, candidate := range r.ids {
 			if candidate == parsed {
 				return parsed, nil
 			}
@@ -63,7 +79,7 @@ func ResolveShortID(ref string, candidates []modeluuid.UUID) (modeluuid.UUID, er
 	}
 
 	var matches []modeluuid.UUID
-	for _, candidate := range candidates {
+	for _, candidate := range r.ids {
 		if strings.HasPrefix(candidate.String(), ref) {
 			matches = append(matches, candidate)
 		}

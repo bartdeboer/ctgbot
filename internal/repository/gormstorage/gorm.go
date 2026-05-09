@@ -138,23 +138,7 @@ func (r *gormThreads) ListByChatID(ctx context.Context, chatID modeluuid.UUID) (
 	return threads, err
 }
 
-func (r *gormThreads) GetShortID(ctx context.Context, threadID modeluuid.UUID, minLength int) (string, error) {
-	ids, err := r.listIDs(ctx)
-	if err != nil {
-		return "", err
-	}
-	return repository.ShortIDFor(threadID, ids, minLength)
-}
-
-func (r *gormThreads) ResolveShortID(ctx context.Context, ref string) (modeluuid.UUID, error) {
-	ids, err := r.listIDs(ctx)
-	if err != nil {
-		return modeluuid.Nil, err
-	}
-	return repository.ResolveShortID(ref, ids)
-}
-
-func (r *gormThreads) listIDs(ctx context.Context) ([]modeluuid.UUID, error) {
+func (r *gormThreads) ListIDs(ctx context.Context) ([]modeluuid.UUID, error) {
 	var threads []coremodel.Thread
 	if err := r.db.WithContext(ctx).Select("id").Find(&threads).Error; err != nil {
 		return nil, err

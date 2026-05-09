@@ -132,7 +132,11 @@ func (s *Service) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.U
 		}
 	}
 
-	threadID, err := s.Storage.Threads().ResolveShortID(ctx, ref)
+	resolver, err := s.threadShortIDResolver(ctx)
+	if err != nil {
+		return modeluuid.Nil, err
+	}
+	threadID, err := resolver.Resolve(ref)
 	if err == nil {
 		return threadID, nil
 	}
@@ -178,6 +182,10 @@ func requireActor(actor coremodel.Actor) error {
 }
 
 func (s *Service) threadSummaries(ctx context.Context, activeOnly bool) ([]ThreadSummary, error) {
+	resolver, err := s.threadShortIDResolver(ctx)
+	if err != nil {
+		return nil, err
+	}
 	chats, err := s.Storage.Chats().List(ctx)
 	if err != nil {
 		return nil, err
@@ -205,7 +213,7 @@ func (s *Service) threadSummaries(ctx context.Context, activeOnly bool) ([]Threa
 				ChatLabel:   chat.Label,
 				ThreadLabel: thread.Label,
 			}
-			summary.ShortID = s.threadShortID(ctx, thread.ID)
+			summary.ShortID = threadShortID(resolver, thread.ID)
 			if len(messages) > 0 {
 				last := messages[len(messages)-1]
 				summary.LastMessageAt = last.CreatedAt
@@ -266,8 +274,16 @@ func (s *Service) ambiguousThreadRefError(ctx context.Context, ref string, candi
 	return errors.New(strings.Join(lines, "\n"))
 }
 
-func (s *Service) threadShortID(ctx context.Context, threadID modeluuid.UUID) string {
-	shortID, err := s.Storage.Threads().GetShortID(ctx, threadID, 6)
+func (s *Service) threadShortIDResolver(ctx context.Context) (*repository.ShortIDResolver, error) {
+	ids, err := s.Storage.Threads().ListIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return repository.NewShortIDResolver(ids), nil
+}
+
+func threadShortID(resolver *repository.ShortIDResolver, threadID modeluuid.UUID) string {
+	shortID, err := resolver.ShortIDFor(threadID, 6)
 	if err != nil {
 		return threadID.String()
 	}

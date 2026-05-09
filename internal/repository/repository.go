@@ -26,13 +26,12 @@ type ChatRepository interface {
 	List(ctx context.Context) ([]coremodel.Chat, error)
 }
 
-type ShortIDRepository interface {
-	GetShortID(ctx context.Context, id modeluuid.UUID, minLength int) (string, error)
-	ResolveShortID(ctx context.Context, ref string) (modeluuid.UUID, error)
+type ShortIDSource interface {
+	ListIDs(ctx context.Context) ([]modeluuid.UUID, error)
 }
 
 type ThreadRepository interface {
-	ShortIDRepository
+	ShortIDSource
 	Save(ctx context.Context, thread *coremodel.Thread) error
 	GetByID(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
 	ListByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.Thread, error)
