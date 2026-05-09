@@ -144,6 +144,13 @@ func (s *Service) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.U
 	if errors.As(err, &ambiguous) {
 		return modeluuid.Nil, s.ambiguousThreadRefError(ctx, ref, ambiguous.Candidates)
 	}
+	var notFound *repository.ShortIDNotFoundError
+	if errors.As(err, &notFound) {
+		return modeluuid.Nil, fmt.Errorf("thread not found: %s", ref)
+	}
+	if err != nil {
+		return modeluuid.Nil, err
+	}
 	return modeluuid.Nil, fmt.Errorf("thread not found: %s", ref)
 }
 
@@ -329,6 +336,7 @@ func threadMatchesQuery(thread ThreadSummary, query string) bool {
 	}
 	values := []string{
 		thread.ID.String(),
+		strings.ToLower(strings.TrimSpace(thread.ShortID)),
 		strings.ToLower(strings.TrimSpace(thread.ChatLabel)),
 		strings.ToLower(strings.TrimSpace(thread.ThreadLabel)),
 		strings.ToLower(strings.TrimSpace(thread.LastMessageText)),

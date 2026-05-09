@@ -17,6 +17,14 @@ func (e *ShortIDAmbiguousError) Error() string {
 	return fmt.Sprintf("short ID %s is ambiguous", strings.TrimSpace(e.Ref))
 }
 
+type ShortIDNotFoundError struct {
+	Ref string
+}
+
+func (e *ShortIDNotFoundError) Error() string {
+	return fmt.Sprintf("id not found: %s", strings.TrimSpace(e.Ref))
+}
+
 type ShortIDResolver struct {
 	ids []modeluuid.UUID
 }
@@ -50,7 +58,7 @@ func (r *ShortIDResolver) ShortIDFor(id modeluuid.UUID, minLength int) (string, 
 		}
 	}
 	if !found {
-		return "", fmt.Errorf("id not found: %s", full)
+		return "", &ShortIDNotFoundError{Ref: full}
 	}
 
 	for length := minLength; length <= len(full); length++ {
@@ -86,7 +94,7 @@ func (r *ShortIDResolver) Resolve(ref string) (modeluuid.UUID, error) {
 	}
 	switch len(matches) {
 	case 0:
-		return modeluuid.Nil, fmt.Errorf("id not found: %s", ref)
+		return modeluuid.Nil, &ShortIDNotFoundError{Ref: ref}
 	case 1:
 		return matches[0], nil
 	default:

@@ -63,6 +63,12 @@ func TestMemoryThreadsShortIDs(t *testing.T) {
 	if !errors.As(err, &ambiguous) {
 		t.Fatalf("Resolve(\"0\") error = %v, want ambiguous", err)
 	}
+
+	_, err = resolver.Resolve("missing")
+	var notFound *ShortIDNotFoundError
+	if !errors.As(err, &notFound) {
+		t.Fatalf("Resolve(\"missing\") error = %v, want not found", err)
+	}
 }
 
 func TestMemoryThreadComponentStatesSaveGetDelete(t *testing.T) {
