@@ -26,10 +26,10 @@ type Authenticator interface {
 type Server struct {
 	Service       *messaging.Service
 	Authenticator Authenticator
-	Inbound       component.ResolvedInboundHandler
+	Inbound       component.ResolvedInboundAsyncHandler
 }
 
-func New(service *messaging.Service, auth Authenticator, inbound component.ResolvedInboundHandler) *Server {
+func New(service *messaging.Service, auth Authenticator, inbound component.ResolvedInboundAsyncHandler) *Server {
 	return &Server{
 		Service:       service,
 		Authenticator: auth,
@@ -151,7 +151,7 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request, threa
 		writeError(w, http.StatusBadRequest, "target chat is disabled: "+targetChat.ID.String())
 		return
 	}
-	result, err := s.Inbound.HandleResolvedInbound(r.Context(), component.ResolvedInbound{
+	if err := s.Inbound.HandleResolvedInboundAsync(r.Context(), component.ResolvedInbound{
 		Chat:   *targetChat,
 		Thread: *targetThread,
 		Payload: message.InboundPayload{
@@ -164,13 +164,12 @@ func (s *Server) handleSendMessage(w http.ResponseWriter, r *http.Request, threa
 			FromLabel: actor.Label,
 			FromID:    actor.ID,
 		},
-	})
-	if err != nil {
+	}); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"message": result.Inbound,
+		"accepted": true,
 	})
 }
 

@@ -23,7 +23,7 @@ const Type = "messaging"
 
 type Component struct {
 	Service *messagingdomain.Service
-	Inbound component.ResolvedInboundHandler
+	Inbound component.ResolvedInboundAsyncHandler
 }
 
 var _ component.Component = (*Component)(nil)
@@ -51,7 +51,7 @@ func RegisterGobTypes(register func(any)) {
 	register(messageSendCommand{})
 }
 
-func New(service *messagingdomain.Service, inbound component.ResolvedInboundHandler) *Component {
+func New(service *messagingdomain.Service, inbound component.ResolvedInboundAsyncHandler) *Component {
 	return &Component{Service: service, Inbound: inbound}
 }
 
@@ -181,16 +181,10 @@ func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Req
 		inbound.Metadata = append(inbound.Metadata, "source_thread_id="+sourceThreadID.String())
 		inbound.PromptContext.ReplyHint = "hostbridge thread " + sourceThreadID.String() + " message send <message>"
 	}
-	result, err := c.Inbound.HandleResolvedInbound(ctx, inbound)
-	if err != nil {
+	if err := c.Inbound.HandleResolvedInboundAsync(ctx, inbound); err != nil {
 		return commandengine.Result{}, err
 	}
-	if result.Inbound == nil {
-		return commandengine.Result{Text: "message sent"}, nil
-	}
-	return commandengine.Result{
-		Text: "message sent\nmessage_id: " + result.Inbound.ID.String(),
-	}, nil
+	return commandengine.Result{Text: "message queued"}, nil
 }
 
 func (c *Component) resolveThreadID(ctx context.Context, req commandengine.Request, ref string) (modeluuid.UUID, error) {

@@ -135,6 +135,10 @@ type ResolvedInboundHandler interface {
 	HandleResolvedInbound(ctx context.Context, inbound ResolvedInbound) (DeliveryResult, error)
 }
 
+type ResolvedInboundAsyncHandler interface {
+	HandleResolvedInboundAsync(ctx context.Context, inbound ResolvedInbound) error
+}
+
 type InboundSource interface {
 	Component
 	RunInbound(ctx context.Context, emit InboundEmitter) error

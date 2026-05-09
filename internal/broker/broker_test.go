@@ -633,6 +633,112 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 	}
 }
 
+func TestHandleResolvedInboundAsyncQueuesWhileThreadBusy(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentEntered := make(chan struct{}, 1)
+	agentRecorder := &fakeAgentRecorder{
+		finalText: "ack",
+		entered:   agentEntered,
+	}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := broker.New(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Components().Save(context.Background(), codex); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+	thread := &coremodel.Thread{ChatID: chat.ID, Label: "alpha"}
+	if err := storage.Threads().Save(context.Background(), thread); err != nil {
+		t.Fatal(err)
+	}
+
+	releaseGate, err := b.Turns.Acquire(context.Background(), thread.ID)
+	if err != nil {
+		t.Fatalf("Acquire() error = %v", err)
+	}
+	gateReleased := false
+	defer func() {
+		if !gateReleased {
+			releaseGate()
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	start := time.Now()
+	err = b.HandleResolvedInboundAsync(ctx, component.ResolvedInbound{
+		Chat:   *chat,
+		Thread: *thread,
+		Payload: message.InboundPayload{
+			ProviderType: "thread",
+			Text:         message.TextMessage{Text: "hello async"},
+			Actor:        coremodel.Actor{ID: "thread:source", Label: "source thread"},
+		},
+		PromptContext: &component.InboundPromptContext{
+			Kind:      "Internal thread message",
+			FromLabel: "source thread",
+			FromID:    "thread:source",
+		},
+	})
+	if err != nil {
+		t.Fatalf("HandleResolvedInboundAsync() error = %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("HandleResolvedInboundAsync() took %v, want immediate return", elapsed)
+	}
+	cancel()
+
+	messages, err := storage.Messages().ListByThreadID(context.Background(), thread.ID)
+	if err != nil {
+		t.Fatalf("ListByThreadID() error = %v", err)
+	}
+	if got := len(messages); got != 0 {
+		t.Fatalf("messages while gate held = %d, want 0", got)
+	}
+
+	releaseGate()
+	gateReleased = true
+
+	select {
+	case <-agentEntered:
+	case <-time.After(time.Second):
+		t.Fatal("async inbound did not start after gate release")
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		messages, err = storage.Messages().ListByThreadID(context.Background(), thread.ID)
+		if err != nil {
+			t.Fatalf("ListByThreadID() error = %v", err)
+		}
+		if len(messages) >= 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for async delivery, messages=%d", len(messages))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
