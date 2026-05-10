@@ -35,11 +35,6 @@ func main() {
 	}
 	req, err := router.Parse(context.Background(), base, args)
 	if err != nil {
-		if isHelpRequest(args) {
-			if helpErr := router.FPrintHelp(context.Background(), os.Stdout, args); helpErr == nil {
-				return
-			}
-		}
 		fmt.Fprintln(os.Stderr, "error:", err)
 		printHelp()
 		os.Exit(1)
@@ -96,16 +91,6 @@ func isLegacyCodexShorthand(arg string) bool {
 	default:
 		return false
 	}
-}
-
-func isHelpRequest(args []string) bool {
-	if len(args) == 0 {
-		return false
-	}
-	if args[len(args)-1] == "help" {
-		return true
-	}
-	return len(args) > 1 && args[len(args)-2] == "help" && args[len(args)-1] == "all"
 }
 
 func baseRequest() (commandengine.Request, error) {

@@ -280,7 +280,6 @@ func InstructionRoutePatterns(definitions []commandengine.Definition, actor core
 	}
 
 	eligible := instructionEligibleDefinitions(definitions, actor)
-	rootCounts := instructionRootCounts(eligible)
 	for _, definition := range eligible {
 		visibility := definition.InstructionVisibilityOrDefault()
 		if visibility == commandengine.InstructionEssential || visibility == commandengine.InstructionImportant {
@@ -293,9 +292,6 @@ func InstructionRoutePatterns(definitions []commandengine.Definition, actor core
 			pattern := commandengine.NormalizePattern(route.Pattern)
 			if isHelpRoutePattern(pattern) {
 				add(pattern)
-			}
-			if root := instructionRoot(pattern); root != "" && rootCounts[root] > 1 {
-				add(root + " help")
 			}
 		}
 	}
@@ -317,21 +313,6 @@ func instructionEligibleDefinitions(definitions []commandengine.Definition, acto
 	return out
 }
 
-func instructionRootCounts(definitions []commandengine.Definition) map[string]int {
-	counts := map[string]int{}
-	for _, definition := range definitions {
-		for _, route := range definition.Routes() {
-			if route.Hidden {
-				continue
-			}
-			if root := instructionRoot(route.Pattern); root != "" {
-				counts[root]++
-			}
-		}
-	}
-	return counts
-}
-
 func firstVisibleRoutePattern(definition commandengine.Definition) string {
 	for _, route := range definition.Routes() {
 		if route.Hidden {
@@ -345,12 +326,4 @@ func firstVisibleRoutePattern(definition commandengine.Definition) string {
 func isHelpRoutePattern(pattern string) bool {
 	fields := strings.Fields(commandengine.NormalizePattern(pattern))
 	return len(fields) > 0 && fields[len(fields)-1] == "help"
-}
-
-func instructionRoot(pattern string) string {
-	fields := strings.Fields(commandengine.NormalizePattern(pattern))
-	if len(fields) < 2 {
-		return ""
-	}
-	return fields[0]
 }

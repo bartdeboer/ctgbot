@@ -3,7 +3,6 @@ package commandengine
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/bartdeboer/go-clir"
 )
@@ -104,13 +103,6 @@ func (r *Router) Parse(ctx context.Context, base Request, argv []string) (Reques
 		return Request{}, err
 	}
 	return state.Request, nil
-}
-
-func (r *Router) FPrintHelp(ctx context.Context, w io.Writer, argv []string) error {
-	if r == nil || r.clir == nil {
-		return fmt.Errorf("missing command router")
-	}
-	return r.clir.FRunWithHelp(ctx, w, argv)
 }
 
 func (r *Router) Authorize(req Request) error {
