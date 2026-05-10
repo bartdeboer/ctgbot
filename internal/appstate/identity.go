@@ -25,6 +25,50 @@ func (c *Config) Git() GitConfig {
 	return GitConfig{cfg: c}
 }
 
+func (g GitConfig) UserName() string {
+	if g.cfg == nil {
+		return ""
+	}
+	name := g.cfg.string("git.user_name", "")
+	if name != "" {
+		return name
+	}
+	var grouped gitConfigValue
+	if g.cfg.structValue("git", &grouped) {
+		return strings.TrimSpace(grouped.UserName)
+	}
+	return ""
+}
+
+func (g GitConfig) SetUserName(name string) error {
+	if g.cfg == nil {
+		return errMissingConfigStore()
+	}
+	return g.cfg.persistString("git.user_name", strings.TrimSpace(name))
+}
+
+func (g GitConfig) UserEmail() string {
+	if g.cfg == nil {
+		return ""
+	}
+	email := g.cfg.string("git.user_email", "")
+	if email != "" {
+		return email
+	}
+	var grouped gitConfigValue
+	if g.cfg.structValue("git", &grouped) {
+		return strings.TrimSpace(grouped.UserEmail)
+	}
+	return ""
+}
+
+func (g GitConfig) SetUserEmail(email string) error {
+	if g.cfg == nil {
+		return errMissingConfigStore()
+	}
+	return g.cfg.persistString("git.user_email", strings.TrimSpace(email))
+}
+
 func (i GitIdentity) Complete() bool {
 	return strings.TrimSpace(i.Name) != "" && strings.TrimSpace(i.Email) != ""
 }
@@ -49,14 +93,8 @@ func (g GitConfig) ExplicitIdentity() (GitIdentity, bool) {
 	}
 	var grouped gitConfigValue
 	hasGrouped := g.cfg.structValue("git", &grouped)
-	name := g.cfg.string("git.user_name", "")
-	email := g.cfg.string("git.user_email", "")
-	if name == "" {
-		name = strings.TrimSpace(grouped.UserName)
-	}
-	if email == "" {
-		email = strings.TrimSpace(grouped.UserEmail)
-	}
+	name := g.UserName()
+	email := g.UserEmail()
 	configured := name != "" || email != "" || (hasGrouped && (strings.TrimSpace(grouped.UserName) != "" || strings.TrimSpace(grouped.UserEmail) != ""))
 	return GitIdentity{Name: name, Email: email}, configured
 }

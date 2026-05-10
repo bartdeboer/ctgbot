@@ -29,6 +29,8 @@ func Items(cfg *appstate.Config) []configengine.Item {
 		Dockerfile(cfg),
 		DockerImage(cfg),
 		DockerWorkspaceHostPath(cfg),
+		GitUserEmail(cfg),
+		GitUserName(cfg),
 		HostbridgeTCPListenAddr(cfg),
 		TelegramDebounceWindow(cfg),
 		TelegramPollTimeout(cfg),

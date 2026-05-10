@@ -45,6 +45,24 @@ func TestResolveGitIdentityReadsGroupedConfig(t *testing.T) {
 	}
 }
 
+func TestGitConfigGettersAndSetters(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+
+	if err := cfg.Git().SetUserName(" Config User "); err != nil {
+		t.Fatalf("SetUserName() error = %v", err)
+	}
+	if err := cfg.Git().SetUserEmail(" config@example.com "); err != nil {
+		t.Fatalf("SetUserEmail() error = %v", err)
+	}
+
+	if got, want := cfg.Git().UserName(), "Config User"; got != want {
+		t.Fatalf("UserName() = %q, want %q", got, want)
+	}
+	if got, want := cfg.Git().UserEmail(), "config@example.com"; got != want {
+		t.Fatalf("UserEmail() = %q, want %q", got, want)
+	}
+}
+
 func TestResolveGitIdentityUsesHostGlobalOnly(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skipf("git unavailable: %v", err)
