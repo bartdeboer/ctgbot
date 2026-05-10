@@ -3,6 +3,8 @@ package commandengine
 import (
 	"context"
 	"fmt"
+	"io"
+
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -74,10 +76,18 @@ func NewRouter(definitions []Definition, source Source) (*Router, error) {
 				state.Request.CanonicalPattern = registered.definition.CanonicalPattern()
 				state.Request.Route = registered.pattern
 				return nil
-			})
+			}, clirRouteOptions(registered.route)...)
 		}
 	})
 	return router, nil
+}
+
+func clirRouteOptions(route Route) []clir.RouteOption {
+	var opts []clir.RouteOption
+	if route.Hidden {
+		opts = append(opts, clir.Hidden())
+	}
+	return opts
 }
 
 type registeredRoute struct {
@@ -102,6 +112,13 @@ func (r *Router) Parse(ctx context.Context, base Request, argv []string) (Reques
 		return Request{}, err
 	}
 	return state.Request, nil
+}
+
+func (r *Router) FPrintHelp(ctx context.Context, w io.Writer, argv []string) error {
+	if r == nil || r.clir == nil {
+		return fmt.Errorf("missing command router")
+	}
+	return r.clir.FPrintHelp(ctx, w, argv)
 }
 
 func (r *Router) Authorize(req Request) error {

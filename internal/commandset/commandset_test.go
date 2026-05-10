@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -91,4 +93,79 @@ func TestNewBoundEngineForSourceRequiresFullRefForMultipleInstances(t *testing.T
 	if got, want := result.Text, "codex/personal status"; got != want {
 		t.Fatalf("Run(codex/personal status) = %q, want %q", got, want)
 	}
+}
+
+func TestInstructionRoutePatternsFiltersVisibilityAndPermissions(t *testing.T) {
+	definitions := []commandengine.Definition{
+		testInstructionDefinition("hidden", commandengine.InstructionHidden, simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("discoverable leaf", "", simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("important leaf", commandengine.InstructionImportant, simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("essential leaf", commandengine.InstructionEssential, simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("root only", commandengine.InstructionEssential, simplerbac.Any(simplerbac.RoleRoot)),
+		testInstructionDefinition("tool help", "", simplerbac.Any(simplerbac.RoleAgent)),
+	}
+
+	got := InstructionRoutePatterns(definitions, coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}})
+	for _, want := range []string{"important leaf", "essential leaf", "tool help"} {
+		if !containsPattern(got, want) {
+			t.Fatalf("InstructionRoutePatterns() missing %q in %#v", want, got)
+		}
+	}
+	for _, notWant := range []string{"hidden", "discoverable leaf", "root only"} {
+		if containsPattern(got, notWant) {
+			t.Fatalf("InstructionRoutePatterns() unexpectedly contains %q in %#v", notWant, got)
+		}
+	}
+}
+
+func TestInstructionRoutePatternsDefaultsUnsetVisibilityToDiscoverable(t *testing.T) {
+	definition := testInstructionDefinition("plain command", "", simplerbac.Any(simplerbac.RoleAgent))
+	if got, want := definition.InstructionVisibilityOrDefault(), commandengine.InstructionDiscoverable; got != want {
+		t.Fatalf("InstructionVisibilityOrDefault() = %q, want %q", got, want)
+	}
+	patterns := InstructionRoutePatterns([]commandengine.Definition{definition}, coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}})
+	if len(patterns) != 0 {
+		t.Fatalf("InstructionRoutePatterns() = %#v, want empty discoverable leaf list", patterns)
+	}
+}
+
+func TestInstructionRoutePatternsAddsScopedHelpForDiscoverableFamilies(t *testing.T) {
+	definitions := []commandengine.Definition{
+		testInstructionDefinition("codex status", commandengine.InstructionImportant, simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("codex model effort list", "", simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("sendstdin", commandengine.InstructionEssential, simplerbac.Any(simplerbac.RoleAgent)),
+	}
+
+	patterns := InstructionRoutePatterns(definitions, coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}})
+	for _, want := range []string{"codex status", "codex help", "sendstdin"} {
+		if !containsPattern(patterns, want) {
+			t.Fatalf("InstructionRoutePatterns() missing %q in %#v", want, patterns)
+		}
+	}
+	if containsPattern(patterns, "codex model effort list") {
+		t.Fatalf("InstructionRoutePatterns() unexpectedly contains discoverable leaf in %#v", patterns)
+	}
+	if containsPattern(patterns, "sendstdin help") {
+		t.Fatalf("InstructionRoutePatterns() unexpectedly adds help for single root command in %#v", patterns)
+	}
+}
+
+func testInstructionDefinition(pattern string, visibility commandengine.InstructionVisibility, policy simplerbac.Rule) commandengine.Definition {
+	return commandengine.Definition{
+		Pattern:               pattern,
+		Help:                  pattern,
+		Build:                 func(req *clir.Request) (any, error) { _ = req; return testCommand{}, nil },
+		Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+		Policy:                policy,
+		InstructionVisibility: visibility,
+	}
+}
+
+func containsPattern(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

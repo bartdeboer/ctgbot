@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -132,5 +134,57 @@ func TestHostbridgeRouterFallsBackToGlobalsForUnsupportedComponent(t *testing.T)
 	}
 	if _, err := router.Parse(context.Background(), base, []string{"gmail", "sendmessage"}); err == nil {
 		t.Fatal("Parse(gmail sendmessage) error = nil, want no matching command")
+	}
+}
+
+func TestIsHelpRequest(t *testing.T) {
+	tests := []struct {
+		args []string
+		want bool
+	}{
+		{args: nil, want: false},
+		{args: []string{"help"}, want: true},
+		{args: []string{"codex", "help"}, want: true},
+		{args: []string{"help", "all"}, want: true},
+		{args: []string{"codex", "help", "all"}, want: true},
+		{args: []string{"codex", "status"}, want: false},
+	}
+
+	for _, tc := range tests {
+		if got := isHelpRequest(tc.args); got != tc.want {
+			t.Fatalf("isHelpRequest(%v) = %v, want %v", tc.args, got, tc.want)
+		}
+	}
+}
+
+func TestHostbridgeScopedHelpHidesHiddenCodexAliases(t *testing.T) {
+	router, err := hostbridgeRouter()
+	if err != nil {
+		t.Fatalf("hostbridgeRouter() error = %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		argv []string
+	}{
+		{name: "scoped", argv: []string{"codex", "help"}},
+		{name: "all", argv: []string{"help", "all"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := router.FPrintHelp(context.Background(), &buf, tc.argv); err != nil {
+				t.Fatalf("FPrintHelp(%v) error = %v", tc.argv, err)
+			}
+
+			out := buf.String()
+			if !strings.Contains(out, "codex status") {
+				t.Fatalf("FPrintHelp(%v) missing visible codex command in %q", tc.argv, out)
+			}
+			for _, notWant := range []string{"codex purge", "codex refresh"} {
+				if strings.Contains(out, notWant) {
+					t.Fatalf("FPrintHelp(%v) unexpectedly contains hidden alias %q in %q", tc.argv, notWant, out)
+				}
+			}
+		})
 	}
 }

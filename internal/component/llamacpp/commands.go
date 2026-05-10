@@ -126,7 +126,15 @@ func llamacppCommand(pattern string, command any, help string, aliases ...comman
 			commandengine.SourceMessage,
 			commandengine.SourceHostbridge,
 		},
-		Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
-		Aliases: commandAliases,
+		Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+		Aliases:               commandAliases,
+		InstructionVisibility: llamacppInstructionVisibility(pattern),
 	}
+}
+
+func llamacppInstructionVisibility(pattern string) commandengine.InstructionVisibility {
+	if commandengine.NormalizePattern(pattern) == "status" {
+		return commandengine.InstructionImportant
+	}
+	return commandengine.InstructionDiscoverable
 }

@@ -82,8 +82,9 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 				}
 				return currentStatusCommand{}, nil
 			},
-			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+			Sources:               []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+			InstructionVisibility: commandengine.InstructionEssential,
 			Aliases: []commandengine.Route{
 				{Pattern: "thread status", Absolute: true},
 				{Pattern: "thread current status", Absolute: true},
@@ -107,11 +108,12 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 		},
 		{
-			Pattern: "thread list",
-			Help:    "List recent active threads",
-			Build:   buildListCommand,
-			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			Pattern:               "thread list",
+			Help:                  "List recent active threads",
+			Build:                 buildListCommand,
+			Sources:               []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
 			Pattern: "thread <thread> message list",
@@ -121,11 +123,12 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 		},
 		{
-			Pattern: "thread <thread> message send",
-			Help:    "Send a message into another thread",
-			Build:   buildMessageSendCommand,
-			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			Pattern:               "thread <thread> message send",
+			Help:                  "Send a message into another thread",
+			Build:                 buildMessageSendCommand,
+			Sources:               []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			InstructionVisibility: commandengine.InstructionImportant,
 		},
 	}
 }

@@ -430,12 +430,22 @@ func codexCommand(pattern string, command any, help string, aliases ...commanden
 		})
 	}
 	return commandengine.Definition{
-		Pattern: pattern,
-		Help:    help,
-		Build:   func(req *clir.Request) (any, error) { _ = req; return command, nil },
-		Sources: codexCommandSources(),
-		Policy:  codexCommandPolicy(),
-		Aliases: commandAliases,
+		Pattern:               pattern,
+		Help:                  help,
+		Build:                 func(req *clir.Request) (any, error) { _ = req; return command, nil },
+		Sources:               codexCommandSources(),
+		Policy:                codexCommandPolicy(),
+		Aliases:               commandAliases,
+		InstructionVisibility: codexInstructionVisibility(pattern),
+	}
+}
+
+func codexInstructionVisibility(pattern string) commandengine.InstructionVisibility {
+	switch commandengine.NormalizePattern(pattern) {
+	case "container refresh", "chat purge", "interrupt", "status":
+		return commandengine.InstructionImportant
+	default:
+		return commandengine.InstructionDiscoverable
 	}
 }
 

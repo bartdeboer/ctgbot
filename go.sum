@@ -6,6 +6,8 @@ cloud.google.com/go/compute/metadata v0.8.4 h1:oXMa1VMQBVCyewMIOm3WQsnVd9FbKBtm8
 cloud.google.com/go/compute/metadata v0.8.4/go.mod h1:E0bWwX5wTnLPedCKqk3pJmVgCBSM6qQI1yTBdEb3C10=
 github.com/bartdeboer/go-clir v0.0.7 h1:fOvC4rl50eH0KH3tdw3bd+5oiPo3hFNEtyqTIepLHlM=
 github.com/bartdeboer/go-clir v0.0.7/go.mod h1:lkwboeLVJIle5KeU9oHbdM8fsy+CDfgejVrwLhAW7XY=
+github.com/bartdeboer/go-clir v0.0.8 h1:R2Ed8WowxG1wDB0r2/EngfEtln5iQxxPmiYrSmkRgvQ=
+github.com/bartdeboer/go-clir v0.0.8/go.mod h1:lkwboeLVJIle5KeU9oHbdM8fsy+CDfgejVrwLhAW7XY=
 github.com/bartdeboer/go-clistate v0.0.6 h1:lLoiE5dxKxaDKWBzcKxyhiNlr/4VaentdkNVVGrIwKg=
 github.com/bartdeboer/go-clistate v0.0.6/go.mod h1:aokoc6hgbN5JryA3kfyF60CZacZyLmKNaPYu3qVbllg=
 github.com/bartdeboer/words v0.0.3 h1:kcTX6Go4p4WYNp3l7887YbPMuV/vRIhiMKDuxEdM/to=

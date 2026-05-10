@@ -200,24 +200,16 @@ func hostbridgeControlCommands(runtime *ChatRuntime) []string {
 	if runtime == nil || runtime.AgentCommands == nil {
 		return nil
 	}
-	patterns := commandset.CanonicalRoutePatterns(
+	patterns := commandset.InstructionRoutePatterns(
 		runtime.AgentCommands.Definitions(),
 		coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
 	)
 	out := make([]string, 0, len(patterns))
 	for _, pattern := range patterns {
-		switch {
-		case strings.TrimSpace(pattern) == "":
+		if strings.TrimSpace(pattern) == "" {
 			continue
-		case strings.HasPrefix(pattern, "run "):
-			continue
-		case strings.HasPrefix(pattern, "sendfile"):
-			continue
-		case strings.HasPrefix(pattern, "sendstdin"):
-			continue
-		default:
-			out = append(out, "hostbridge "+pattern)
 		}
+		out = append(out, "hostbridge "+pattern)
 	}
 	return out
 }
