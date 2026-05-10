@@ -1,6 +1,7 @@
 package commandengine
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -72,6 +73,41 @@ func TestRouterRejectsDuplicateRoutes(t *testing.T) {
 	}, SourceCLI)
 	if err == nil || !strings.Contains(err.Error(), `duplicate command route "same"`) {
 		t.Fatalf("NewRouter() error = %v, want duplicate route", err)
+	}
+}
+
+func TestRouterHelpHidesHiddenRoutes(t *testing.T) {
+	router, err := NewRouter([]Definition{
+		testDefinition("visible help", "visible"),
+		testDefinition("target help", "target", Route{Pattern: "legacy", Hidden: true}),
+		{
+			Pattern: "hidden-canonical",
+			Help:    "hidden help",
+			Hidden:  true,
+			Build:   func(req *clir.Request) (any, error) { return testCommand{}, nil },
+			Sources: []Source{SourceCLI},
+			Policy:  simplerbac.Public(),
+		},
+	}, SourceCLI)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := router.FPrintHelp(context.Background(), &buf, []string{"help", "all"}); err != nil {
+		t.Fatalf("FPrintHelp() error = %v", err)
+	}
+
+	out := buf.String()
+	for _, want := range []string{"visible", "target"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("FPrintHelp() missing %q in %q", want, out)
+		}
+	}
+	for _, notWant := range []string{"legacy", "hidden-canonical"} {
+		if strings.Contains(out, notWant) {
+			t.Fatalf("FPrintHelp() unexpectedly contains hidden route %q in %q", notWant, out)
+		}
 	}
 }
 

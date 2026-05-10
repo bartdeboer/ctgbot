@@ -129,6 +129,27 @@ func TestInstructionRoutePatternsDefaultsUnsetVisibilityToDiscoverable(t *testin
 	}
 }
 
+func TestInstructionRoutePatternsAddsScopedHelpForDiscoverableFamilies(t *testing.T) {
+	definitions := []commandengine.Definition{
+		testInstructionDefinition("codex status", commandengine.InstructionImportant, simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("codex model effort list", "", simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("sendstdin", commandengine.InstructionEssential, simplerbac.Any(simplerbac.RoleAgent)),
+	}
+
+	patterns := InstructionRoutePatterns(definitions, coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}})
+	for _, want := range []string{"codex status", "codex help", "sendstdin"} {
+		if !containsPattern(patterns, want) {
+			t.Fatalf("InstructionRoutePatterns() missing %q in %#v", want, patterns)
+		}
+	}
+	if containsPattern(patterns, "codex model effort list") {
+		t.Fatalf("InstructionRoutePatterns() unexpectedly contains discoverable leaf in %#v", patterns)
+	}
+	if containsPattern(patterns, "sendstdin help") {
+		t.Fatalf("InstructionRoutePatterns() unexpectedly adds help for single root command in %#v", patterns)
+	}
+}
+
 func testInstructionDefinition(pattern string, visibility commandengine.InstructionVisibility, policy simplerbac.Rule) commandengine.Definition {
 	return commandengine.Definition{
 		Pattern:               pattern,
