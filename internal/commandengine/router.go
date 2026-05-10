@@ -121,6 +121,9 @@ func (r *Router) Match(ctx context.Context, argv []string) (RouteMatch, error) {
 	}
 	resolution, err := r.clir.Resolve(ctx, argv)
 	if err != nil {
+		// Match is an inspection helper. A missing route is represented as
+		// Matched=false so callers can decide whether to render help, fall back,
+		// or report the parse error themselves.
 		return RouteMatch{}, nil
 	}
 	return RouteMatch{
