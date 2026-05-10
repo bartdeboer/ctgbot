@@ -111,6 +111,63 @@ func (s *Service) ListMessages(ctx context.Context, actor coremodel.Actor, threa
 	return page, nil
 }
 
+func (s *Service) ThreadStatus(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID) (ThreadStatus, error) {
+	if err := s.ensureStorage(); err != nil {
+		return ThreadStatus{}, err
+	}
+	if err := requireActor(actor); err != nil {
+		return ThreadStatus{}, err
+	}
+	thread, chat, err := s.loadThreadAndChat(ctx, threadID)
+	if err != nil {
+		return ThreadStatus{}, err
+	}
+	resolver, err := s.threadShortIDResolver(ctx)
+	if err != nil {
+		return ThreadStatus{}, err
+	}
+	components, err := s.threadStatusComponents(ctx, *chat, *thread)
+	if err != nil {
+		return ThreadStatus{}, err
+	}
+	return ThreadStatus{
+		ID:          thread.ID,
+		ShortID:     threadShortID(resolver, thread.ID),
+		Label:       strings.TrimSpace(thread.Label),
+		ChatID:      chat.ID,
+		ChatLabel:   strings.TrimSpace(chat.Label),
+		ChatEnabled: chat.Enabled,
+		Components:  components,
+	}, nil
+}
+
+func (s *Service) SetThreadLabel(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, label string) (ThreadStatus, error) {
+	if err := s.ensureStorage(); err != nil {
+		return ThreadStatus{}, err
+	}
+	if err := requireActor(actor); err != nil {
+		return ThreadStatus{}, err
+	}
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return ThreadStatus{}, fmt.Errorf("missing thread label")
+	}
+	if err := s.Storage.Transaction(ctx, func(tx repository.Storage) error {
+		thread, err := tx.Threads().GetByID(ctx, threadID)
+		if err != nil {
+			return err
+		}
+		if thread == nil {
+			return fmt.Errorf("thread not found: %s", threadID)
+		}
+		thread.Label = label
+		return tx.Threads().Save(ctx, thread)
+	}); err != nil {
+		return ThreadStatus{}, err
+	}
+	return s.ThreadStatus(ctx, actor, threadID)
+}
+
 func (s *Service) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
 	if err := s.ensureStorage(); err != nil {
 		return modeluuid.Nil, err
@@ -287,6 +344,38 @@ func (s *Service) threadShortIDResolver(ctx context.Context) (*repository.ShortI
 		return nil, err
 	}
 	return repository.NewShortIDResolver(ids), nil
+}
+
+func (s *Service) threadStatusComponents(ctx context.Context, chat coremodel.Chat, thread coremodel.Thread) ([]ThreadStatusComponent, error) {
+	bindings, err := s.Storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ThreadStatusComponent, 0, len(bindings))
+	for _, binding := range bindings {
+		componentRef := binding.ComponentID.String()
+		registration, err := s.Storage.Components().GetByID(ctx, binding.ComponentID)
+		if err != nil {
+			return nil, err
+		}
+		if registration != nil {
+			componentRef = registration.Ref()
+		}
+		statusComponent := ThreadStatusComponent{
+			Ref:            componentRef,
+			Role:           string(binding.Role),
+			ExternalChatID: strings.TrimSpace(binding.ExternalChatID),
+		}
+		mapping, err := s.Storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, thread.ID, binding.ComponentID)
+		if err != nil {
+			return nil, err
+		}
+		if mapping != nil {
+			statusComponent.ExternalThreadID = strings.TrimSpace(mapping.ComponentThreadID)
+		}
+		out = append(out, statusComponent)
+	}
+	return out, nil
 }
 
 func threadShortID(resolver *repository.ShortIDResolver, threadID modeluuid.UUID) string {

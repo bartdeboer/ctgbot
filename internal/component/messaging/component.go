@@ -34,6 +34,15 @@ type listCommand struct {
 	Query string
 }
 
+type statusCommand struct {
+	ThreadRef string
+}
+
+type labelSetCommand struct {
+	ThreadRef string
+	Label     string
+}
+
 type messageListCommand struct {
 	ThreadRef string
 	Cursor    string
@@ -47,6 +56,8 @@ type messageSendCommand struct {
 
 func RegisterGobTypes(register func(any)) {
 	register(listCommand{})
+	register(statusCommand{})
+	register(labelSetCommand{})
 	register(messageListCommand{})
 	register(messageSendCommand{})
 }
@@ -59,6 +70,27 @@ func (c *Component) Type() string { return Type }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
+		{
+			Pattern: "thread <thread> status",
+			Help:    "Show thread status",
+			Build:   buildStatusCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+			Aliases: []commandengine.Route{
+				{Pattern: "status", Absolute: true},
+				{Pattern: "thread status", Absolute: true},
+			},
+		},
+		{
+			Pattern: "thread <thread> label set",
+			Help:    "Set thread label",
+			Build:   buildLabelSetCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			Aliases: []commandengine.Route{
+				{Pattern: "thread label set", Absolute: true},
+			},
+		},
 		{
 			Pattern: "thread list",
 			Help:    "List recent active threads",
@@ -90,6 +122,12 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.Register[listCommand](registry, c.handleList); err != nil {
 		return err
 	}
+	if err := commandengine.Register[statusCommand](registry, c.handleStatus); err != nil {
+		return err
+	}
+	if err := commandengine.Register[labelSetCommand](registry, c.handleLabelSet); err != nil {
+		return err
+	}
 	if err := commandengine.Register[messageListCommand](registry, c.handleMessageList); err != nil {
 		return err
 	}
@@ -110,6 +148,36 @@ func (c *Component) handleList(ctx context.Context, req commandengine.Request, c
 	return commandengine.Result{
 		Text: formatThreadList(threads, requestThreadID(req)),
 	}, nil
+}
+
+func (c *Component) handleStatus(ctx context.Context, req commandengine.Request, cmd statusCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	status, err := c.Service.ThreadStatus(ctx, req.Context.Actor, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: formatThreadStatus(status)}, nil
+}
+
+func (c *Component) handleLabelSet(ctx context.Context, req commandengine.Request, cmd labelSetCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	status, err := c.Service.SetThreadLabel(ctx, req.Context.Actor, threadID, cmd.Label)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "thread label set: " + strings.TrimSpace(status.Label)}, nil
 }
 
 func (c *Component) handleMessageList(ctx context.Context, req commandengine.Request, cmd messageListCommand) (commandengine.Result, error) {
@@ -254,6 +322,32 @@ func buildMessageSendCommand(req *clir.Request) (any, error) {
 	}, nil
 }
 
+func buildStatusCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected status arguments: %s", extra)
+	}
+	return statusCommand{ThreadRef: threadRef}, nil
+}
+
+func buildLabelSetCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	label := strings.TrimSpace(strings.Join(req.Extra, " "))
+	if label == "" {
+		return nil, fmt.Errorf("missing thread label")
+	}
+	return labelSetCommand{
+		ThreadRef: threadRef,
+		Label:     label,
+	}, nil
+}
+
 func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID modeluuid.UUID) string {
 	if len(threads) == 0 {
 		return "no recent threads"
@@ -294,6 +388,36 @@ func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID m
 			continue
 		}
 		lines = append(lines, fmt.Sprintf("%s%s - %s - %s", threadRef, marker, label, last))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatThreadStatus(status messagingdomain.ThreadStatus) string {
+	lines := []string{
+		"thread status",
+		"chat_id: " + status.ChatID.String(),
+		"chat_label: " + strings.TrimSpace(status.ChatLabel),
+		"chat_enabled: " + fmt.Sprintf("%t", status.ChatEnabled),
+		"thread_id: " + status.ID.String(),
+		"thread_short_id: " + strings.TrimSpace(status.ShortID),
+		"thread_label: " + strings.TrimSpace(status.Label),
+	}
+	if len(status.Components) == 0 {
+		return strings.Join(lines, "\n")
+	}
+	lines = append(lines, "components:")
+	for _, component := range status.Components {
+		line := "- " + strings.TrimSpace(component.Ref)
+		if role := strings.TrimSpace(component.Role); role != "" {
+			line += " " + role
+		}
+		if externalChatID := strings.TrimSpace(component.ExternalChatID); externalChatID != "" {
+			line += " external_chat_id=" + externalChatID
+		}
+		if externalThreadID := strings.TrimSpace(component.ExternalThreadID); externalThreadID != "" {
+			line += " external_thread_id=" + externalThreadID
+		}
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
 }

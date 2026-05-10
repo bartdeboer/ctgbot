@@ -78,7 +78,7 @@ func RegisterGobTypes(register func(any)) {
 }
 
 func GlobalDirectPrefixes() []string {
-	return []string{"component", "thread"}
+	return []string{"component", "status", "thread"}
 }
 
 func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {

@@ -47,3 +47,13 @@ func TestDirectPrefixesIncludeTypeAndRef(t *testing.T) {
 		t.Fatalf("DirectPrefixes = %#v, want [llamacpp llamacpp/default]", prefixes)
 	}
 }
+
+func TestGlobalDirectPrefixesIncludeStatus(t *testing.T) {
+	prefixes := GlobalDirectPrefixes()
+	for _, prefix := range prefixes {
+		if prefix == "status" {
+			return
+		}
+	}
+	t.Fatalf("GlobalDirectPrefixes() = %#v, want status", prefixes)
+}

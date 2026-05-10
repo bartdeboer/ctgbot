@@ -15,18 +15,19 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 		in   []string
 		want []string
 	}{
-		{name: "status", ref: "codex", in: []string{"status"}, want: []string{"codex", "status"}},
+		{name: "status", ref: "codex", in: []string{"status"}, want: []string{"status"}},
 		{name: "refresh", ref: "codex", in: []string{"refresh"}, want: []string{"codex", "refresh"}},
 		{name: "interrupt", ref: "codex", in: []string{"interrupt"}, want: []string{"codex", "interrupt"}},
 		{name: "model status", ref: "codex", in: []string{"model"}, want: []string{"codex", "model"}},
 		{name: "model set", ref: "codex", in: []string{"model", "set", "gpt-5.5"}, want: []string{"codex", "model", "set", "gpt-5.5"}},
 		{name: "llamacpp status is explicit", ref: "llamacpp/default", in: []string{"llamacpp", "status"}, want: []string{"llamacpp", "status"}},
-		{name: "llamacpp shorthand is not assumed", ref: "llamacpp/default", in: []string{"status"}, want: []string{"run", "status"}},
+		{name: "status is global", ref: "llamacpp/default", in: []string{"status"}, want: []string{"status"}},
 		{name: "full current ref is direct", ref: "llamacpp/default", in: []string{"llamacpp/default", "status"}, want: []string{"llamacpp/default", "status"}},
 		{name: "run alias", ref: "codex", in: []string{"whoami"}, want: []string{"run", "whoami"}},
 		{name: "direct hostbridge", ref: "codex", in: []string{"sendstdin"}, want: []string{"sendstdin"}},
 		{name: "config", ref: "codex", in: []string{"config", "list"}, want: []string{"config", "list"}},
 		{name: "component global direct", ref: "codex", in: []string{"component", "help"}, want: []string{"component", "help"}},
+		{name: "status global direct", ref: "codex", in: []string{"status"}, want: []string{"status"}},
 		{name: "thread global direct", ref: "codex", in: []string{"thread", "list"}, want: []string{"thread", "list"}},
 	}
 
@@ -64,7 +65,7 @@ func TestHostbridgeRouterUsesCodexDefinitions(t *testing.T) {
 		argv []string
 		want string
 	}{
-		{argv: normalizedArgs([]string{"status"}, "codex"), want: "codex status"},
+		{argv: normalizedArgs([]string{"status"}, "codex"), want: "thread <thread> status"},
 		{argv: normalizedArgs([]string{"refresh"}, "codex"), want: "codex container refresh"},
 		{argv: normalizedArgs([]string{"interrupt"}, "codex"), want: "codex interrupt"},
 		{argv: normalizedArgs([]string{"model"}, "codex"), want: "codex model"},

@@ -86,7 +86,7 @@ func isDirectHostbridgeCommand(arg string, componentRef string) bool {
 
 func isLegacyCodexShorthand(arg string) bool {
 	switch arg {
-	case "refresh", "purge", "interrupt", "status", "container", "chat", "model":
+	case "refresh", "purge", "interrupt", "container", "chat", "model":
 		return true
 	default:
 		return false

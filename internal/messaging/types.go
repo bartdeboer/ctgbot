@@ -21,6 +21,23 @@ type ThreadSummary struct {
 	LastMessageText string         `json:"last_message_text"`
 }
 
+type ThreadStatus struct {
+	ID          modeluuid.UUID          `json:"id"`
+	ShortID     string                  `json:"short_id"`
+	Label       string                  `json:"label"`
+	ChatID      modeluuid.UUID          `json:"chat_id"`
+	ChatLabel   string                  `json:"chat_label"`
+	ChatEnabled bool                    `json:"chat_enabled"`
+	Components  []ThreadStatusComponent `json:"components"`
+}
+
+type ThreadStatusComponent struct {
+	Ref              string `json:"ref"`
+	Role             string `json:"role"`
+	ExternalChatID   string `json:"external_chat_id"`
+	ExternalThreadID string `json:"external_thread_id"`
+}
+
 type ListThreadsRequest struct {
 	Limit int    `json:"limit"`
 	Query string `json:"query"`
