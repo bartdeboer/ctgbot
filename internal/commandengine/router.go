@@ -114,6 +114,22 @@ func (r *Router) Parse(ctx context.Context, base Request, argv []string) (Reques
 	return state.Request, nil
 }
 
+// Match resolves argv to clir's best route without executing the command builder.
+func (r *Router) Match(ctx context.Context, argv []string) (RouteMatch, error) {
+	if r == nil || r.clir == nil {
+		return RouteMatch{}, fmt.Errorf("missing command router")
+	}
+	resolution, err := r.clir.Resolve(ctx, argv)
+	if err != nil {
+		return RouteMatch{}, nil
+	}
+	return RouteMatch{
+		Matched:    true,
+		Executable: resolution.Executable,
+		Exact:      resolution.Exact,
+	}, nil
+}
+
 func (r *Router) FPrintHelp(ctx context.Context, w io.Writer, argv []string) error {
 	if r == nil || r.clir == nil {
 		return fmt.Errorf("missing command router")

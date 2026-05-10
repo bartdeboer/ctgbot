@@ -137,26 +137,6 @@ func TestHostbridgeRouterFallsBackToGlobalsForUnsupportedComponent(t *testing.T)
 	}
 }
 
-func TestIsHelpRequest(t *testing.T) {
-	tests := []struct {
-		args []string
-		want bool
-	}{
-		{args: nil, want: false},
-		{args: []string{"help"}, want: true},
-		{args: []string{"codex", "help"}, want: true},
-		{args: []string{"help", "all"}, want: true},
-		{args: []string{"codex", "help", "all"}, want: true},
-		{args: []string{"codex", "status"}, want: false},
-	}
-
-	for _, tc := range tests {
-		if got := isHelpRequest(tc.args); got != tc.want {
-			t.Fatalf("isHelpRequest(%v) = %v, want %v", tc.args, got, tc.want)
-		}
-	}
-}
-
 func TestHostbridgeScopedHelpHidesHiddenCodexAliases(t *testing.T) {
 	router, err := hostbridgeRouter()
 	if err != nil {
@@ -186,5 +166,156 @@ func TestHostbridgeScopedHelpHidesHiddenCodexAliases(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing.T) {
+	router, err := hostbridgeRouter()
+	if err != nil {
+		t.Fatalf("hostbridgeRouter() error = %v", err)
+	}
+	base := testHostbridgeRequest()
+
+	tests := []struct {
+		name     string
+		argv     []string
+		contains []string
+	}{
+		{
+			name: "model group",
+			argv: []string{"codex", "model", "help"},
+			contains: []string{
+				"codex model clear",
+				"codex model list",
+				"codex model set",
+			},
+		},
+		{
+			name: "model effort group",
+			argv: []string{"codex", "model", "effort", "help"},
+			contains: []string{
+				"codex model effort clear",
+				"codex model effort list",
+				"codex model effort set",
+			},
+		},
+		{
+			name: "container group",
+			argv: []string{"codex", "container", "help"},
+			contains: []string{
+				"codex container refresh",
+				"codex container start",
+				"codex container stop",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			req, handled, err := parseOrRenderHelp(context.Background(), router, base, tc.argv, &buf)
+			if err != nil {
+				t.Fatalf("parseOrRenderHelp(%v) error = %v", tc.argv, err)
+			}
+			if !handled {
+				t.Fatalf("parseOrRenderHelp(%v) handled = false, req = %#v", tc.argv, req)
+			}
+
+			out := buf.String()
+			for _, want := range tc.contains {
+				if !strings.Contains(out, want) {
+					t.Fatalf("parseOrRenderHelp(%v) output missing %q in %q", tc.argv, want, out)
+				}
+			}
+			if strings.Contains(out, "codex model:") || strings.Contains(out, "codex reasoning effort:") {
+				t.Fatalf("parseOrRenderHelp(%v) rendered command result instead of help: %q", tc.argv, out)
+			}
+		})
+	}
+}
+
+func TestHelpRequestKeepsExactExecutableRoutes(t *testing.T) {
+	router, err := hostbridgeRouter()
+	if err != nil {
+		t.Fatalf("hostbridgeRouter() error = %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		argv    []string
+		pattern string
+	}{
+		{
+			name:    "component skill help",
+			argv:    []string{"component", "gmail/work", "help"},
+			pattern: "component <component> help",
+		},
+		{
+			name:    "param value named help",
+			argv:    []string{"codex", "model", "effort", "set", "help"},
+			pattern: "codex model effort set <effort>",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			req, handled, err := parseOrRenderHelp(context.Background(), router, testHostbridgeRequest(), tc.argv, &buf)
+			if err != nil {
+				t.Fatalf("parseOrRenderHelp(%v) error = %v", tc.argv, err)
+			}
+			if handled {
+				t.Fatalf("parseOrRenderHelp(%v) rendered local help, want executable route; output = %q", tc.argv, buf.String())
+			}
+			if got := req.CanonicalPattern; got != tc.pattern {
+				t.Fatalf("canonical pattern = %q, want %q", got, tc.pattern)
+			}
+			if strings.TrimSpace(buf.String()) != "" {
+				t.Fatalf("unexpected local help output for executable route: %q", buf.String())
+			}
+		})
+	}
+}
+
+func TestHelpRequestUsesClirLiteralScopeBehavior(t *testing.T) {
+	router, err := hostbridgeRouter()
+	if err != nil {
+		t.Fatalf("hostbridgeRouter() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	_, handled, err := parseOrRenderHelp(
+		context.Background(),
+		router,
+		testHostbridgeRequest(),
+		[]string{"thread", "current", "help"},
+		&buf,
+	)
+	if err != nil {
+		t.Fatalf("parseOrRenderHelp(thread current help) error = %v", err)
+	}
+	if !handled {
+		t.Fatal("parseOrRenderHelp(thread current help) handled = false, want contextual help")
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "thread current status") {
+		t.Fatalf("thread current help missing current status in %q", out)
+	}
+	for _, notWant := range []string{"thread <thread>", "thread <thread> label", "thread <thread> message", "thread <thread> status"} {
+		if strings.Contains(out, notWant) {
+			t.Fatalf("thread current help unexpectedly contains parameterized sibling %q in %q", notWant, out)
+		}
+	}
+}
+
+func testHostbridgeRequest() commandengine.Request {
+	return commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{
+				ID:    "hostbridge",
+				Roles: []simplerbac.Role{simplerbac.RoleAgent},
+			},
+		},
 	}
 }

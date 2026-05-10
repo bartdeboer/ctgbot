@@ -35,6 +35,19 @@ type Request struct {
 	Route            string
 }
 
+// RouteMatch describes clir's best route match without executing a command builder.
+type RouteMatch struct {
+	Matched    bool
+	Executable bool
+	Exact      bool
+}
+
+// HelpRequest is commandengine's wrapper around clir's trailing help convention.
+type HelpRequest struct {
+	Scope []string
+	All   bool
+}
+
 type Result struct {
 	Text string
 }
@@ -120,6 +133,18 @@ func (d Definition) InstructionVisibilityOrDefault() InstructionVisibility {
 		return InstructionDiscoverable
 	}
 	return d.InstructionVisibility
+}
+
+// ParseHelpRequest parses clir's built-in trailing "help" / "help all" convention.
+func ParseHelpRequest(args []string) (HelpRequest, bool) {
+	req, ok := clir.ParseHelpRequest(args)
+	if !ok {
+		return HelpRequest{}, false
+	}
+	return HelpRequest{
+		Scope: append([]string{}, req.Scope...),
+		All:   req.All,
+	}, true
 }
 
 func NormalizePattern(pattern string) string {

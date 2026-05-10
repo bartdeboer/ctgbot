@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -33,13 +34,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	req, err := router.Parse(context.Background(), base, args)
+	req, handled, err := parseOrRenderHelp(context.Background(), router, base, args, os.Stdout)
+	if handled {
+		return
+	}
 	if err != nil {
-		if isHelpRequest(args) {
-			if helpErr := router.FPrintHelp(context.Background(), os.Stdout, args); helpErr == nil {
-				return
-			}
-		}
 		fmt.Fprintln(os.Stderr, "error:", err)
 		printHelp()
 		os.Exit(1)
@@ -53,6 +52,30 @@ func main() {
 	if strings.TrimSpace(resp.Result.Text) != "" {
 		fmt.Fprintln(os.Stdout, resp.Result.Text)
 	}
+}
+
+func parseOrRenderHelp(
+	ctx context.Context,
+	router *commandengine.Router,
+	base commandengine.Request,
+	args []string,
+	helpWriter io.Writer,
+) (commandengine.Request, bool, error) {
+	if _, ok := commandengine.ParseHelpRequest(args); ok {
+		match, err := router.Match(ctx, args)
+		if err != nil {
+			return commandengine.Request{}, false, err
+		}
+		if !match.Matched || !match.Executable || !match.Exact {
+			if err := router.FPrintHelp(ctx, helpWriter, args); err != nil {
+				return commandengine.Request{}, false, err
+			}
+			return commandengine.Request{}, true, nil
+		}
+	}
+
+	req, err := router.Parse(ctx, base, args)
+	return req, false, err
 }
 
 func normalizedArgs(args []string, componentRef string) []string {
@@ -96,16 +119,6 @@ func isLegacyCodexShorthand(arg string) bool {
 	default:
 		return false
 	}
-}
-
-func isHelpRequest(args []string) bool {
-	if len(args) == 0 {
-		return false
-	}
-	if args[len(args)-1] == "help" {
-		return true
-	}
-	return len(args) > 1 && args[len(args)-2] == "help" && args[len(args)-1] == "all"
 }
 
 func baseRequest() (commandengine.Request, error) {
