@@ -320,6 +320,7 @@ func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
 	}
 	for _, want := range []string{
 		"The `hostbridge` command is available",
+		"discovering additional hostbridge commands via `hostbridge help`",
 		"Canonical hostbridge control commands for this chat:",
 		"`hostbridge codex status`",
 		"`hostbridge config list`",
