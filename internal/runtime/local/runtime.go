@@ -17,6 +17,7 @@ import (
 type Factory struct {
 	rootDir        string
 	componentsRoot string
+	env            []string
 }
 
 func New(rootDir string, componentsRoot string) *Factory {
@@ -24,6 +25,15 @@ func New(rootDir string, componentsRoot string) *Factory {
 		rootDir:        strings.TrimSpace(rootDir),
 		componentsRoot: strings.TrimSpace(componentsRoot),
 	}
+}
+
+func (f *Factory) WithEnv(env ...string) *Factory {
+	if f == nil {
+		return nil
+	}
+	clone := *f
+	clone.env = runtimepkg.MergeEnv(clone.env, env)
+	return &clone
 }
 
 func (f *Factory) Kind() string {
@@ -53,6 +63,7 @@ func (f *Factory) Bind(
 	config runtimepkg.BindConfig,
 ) runtimepkg.Runtime {
 	_ = registration
+	config = config.WithEnvOverride(f.env...)
 	return &Runtime{
 		rootDir: f.rootDir,
 		home:    home,

@@ -89,6 +89,40 @@ func TestSandboxPropagatesConfiguredGPUs(t *testing.T) {
 	}
 }
 
+func TestSandboxPropagatesBaseGitIdentityEnv(t *testing.T) {
+	root := t.TempDir()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil).WithEnv(
+		"GIT_AUTHOR_NAME=Human",
+		"GIT_AUTHOR_EMAIL=human@example.com",
+		"GIT_COMMITTER_NAME=Human",
+		"GIT_COMMITTER_EMAIL=human@example.com",
+	)
+	registration := coremodel.Component{Type: "mockagent", Name: "git", Runtime: "docker"}
+	home := factory.ComponentHome(registration)
+	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{
+		Env: []string{"GIT_AUTHOR_NAME=Bot"},
+	}).(*Runtime)
+
+	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+
+	if got, want := findEnv(sandbox.Env, "GIT_AUTHOR_NAME"), "Human"; got != want {
+		t.Fatalf("GIT_AUTHOR_NAME = %q, want %q in %#v", got, want, sandbox.Env)
+	}
+	if got, want := findEnv(sandbox.Env, "GIT_AUTHOR_EMAIL"), "human@example.com"; got != want {
+		t.Fatalf("GIT_AUTHOR_EMAIL = %q, want %q in %#v", got, want, sandbox.Env)
+	}
+	if got, want := findEnv(sandbox.Env, "GIT_COMMITTER_NAME"), "Human"; got != want {
+		t.Fatalf("GIT_COMMITTER_NAME = %q, want %q in %#v", got, want, sandbox.Env)
+	}
+	if got, want := findEnv(sandbox.Env, "GIT_COMMITTER_EMAIL"), "human@example.com"; got != want {
+		t.Fatalf("GIT_COMMITTER_EMAIL = %q, want %q in %#v", got, want, sandbox.Env)
+	}
+}
+
 func TestSandboxUsesDockerDefaultSeccompByDefault(t *testing.T) {
 	root := t.TempDir()
 	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)

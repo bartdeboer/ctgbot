@@ -57,8 +57,10 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 	if got, want := spec.GPUs, "all"; got != want {
 		t.Fatalf("GPUs = %q, want %q", got, want)
 	}
-	if !slices.Equal(spec.Env, []string{"RUNTIME=1", "SERVICE=1"}) {
-		t.Fatalf("Env = %#v", spec.Env)
+	for _, want := range []string{"RUNTIME=1", "SERVICE=1"} {
+		if !slices.Contains(spec.Env, want) {
+			t.Fatalf("Env missing %q in %#v", want, spec.Env)
+		}
 	}
 	if !slices.Equal(spec.SecurityOpts, []string{"seccomp=unconfined"}) {
 		t.Fatalf("SecurityOpts = %#v", spec.SecurityOpts)
@@ -72,4 +74,34 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 	if got, want := runtime.BaseURL(), "http://127.0.0.1:18080"; got != want {
 		t.Fatalf("BaseURL = %q, want %q", got, want)
 	}
+}
+
+func TestBindBackendPropagatesBaseEnvOverRuntimeEnv(t *testing.T) {
+	t.Parallel()
+
+	factory := New("/state/components", nil).WithEnv("GIT_AUTHOR_NAME=Human")
+	runtime := factory.BindBackend(
+		coremodel.Component{Type: "llamacpp", Name: "qwen3-q5"},
+		runtimepkg.Home{Path: "/state/components/llamacpp/qwen3-q5"},
+		runtimepkg.BindConfig{Env: []string{"GIT_AUTHOR_NAME=Bot"}},
+		ServiceSpec{Env: []string{"GIT_AUTHOR_NAME=Service"}},
+	)
+
+	spec, err := runtime.containerSpec()
+	if err != nil {
+		t.Fatalf("containerSpec() error = %v", err)
+	}
+	if got, want := findEnv(spec.Env, "GIT_AUTHOR_NAME"), "Human"; got != want {
+		t.Fatalf("GIT_AUTHOR_NAME = %q, want %q in %#v", got, want, spec.Env)
+	}
+}
+
+func findEnv(env []string, key string) string {
+	prefix := key + "="
+	for _, value := range env {
+		if len(value) >= len(prefix) && value[:len(prefix)] == prefix {
+			return value[len(prefix):]
+		}
+	}
+	return ""
 }
