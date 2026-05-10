@@ -30,6 +30,7 @@ func TestBuildContextTarContainsDockerfiles(t *testing.T) {
 		"Dockerfile",
 		"slim.Dockerfile",
 		"cuda.Dockerfile",
+		"LICENSE",
 		"cmd/hostbridge/main.go",
 		"internal/commandset/commandset.go",
 	} {
