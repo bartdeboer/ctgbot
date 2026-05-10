@@ -78,16 +78,16 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		componentCommand("component help", "Show component command help", func(req *clir.Request) (any, error) {
 			_ = req
 			return HelpCommand{}, nil
-		}, componentReadSources()),
+		}, componentReadSources(), commandengine.InstructionEssential),
 		componentCommand("component list", "List registered components", func(req *clir.Request) (any, error) {
 			_ = req
 			return ListCommand{}, nil
-		}, componentReadSources()),
-		componentCommand("component <component> help", "Show component-specific help", buildComponentHelp, componentReadSources()),
-		componentCommand("component <component> auth status", "Show component auth status", buildAuthStatus, []commandengine.Source{commandengine.SourceHostbridge}),
-		componentCommand("component <component> managed-file list", "List declared managed files", buildManagedFileList, componentReadSources()),
-		componentCommand("component <component> managed-file status", "Show managed file presence", buildManagedFileStatus, componentReadSources()),
-		componentCommand("component <component> managed-file put <file>", "Write a declared managed file from stdin", buildManagedFilePut, []commandengine.Source{commandengine.SourceHostbridge}),
+		}, componentReadSources(), commandengine.InstructionImportant),
+		componentCommand("component <component> help", "Show component-specific help", buildComponentHelp, componentReadSources(), commandengine.InstructionEssential),
+		componentCommand("component <component> auth status", "Show component auth status", buildAuthStatus, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
+		componentCommand("component <component> managed-file list", "List declared managed files", buildManagedFileList, componentReadSources(), commandengine.InstructionDiscoverable),
+		componentCommand("component <component> managed-file status", "Show managed file presence", buildManagedFileStatus, componentReadSources(), commandengine.InstructionDiscoverable),
+		componentCommand("component <component> managed-file put <file>", "Write a declared managed file from stdin", buildManagedFilePut, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
 	}
 }
 
@@ -95,13 +95,14 @@ func componentReadSources() []commandengine.Source {
 	return []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge}
 }
 
-func componentCommand(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source) commandengine.Definition {
+func componentCommand(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source, visibility commandengine.InstructionVisibility) commandengine.Definition {
 	return commandengine.Definition{
-		Pattern: pattern,
-		Help:    help,
-		Build:   build,
-		Sources: sources,
-		Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+		Pattern:               pattern,
+		Help:                  help,
+		Build:                 build,
+		Sources:               sources,
+		Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+		InstructionVisibility: visibility,
 	}
 }
 

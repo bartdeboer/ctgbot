@@ -27,11 +27,12 @@ type ConfigHostbridgeScaffold struct {
 func ConfigCommands() []commandengine.Definition {
 	return []commandengine.Definition{
 		{
-			Pattern: "config list",
-			Help:    "List available config keys",
-			Build:   func(req *clir.Request) (any, error) { return ConfigList{}, nil },
-			Sources: allSources(),
-			Policy:  anyOperator(),
+			Pattern:               "config list",
+			Help:                  "List available config keys",
+			Build:                 func(req *clir.Request) (any, error) { return ConfigList{}, nil },
+			Sources:               allSources(),
+			Policy:                anyOperator(),
+			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
 			Pattern: "config get <key>",
@@ -43,8 +44,9 @@ func ConfigCommands() []commandengine.Definition {
 				}
 				return ConfigGet{Key: key}, nil
 			},
-			Sources: allSources(),
-			Policy:  anyOperator(),
+			Sources:               allSources(),
+			Policy:                anyOperator(),
+			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
 			Pattern: "config set <key> <value>",

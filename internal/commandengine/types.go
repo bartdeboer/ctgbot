@@ -47,15 +47,25 @@ type Route struct {
 	Hidden   bool
 }
 
+type InstructionVisibility string
+
+const (
+	InstructionHidden       InstructionVisibility = "hidden"
+	InstructionDiscoverable InstructionVisibility = "discoverable"
+	InstructionImportant    InstructionVisibility = "important"
+	InstructionEssential    InstructionVisibility = "essential"
+)
+
 type Definition struct {
-	Pattern  string
-	Help     string
-	Build    BuildFunc
-	Absolute bool
-	Hidden   bool
-	Sources  []Source
-	Policy   simplerbac.Rule
-	Aliases  []Route
+	Pattern               string
+	Help                  string
+	Build                 BuildFunc
+	Absolute              bool
+	Hidden                bool
+	Sources               []Source
+	Policy                simplerbac.Rule
+	Aliases               []Route
+	InstructionVisibility InstructionVisibility
 }
 
 func (d Definition) Validate() error {
@@ -72,6 +82,11 @@ func (d Definition) Validate() error {
 		if NormalizePattern(route.Pattern) == "" {
 			return fmt.Errorf("command definition %s has an empty alias pattern", d.CanonicalPattern())
 		}
+	}
+	switch d.InstructionVisibilityOrDefault() {
+	case InstructionHidden, InstructionDiscoverable, InstructionImportant, InstructionEssential:
+	default:
+		return fmt.Errorf("command definition %s has invalid instruction visibility: %s", d.CanonicalPattern(), d.InstructionVisibility)
 	}
 	return nil
 }
@@ -98,6 +113,13 @@ func (d Definition) AllowsSource(source Source) bool {
 		}
 	}
 	return false
+}
+
+func (d Definition) InstructionVisibilityOrDefault() InstructionVisibility {
+	if d.InstructionVisibility == "" {
+		return InstructionDiscoverable
+	}
+	return d.InstructionVisibility
 }
 
 func NormalizePattern(pattern string) string {

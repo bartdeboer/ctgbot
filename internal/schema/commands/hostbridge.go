@@ -32,29 +32,32 @@ func HostbridgeCommands() []commandengine.Definition {
 	return []commandengine.Definition{
 		RunCommandDefinition(),
 		{
-			Pattern: "sendfile <path>",
-			Help:    "Upload a file",
-			Build:   buildSendFile,
-			Sources: []commandengine.Source{commandengine.SourceHostbridge},
-			Policy:  agentPolicy(),
+			Pattern:               "sendfile <path>",
+			Help:                  "Upload a file",
+			Build:                 buildSendFile,
+			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:                agentPolicy(),
+			InstructionVisibility: commandengine.InstructionEssential,
 		},
 		{
-			Pattern: "sendstdin",
-			Help:    "Send stdin as text",
-			Build:   buildSendStdin,
-			Sources: []commandengine.Source{commandengine.SourceHostbridge},
-			Policy:  agentPolicy(),
+			Pattern:               "sendstdin",
+			Help:                  "Send stdin as text",
+			Build:                 buildSendStdin,
+			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:                agentPolicy(),
+			InstructionVisibility: commandengine.InstructionEssential,
 		},
 	}
 }
 
 func RunCommandDefinition() commandengine.Definition {
 	return commandengine.Definition{
-		Pattern: "run <command>",
-		Help:    "Run a whitelisted host command",
-		Build:   buildRunCommand,
-		Sources: []commandengine.Source{commandengine.SourceHostbridge},
-		Policy:  agentPolicy(),
+		Pattern:               "run <command>",
+		Help:                  "Run a whitelisted host command",
+		Build:                 buildRunCommand,
+		Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+		Policy:                agentPolicy(),
+		InstructionVisibility: commandengine.InstructionHidden,
 	}
 }
 

@@ -134,3 +134,21 @@ func TestHostbridgeRouterFallsBackToGlobalsForUnsupportedComponent(t *testing.T)
 		t.Fatal("Parse(gmail sendmessage) error = nil, want no matching command")
 	}
 }
+
+func TestIsHelpRequest(t *testing.T) {
+	tests := []struct {
+		args []string
+		want bool
+	}{
+		{args: []string{"codex", "help"}, want: true},
+		{args: []string{"codex", "help", "all"}, want: true},
+		{args: []string{"component", "gmail/work", "help"}, want: true},
+		{args: []string{"status"}, want: false},
+		{args: nil, want: false},
+	}
+	for _, tc := range tests {
+		if got := isHelpRequest(tc.args); got != tc.want {
+			t.Fatalf("isHelpRequest(%v) = %t, want %t", tc.args, got, tc.want)
+		}
+	}
+}
