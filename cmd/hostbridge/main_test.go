@@ -65,7 +65,7 @@ func TestHostbridgeRouterUsesCodexDefinitions(t *testing.T) {
 		argv []string
 		want string
 	}{
-		{argv: normalizedArgs([]string{"status"}, "codex"), want: "thread <thread> status"},
+		{argv: normalizedArgs([]string{"status"}, "codex"), want: "status"},
 		{argv: normalizedArgs([]string{"refresh"}, "codex"), want: "codex container refresh"},
 		{argv: normalizedArgs([]string{"interrupt"}, "codex"), want: "codex interrupt"},
 		{argv: normalizedArgs([]string{"model"}, "codex"), want: "codex model"},

@@ -34,6 +34,8 @@ type listCommand struct {
 	Query string
 }
 
+type currentStatusCommand struct{}
+
 type statusCommand struct {
 	ThreadRef string
 }
@@ -56,6 +58,7 @@ type messageSendCommand struct {
 
 func RegisterGobTypes(register func(any)) {
 	register(listCommand{})
+	register(currentStatusCommand{})
 	register(statusCommand{})
 	register(labelSetCommand{})
 	register(messageListCommand{})
@@ -71,15 +74,27 @@ func (c *Component) Type() string { return Type }
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
 		{
-			Pattern: "thread <thread> status",
-			Help:    "Show thread status",
-			Build:   buildStatusCommand,
+			Pattern: "status",
+			Help:    "Show current thread status",
+			Build: func(req *clir.Request) (any, error) {
+				if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+					return nil, fmt.Errorf("unexpected status arguments: %s", extra)
+				}
+				return currentStatusCommand{}, nil
+			},
 			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
 			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
 			Aliases: []commandengine.Route{
-				{Pattern: "status", Absolute: true},
 				{Pattern: "thread status", Absolute: true},
+				{Pattern: "thread current status", Absolute: true},
 			},
+		},
+		{
+			Pattern: "thread <thread> status",
+			Help:    "Show referenced thread status",
+			Build:   buildStatusCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 		},
 		{
 			Pattern: "thread <thread> label set",
@@ -122,6 +137,9 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.Register[listCommand](registry, c.handleList); err != nil {
 		return err
 	}
+	if err := commandengine.Register[currentStatusCommand](registry, c.handleCurrentStatus); err != nil {
+		return err
+	}
 	if err := commandengine.Register[statusCommand](registry, c.handleStatus); err != nil {
 		return err
 	}
@@ -150,11 +168,20 @@ func (c *Component) handleList(ctx context.Context, req commandengine.Request, c
 	}, nil
 }
 
+func (c *Component) handleCurrentStatus(ctx context.Context, req commandengine.Request, cmd currentStatusCommand) (commandengine.Result, error) {
+	_ = cmd
+	return c.threadStatus(ctx, req, "current")
+}
+
 func (c *Component) handleStatus(ctx context.Context, req commandengine.Request, cmd statusCommand) (commandengine.Result, error) {
+	return c.threadStatus(ctx, req, cmd.ThreadRef)
+}
+
+func (c *Component) threadStatus(ctx context.Context, req commandengine.Request, threadRef string) (commandengine.Result, error) {
 	if c == nil || c.Service == nil {
 		return commandengine.Result{}, fmt.Errorf("missing messaging service")
 	}
-	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	threadID, err := c.resolveThreadID(ctx, req, threadRef)
 	if err != nil {
 		return commandengine.Result{}, err
 	}

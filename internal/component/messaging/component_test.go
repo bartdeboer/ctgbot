@@ -19,7 +19,7 @@ func TestStatusShowsCurrentThread(t *testing.T) {
 	storage, thread := testMessagingStorage(t, ctx)
 	engine := testMessagingEngine(t, storage)
 
-	result, err := engine.Run(ctx, testMessagingRequest(thread.ID), []string{"status"})
+	result, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"status"})
 	if err != nil {
 		t.Fatalf("Run(status) error = %v", err)
 	}
@@ -35,12 +35,39 @@ func TestStatusShowsCurrentThread(t *testing.T) {
 	}
 }
 
+func TestThreadCurrentStatusAllowsUser(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	engine := testMessagingEngine(t, storage)
+
+	for _, argv := range [][]string{
+		{"status"},
+		{"thread", "status"},
+		{"thread", "current", "status"},
+	} {
+		if _, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleUser), argv); err != nil {
+			t.Fatalf("Run(%v) error = %v, want user to read current status", argv, err)
+		}
+	}
+}
+
+func TestThreadReferencedStatusDeniesUser(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	engine := testMessagingEngine(t, storage)
+
+	_, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleUser), []string{"thread", thread.ID.String(), "status"})
+	if err == nil || !strings.Contains(err.Error(), "denied") {
+		t.Fatalf("Run(thread <thread> status) error = %v, want denied", err)
+	}
+}
+
 func TestThreadLabelSetUpdatesCurrentThread(t *testing.T) {
 	ctx := context.Background()
 	storage, thread := testMessagingStorage(t, ctx)
 	engine := testMessagingEngine(t, storage)
 
-	result, err := engine.Run(ctx, testMessagingRequest(thread.ID), []string{"thread", "label", "set", "new", "label"})
+	result, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "label", "set", "new", "label"})
 	if err != nil {
 		t.Fatalf("Run(thread label set) error = %v", err)
 	}
@@ -53,6 +80,17 @@ func TestThreadLabelSetUpdatesCurrentThread(t *testing.T) {
 	}
 	if got, want := updated.Label, "new label"; got != want {
 		t.Fatalf("thread label = %q, want %q", got, want)
+	}
+}
+
+func TestThreadLabelSetDeniesUser(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	engine := testMessagingEngine(t, storage)
+
+	_, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleUser), []string{"thread", "label", "set", "new", "label"})
+	if err == nil || !strings.Contains(err.Error(), "denied") {
+		t.Fatalf("Run(thread label set) error = %v, want denied", err)
 	}
 }
 
@@ -102,13 +140,16 @@ func testMessagingEngine(t *testing.T, storage repository.Storage) *commandengin
 	return engine
 }
 
-func testMessagingRequest(threadID modeluuid.UUID) commandengine.Request {
+func testMessagingRequest(threadID modeluuid.UUID, roles ...simplerbac.Role) commandengine.Request {
+	if len(roles) == 0 {
+		roles = []simplerbac.Role{simplerbac.RoleRoot}
+	}
 	return commandengine.Request{Context: commandengine.Context{
 		ThreadID: threadID,
 		Actor: commandengine.Actor{
 			ID:    "bart",
 			Label: "Bart",
-			Roles: []simplerbac.Role{simplerbac.RoleRoot},
+			Roles: roles,
 		},
 	}}
 }

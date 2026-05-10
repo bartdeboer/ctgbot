@@ -375,6 +375,12 @@ func (s *Service) threadStatusComponents(ctx context.Context, chat coremodel.Cha
 		}
 		out = append(out, statusComponent)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Ref != out[j].Ref {
+			return out[i].Ref < out[j].Ref
+		}
+		return out[i].Role < out[j].Role
+	})
 	return out, nil
 }
 
