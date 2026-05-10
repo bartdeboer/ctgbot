@@ -65,8 +65,8 @@ func ensureGitWorkspace(dir string) error {
 	return nil
 }
 
-func readGitConfig(ctx context.Context, key string) string {
-	cmd := exec.CommandContext(ctx, "git", "config", "--get", key)
+func readGlobalGitConfig(ctx context.Context, key string) string {
+	cmd := exec.CommandContext(ctx, "git", "config", "--global", "--get", key)
 	out, err := cmd.Output()
 	if err != nil {
 		return ""

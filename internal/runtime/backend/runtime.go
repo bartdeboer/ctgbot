@@ -21,6 +21,7 @@ const Kind = "backend"
 type Factory struct {
 	componentsRoot string
 	logger         *log.Logger
+	env            []string
 }
 
 type ServiceSpec struct {
@@ -42,6 +43,15 @@ func New(componentsRoot string, logger *log.Logger) *Factory {
 		componentsRoot: strings.TrimSpace(componentsRoot),
 		logger:         logger,
 	}
+}
+
+func (f *Factory) WithEnv(env ...string) *Factory {
+	if f == nil {
+		return nil
+	}
+	clone := *f
+	clone.env = runtimepkg.MergeEnv(clone.env, env)
+	return &clone
 }
 
 func (f *Factory) Kind() string {
@@ -70,10 +80,11 @@ func (f *Factory) Bind(
 	home runtimepkg.Home,
 	config runtimepkg.BindConfig,
 ) runtimepkg.Runtime {
+	config = config.WithEnvOverride(f.env...)
 	return &unsupportedRuntime{
 		registration: registration,
 		home:         home,
-		config:       config.Clean(),
+		config:       config,
 	}
 }
 
@@ -83,10 +94,11 @@ func (f *Factory) BindBackend(
 	config runtimepkg.BindConfig,
 	service ServiceSpec,
 ) *Runtime {
+	config = config.WithEnvOverride(f.env...)
 	return &Runtime{
 		registration: registration,
 		home:         home,
-		config:       config.Clean(),
+		config:       config,
 		service:      service.clean(),
 		containers:   containerengine.NewManager(f.logger),
 	}
@@ -173,8 +185,7 @@ func (r *Runtime) containerSpec() (containerengine.ContainerSpec, error) {
 	if err != nil {
 		return containerengine.ContainerSpec{}, err
 	}
-	env := append([]string{}, r.config.Env...)
-	env = append(env, r.service.Env...)
+	env := runtimepkg.MergeEnv(r.service.Env, r.config.Env)
 	return containerengine.ContainerSpec{
 		Name:         r.containerName(),
 		Image:        strings.TrimSpace(r.config.Image),

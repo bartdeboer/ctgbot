@@ -87,7 +87,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 	if err != nil {
 		return nil, err
 	}
-	runtimes, bridge, err := buildRuntimes(rootDir, stateRoot, cfg, storage, sandboxengine.NewSandboxManager(logger), logger)
+	runtimes, bridge, err := buildRuntimes(ctx, rootDir, stateRoot, cfg, storage, sandboxengine.NewSandboxManager(logger), logger)
 	if err != nil {
 		return nil, err
 	}
@@ -148,8 +148,12 @@ func resolveComponentsRoot(stateRoot string) string {
 	return filepath.Join(strings.TrimSpace(stateRoot), "components")
 }
 
-func buildRuntimes(rootDir string, stateRoot string, cfg *appstate.Config, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger) (map[string]runtimepkg.Factory, *hostbridgebridge.Bridge, error) {
+func buildRuntimes(ctx context.Context, rootDir string, stateRoot string, cfg *appstate.Config, storage repository.Storage, sandboxes sandboxengine.RuntimeManager, logger *log.Logger) (map[string]runtimepkg.Factory, *hostbridgebridge.Bridge, error) {
 	runtimes := map[string]runtimepkg.Factory{}
+	gitEnv := cfg.ResolveGitIdentity(ctx).Env()
+	if len(gitEnv) == 0 && logger != nil {
+		logger.Printf("git identity not configured or incomplete; sandbox git commits may use repository defaults")
+	}
 	listenAddress := strings.TrimSpace(os.Getenv("CTGBOT_HOSTBRIDGE_LISTEN_ADDR"))
 	if listenAddress == "" {
 		listenAddress = strings.TrimSpace(cfg.Hostbridge().ConfiguredTCPListenAddr())
@@ -163,11 +167,11 @@ func buildRuntimes(rootDir string, stateRoot string, cfg *appstate.Config, stora
 		var runtime runtimepkg.Factory
 		switch runtimeKind {
 		case "docker":
-			runtime = dockerruntime.New(rootDir, componentsRoot, sandboxes, bridge)
+			runtime = dockerruntime.New(rootDir, componentsRoot, sandboxes, bridge).WithEnv(gitEnv...)
 		case "local":
-			runtime = localruntime.New(rootDir, componentsRoot)
+			runtime = localruntime.New(rootDir, componentsRoot).WithEnv(gitEnv...)
 		case backendruntime.Kind:
-			runtime = backendruntime.New(componentsRoot, logger)
+			runtime = backendruntime.New(componentsRoot, logger).WithEnv(gitEnv...)
 		default:
 			return nil, nil, fmt.Errorf("unsupported runtime %q", runtimeKind)
 		}

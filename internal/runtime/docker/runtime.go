@@ -26,6 +26,7 @@ type Factory struct {
 	componentsRoot string
 	sandboxes      sandboxengine.RuntimeManager
 	bridge         *hostbridgebridge.Bridge
+	env            []string
 }
 
 func New(rootDir string, componentsRoot string, sandboxes sandboxengine.RuntimeManager, bridge *hostbridgebridge.Bridge) *Factory {
@@ -35,6 +36,15 @@ func New(rootDir string, componentsRoot string, sandboxes sandboxengine.RuntimeM
 		sandboxes:      sandboxes,
 		bridge:         bridge,
 	}
+}
+
+func (f *Factory) WithEnv(env ...string) *Factory {
+	if f == nil {
+		return nil
+	}
+	clone := *f
+	clone.env = runtimepkg.MergeEnv(clone.env, env)
+	return &clone
 }
 
 func (f *Factory) Kind() string {
@@ -64,7 +74,7 @@ func (f *Factory) Bind(
 	home runtimepkg.Home,
 	config runtimepkg.BindConfig,
 ) runtimepkg.Runtime {
-	config = config.Clean()
+	config = config.WithEnvOverride(f.env...)
 	return &Runtime{
 		rootDir:      f.rootDir,
 		sandboxes:    f.sandboxes,

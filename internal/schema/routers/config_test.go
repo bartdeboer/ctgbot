@@ -43,6 +43,9 @@ func TestConfigCommandsUseConfigItemRBAC(t *testing.T) {
 	if containsLine(list.Text, "docker.image") {
 		t.Fatalf("list = %q, did not expect docker.image for user", list.Text)
 	}
+	if containsLine(list.Text, "git.user-name") {
+		t.Fatalf("list = %q, did not expect git.user-name for user", list.Text)
+	}
 	if _, err := engine.Run(context.Background(), userReq, []string{"config", "set", "chat.enabled", "true"}); err == nil || !strings.Contains(err.Error(), "set chat.enabled denied") {
 		t.Fatalf("user set error = %v, want item RBAC denial", err)
 	}
@@ -134,6 +137,8 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		"docker.container-hostbridge-tcp-addr",
 		"docker.image",
 		"docker.workspace-host-path",
+		"git.user-email",
+		"git.user-name",
 		"hostbridge.tcp-listen-addr",
 		"telegram.debounce-window",
 		"telegram.poll-timeout",
@@ -157,6 +162,8 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 	}{
 		{key: "telegram.render-format", value: "markdown", wantReply: "telegram.render-format=markdown_v2"},
 		{key: "codex.model", value: "gpt-test", wantReply: "codex.model=gpt-test"},
+		{key: "git.user_name", value: "Registry User", wantReply: "git.user-name=Registry User"},
+		{key: "git.user_email", value: "registry@example.com", wantReply: "git.user-email=registry@example.com"},
 		{key: "hostbridge.tcp-listen-addr", value: "127.0.0.1:9999", wantReply: "hostbridge.tcp-listen-addr=127.0.0.1:9999"},
 		{key: "chat.process-tools-enabled", value: "true", wantReply: "chat.process-tools-enabled=true"},
 		{key: "chat.interactive-interrupt-enabled", value: "false", wantReply: "chat.interactive-interrupt-enabled=false"},
@@ -171,8 +178,29 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 			t.Fatalf("config set %s reply = %q, want %q", tc.key, result.Text, tc.wantReply)
 		}
 	}
+	for _, tc := range []struct {
+		key       string
+		wantReply string
+	}{
+		{key: "git.user_name", wantReply: "git.user-name=Registry User"},
+		{key: "git.user_email", wantReply: "git.user-email=registry@example.com"},
+	} {
+		result, err := engine.Run(context.Background(), rootReq, []string{"config", "get", tc.key})
+		if err != nil {
+			t.Fatalf("config get %s: %v", tc.key, err)
+		}
+		if result.Text != tc.wantReply {
+			t.Fatalf("config get %s reply = %q, want %q", tc.key, result.Text, tc.wantReply)
+		}
+	}
 	if got := cfg.Telegram().RenderFormat(); got != "markdown_v2" {
 		t.Fatalf("render format = %q, want markdown_v2", got)
+	}
+	if got := cfg.Git().UserName(); got != "Registry User" {
+		t.Fatalf("git user name = %q, want Registry User", got)
+	}
+	if got := cfg.Git().UserEmail(); got != "registry@example.com" {
+		t.Fatalf("git user email = %q, want registry@example.com", got)
 	}
 	if got := cfg.Chat(chatID).Skills(); len(got) != 1 || got[0] != skill {
 		t.Fatalf("chat skills = %#v, want %q", got, skill)

@@ -45,6 +45,22 @@ func BuildCompilerPath(cfg *appstate.Config) configengine.Item {
 	)
 }
 
+func GitUserName(cfg *appstate.Config) configengine.Item {
+	return rootString("git.user_name", "Git author/committer name for sandbox commits", configengine.ValueString, cfg,
+		func(cfg *appstate.Config) string { return cfg.Git().UserName() },
+		func(cfg *appstate.Config, value string) error { return cfg.Git().SetUserName(value) },
+		rootOnly(), rootOnly(),
+	)
+}
+
+func GitUserEmail(cfg *appstate.Config) configengine.Item {
+	return rootString("git.user_email", "Git author/committer email for sandbox commits", configengine.ValueString, cfg,
+		func(cfg *appstate.Config) string { return cfg.Git().UserEmail() },
+		func(cfg *appstate.Config, value string) error { return cfg.Git().SetUserEmail(value) },
+		rootOnly(), rootOnly(),
+	)
+}
+
 func CodexSessionTimeout(cfg *appstate.Config) configengine.Item {
 	return rootString("codex.session-timeout", "Codex session timeout", configengine.ValueDuration, cfg,
 		func(cfg *appstate.Config) string { return cfg.Codex().SessionTimeout().String() },

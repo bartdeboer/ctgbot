@@ -40,6 +40,47 @@ func (c BindConfig) WithEnv(extra ...string) BindConfig {
 	return c
 }
 
+func (c BindConfig) WithEnvOverride(extra ...string) BindConfig {
+	c = c.Clean()
+	c.Env = MergeEnv(c.Env, extra)
+	return c
+}
+
+func MergeEnv(base []string, extra []string) []string {
+	out := make([]string, 0, len(base)+len(extra))
+	for _, value := range cleanEnv(base) {
+		if envKey(value) == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	for _, value := range cleanEnv(extra) {
+		key := envKey(value)
+		if key == "" {
+			continue
+		}
+		filtered := out[:0]
+		for _, existing := range out {
+			if envKey(existing) != key {
+				filtered = append(filtered, existing)
+			}
+		}
+		out = append(filtered, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func envKey(value string) string {
+	key, _, ok := strings.Cut(strings.TrimSpace(value), "=")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(key)
+}
+
 func cleanEnv(values []string) []string {
 	if len(values) == 0 {
 		return nil
