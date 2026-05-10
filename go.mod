@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.11
 
 require (
-	github.com/bartdeboer/go-clir v0.0.8
+	github.com/bartdeboer/go-clir v0.0.9
 	github.com/bartdeboer/go-clistate v0.0.6
 	github.com/go-telegram/bot v1.17.0
 	golang.org/x/oauth2 v0.31.0

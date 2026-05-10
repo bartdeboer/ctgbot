@@ -111,6 +111,59 @@ func TestRouterHelpHidesHiddenRoutes(t *testing.T) {
 	}
 }
 
+func TestRouterMatchUsesResolveWithoutBuildingCommand(t *testing.T) {
+	buildCalls := 0
+	router, err := NewRouter([]Definition{{
+		Pattern: "codex model",
+		Help:    "Show model",
+		Build: func(req *clir.Request) (any, error) {
+			buildCalls++
+			return testCommand{}, nil
+		},
+		Sources: []Source{SourceCLI},
+		Policy:  simplerbac.Public(),
+	}}, SourceCLI)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	match, err := router.Match(context.Background(), []string{"codex", "model", "help"})
+	if err != nil {
+		t.Fatalf("Match() error = %v", err)
+	}
+	if !match.Matched || !match.Executable || match.Exact {
+		t.Fatalf("Match() = %#v, want matched executable prefix", match)
+	}
+	if buildCalls != 0 {
+		t.Fatalf("Match() called builder %d times, want 0", buildCalls)
+	}
+
+	match, err = router.Match(context.Background(), []string{"codex", "model"})
+	if err != nil {
+		t.Fatalf("Match() exact error = %v", err)
+	}
+	if !match.Matched || !match.Executable || !match.Exact {
+		t.Fatalf("Match() exact = %#v, want exact executable match", match)
+	}
+}
+
+func TestParseHelpRequestUsesClirConvention(t *testing.T) {
+	req, ok := ParseHelpRequest([]string{"codex", "model", "help", "all"})
+	if !ok {
+		t.Fatal("ParseHelpRequest() ok = false, want true")
+	}
+	if got, want := strings.Join(req.Scope, " "), "codex model"; got != want {
+		t.Fatalf("Scope = %q, want %q", got, want)
+	}
+	if !req.All {
+		t.Fatal("All = false, want true")
+	}
+
+	if _, ok := ParseHelpRequest([]string{"codex", "model"}); ok {
+		t.Fatal("ParseHelpRequest(non-help) ok = true, want false")
+	}
+}
+
 func testDefinition(help string, pattern string, aliases ...Route) Definition {
 	return Definition{
 		Pattern: pattern,
