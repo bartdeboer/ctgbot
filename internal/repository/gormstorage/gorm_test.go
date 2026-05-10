@@ -219,6 +219,38 @@ func TestArtifactsAppendFailsWithoutArtifactDir(t *testing.T) {
 	}
 }
 
+func TestTransactionPreservesArtifactDir(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStoreWithArtifactDir(t)
+	messageID := modeluuid.New()
+
+	err := store.Transaction(ctx, func(tx repository.Storage) error {
+		return tx.Artifacts().Append(ctx, &coremodel.Artifact{
+			ChatID:      modeluuid.New(),
+			ThreadID:    modeluuid.New(),
+			MessageID:   messageID,
+			ComponentID: modeluuid.New(),
+			Filename:    "stdin.txt",
+			ContentType: "text/plain",
+			Content:     []byte("hello from transaction"),
+		})
+	})
+	if err != nil {
+		t.Fatalf("Transaction(artifact append) error = %v", err)
+	}
+
+	artifacts, err := store.Artifacts().ListByMessageID(ctx, messageID)
+	if err != nil {
+		t.Fatalf("Artifacts().ListByMessageID() error = %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("len(artifacts) = %d, want 1", len(artifacts))
+	}
+	if got, want := string(artifacts[0].Content), "hello from transaction"; got != want {
+		t.Fatalf("artifact content = %q, want %q", got, want)
+	}
+}
+
 func TestInboundDropsSaveListGetDelete(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)

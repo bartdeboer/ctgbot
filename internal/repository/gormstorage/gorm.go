@@ -16,6 +16,7 @@ import (
 )
 
 type GORMStorage struct {
+	artifactDir    string
 	db             *gorm.DB
 	chats          *gormChats
 	threads        *gormThreads
@@ -33,7 +34,9 @@ func New(db *gorm.DB) *GORMStorage {
 }
 
 func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
+	artifactDir = clean(artifactDir)
 	return &GORMStorage{
+		artifactDir:    artifactDir,
 		db:             db,
 		chats:          &gormChats{db: db},
 		threads:        &gormThreads{db: db},
@@ -43,7 +46,7 @@ func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
 		threadMappings: &gormThreadComponentMappings{db: db},
 		threadStates:   &gormThreadComponentStates{db: db},
 		messages:       &gormMessages{db: db},
-		artifacts:      &gormArtifacts{db: db, artifactDir: clean(artifactDir)},
+		artifacts:      &gormArtifacts{db: db, artifactDir: artifactDir},
 	}
 }
 
@@ -69,7 +72,7 @@ func (s *GORMStorage) Transaction(ctx context.Context, fn func(repository.Storag
 		return fmt.Errorf("missing db")
 	}
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(New(tx))
+		return fn(NewWithArtifactDir(tx, s.artifactDir))
 	})
 }
 
