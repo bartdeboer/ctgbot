@@ -171,6 +171,20 @@ func (r memoryChats) List(ctx context.Context) ([]coremodel.Chat, error) {
 	return out, nil
 }
 
+func (r memoryChats) ListIDs(ctx context.Context) ([]modeluuid.UUID, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	ids := make([]modeluuid.UUID, 0, len(r.s.chats))
+	for _, chat := range r.s.chats {
+		if chat.ID.IsNull() {
+			continue
+		}
+		ids = append(ids, chat.ID)
+	}
+	return ids, nil
+}
+
 type memoryThreads struct{ s *MemoryStorage }
 
 func (r memoryThreads) Save(ctx context.Context, thread *coremodel.Thread) error {

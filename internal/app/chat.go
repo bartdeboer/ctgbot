@@ -2,13 +2,21 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/repository"
 )
+
+type ChatInfo struct {
+	Chat    coremodel.Chat
+	ShortID string
+}
 
 type InboundDropInfo struct {
 	ComponentRef    string
@@ -46,11 +54,50 @@ func (s *Service) CreateChat(ctx context.Context, label string, workspace string
 	return chat, nil
 }
 
-func (s *Service) ListChats(ctx context.Context) ([]coremodel.Chat, error) {
+func (s *Service) ListChats(ctx context.Context) ([]ChatInfo, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}
-	return s.Storage.Chats().List(ctx)
+	chats, err := s.Storage.Chats().List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resolver, err := s.chatShortIDResolver(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ChatInfo, 0, len(chats))
+	for _, chat := range chats {
+		out = append(out, ChatInfo{
+			Chat:    chat,
+			ShortID: chatShortID(resolver, chat.ID),
+		})
+	}
+	return out, nil
+}
+
+func (s *Service) ResolveChatRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return modeluuid.Nil, fmt.Errorf("missing chat id")
+	}
+	resolver, err := s.chatShortIDResolver(ctx)
+	if err != nil {
+		return modeluuid.Nil, err
+	}
+	chatID, err := resolver.Resolve(ref)
+	if err == nil {
+		return chatID, nil
+	}
+	var ambiguous *repository.ShortIDAmbiguousError
+	if errors.As(err, &ambiguous) {
+		return modeluuid.Nil, s.ambiguousChatRefError(ctx, ref, resolver, ambiguous.Candidates)
+	}
+	var notFound *repository.ShortIDNotFoundError
+	if errors.As(err, &notFound) {
+		return modeluuid.Nil, fmt.Errorf("chat not found: %s", ref)
+	}
+	return modeluuid.Nil, err
 }
 
 func (s *Service) ListInboundDrops(ctx context.Context) ([]InboundDropInfo, error) {
@@ -117,4 +164,46 @@ func (s *Service) validateWorkspace(workspace string) error {
 		return nil
 	}
 	return s.WorkspaceValidator.ValidateWorkspace(workspace)
+}
+
+func (s *Service) chatShortIDResolver(ctx context.Context) (*repository.ShortIDResolver, error) {
+	if s == nil || s.Storage == nil {
+		return nil, fmt.Errorf("missing app storage")
+	}
+	ids, err := s.Storage.Chats().ListIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return repository.NewShortIDResolver(ids), nil
+}
+
+func (s *Service) ambiguousChatRefError(ctx context.Context, ref string, resolver *repository.ShortIDResolver, candidates []modeluuid.UUID) error {
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].String() < candidates[j].String()
+	})
+	lines := []string{
+		fmt.Sprintf("chat id %s is ambiguous", strings.TrimSpace(ref)),
+		"candidates:",
+	}
+	for _, candidate := range candidates {
+		label := ""
+		chat, err := s.Storage.Chats().GetByID(ctx, candidate)
+		if err == nil && chat != nil {
+			label = strings.TrimSpace(chat.Label)
+		}
+		line := fmt.Sprintf("- %s %s", chatShortID(resolver, candidate), candidate.String())
+		if label != "" {
+			line += " " + label
+		}
+		lines = append(lines, line)
+	}
+	return errors.New(strings.Join(lines, "\n"))
+}
+
+func chatShortID(resolver *repository.ShortIDResolver, chatID modeluuid.UUID) string {
+	shortID, err := resolver.ShortIDFor(chatID, 6)
+	if err != nil {
+		return chatID.String()
+	}
+	return shortID
 }

@@ -331,6 +331,26 @@ func TestServiceChatManagement(t *testing.T) {
 	if got, want := len(chats), 1; got != want {
 		t.Fatalf("chats = %d, want %d", got, want)
 	}
+	if chats[0].Chat.ID != chat.ID {
+		t.Fatalf("chat list ID = %s, want %s", chats[0].Chat.ID, chat.ID)
+	}
+	if chats[0].ShortID == "" || !strings.HasSuffix(chat.ID.String(), chats[0].ShortID) {
+		t.Fatalf("chat short ID = %q, want suffix of %s", chats[0].ShortID, chat.ID)
+	}
+	resolvedFull, err := svc.ResolveChatRef(ctx, chat.ID.String())
+	if err != nil {
+		t.Fatalf("ResolveChatRef(full) error = %v", err)
+	}
+	if resolvedFull != chat.ID {
+		t.Fatalf("resolved full = %s, want %s", resolvedFull, chat.ID)
+	}
+	resolvedShort, err := svc.ResolveChatRef(ctx, chats[0].ShortID)
+	if err != nil {
+		t.Fatalf("ResolveChatRef(short) error = %v", err)
+	}
+	if resolvedShort != chat.ID {
+		t.Fatalf("resolved short = %s, want %s", resolvedShort, chat.ID)
+	}
 
 	updated, err := svc.SetChatWorkspace(ctx, chat.ID, "work")
 	if err != nil {
@@ -350,6 +370,50 @@ func TestServiceChatManagement(t *testing.T) {
 	if _, err := svc.SetChatWorkspace(ctx, chat.ID, "missing"); err == nil {
 		t.Fatal("SetChatWorkspace() with unknown workspace error = nil")
 	}
+}
+
+func TestServiceResolveChatRefErrors(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+	first := fixedChatUUID(1)
+	second := fixedChatUUID(2)
+	for _, chat := range []*coremodel.Chat{
+		{ID: first, Label: "first", Enabled: true},
+		{ID: second, Label: "second", Enabled: true},
+	} {
+		if err := storage.Chats().Save(ctx, chat); err != nil {
+			t.Fatalf("Save(chat) error = %v", err)
+		}
+	}
+
+	_, err := svc.ResolveChatRef(ctx, "missing")
+	if err == nil || !strings.Contains(err.Error(), "chat not found: missing") {
+		t.Fatalf("ResolveChatRef(missing) error = %v, want chat not found", err)
+	}
+
+	_, err = svc.ResolveChatRef(ctx, "0")
+	if err == nil {
+		t.Fatal("ResolveChatRef(ambiguous) error = nil")
+	}
+	for _, want := range []string{
+		"chat id 0 is ambiguous",
+		"candidates:",
+		first.String(),
+		"first",
+		second.String(),
+		"second",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("ambiguous error missing %q:\n%s", want, err)
+		}
+	}
+}
+
+func fixedChatUUID(last byte) modeluuid.UUID {
+	var id modeluuid.UUID
+	id[6] = last
+	return id
 }
 
 func TestServiceListInboundDropsResolvesComponentRefs(t *testing.T) {

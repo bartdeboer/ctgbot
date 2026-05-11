@@ -22,6 +22,7 @@ type Storage interface {
 }
 
 type ChatRepository interface {
+	ShortIDSource
 	Save(ctx context.Context, chat *coremodel.Chat) error
 	GetByID(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
 	List(ctx context.Context) ([]coremodel.Chat, error)

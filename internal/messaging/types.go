@@ -26,6 +26,7 @@ type ThreadStatus struct {
 	ShortID     string                  `json:"short_id"`
 	Label       string                  `json:"label"`
 	ChatID      modeluuid.UUID          `json:"chat_id"`
+	ChatShortID string                  `json:"chat_short_id"`
 	ChatLabel   string                  `json:"chat_label"`
 	ChatEnabled bool                    `json:"chat_enabled"`
 	Components  []ThreadStatusComponent `json:"components"`

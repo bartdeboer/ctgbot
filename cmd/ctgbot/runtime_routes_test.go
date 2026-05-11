@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/repository"
 	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
@@ -133,18 +135,19 @@ func TestChatCreateListAndWorkspaceRoutes(t *testing.T) {
 			t.Fatalf("chat count = %d, want %d", got, want)
 		}
 		chat := chats[0]
+		shortChatID := shortChatIDForTest(t, system.Storage, chat.ID)
 
 		listOutput := captureStdout(t, func() {
 			if err := router.Run(context.Background(), []string{"chat", "list"}); err != nil {
 				t.Fatalf("chat list: %v", err)
 			}
 		})
-		if !strings.Contains(listOutput, chat.ID.String()) || !strings.Contains(listOutput, "team") || !strings.Contains(listOutput, "enabled=true") {
+		if !strings.Contains(listOutput, chat.ID.String()) || !strings.Contains(listOutput, "short_id="+shortChatID) || !strings.Contains(listOutput, "team") || !strings.Contains(listOutput, "enabled=true") {
 			t.Fatalf("unexpected chat list output: %q", listOutput)
 		}
 
 		setOutput := captureStdout(t, func() {
-			if err := router.Run(context.Background(), []string{"chat", chat.ID.String(), "workspace", "set", "work"}); err != nil {
+			if err := router.Run(context.Background(), []string{"chat", shortChatID, "workspace", "set", "work"}); err != nil {
 				t.Fatalf("chat workspace set: %v", err)
 			}
 		})
@@ -210,6 +213,7 @@ func TestChatComponentAddBindsExternalChatID(t *testing.T) {
 		if len(chats) != 1 {
 			t.Fatalf("chat count = %d, want 1", len(chats))
 		}
+		shortChatID := shortChatIDForTest(t, system.Storage, chats[0].ID)
 
 		bindOutput := captureStdout(t, func() {
 			if err := router.Run(context.Background(), []string{"chat", chats[0].ID.String(), "component", "add", "source", "telegram", "--external-chat-id", "chat-1"}); err != nil {
@@ -232,7 +236,7 @@ func TestChatComponentAddBindsExternalChatID(t *testing.T) {
 		}
 
 		listOutput := captureStdout(t, func() {
-			if err := router.Run(context.Background(), []string{"chat", chats[0].ID.String(), "component", "list"}); err != nil {
+			if err := router.Run(context.Background(), []string{"chat", shortChatID, "component", "list"}); err != nil {
 				t.Fatalf("component list: %v", err)
 			}
 		})
@@ -240,6 +244,19 @@ func TestChatComponentAddBindsExternalChatID(t *testing.T) {
 			t.Fatalf("unexpected component list output: %q", listOutput)
 		}
 	})
+}
+
+func shortChatIDForTest(t *testing.T, storage repository.Storage, chatID modeluuid.UUID) string {
+	t.Helper()
+	ids, err := storage.Chats().ListIDs(context.Background())
+	if err != nil {
+		t.Fatalf("Chats().ListIDs() error = %v", err)
+	}
+	shortID, err := repository.NewShortIDResolver(ids).ShortIDFor(chatID, 6)
+	if err != nil {
+		t.Fatalf("ShortIDFor(%s) error = %v", chatID, err)
+	}
+	return shortID
 }
 
 func TestComponentGuardSetStatusReplacesAndClearDisables(t *testing.T) {

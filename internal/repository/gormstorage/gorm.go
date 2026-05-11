@@ -122,6 +122,21 @@ func (r *gormChats) List(ctx context.Context) ([]coremodel.Chat, error) {
 	return chats, err
 }
 
+func (r *gormChats) ListIDs(ctx context.Context) ([]modeluuid.UUID, error) {
+	var chats []coremodel.Chat
+	if err := r.db.WithContext(ctx).Select("id").Find(&chats).Error; err != nil {
+		return nil, err
+	}
+	ids := make([]modeluuid.UUID, 0, len(chats))
+	for _, chat := range chats {
+		if chat.ID.IsNull() {
+			continue
+		}
+		ids = append(ids, chat.ID)
+	}
+	return ids, nil
+}
+
 type gormThreads struct{ db *gorm.DB }
 
 func (r *gormThreads) Save(ctx context.Context, thread *coremodel.Thread) error {

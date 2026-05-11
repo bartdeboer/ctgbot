@@ -81,6 +81,43 @@ func TestTransactionCommitsOnSuccess(t *testing.T) {
 	}
 }
 
+func TestChatsShortIDs(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	first := fixedUUID(1)
+	second := fixedUUID(2)
+
+	for _, chat := range []*coremodel.Chat{
+		{ID: first, Label: "first", Enabled: true},
+		{ID: second, Label: "second", Enabled: true},
+	} {
+		if err := store.Chats().Save(ctx, chat); err != nil {
+			t.Fatalf("Chats().Save() error = %v", err)
+		}
+	}
+
+	ids, err := store.Chats().ListIDs(ctx)
+	if err != nil {
+		t.Fatalf("Chats().ListIDs() error = %v", err)
+	}
+	resolver := repository.NewShortIDResolver(ids)
+
+	shortID, err := resolver.ShortIDFor(first, 1)
+	if err != nil {
+		t.Fatalf("ShortIDFor() error = %v", err)
+	}
+	if !strings.HasSuffix(first.String(), shortID) {
+		t.Fatalf("short ID %q is not a suffix of %s", shortID, first)
+	}
+	resolved, err := resolver.Resolve(shortID)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if resolved != first {
+		t.Fatalf("resolved = %s, want %s", resolved, first)
+	}
+}
+
 func TestThreadsShortIDs(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()

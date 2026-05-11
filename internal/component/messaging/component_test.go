@@ -23,8 +23,10 @@ func TestStatusShowsCurrentThread(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run(status) error = %v", err)
 	}
+	chatShortID := shortChatIDForMessagingTest(t, storage, thread.ChatID)
 	for _, want := range []string{
 		"thread status",
+		"chat_short_id: " + chatShortID,
 		"chat_label: Codex #1",
 		"thread_label: ctgbot 2",
 		"- telegram source external_chat_id=-100 external_thread_id=845",
@@ -33,6 +35,19 @@ func TestStatusShowsCurrentThread(t *testing.T) {
 			t.Fatalf("status missing %q:\n%s", want, result.Text)
 		}
 	}
+}
+
+func shortChatIDForMessagingTest(t *testing.T, storage repository.Storage, chatID modeluuid.UUID) string {
+	t.Helper()
+	ids, err := storage.Chats().ListIDs(context.Background())
+	if err != nil {
+		t.Fatalf("Chats().ListIDs() error = %v", err)
+	}
+	shortID, err := repository.NewShortIDResolver(ids).ShortIDFor(chatID, 6)
+	if err != nil {
+		t.Fatalf("ShortIDFor(%s) error = %v", chatID, err)
+	}
+	return shortID
 }
 
 func TestThreadCurrentStatusAllowsUser(t *testing.T) {

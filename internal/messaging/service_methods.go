@@ -122,7 +122,11 @@ func (s *Service) ThreadStatus(ctx context.Context, actor coremodel.Actor, threa
 	if err != nil {
 		return ThreadStatus{}, err
 	}
-	resolver, err := s.threadShortIDResolver(ctx)
+	threadResolver, err := s.threadShortIDResolver(ctx)
+	if err != nil {
+		return ThreadStatus{}, err
+	}
+	chatResolver, err := s.chatShortIDResolver(ctx)
 	if err != nil {
 		return ThreadStatus{}, err
 	}
@@ -132,9 +136,10 @@ func (s *Service) ThreadStatus(ctx context.Context, actor coremodel.Actor, threa
 	}
 	return ThreadStatus{
 		ID:          thread.ID,
-		ShortID:     threadShortID(resolver, thread.ID),
+		ShortID:     threadShortID(threadResolver, thread.ID),
 		Label:       strings.TrimSpace(thread.Label),
 		ChatID:      chat.ID,
+		ChatShortID: chatShortID(chatResolver, chat.ID),
 		ChatLabel:   strings.TrimSpace(chat.Label),
 		ChatEnabled: chat.Enabled,
 		Components:  components,
@@ -346,6 +351,14 @@ func (s *Service) threadShortIDResolver(ctx context.Context) (*repository.ShortI
 	return repository.NewShortIDResolver(ids), nil
 }
 
+func (s *Service) chatShortIDResolver(ctx context.Context) (*repository.ShortIDResolver, error) {
+	ids, err := s.Storage.Chats().ListIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return repository.NewShortIDResolver(ids), nil
+}
+
 func (s *Service) threadStatusComponents(ctx context.Context, chat coremodel.Chat, thread coremodel.Thread) ([]ThreadStatusComponent, error) {
 	bindings, err := s.Storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
 	if err != nil {
@@ -388,6 +401,14 @@ func threadShortID(resolver *repository.ShortIDResolver, threadID modeluuid.UUID
 	shortID, err := resolver.ShortIDFor(threadID, 6)
 	if err != nil {
 		return threadID.String()
+	}
+	return shortID
+}
+
+func chatShortID(resolver *repository.ShortIDResolver, chatID modeluuid.UUID) string {
+	shortID, err := resolver.ShortIDFor(chatID, 6)
+	if err != nil {
+		return chatID.String()
 	}
 	return shortID
 }

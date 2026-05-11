@@ -22,7 +22,6 @@ import (
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	"github.com/bartdeboer/ctgbot/internal/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	systempkg "github.com/bartdeboer/ctgbot/internal/system"
@@ -372,8 +371,9 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 				fmt.Println("no chats")
 				return nil
 			}
-			for _, chat := range chats {
-				fmt.Printf("%s\t%s\tworkspace=%s\tenabled=%t\n", chat.ID, chat.Label, chat.Workspace, chat.Enabled)
+			for _, info := range chats {
+				chat := info.Chat
+				fmt.Printf("%s\tshort_id=%s\t%s\tworkspace=%s\tenabled=%t\n", chat.ID, info.ShortID, chat.Label, chat.Workspace, chat.Enabled)
 			}
 			return nil
 		})
@@ -450,9 +450,9 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			if err != nil {
 				return err
 			}
-			chatID, err := modeluuid.Parse(strings.TrimSpace(req.Params["chatID"]))
+			chatID, err := appService.ResolveChatRef(req.Context(), strings.TrimSpace(req.Params["chatID"]))
 			if err != nil {
-				return fmt.Errorf("parse chat id: %w", err)
+				return fmt.Errorf("resolve chat id: %w", err)
 			}
 			chat, err := appService.SetChatWorkspace(req.Context(), chatID, strings.TrimSpace(req.Params["workspace"]))
 			if err != nil {
@@ -475,9 +475,9 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			if err != nil {
 				return err
 			}
-			chatID, err := modeluuid.Parse(strings.TrimSpace(req.Params["chatID"]))
+			chatID, err := appService.ResolveChatRef(req.Context(), strings.TrimSpace(req.Params["chatID"]))
 			if err != nil {
-				return fmt.Errorf("parse chat id: %w", err)
+				return fmt.Errorf("resolve chat id: %w", err)
 			}
 			chat, err := appService.SetChatWorkspace(req.Context(), chatID, "")
 			if err != nil {
@@ -500,9 +500,9 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			if err != nil {
 				return err
 			}
-			chatID, err := modeluuid.Parse(strings.TrimSpace(req.Params["chatID"]))
+			chatID, err := appService.ResolveChatRef(req.Context(), strings.TrimSpace(req.Params["chatID"]))
 			if err != nil {
-				return fmt.Errorf("parse chat id: %w", err)
+				return fmt.Errorf("resolve chat id: %w", err)
 			}
 			role := coremodel.ChatComponentRole(strings.TrimSpace(req.Params["role"]))
 			componentRef := strings.TrimSpace(req.Params["component"])
@@ -537,9 +537,9 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			if err != nil {
 				return err
 			}
-			chatID, err := modeluuid.Parse(strings.TrimSpace(req.Params["chatID"]))
+			chatID, err := appService.ResolveChatRef(req.Context(), strings.TrimSpace(req.Params["chatID"]))
 			if err != nil {
-				return fmt.Errorf("parse chat id: %w", err)
+				return fmt.Errorf("resolve chat id: %w", err)
 			}
 			bindings, err := appService.ListChatComponents(req.Context(), chatID)
 			if err != nil {

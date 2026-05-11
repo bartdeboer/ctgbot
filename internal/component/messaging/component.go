@@ -426,6 +426,7 @@ func formatThreadStatus(status messagingdomain.ThreadStatus) string {
 	lines := []string{
 		"thread status",
 		"chat_id: " + status.ChatID.String(),
+		"chat_short_id: " + strings.TrimSpace(status.ChatShortID),
 		"chat_label: " + strings.TrimSpace(status.ChatLabel),
 		"chat_enabled: " + fmt.Sprintf("%t", status.ChatEnabled),
 		"thread_id: " + status.ID.String(),
