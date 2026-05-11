@@ -61,10 +61,13 @@ func (r *ShortIDResolver) ShortIDFor(id modeluuid.UUID, minLength int) (string, 
 		return "", &ShortIDNotFoundError{Ref: full}
 	}
 
+	// ctgbot IDs are time-ordered, so the first characters mostly encode the
+	// timestamp and tend to be shared by recently-created rows. The suffix is
+	// backed by random bytes and produces much shorter useful IDs.
 	for length := minLength; length <= len(full); length++ {
-		prefix := full[:length]
-		if countIDPrefixMatches(r.ids, prefix) == 1 {
-			return prefix, nil
+		suffix := full[len(full)-length:]
+		if countIDSuffixMatches(r.ids, suffix) == 1 {
+			return suffix, nil
 		}
 	}
 	return full, nil
@@ -86,11 +89,12 @@ func (r *ShortIDResolver) Resolve(ref string) (modeluuid.UUID, error) {
 		}
 	}
 
-	var matches []modeluuid.UUID
-	for _, candidate := range r.ids {
-		if strings.HasPrefix(candidate.String(), ref) {
-			matches = append(matches, candidate)
-		}
+	matches := resolveIDMatches(r.ids, ref, strings.HasSuffix)
+	if len(matches) == 0 {
+		// Backward compatibility for short IDs produced before suffix-based
+		// shortening. Displayed IDs are suffixes, but old prefix refs still
+		// work when they are unambiguous.
+		matches = resolveIDMatches(r.ids, ref, strings.HasPrefix)
 	}
 	switch len(matches) {
 	case 0:
@@ -108,10 +112,20 @@ func (r *ShortIDResolver) Resolve(ref string) (modeluuid.UUID, error) {
 	}
 }
 
-func countIDPrefixMatches(candidates []modeluuid.UUID, prefix string) int {
+func resolveIDMatches(ids []modeluuid.UUID, ref string, match func(string, string) bool) []modeluuid.UUID {
+	var matches []modeluuid.UUID
+	for _, candidate := range ids {
+		if match(candidate.String(), ref) {
+			matches = append(matches, candidate)
+		}
+	}
+	return matches
+}
+
+func countIDSuffixMatches(candidates []modeluuid.UUID, suffix string) int {
 	count := 0
 	for _, candidate := range candidates {
-		if strings.HasPrefix(candidate.String(), prefix) {
+		if strings.HasSuffix(candidate.String(), suffix) {
 			count++
 		}
 	}

@@ -43,11 +43,11 @@ func TestMemoryThreadsShortIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ShortIDFor() error = %v", err)
 	}
-	if !strings.HasPrefix(first.String(), shortID) {
-		t.Fatalf("short ID %q is not a prefix of %s", shortID, first)
+	if !strings.HasSuffix(first.String(), shortID) {
+		t.Fatalf("short ID %q is not a suffix of %s", shortID, first)
 	}
 	if shortID == first.String() {
-		t.Fatalf("short ID = full ID %q, want shortest unique prefix", shortID)
+		t.Fatalf("short ID = full ID %q, want shortest unique suffix", shortID)
 	}
 
 	resolved, err := resolver.Resolve(shortID)
@@ -56,6 +56,15 @@ func TestMemoryThreadsShortIDs(t *testing.T) {
 	}
 	if resolved != first {
 		t.Fatalf("resolved = %s, want %s", resolved, first)
+	}
+
+	oldPrefix := first.String()[:12]
+	resolved, err = resolver.Resolve(oldPrefix)
+	if err != nil {
+		t.Fatalf("Resolve(old prefix) error = %v", err)
+	}
+	if resolved != first {
+		t.Fatalf("resolved old prefix = %s, want %s", resolved, first)
 	}
 
 	_, err = resolver.Resolve("0")
