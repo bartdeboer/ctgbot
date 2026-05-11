@@ -16,17 +16,18 @@ import (
 )
 
 type GORMStorage struct {
-	artifactDir    string
-	db             *gorm.DB
-	chats          *gormChats
-	threads        *gormThreads
-	components     *gormComponents
-	chatComponents *gormChatComponents
-	inboundDrops   *gormInboundDrops
-	threadMappings *gormThreadComponentMappings
-	threadStates   *gormThreadComponentStates
-	messages       *gormMessages
-	artifacts      *gormArtifacts
+	artifactDir             string
+	db                      *gorm.DB
+	chats                   *gormChats
+	threads                 *gormThreads
+	components              *gormComponents
+	componentBindings       *gormComponentBindings
+	chatComponents          *gormChatComponents
+	inboundDrops            *gormInboundDrops
+	threadComponentMappings *gormThreadComponentMappings
+	threadComponentStates   *gormThreadComponentStates
+	messages                *gormMessages
+	artifacts               *gormArtifacts
 }
 
 func New(db *gorm.DB) *GORMStorage {
@@ -36,17 +37,18 @@ func New(db *gorm.DB) *GORMStorage {
 func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
 	artifactDir = clean(artifactDir)
 	return &GORMStorage{
-		artifactDir:    artifactDir,
-		db:             db,
-		chats:          &gormChats{db: db},
-		threads:        &gormThreads{db: db},
-		components:     &gormComponents{db: db},
-		chatComponents: &gormChatComponents{db: db},
-		inboundDrops:   &gormInboundDrops{db: db},
-		threadMappings: &gormThreadComponentMappings{db: db},
-		threadStates:   &gormThreadComponentStates{db: db},
-		messages:       &gormMessages{db: db},
-		artifacts:      &gormArtifacts{db: db, artifactDir: artifactDir},
+		artifactDir:             artifactDir,
+		db:                      db,
+		chats:                   &gormChats{db: db},
+		threads:                 &gormThreads{db: db},
+		components:              &gormComponents{db: db},
+		componentBindings:       &gormComponentBindings{db: db},
+		chatComponents:          &gormChatComponents{db: db},
+		inboundDrops:            &gormInboundDrops{db: db},
+		threadComponentMappings: &gormThreadComponentMappings{db: db},
+		threadComponentStates:   &gormThreadComponentStates{db: db},
+		messages:                &gormMessages{db: db},
+		artifacts:               &gormArtifacts{db: db, artifactDir: artifactDir},
 	}
 }
 
@@ -55,6 +57,7 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.Chat{},
 		&coremodel.Thread{},
 		&coremodel.Component{},
+		&coremodel.ComponentBinding{},
 		&coremodel.ChatComponent{},
 		&coremodel.InboundDrop{},
 		&coremodel.ThreadComponentMapping{},
@@ -76,16 +79,19 @@ func (s *GORMStorage) Transaction(ctx context.Context, fn func(repository.Storag
 	})
 }
 
-func (s *GORMStorage) Chats() repository.ChatRepository                   { return s.chats }
-func (s *GORMStorage) Threads() repository.ThreadRepository               { return s.threads }
-func (s *GORMStorage) Components() repository.ComponentRepository         { return s.components }
+func (s *GORMStorage) Chats() repository.ChatRepository           { return s.chats }
+func (s *GORMStorage) Threads() repository.ThreadRepository       { return s.threads }
+func (s *GORMStorage) Components() repository.ComponentRepository { return s.components }
+func (s *GORMStorage) ComponentBindings() repository.ComponentBindingRepository {
+	return s.componentBindings
+}
 func (s *GORMStorage) ChatComponents() repository.ChatComponentRepository { return s.chatComponents }
 func (s *GORMStorage) InboundDrops() repository.InboundDropRepository     { return s.inboundDrops }
 func (s *GORMStorage) ThreadComponentMappings() repository.ThreadComponentMappingRepository {
-	return s.threadMappings
+	return s.threadComponentMappings
 }
 func (s *GORMStorage) ThreadComponentStates() repository.ThreadComponentStateRepository {
-	return s.threadStates
+	return s.threadComponentStates
 }
 func (s *GORMStorage) Messages() repository.MessageRepository   { return s.messages }
 func (s *GORMStorage) Artifacts() repository.ArtifactRepository { return s.artifacts }
@@ -218,6 +224,44 @@ func (r *gormComponents) ListEnabled(ctx context.Context) ([]coremodel.Component
 	var out []coremodel.Component
 	err := r.db.WithContext(ctx).Where("enabled = ?", true).Order("created_at ASC").Find(&out).Error
 	return out, err
+}
+
+type gormComponentBindings struct{ db *gorm.DB }
+
+func (r *gormComponentBindings) Save(ctx context.Context, binding *coremodel.ComponentBinding) error {
+	if binding.ID.IsNull() {
+		existing, err := r.GetBySourceTargetRole(ctx, binding.SourceComponentID, binding.TargetComponentID, binding.Role)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			binding.ID = existing.ID
+		}
+	}
+	ensureID(&binding.ID)
+	return r.db.WithContext(ctx).Save(binding).Error
+}
+
+func (r *gormComponentBindings) GetBySourceTargetRole(ctx context.Context, sourceComponentID modeluuid.UUID, targetComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) (*coremodel.ComponentBinding, error) {
+	var binding coremodel.ComponentBinding
+	if err := first(r.db.WithContext(ctx).
+		Where("source_component_id = ? AND target_component_id = ? AND role = ?", sourceComponentID, targetComponentID, role).
+		First(&binding)); err != nil {
+		return nil, err
+	}
+	if binding.ID.IsNull() {
+		return nil, nil
+	}
+	return &binding, nil
+}
+
+func (r *gormComponentBindings) ListEnabledBySourceAndRole(ctx context.Context, sourceComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) ([]coremodel.ComponentBinding, error) {
+	var bindings []coremodel.ComponentBinding
+	err := r.db.WithContext(ctx).
+		Where("source_component_id = ? AND role = ? AND enabled = ?", sourceComponentID, role, true).
+		Order("created_at ASC").
+		Find(&bindings).Error
+	return bindings, err
 }
 
 type gormChatComponents struct{ db *gorm.DB }

@@ -17,6 +17,12 @@ const (
 	ChatComponentRoleCommand ChatComponentRole = "command"
 )
 
+type ComponentBindingRole string
+
+const (
+	ComponentBindingRoleGuard ComponentBindingRole = "guard"
+)
+
 type MessageDirection string
 
 const (
@@ -125,6 +131,17 @@ type ChatComponent struct {
 	Role           ChatComponentRole `gorm:"uniqueIndex:idx_chat_component_role"`
 	ExternalChatID string
 	Enabled        bool
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type ComponentBinding struct {
+	ID                modeluuid.UUID       `gorm:"primaryKey"`
+	SourceComponentID modeluuid.UUID       `gorm:"index;uniqueIndex:idx_component_binding_role"`
+	TargetComponentID modeluuid.UUID       `gorm:"uniqueIndex:idx_component_binding_role"`
+	Role              ComponentBindingRole `gorm:"uniqueIndex:idx_component_binding_role"`
+	Enabled           bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

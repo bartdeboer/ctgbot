@@ -65,3 +65,12 @@ func (r ChatComponentRole) Valid() bool {
 		return false
 	}
 }
+
+func (r ComponentBindingRole) Valid() bool {
+	switch r {
+	case ComponentBindingRoleGuard:
+		return true
+	default:
+		return false
+	}
+}

@@ -189,7 +189,7 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		mustBindChatComponent(t, ctx, system, beta.ID, coremodel.ChatComponentRoleRelay, betaRelay.Ref(), "telegram-beta")
 		mustBindChatComponent(t, ctx, system, beta.ID, coremodel.ChatComponentRoleAgent, personalAgent.Ref(), "")
 
-		b := brokerpkg.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}

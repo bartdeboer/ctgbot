@@ -160,7 +160,7 @@ func TestHostbridgeFlow(t *testing.T) {
 			t.Fatalf("BindChatComponent(command) error = %v", err)
 		}
 
-		b := brokerpkg.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -291,7 +291,7 @@ func TestHostbridgeSendMediaFlow(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := brokerpkg.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -449,7 +449,7 @@ func TestHostbridgeRunCommandFlow(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := brokerpkg.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -575,7 +575,7 @@ func TestHostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := brokerpkg.New(storage, system, nil)
+		b := brokerpkg.New(storage, system, nil, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}

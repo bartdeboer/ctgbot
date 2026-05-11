@@ -30,7 +30,7 @@ type Component struct {
 }
 
 var _ component.Component = (*Component)(nil)
-var _ component.CompletionAgent = (*Component)(nil)
+var _ component.CompletionProvider = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 
 func New(
@@ -73,24 +73,7 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 }
 
 func (c *Component) HandleCompletion(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
-	if c == nil {
-		return nil, fmt.Errorf("missing llamacpp component")
-	}
-	if c.runtime == nil {
-		return nil, fmt.Errorf("missing llamacpp backend runtime")
-	}
-	wasRunning, err := c.isRunning(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := c.runtime.Start(ctx); err != nil {
-		return nil, err
-	}
-	autoStarted := !wasRunning
-	if autoStarted && !c.componentConfig.KeepRunning {
-		defer c.stopAfterCompletion()
-	}
-	text, err := c.complete(ctx, completionPromptToChat(request.Prompt))
+	text, err := c.completeWithManagedBackend(ctx, completionPromptToChat(request.Prompt), request.MaxOutputTokens, request.ResponseFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +82,27 @@ func (c *Component) HandleCompletion(ctx context.Context, request component.Comp
 		return nil, nil
 	}
 	return &component.CompletionResult{Final: &coremodel.ThreadMessage{Text: text}}, nil
+}
+
+func (c *Component) completeWithManagedBackend(ctx context.Context, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
+	if c == nil {
+		return "", fmt.Errorf("missing llamacpp component")
+	}
+	if c.runtime == nil {
+		return "", fmt.Errorf("missing llamacpp backend runtime")
+	}
+	wasRunning, err := c.isRunning(ctx)
+	if err != nil {
+		return "", err
+	}
+	if _, err := c.runtime.Start(ctx); err != nil {
+		return "", err
+	}
+	autoStarted := !wasRunning
+	if autoStarted && !c.componentConfig.KeepRunning {
+		defer c.stopAfterCompletion()
+	}
+	return c.completeWithOptions(ctx, messages, maxOutputTokens, responseFormat)
 }
 
 func (c *Component) isRunning(ctx context.Context) (bool, error) {
@@ -156,12 +160,19 @@ func (c *Component) stopAfterCompletion() {
 	}
 }
 
-func (c *Component) complete(ctx context.Context, messages []chatMessage) (string, error) {
+func (c *Component) completeWithOptions(ctx context.Context, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
+	maxTokens := c.componentConfig.MaxTokens
+	if maxOutputTokens > 0 {
+		maxTokens = maxOutputTokens
+	}
 	body := completionRequest{
 		Model:       c.registration.Name,
 		Messages:    messages,
-		MaxTokens:   c.componentConfig.MaxTokens,
+		MaxTokens:   maxTokens,
 		Temperature: c.componentConfig.Temperature,
+	}
+	if strings.EqualFold(strings.TrimSpace(responseFormat), "json") {
+		body.ResponseFormat = &completionResponseFormat{Type: "json_object"}
 	}
 	data, err := json.Marshal(body)
 	if err != nil {
@@ -208,10 +219,15 @@ func (c *Component) logf(format string, args ...any) {
 }
 
 type completionRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature float64       `json:"temperature,omitempty"`
+	Model          string                    `json:"model"`
+	Messages       []chatMessage             `json:"messages"`
+	MaxTokens      int                       `json:"max_tokens,omitempty"`
+	Temperature    float64                   `json:"temperature,omitempty"`
+	ResponseFormat *completionResponseFormat `json:"response_format,omitempty"`
+}
+
+type completionResponseFormat struct {
+	Type string `json:"type"`
 }
 
 type completionResponse struct {

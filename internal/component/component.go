@@ -163,12 +163,12 @@ type Agent interface {
 	HandleTurn(ctx context.Context, turn Turn) (*TurnResult, error)
 }
 
-// CompletionAgent receives a normalized completion prompt for a thread.
+// CompletionProvider receives a normalized completion prompt.
 //
 // The prompt shape intentionally aligns with OpenAI-style chat completions so
 // that components such as llama.cpp can translate it almost directly to their
 // backend payloads without needing to understand broker storage details.
-type CompletionAgent interface {
+type CompletionProvider interface {
 	Component
 	HandleCompletion(ctx context.Context, request CompletionRequest) (*CompletionResult, error)
 }
@@ -225,11 +225,25 @@ type CompletionPrompt struct {
 	Messages []CompletionMessage
 }
 
+type CompletionMode string
+
+const (
+	CompletionModeDefault    CompletionMode = ""
+	CompletionModeRestricted CompletionMode = "restricted"
+)
+
+// CompletionRequest is intentionally reusable for both normal thread turns and
+// bounded classifier-style completions. Restricted consumers should leave
+// Runtime nil and use Mode/controls to make the intended execution envelope
+// explicit to providers.
 type CompletionRequest struct {
-	Chat    coremodel.Chat
-	Thread  coremodel.Thread
-	Prompt  CompletionPrompt
-	Runtime TurnRuntime
+	Chat            coremodel.Chat
+	Thread          coremodel.Thread
+	Prompt          CompletionPrompt
+	Runtime         TurnRuntime
+	MaxOutputTokens int
+	ResponseFormat  string
+	Mode            CompletionMode
 }
 
 type CompletionResult struct {

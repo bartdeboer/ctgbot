@@ -11,6 +11,7 @@ import (
 	componentbroker "github.com/bartdeboer/ctgbot/internal/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	"github.com/bartdeboer/ctgbot/internal/inbound"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -24,11 +25,12 @@ type InstanceResolver interface {
 }
 
 type Broker struct {
-	Storage  repository.Storage
-	Resolver InstanceResolver
-	Mapper   ThreadComponentMapper
-	Turns    *ThreadTurnGate
-	Logf     func(format string, args ...any)
+	Storage        repository.Storage
+	Resolver       InstanceResolver
+	Mapper         ThreadComponentMapper
+	Turns          *ThreadTurnGate
+	Logf           func(format string, args ...any)
+	InboundFilters []inbound.Filter
 }
 
 type EventOutcome struct {
@@ -53,7 +55,7 @@ type ChatRuntime struct {
 type AgentBinding struct {
 	ComponentID modeluuid.UUID
 	Agent       component.Agent
-	Completion  component.CompletionAgent
+	Completion  component.CompletionProvider
 }
 
 type RelayBinding struct {
@@ -62,13 +64,14 @@ type RelayBinding struct {
 	Relay       component.OutboundRelay
 }
 
-func New(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any)) *Broker {
+func New(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any), filters ...inbound.Filter) *Broker {
 	return &Broker{
-		Storage:  storage,
-		Resolver: resolver,
-		Mapper:   NewThreadComponentMapper(storage),
-		Turns:    NewThreadTurnGate(),
-		Logf:     logf,
+		Storage:        storage,
+		Resolver:       resolver,
+		Mapper:         NewThreadComponentMapper(storage),
+		Turns:          NewThreadTurnGate(),
+		Logf:           logf,
+		InboundFilters: inboundFilters(storage, filters...),
 	}
 }
 
@@ -79,54 +82,60 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 	if event.ComponentID.IsNull() {
 		return EventOutcome{}, fmt.Errorf("missing inbound component id")
 	}
-	externalChatID := strings.TrimSpace(event.Payload.ProviderChatID)
-	if externalChatID == "" {
-		return EventOutcome{}, fmt.Errorf("missing inbound provider chat id")
-	}
 
-	decision, err := b.checkInboundFirewall(ctx, event)
+	envelope, filterResult, err := b.filterInbound(ctx, inbound.Envelope{Event: event})
 	if err != nil {
 		return EventOutcome{}, err
 	}
-	if !decision.Allowed {
-		actor := event.Payload.ResolvedActor()
+	if filterResult.Drop {
+		dropEvent := filterResult.Envelope.Event
+		if dropEvent.ComponentID.IsNull() {
+			dropEvent = event
+		}
+		actor := dropEvent.Payload.ResolvedActor()
+		details := strings.Join(filterResult.Details, " ")
 		b.logf(
-			"inbound dropped component=%s external_chat=%q external_thread=%q reason=%s actor_id=%q actor_label=%q chat_label=%q preview=%q",
-			event.ComponentID,
-			externalChatID,
-			strings.TrimSpace(event.Payload.ProviderThreadID),
-			decision.Reason,
+			"inbound dropped component=%s external_chat=%q external_thread=%q reason=%s actor_id=%q actor_label=%q chat_label=%q preview=%q details=%q",
+			dropEvent.ComponentID,
+			strings.TrimSpace(dropEvent.Payload.ProviderChatID),
+			strings.TrimSpace(dropEvent.Payload.ProviderThreadID),
+			filterResult.Reason,
 			strings.TrimSpace(actor.ID),
 			strings.TrimSpace(actor.Label),
-			strings.TrimSpace(event.Payload.ChatLabel),
-			inboundPreview(event.Payload.Text.Text),
+			strings.TrimSpace(dropEvent.Payload.ChatLabel),
+			inboundPreview(dropEvent.Payload.Text.Text),
+			details,
 		)
-		b.maybeHandleInboundFirewallInit(ctx, event, decision)
+		b.maybeHandleInboundFirewallInit(ctx, filterResult)
 		return EventOutcome{Dropped: true}, nil
 	}
-	sourceBinding := decision.SourceBinding
-	chat := decision.Chat
+	sourceBinding := envelope.SourceBinding
+	chat := envelope.Chat
+	if sourceBinding == nil || chat == nil {
+		return EventOutcome{}, fmt.Errorf("inbound filters did not resolve chat routing")
+	}
+	routedEvent := envelope.Event
 
-	thread, err := b.Mapper.EnsureThread(ctx, *sourceBinding, strings.TrimSpace(event.Payload.ProviderThreadID))
+	thread, err := b.Mapper.EnsureThread(ctx, *sourceBinding, strings.TrimSpace(routedEvent.Payload.ProviderThreadID))
 	if err != nil {
 		return EventOutcome{}, err
 	}
-	result, err := b.HandleResolvedInbound(ctx, component.ResolvedInbound{
+	delivery, err := b.HandleResolvedInbound(ctx, component.ResolvedInbound{
 		Chat:        *chat,
 		Thread:      *thread,
-		ComponentID: event.ComponentID,
-		ExternalID:  strings.TrimSpace(event.ExternalID),
-		Payload:     event.Payload,
+		ComponentID: routedEvent.ComponentID,
+		ExternalID:  strings.TrimSpace(routedEvent.ExternalID),
+		Payload:     routedEvent.Payload,
 	})
 	if err != nil {
 		return EventOutcome{
-			Inbound:  result.Inbound,
-			Outbound: result.Outbound,
+			Inbound:  delivery.Inbound,
+			Outbound: delivery.Outbound,
 		}, err
 	}
 	return EventOutcome{
-		Inbound:  result.Inbound,
-		Outbound: result.Outbound,
+		Inbound:  delivery.Inbound,
+		Outbound: delivery.Outbound,
 	}, nil
 }
 

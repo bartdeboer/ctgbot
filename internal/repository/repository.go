@@ -12,6 +12,7 @@ type Storage interface {
 	Chats() ChatRepository
 	Threads() ThreadRepository
 	Components() ComponentRepository
+	ComponentBindings() ComponentBindingRepository
 	ChatComponents() ChatComponentRepository
 	InboundDrops() InboundDropRepository
 	ThreadComponentMappings() ThreadComponentMappingRepository
@@ -43,6 +44,12 @@ type ComponentRepository interface {
 	GetDefaultByType(ctx context.Context, componentType string) (*coremodel.Component, error)
 	GetByTypeAndName(ctx context.Context, componentType string, name string) (*coremodel.Component, error)
 	ListEnabled(ctx context.Context) ([]coremodel.Component, error)
+}
+
+type ComponentBindingRepository interface {
+	Save(ctx context.Context, binding *coremodel.ComponentBinding) error
+	GetBySourceTargetRole(ctx context.Context, sourceComponentID modeluuid.UUID, targetComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) (*coremodel.ComponentBinding, error)
+	ListEnabledBySourceAndRole(ctx context.Context, sourceComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) ([]coremodel.ComponentBinding, error)
 }
 
 type ChatComponentRepository interface {

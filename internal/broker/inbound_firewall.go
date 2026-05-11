@@ -9,60 +9,86 @@ import (
 
 	component "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/inbound"
 	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/repository"
 )
 
-type inboundFirewallDecision struct {
-	Allowed       bool
-	Reason        string
-	Chat          *coremodel.Chat
-	SourceBinding *coremodel.ChatComponent
+func inboundFilters(storage repository.Storage, filters ...inbound.Filter) []inbound.Filter {
+	out := []inbound.Filter{NewSourceBindingFilter(storage)}
+	for _, filter := range filters {
+		if filter != nil {
+			out = append(out, filter)
+		}
+	}
+	return out
 }
 
-func (b *Broker) checkInboundFirewall(ctx context.Context, event component.InboundEvent) (inboundFirewallDecision, error) {
+func (b *Broker) filterInbound(ctx context.Context, envelope inbound.Envelope) (inbound.Envelope, inbound.FilterResult, error) {
+	current := envelope
+	for _, filter := range b.InboundFilters {
+		if filter == nil {
+			continue
+		}
+		result, err := filter.FilterInbound(ctx, current)
+		if err != nil || result.Drop {
+			return result.Envelope, result, err
+		}
+		current = result.Envelope
+	}
+	return current, inbound.Pass(current), nil
+}
+
+type SourceBindingFilter struct {
+	Storage repository.Storage
+}
+
+func NewSourceBindingFilter(storage repository.Storage) *SourceBindingFilter {
+	return &SourceBindingFilter{Storage: storage}
+}
+
+func (f *SourceBindingFilter) FilterInbound(ctx context.Context, envelope inbound.Envelope) (inbound.FilterResult, error) {
+	event := envelope.Event
 	externalChatID := strings.TrimSpace(event.Payload.ProviderChatID)
 	if externalChatID == "" {
-		return inboundFirewallDecision{}, fmt.Errorf("missing inbound provider chat id")
+		return inbound.FilterResult{}, fmt.Errorf("missing inbound provider chat id")
+	}
+	if f == nil || f.Storage == nil {
+		return inbound.FilterResult{}, fmt.Errorf("missing inbound source binding storage")
 	}
 
-	sourceBinding, err := b.Storage.ChatComponents().FindByComponentRoleAndExternalChatID(
+	sourceBinding, err := f.Storage.ChatComponents().FindByComponentRoleAndExternalChatID(
 		ctx,
 		event.ComponentID,
 		coremodel.ChatComponentRoleSource,
 		externalChatID,
 	)
 	if err != nil {
-		return inboundFirewallDecision{}, err
+		return inbound.FilterResult{}, err
 	}
 	if sourceBinding == nil {
-		if err := b.recordInboundDrop(ctx, event); err != nil {
-			return inboundFirewallDecision{}, err
+		if err := f.recordInboundDrop(ctx, event); err != nil {
+			return inbound.FilterResult{}, err
 		}
-		return inboundFirewallDecision{Reason: "no-source-binding"}, nil
+		return inbound.Drop(envelope, "no-source-binding"), nil
 	}
+	envelope.SourceBinding = sourceBinding
 
-	chat, err := b.Storage.Chats().GetByID(ctx, sourceBinding.ChatID)
+	chat, err := f.Storage.Chats().GetByID(ctx, sourceBinding.ChatID)
 	if err != nil {
-		return inboundFirewallDecision{}, err
+		return inbound.FilterResult{}, err
 	}
 	if chat == nil {
-		return inboundFirewallDecision{Reason: "missing-chat", SourceBinding: sourceBinding}, nil
+		return inbound.Drop(envelope, "missing-chat"), nil
 	}
+	envelope.Chat = chat
 	if !chat.Enabled {
-		return inboundFirewallDecision{Reason: "chat-disabled", Chat: chat, SourceBinding: sourceBinding}, nil
+		return inbound.Drop(envelope, "chat-disabled"), nil
 	}
-	return inboundFirewallDecision{
-		Allowed:       true,
-		Reason:        "allowed",
-		Chat:          chat,
-		SourceBinding: sourceBinding,
-	}, nil
+	return inbound.Pass(envelope), nil
 }
 
-func (b *Broker) recordInboundDrop(ctx context.Context, event component.InboundEvent) error {
-	if b == nil || b.Storage == nil {
-		return fmt.Errorf("missing broker storage")
-	}
+func (f *SourceBindingFilter) recordInboundDrop(ctx context.Context, event component.InboundEvent) error {
 	externalChatID := strings.TrimSpace(event.Payload.ProviderChatID)
 	if externalChatID == "" {
 		return fmt.Errorf("missing inbound provider chat id")
@@ -70,7 +96,7 @@ func (b *Broker) recordInboundDrop(ctx context.Context, event component.InboundE
 	actor := event.Payload.ResolvedActor()
 	now := time.Now()
 
-	drop, err := b.Storage.InboundDrops().GetByComponentAndExternalChatID(ctx, event.ComponentID, externalChatID)
+	drop, err := f.Storage.InboundDrops().GetByComponentAndExternalChatID(ctx, event.ComponentID, externalChatID)
 	if err != nil {
 		return err
 	}
@@ -91,22 +117,29 @@ func (b *Broker) recordInboundDrop(ctx context.Context, event component.InboundE
 		drop.FirstSeenAt = now
 	}
 	drop.LastSeenAt = now
-	return b.Storage.InboundDrops().Save(ctx, drop)
+	return f.Storage.InboundDrops().Save(ctx, drop)
 }
 
-func (b *Broker) maybeHandleInboundFirewallInit(ctx context.Context, event component.InboundEvent, decision inboundFirewallDecision) {
+func (b *Broker) maybeHandleInboundFirewallInit(ctx context.Context, result inbound.FilterResult) {
+	switch result.Reason {
+	case "no-source-binding", "missing-chat", "chat-disabled":
+	default:
+		return
+	}
+	event := result.Envelope.Event
 	if !isInitCommand(event.Payload.Text.Text) {
 		return
 	}
-	if err := b.sendInboundInitReply(ctx, event, decision); err != nil {
-		b.logf("inbound init reply failed component=%s external_chat=%q reason=%s err=%v", event.ComponentID, strings.TrimSpace(event.Payload.ProviderChatID), decision.Reason, err)
+	if err := b.sendInboundInitReply(ctx, result); err != nil {
+		b.logf("inbound init reply failed component=%s external_chat=%q reason=%s err=%v", event.ComponentID, strings.TrimSpace(event.Payload.ProviderChatID), result.Reason, err)
 	}
 }
 
-func (b *Broker) sendInboundInitReply(ctx context.Context, event component.InboundEvent, decision inboundFirewallDecision) error {
+func (b *Broker) sendInboundInitReply(ctx context.Context, result inbound.FilterResult) error {
 	if b == nil || b.Resolver == nil {
 		return nil
 	}
+	event := result.Envelope.Event
 	loaded, err := b.Resolver.ResolveComponent(ctx, event.ComponentID)
 	if err != nil {
 		return err
@@ -125,7 +158,7 @@ func (b *Broker) sendInboundInitReply(ctx context.Context, event component.Inbou
 	label := strings.TrimSpace(event.Payload.ChatLabel)
 
 	status := "chat is not enabled"
-	if decision.Chat == nil {
+	if result.Envelope.Chat == nil {
 		status = "chat is not bound"
 	}
 
@@ -138,9 +171,9 @@ func (b *Broker) sendInboundInitReply(ctx context.Context, event component.Inbou
 		"Console:",
 	}
 	switch {
-	case decision.Chat != nil:
+	case result.Envelope.Chat != nil:
 		lines = append(lines,
-			"ctgbot config chat "+decision.Chat.ID.String()+" set chat.enabled true",
+			"ctgbot config chat "+result.Envelope.Chat.ID.String()+" set chat.enabled true",
 		)
 	default:
 		bind := "ctgbot chat bind " + componentRef + " " + externalChatID

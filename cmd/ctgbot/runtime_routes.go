@@ -23,6 +23,7 @@ import (
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	"github.com/bartdeboer/ctgbot/internal/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	inboundguard "github.com/bartdeboer/ctgbot/internal/guard"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -72,7 +73,8 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			if rtSystem.Logger != nil {
 				logf = rtSystem.Logger.Printf
 			}
-			return broker.New(rtSystem.Storage, rtSystem, logf).Run(runCtx)
+			guardFilter := inboundguard.NewInboundFilter(rtSystem.Storage, rtSystem, logf)
+			return broker.New(rtSystem.Storage, rtSystem, logf, guardFilter).Run(runCtx)
 		})
 
 		b.Handle("workspace set <workspace>", "Configure a workspace", func(req *clir.Request) error {
@@ -204,6 +206,88 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			return nil
 		})
 
+		b.Handle("component <source> guard set <guard>", "Set the inbound guard component for a source component", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("component guard set", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
+			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
+			codexImage := fs.String("codex-image", "", "Codex runtime image override")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			rtSystem, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
+			if err != nil {
+				return err
+			}
+			result, err := setSourceGuard(req.Context(), rtSystem, strings.TrimSpace(req.Params["source"]), strings.TrimSpace(req.Params["guard"]))
+			if err != nil {
+				return err
+			}
+			fmt.Println("component guard set")
+			fmt.Printf("source: %s\n", result.Source.Ref())
+			fmt.Printf("guard: %s\n", result.Guard.Ref())
+			fmt.Printf("binding_id: %s\n", result.Binding.ID)
+			return nil
+		})
+
+		b.Handle("component <source> guard clear", "Clear the inbound guard component for a source component", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("component guard clear", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
+			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
+			codexImage := fs.String("codex-image", "", "Codex runtime image override")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			rtSystem, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
+			if err != nil {
+				return err
+			}
+			result, err := clearSourceGuard(req.Context(), rtSystem, strings.TrimSpace(req.Params["source"]))
+			if err != nil {
+				return err
+			}
+			fmt.Println("component guard cleared")
+			fmt.Printf("source: %s\n", result.Source.Ref())
+			fmt.Printf("disabled: %d\n", result.Disabled)
+			return nil
+		})
+
+		b.Handle("component <source> guard status", "Show the inbound guard component for a source component", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("component guard status", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
+			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
+			codexImage := fs.String("codex-image", "", "Codex runtime image override")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			rtSystem, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
+			if err != nil {
+				return err
+			}
+			result, err := sourceGuardStatus(req.Context(), rtSystem, strings.TrimSpace(req.Params["source"]))
+			if err != nil {
+				return err
+			}
+			fmt.Println("component guard status")
+			fmt.Printf("source: %s\n", result.Source.Ref())
+			if len(result.Bindings) == 0 {
+				fmt.Println("guard: none")
+				return nil
+			}
+			for _, binding := range result.Bindings {
+				fmt.Printf("guard: %s\tbinding_id=%s\n", binding.GuardRef, binding.Binding.ID)
+			}
+			return nil
+		})
+
 		b.Handle("component <component>", "Run a registered component CLI command", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("component", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
@@ -245,6 +329,57 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			}
 			return runComponentCLI(req, rtSystem, registration, argv)
 		})
+
+		b.Handle("source <source> guard set <guard>", "Set the inbound guard component for a source component", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("source guard set", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
+			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
+			codexImage := fs.String("codex-image", "", "Codex runtime image override")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			rtSystem, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
+			if err != nil {
+				return err
+			}
+			result, err := setSourceGuard(req.Context(), rtSystem, strings.TrimSpace(req.Params["source"]), strings.TrimSpace(req.Params["guard"]))
+			if err != nil {
+				return err
+			}
+			fmt.Println("source guard set")
+			fmt.Printf("source: %s\n", result.Source.Ref())
+			fmt.Printf("guard: %s\n", result.Guard.Ref())
+			fmt.Printf("binding_id: %s\n", result.Binding.ID)
+			return nil
+		}, clir.Hidden())
+
+		b.Handle("source <source> guard clear", "Clear the inbound guard component for a source component", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("source guard clear", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			stateRoot := fs.String("state-root", "", "ctgbot state root")
+			dbPath := fs.String("db-path", "", "SQLite DB path")
+			telegramToken := fs.String("telegram-token", "", "Telegram bot token")
+			codexImage := fs.String("codex-image", "", "Codex runtime image override")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			rtSystem, err := openSystemForRoutes(req, store, *stateRoot, *dbPath, resolveTelegramToken(*telegramToken, store), *codexImage, nil)
+			if err != nil {
+				return err
+			}
+			result, err := clearSourceGuard(req.Context(), rtSystem, strings.TrimSpace(req.Params["source"]))
+			if err != nil {
+				return err
+			}
+			fmt.Println("source guard cleared")
+			fmt.Printf("source: %s\n", result.Source.Ref())
+			fmt.Printf("disabled: %d\n", result.Disabled)
+			return nil
+		}, clir.Hidden())
 
 		b.Handle("chat create <label>", "Create a chat", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("chat create", flag.ContinueOnError)
@@ -569,6 +704,176 @@ func defaultSourceExternalChatID(ctx context.Context, system *systempkg.System, 
 		return "", nil
 	}
 	return defaults.DefaultSourceExternalChatID(ctx)
+}
+
+type sourceGuardSetResult struct {
+	Source  coremodel.Component
+	Guard   coremodel.Component
+	Binding coremodel.ComponentBinding
+}
+
+type sourceGuardClearResult struct {
+	Source   coremodel.Component
+	Disabled int
+}
+
+type sourceGuardStatusResult struct {
+	Source   coremodel.Component
+	Bindings []sourceGuardStatusBinding
+}
+
+type sourceGuardStatusBinding struct {
+	Binding  coremodel.ComponentBinding
+	GuardRef string
+}
+
+func setSourceGuard(ctx context.Context, system *systempkg.System, sourceRef string, guardRef string) (sourceGuardSetResult, error) {
+	if system == nil || system.Storage == nil {
+		return sourceGuardSetResult{}, fmt.Errorf("missing system storage")
+	}
+	source, err := resolveInboundSourceRegistration(ctx, system, sourceRef)
+	if err != nil {
+		return sourceGuardSetResult{}, err
+	}
+	guard, err := resolveCompletionProviderRegistration(ctx, system, guardRef)
+	if err != nil {
+		return sourceGuardSetResult{}, err
+	}
+
+	var binding coremodel.ComponentBinding
+	if err := system.Storage.Transaction(ctx, func(tx repository.Storage) error {
+		existing, err := tx.ComponentBindings().ListEnabledBySourceAndRole(ctx, source.ID, coremodel.ComponentBindingRoleGuard)
+		if err != nil {
+			return err
+		}
+		for _, old := range existing {
+			old.Enabled = false
+			if err := tx.ComponentBindings().Save(ctx, &old); err != nil {
+				return err
+			}
+		}
+
+		current, err := tx.ComponentBindings().GetBySourceTargetRole(ctx, source.ID, guard.ID, coremodel.ComponentBindingRoleGuard)
+		if err != nil {
+			return err
+		}
+		if current != nil {
+			binding = *current
+		} else {
+			binding = coremodel.ComponentBinding{
+				SourceComponentID: source.ID,
+				TargetComponentID: guard.ID,
+				Role:              coremodel.ComponentBindingRoleGuard,
+			}
+		}
+		binding.Enabled = true
+		return tx.ComponentBindings().Save(ctx, &binding)
+	}); err != nil {
+		return sourceGuardSetResult{}, err
+	}
+
+	return sourceGuardSetResult{Source: *source, Guard: *guard, Binding: binding}, nil
+}
+
+func clearSourceGuard(ctx context.Context, system *systempkg.System, sourceRef string) (sourceGuardClearResult, error) {
+	if system == nil || system.Storage == nil {
+		return sourceGuardClearResult{}, fmt.Errorf("missing system storage")
+	}
+	source, err := resolveInboundSourceRegistration(ctx, system, sourceRef)
+	if err != nil {
+		return sourceGuardClearResult{}, err
+	}
+
+	disabled := 0
+	if err := system.Storage.Transaction(ctx, func(tx repository.Storage) error {
+		existing, err := tx.ComponentBindings().ListEnabledBySourceAndRole(ctx, source.ID, coremodel.ComponentBindingRoleGuard)
+		if err != nil {
+			return err
+		}
+		for _, binding := range existing {
+			binding.Enabled = false
+			if err := tx.ComponentBindings().Save(ctx, &binding); err != nil {
+				return err
+			}
+			disabled++
+		}
+		return nil
+	}); err != nil {
+		return sourceGuardClearResult{}, err
+	}
+
+	return sourceGuardClearResult{Source: *source, Disabled: disabled}, nil
+}
+
+func sourceGuardStatus(ctx context.Context, system *systempkg.System, sourceRef string) (sourceGuardStatusResult, error) {
+	if system == nil || system.Storage == nil {
+		return sourceGuardStatusResult{}, fmt.Errorf("missing system storage")
+	}
+	source, err := resolveInboundSourceRegistration(ctx, system, sourceRef)
+	if err != nil {
+		return sourceGuardStatusResult{}, err
+	}
+	bindings, err := system.Storage.ComponentBindings().ListEnabledBySourceAndRole(ctx, source.ID, coremodel.ComponentBindingRoleGuard)
+	if err != nil {
+		return sourceGuardStatusResult{}, err
+	}
+	result := sourceGuardStatusResult{
+		Source:   *source,
+		Bindings: make([]sourceGuardStatusBinding, 0, len(bindings)),
+	}
+	for _, binding := range bindings {
+		guardRef := binding.TargetComponentID.String()
+		registration, err := system.Storage.Components().GetByID(ctx, binding.TargetComponentID)
+		if err != nil {
+			return sourceGuardStatusResult{}, err
+		}
+		if registration != nil {
+			guardRef = registration.Ref()
+		}
+		result.Bindings = append(result.Bindings, sourceGuardStatusBinding{
+			Binding:  binding,
+			GuardRef: guardRef,
+		})
+	}
+	return result, nil
+}
+
+func resolveInboundSourceRegistration(ctx context.Context, system *systempkg.System, ref string) (*coremodel.Component, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, fmt.Errorf("missing source component ref")
+	}
+	registration, err := system.ResolveComponentRef(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	loaded, err := system.ResolveComponent(ctx, registration.ID)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := loaded.Component.(component.InboundSource); !ok {
+		return nil, fmt.Errorf("component %s does not support inbound source", registration.Ref())
+	}
+	return registration, nil
+}
+
+func resolveCompletionProviderRegistration(ctx context.Context, system *systempkg.System, ref string) (*coremodel.Component, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, fmt.Errorf("missing guard component ref")
+	}
+	registration, err := system.ResolveComponentRef(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	loaded, err := system.ResolveComponent(ctx, registration.ID)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := loaded.Component.(component.CompletionProvider); !ok {
+		return nil, fmt.Errorf("component %s does not support completion provider guard", registration.Ref())
+	}
+	return registration, nil
 }
 
 func runComponentCLI(req *clir.Request, system *systempkg.System, registration *coremodel.Component, argv []string) error {
