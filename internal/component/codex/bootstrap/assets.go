@@ -22,6 +22,7 @@ type TemplateData struct {
 	ChatProvider              string
 	MessagePrefix             string
 	KeepRepliesConcise        bool
+	RuntimeNotices            []string
 }
 
 func Text(data TemplateData) (string, error) {

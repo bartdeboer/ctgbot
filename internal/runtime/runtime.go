@@ -28,6 +28,7 @@ type Status struct {
 	RuntimeWorkspacePath string
 	ActiveCommandName    string
 	ActiveCommandArgs    []string
+	RuntimeNotices       []string
 }
 
 const DefaultWorkspaceRuntimePath = "/workspace"

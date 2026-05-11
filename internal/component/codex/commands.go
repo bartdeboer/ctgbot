@@ -275,6 +275,12 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 	if status.ActiveCommandName != "" {
 		lines = append(lines, "active_command: "+strings.TrimSpace(status.ActiveCommandName+" "+strings.Join(status.ActiveCommandArgs, " ")))
 	}
+	for _, notice := range status.RuntimeNotices {
+		if strings.TrimSpace(notice) == "" {
+			continue
+		}
+		lines = append(lines, "runtime_notice: "+strings.TrimSpace(notice))
+	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
 

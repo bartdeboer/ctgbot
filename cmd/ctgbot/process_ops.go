@@ -70,8 +70,8 @@ func (p *projectProcessActions) Upgrade(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	return runUpgradeStep(ctx, "ctgbot image build --no-cache", func(ctx context.Context) error {
-		return runInstalledCtgbotCommand(ctx, "image", "build", "--no-cache")
+	return runUpgradeStep(ctx, "ctgbot image build all --no-cache", func(ctx context.Context) error {
+		return runInstalledCtgbotCommandInDir(ctx, projectDir, "image", "build", "all", "--no-cache")
 	})
 }
 
@@ -117,6 +117,10 @@ func runUpgradeStep(ctx context.Context, label string, fn func(context.Context) 
 }
 
 func runInstalledCtgbotCommand(ctx context.Context, args ...string) error {
+	return runInstalledCtgbotCommandInDir(ctx, "", args...)
+}
+
+func runInstalledCtgbotCommandInDir(ctx context.Context, dir string, args ...string) error {
 	binPath, err := exec.LookPath("ctgbot")
 	if err != nil {
 		exePath, exeErr := os.Executable()
@@ -126,6 +130,9 @@ func runInstalledCtgbotCommand(ctx context.Context, args ...string) error {
 		binPath = exePath
 	}
 	cmd := exec.CommandContext(ctx, binPath, args...)
+	if strings.TrimSpace(dir) != "" {
+		cmd.Dir = strings.TrimSpace(dir)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

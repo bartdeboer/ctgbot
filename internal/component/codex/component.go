@@ -30,19 +30,23 @@ const (
 	stopAfterTurnTimeout = 5 * time.Second
 )
 
+var _ component.RuntimeImageProvider = (*Component)(nil)
+
 type TurnRunner interface {
 	RunTurn(ctx context.Context, runtime ExecRuntime, output OutputHandler, request TurnRequest) (TurnResult, error)
 }
 
 type Component struct {
-	registration     coremodel.Component
-	runtime          runtimepkg.Runtime
-	storage          repository.Storage
-	resolveWorkspace func(context.Context, coremodel.Chat) (string, error)
-	config           *appstate.Config
-	componentConfig  ComponentConfig
-	runner           TurnRunner
-	logger           *log.Logger
+	registration      coremodel.Component
+	runtime           runtimepkg.Runtime
+	storage           repository.Storage
+	resolveWorkspace  func(context.Context, coremodel.Chat) (string, error)
+	config            *appstate.Config
+	componentConfig   ComponentConfig
+	runner            TurnRunner
+	logger            *log.Logger
+	runtimeImage      string
+	runtimeDockerfile string
 }
 
 func New(
@@ -78,25 +82,56 @@ func New(
 		return nil, err
 	}
 	runtimeHomePath := runtimeFactory.RuntimeComponentHomePath(registration, home)
+	bindConfig := componentBindConfig(runtimeConfig, cfg, image, runtimeHomePath)
 	runtime := runtimeFactory.Bind(
 		registration,
 		home,
-		componentBindConfig(runtimeConfig, cfg, image, runtimeHomePath),
+		bindConfig,
 	)
 	return &Component{
-		registration:     registration,
-		runtime:          runtime,
-		storage:          storage,
-		resolveWorkspace: resolveWorkspace,
-		config:           cfg,
-		componentConfig:  componentConfig,
-		runner:           NewRunner(cfg, logger),
-		logger:           logger,
+		registration:      registration,
+		runtime:           runtime,
+		storage:           storage,
+		resolveWorkspace:  resolveWorkspace,
+		config:            cfg,
+		componentConfig:   componentConfig,
+		runner:            NewRunner(cfg, logger),
+		logger:            logger,
+		runtimeImage:      bindConfig.Image,
+		runtimeDockerfile: cfg.Docker().Dockerfile(),
 	}, nil
 }
 
 func (c *Component) Type() string {
 	return Type
+}
+
+func (c *Component) RuntimeImageTargets(ctx context.Context) ([]component.RuntimeImageTarget, error) {
+	_ = ctx
+	if c == nil {
+		return nil, nil
+	}
+	if c.runtime != nil && c.runtime.Kind() != "docker" {
+		return nil, nil
+	}
+	image := strings.TrimSpace(c.runtimeImage)
+	if image == "" && c.config != nil {
+		image = strings.TrimSpace(c.config.Docker().Image())
+	}
+	image = componentImage(image)
+	dockerfile := strings.TrimSpace(c.runtimeDockerfile)
+	if dockerfile == "" && c.config != nil {
+		dockerfile = strings.TrimSpace(c.config.Docker().Dockerfile())
+	}
+	if dockerfile == "" {
+		dockerfile = "Dockerfile"
+	}
+	return []component.RuntimeImageTarget{{
+		Name:       Type,
+		Ref:        c.registration.Ref(),
+		Image:      image,
+		Dockerfile: dockerfile,
+	}}, nil
 }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {
@@ -187,7 +222,9 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	workspacePath := turn.Runtime.WorkspacePath()
 	runtimeWorkspacePath := c.runtime.RuntimeWorkspacePath(workspacePath)
 	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
-	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath, turn.Runtime.Instructions())
+	instructions := turn.Runtime.Instructions()
+	instructions.RuntimeNotices = append(instructions.RuntimeNotices, c.runtimeNotices(ctx, workspacePath, turn.Thread.ID)...)
+	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath, instructions)
 	if err != nil {
 		return nil, err
 	}
@@ -251,6 +288,18 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 			Text:        reply,
 		},
 	}, nil
+}
+
+func (c *Component) runtimeNotices(ctx context.Context, workspacePath string, threadID modeluuid.UUID) []string {
+	if c == nil || c.runtime == nil {
+		return nil
+	}
+	status, err := c.runtime.Status(ctx, workspacePath, threadID)
+	if err != nil {
+		c.logf("runtime notice status check failed thread=%s err=%v", threadID, err)
+		return nil
+	}
+	return append([]string(nil), status.RuntimeNotices...)
 }
 
 func (c *Component) providerThreadID(turnRuntime component.TurnRuntime) (string, error) {
@@ -415,6 +464,7 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 		KeepRepliesConcise:        instructions.KeepRepliesConcise,
 		Binaries:                  allowedCommandsText,
 		HostbridgeControlCommands: append([]string(nil), instructions.HostbridgeControlCommands...),
+		RuntimeNotices:            append([]string(nil), instructions.RuntimeNotices...),
 	})
 	if err != nil {
 		return "", err

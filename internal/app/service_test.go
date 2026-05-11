@@ -57,6 +57,8 @@ func (r fakeResolver) ResolveComponent(ctx context.Context, id modeluuid.UUID) (
 		impl = fakeGuard{}
 	case "cli":
 		impl = fakeCLI{}
+	case "image":
+		impl = fakeImageProvider{ref: registration.Ref()}
 	case "plain":
 		impl = fakeComponent{typ: "plain"}
 	default:
@@ -190,6 +192,19 @@ func (fakeCLI) RegisterCommandHandlers(registry *commandengine.Registry) error {
 		_, _, _ = ctx, req, cmd
 		return commandengine.Result{Text: "pong"}, nil
 	})
+}
+
+type fakeImageProvider struct{ ref string }
+
+func (f fakeImageProvider) Type() string { return "image" }
+func (f fakeImageProvider) RuntimeImageTargets(ctx context.Context) ([]component.RuntimeImageTarget, error) {
+	_ = ctx
+	return []component.RuntimeImageTarget{{
+		Name:       "fake",
+		Ref:        f.ref,
+		Image:      "ctgbot-fake:latest",
+		Dockerfile: "fake.Dockerfile",
+	}}, nil
 }
 
 func TestServiceSetStatusClearComponentGuard(t *testing.T) {
@@ -550,6 +565,26 @@ func TestServiceComponentGuardValidatesCapabilities(t *testing.T) {
 	_, err = svc.SetComponentGuard(ctx, "source/inbox", "plain/not-guard")
 	if err == nil || !strings.Contains(err.Error(), "does not support completion provider") {
 		t.Fatalf("guard validation error = %v, want completion provider error", err)
+	}
+}
+
+func TestServiceRuntimeImageTargetsDiscoversProviders(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+	saveComponent(t, storage, "image", "runner")
+	saveComponent(t, storage, "plain", "ignored")
+
+	targets, err := svc.RuntimeImageTargets(ctx)
+	if err != nil {
+		t.Fatalf("RuntimeImageTargets() error = %v", err)
+	}
+	if got, want := len(targets), 1; got != want {
+		t.Fatalf("targets = %d, want %d: %#v", got, want, targets)
+	}
+	target := targets[0]
+	if target.Ref != "image/runner" || target.Image != "ctgbot-fake:latest" || target.Dockerfile != "fake.Dockerfile" {
+		t.Fatalf("target = %#v", target)
 	}
 }
 

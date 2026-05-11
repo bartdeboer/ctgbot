@@ -222,6 +222,54 @@ func TestHandleTurnUsesThreadComponentStateOptions(t *testing.T) {
 	})
 }
 
+func TestHandleTurnInjectsRuntimeNoticesIntoBootstrap(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		ctx := context.Background()
+		cfg := newTestConfig(t, root)
+		storage := repository.NewMemory()
+		homePath := filepath.Join(root, "codex-home")
+		runtime := &testRuntime{
+			componentHome: runtimepkg.Home{Path: homePath},
+			status: runtimepkg.Status{
+				RuntimeNotices: []string{"[Runtime notice] container stale"},
+			},
+		}
+		executor := &stubExecutor{result: TurnResult{Reply: "done"}}
+		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
+		c := &Component{
+			registration: registration,
+			runtime:      runtime,
+			storage:      storage,
+			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+				_ = chat
+				return filepath.Join(root, "workspace"), nil
+			},
+			config: cfg,
+			runner: executor,
+		}
+
+		_, err := c.HandleTurn(ctx, component.Turn{
+			Chat: coremodel.Chat{ID: modeluuid.New(), Enabled: true},
+			Thread: coremodel.Thread{
+				ID:     modeluuid.New(),
+				ChatID: modeluuid.New(),
+			},
+			Inbound: coremodel.ThreadMessage{ID: modeluuid.New(), Text: "hello"},
+			Runtime: stubTurnRuntime{},
+		})
+		if err != nil {
+			t.Fatalf("HandleTurn() error = %v", err)
+		}
+		bootstrap, err := os.ReadFile(filepath.Join(homePath, "ctgbot-bootstrap.md"))
+		if err != nil {
+			t.Fatalf("read bootstrap: %v", err)
+		}
+		if !strings.Contains(string(bootstrap), "[Runtime notice] container stale") {
+			t.Fatalf("bootstrap missing runtime notice:\n%s", string(bootstrap))
+		}
+	})
+}
+
 func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
@@ -314,6 +362,7 @@ func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
 		KeepRepliesConcise:        true,
 		HostbridgeCommandNames:    []string{"docker", "git-push-ctgbot"},
 		HostbridgeControlCommands: []string{"hostbridge codex status", "hostbridge config list"},
+		RuntimeNotices:            []string{"[Runtime notice] image stale"},
 	})
 	if err != nil {
 		t.Fatalf("codexBootstrap() error = %v", err)
@@ -325,6 +374,7 @@ func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
 		"`hostbridge codex status`",
 		"`hostbridge config list`",
 		"Available hostbridge run aliases: `docker, git-push-ctgbot`",
+		"[Runtime notice] image stale",
 		"The user interacts through Telegram; keep replies concise",
 		"Start every assistant message with `🤖`",
 	} {
@@ -332,4 +382,32 @@ func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
 			t.Fatalf("bootstrap missing %q:\n%s", want, text)
 		}
 	}
+}
+
+func TestRuntimeImageTargetsUseConfiguredImage(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		cfg := newTestConfig(t, root)
+		if err := cfg.Docker().SetImage("ctgbot-codex:gpu"); err != nil {
+			t.Fatalf("SetImage() error = %v", err)
+		}
+		if err := cfg.Docker().SetDockerfile("cuda.Dockerfile"); err != nil {
+			t.Fatalf("SetDockerfile() error = %v", err)
+		}
+		c := &Component{
+			registration: coremodel.Component{Type: Type, Name: "work"},
+			config:       cfg,
+		}
+
+		targets, err := c.RuntimeImageTargets(context.Background())
+		if err != nil {
+			t.Fatalf("RuntimeImageTargets() error = %v", err)
+		}
+		if got, want := len(targets), 1; got != want {
+			t.Fatalf("targets = %d, want %d", got, want)
+		}
+		target := targets[0]
+		if target.Ref != "codex/work" || target.Image != "ctgbot-codex:gpu" || target.Dockerfile != "cuda.Dockerfile" {
+			t.Fatalf("target = %#v", target)
+		}
+	})
 }

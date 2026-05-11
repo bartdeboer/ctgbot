@@ -16,6 +16,7 @@ import (
 	hostbridgebridge "github.com/bartdeboer/ctgbot/internal/hostbridge/bridge"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
@@ -356,7 +357,23 @@ func (r *Runtime) statusForSandbox(ctx context.Context, workspacePath string, sb
 		status.ActiveCommandName = active.Name
 		status.ActiveCommandArgs = append([]string(nil), active.Args...)
 	}
+	status.RuntimeNotices = r.runtimeNotices(ctx, sbx)
 	return status, nil
+}
+
+func (r *Runtime) runtimeNotices(ctx context.Context, sbx *sandboxengine.Sandbox) []string {
+	if r == nil || sbx == nil {
+		return nil
+	}
+	image, err := inspectDockerImage(ctx, sbx.Image)
+	if err != nil {
+		return nil
+	}
+	container, err := inspectDockerContainer(ctx, sbx.Name)
+	if err != nil {
+		return nil
+	}
+	return runtimeFreshnessNotices(container, image, runtimeimage.CurrentGitCommit(ctx, r.rootDir))
 }
 
 func authSandboxName(registration coremodel.Component) string {

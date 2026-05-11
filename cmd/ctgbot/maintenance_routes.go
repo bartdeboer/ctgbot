@@ -23,7 +23,7 @@ func registerMaintenanceRoutes(r *clir.Router, globalStore *clistate.Store) {
 			return actions.Install(req.Context())
 		})
 
-		b.Handle("process upgrade", "Update ctgbot from project_dir and rebuild the Docker image", func(req *clir.Request) error {
+		b.Handle("process upgrade", "Update ctgbot from project_dir and rebuild runtime images", func(req *clir.Request) error {
 			return actions.Upgrade(req.Context())
 		})
 		b.Handle("upgrade", "Alias for process upgrade", func(req *clir.Request) error {

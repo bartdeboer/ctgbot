@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	appstate "github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -37,13 +38,37 @@ func TestDockerBuildArgsIncludeConfiguredDockerfile(t *testing.T) {
 		t.Fatalf("set dockerfile: %v", err)
 	}
 
-	got := dockerBuildArgs(cfg, true)
+	got := dockerBuildArgs(DefaultTarget(cfg), true, nil)
 	want := []string{
 		"build",
 		"-f", "cuda.Dockerfile",
 		"-t", "ctgbot-codex:gpu",
 		"--build-arg", "TARGETARCH=" + runtime.GOARCH,
 		"--no-cache",
+		"-",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("dockerBuildArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestDockerBuildArgsIncludeSortedLabels(t *testing.T) {
+	t.Parallel()
+
+	got := dockerBuildArgs(component.RuntimeImageTarget{
+		Image:      "ctgbot-codex:test",
+		Dockerfile: "Dockerfile",
+	}, false, map[string]string{
+		"z.label": "last",
+		"a.label": "first",
+	})
+	want := []string{
+		"build",
+		"-f", "Dockerfile",
+		"-t", "ctgbot-codex:test",
+		"--build-arg", "TARGETARCH=" + runtime.GOARCH,
+		"--label", "a.label=first",
+		"--label", "z.label=last",
 		"-",
 	}
 	if !reflect.DeepEqual(got, want) {

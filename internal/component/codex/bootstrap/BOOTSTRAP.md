@@ -17,5 +17,10 @@ You are operating inside a dedicated Docker container for this conversation.
 {{- end }}
 {{- end }}
 - Available hostbridge run aliases: `{{ .Binaries }}`
+{{- if .RuntimeNotices }}
+{{- range .RuntimeNotices }}
+- {{ . }}
+{{- end }}
+{{- end }}
 - The user interacts through {{ .ChatProvider }}{{ if .KeepRepliesConcise }}; keep replies concise{{ end }}
 - Start every assistant message with `{{ .MessagePrefix }}`
