@@ -49,7 +49,7 @@ Setup commands:
 Replying:
 - Incoming Gmail prompts include Gmail message/thread ids and a ready-to-edit reply command.
 - Send a plain-text email/reply from stdin:
-   printf 'Hi there!' | hostbridge component gmail/work messages send --to you@example.com --subject 'Re: Subject' --thread-id <gmailThreadId> --in-reply-to <messageId>
+   printf '<your reply text>' | hostbridge component gmail/work messages send --to you@example.com --subject 'Re: Subject' --thread-id <gmailThreadId> --in-reply-to <rfcMessageId>
 
 Safety notes:
 - Never paste OAuth client secrets or token.json into chat.

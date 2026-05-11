@@ -89,7 +89,9 @@ func TestInboundEventFromMessage(t *testing.T) {
 		"plain body",
 		"Gmail message id: msg-123",
 		"Gmail thread id: thread-456",
-		"hostbridge component gmail/work messages send --to 'sender@example.com' --subject 'Re: Test subject' --thread-id 'thread-456' --in-reply-to '<rfc-message-id@example.com>'",
+		"RFC message id: <rfc-message-id@example.com>",
+		"Reply command template:",
+		"printf '<your reply text>' | hostbridge component gmail/work messages send --to 'sender@example.com' --subject 'Re: Test subject' --thread-id 'thread-456' --in-reply-to '<rfc-message-id@example.com>'",
 	} {
 		if !strings.Contains(payload.Text.Text, want) {
 			t.Fatalf("Text = %q, want contains %q", payload.Text.Text, want)
@@ -120,7 +122,8 @@ func TestInboundEventFromMessageOmitsInReplyToWithoutRFCMessageID(t *testing.T) 
 	for _, want := range []string{
 		"Gmail message id: gmail-msg-123",
 		"Gmail thread id: gmail-thread-456",
-		"hostbridge component gmail/work messages send --to 'sender@example.com' --subject 'Re: Test subject' --thread-id 'gmail-thread-456'",
+		"Reply command template:",
+		"printf '<your reply text>' | hostbridge component gmail/work messages send --to 'sender@example.com' --subject 'Re: Test subject' --thread-id 'gmail-thread-456'",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("Text = %q, want contains %q", text, want)
