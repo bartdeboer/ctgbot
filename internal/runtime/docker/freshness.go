@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -11,7 +12,6 @@ import (
 )
 
 const (
-	containerStaleNotice = "[Runtime notice] Your runtime container was created from an older image. Some hostbridge commands may be missing or stale. Ask the operator to run: /codex container refresh"
 	imageStaleNotice     = "[Runtime notice] The runtime image for this component is older than the installed ctgbot/hostbridge version. Ask the operator to run: /upgrade"
 	imageUnstampedNotice = "[Runtime notice] The runtime image for this component has no ctgbot freshness metadata. Some hostbridge commands may be missing or stale. Ask the operator to run: /upgrade"
 )
@@ -27,10 +27,10 @@ type dockerContainerInfo struct {
 	Labels  map[string]string
 }
 
-func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInfo, currentGitCommit string) []string {
+func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInfo, currentGitCommit string, componentType string) []string {
 	var notices []string
 	if container.State != sandboxengine.StateMissing && strings.TrimSpace(container.ImageID) != "" && strings.TrimSpace(image.ID) != "" && container.ImageID != image.ID {
-		notices = append(notices, containerStaleNotice)
+		notices = append(notices, containerStaleNotice(componentType))
 	}
 
 	currentGitCommit = strings.TrimSpace(currentGitCommit)
@@ -45,6 +45,14 @@ func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInf
 		notices = append(notices, imageStaleNotice)
 	}
 	return notices
+}
+
+func containerStaleNotice(componentType string) string {
+	componentType = strings.Trim(strings.TrimSpace(componentType), "/")
+	if componentType == "" {
+		return "[Runtime notice] Your runtime container was created from an older image. Some hostbridge commands may be missing or stale. Ask the operator to refresh this component's runtime container."
+	}
+	return fmt.Sprintf("[Runtime notice] Your runtime container was created from an older image. Some hostbridge commands may be missing or stale. Ask the operator to run: /%s container refresh", componentType)
 }
 
 func inspectDockerImage(ctx context.Context, image string) (dockerImageInfo, error) {

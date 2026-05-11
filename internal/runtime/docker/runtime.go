@@ -373,7 +373,7 @@ func (r *Runtime) runtimeNotices(ctx context.Context, sbx *sandboxengine.Sandbox
 	if err != nil {
 		return nil
 	}
-	return runtimeFreshnessNotices(container, image, runtimeimage.CurrentGitCommit(ctx, r.rootDir))
+	return runtimeFreshnessNotices(container, image, runtimeimage.CurrentGitCommit(ctx, r.rootDir), r.registration.Type)
 }
 
 func authSandboxName(registration coremodel.Component) string {
