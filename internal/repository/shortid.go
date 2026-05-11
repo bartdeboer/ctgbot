@@ -90,12 +90,6 @@ func (r *ShortIDResolver) Resolve(ref string) (modeluuid.UUID, error) {
 	}
 
 	matches := resolveIDMatches(r.ids, ref, strings.HasSuffix)
-	if len(matches) == 0 {
-		// Backward compatibility for short IDs produced before suffix-based
-		// shortening. Displayed IDs are suffixes, but old prefix refs still
-		// work when they are unambiguous.
-		matches = resolveIDMatches(r.ids, ref, strings.HasPrefix)
-	}
 	switch len(matches) {
 	case 0:
 		return modeluuid.Nil, &ShortIDNotFoundError{Ref: ref}

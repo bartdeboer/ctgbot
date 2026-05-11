@@ -58,15 +58,6 @@ func TestMemoryThreadsShortIDs(t *testing.T) {
 		t.Fatalf("resolved = %s, want %s", resolved, first)
 	}
 
-	oldPrefix := first.String()[:12]
-	resolved, err = resolver.Resolve(oldPrefix)
-	if err != nil {
-		t.Fatalf("Resolve(old prefix) error = %v", err)
-	}
-	if resolved != first {
-		t.Fatalf("resolved old prefix = %s, want %s", resolved, first)
-	}
-
 	_, err = resolver.Resolve("0")
 	var ambiguous *ShortIDAmbiguousError
 	if !errors.As(err, &ambiguous) {
