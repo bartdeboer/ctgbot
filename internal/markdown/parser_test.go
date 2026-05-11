@@ -87,6 +87,29 @@ func TestParseBuildsCodeBlockWithMatchingFenceWidth(t *testing.T) {
 	}
 }
 
+func TestParseBuildsIndentedFencedCodeBlock(t *testing.T) {
+	doc, err := Parse("  ```go\n  fmt.Println(\"hi\")\n  ```")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(doc.Blocks) != 1 {
+		t.Fatalf("blocks len = %d, want 1", len(doc.Blocks))
+	}
+	block := doc.Blocks[0]
+	if block.Kind != CodeBlock {
+		t.Fatalf("kind = %q, want code_block", block.Kind)
+	}
+	if got := block.Meta["info"]; got != "go" {
+		t.Fatalf("info = %q, want go", got)
+	}
+	if len(block.Lines) != 1 {
+		t.Fatalf("lines len = %d, want 1", len(block.Lines))
+	}
+	if got := block.Lines[0].Spans[0].Text; got != "fmt.Println(\"hi\")" {
+		t.Fatalf("code line = %q, want %q", got, "fmt.Println(\"hi\")")
+	}
+}
+
 func TestDocumentGetLinesAndLineSlice(t *testing.T) {
 	src := "first line\nsecond line\n\n```go\nthird line\nfourth line\n```"
 	doc, err := Parse(src)
@@ -146,5 +169,29 @@ func TestParseBuildsListBlock(t *testing.T) {
 	}
 	if !block.Items[2].Ordered {
 		t.Fatalf("item[2] expected ordered")
+	}
+}
+
+func TestParseKeepsIndentedListContinuationWithItem(t *testing.T) {
+	doc, err := Parse("- **Workspace separation** — chats can be attached to named workspaces, so\n  the same bot can operate on different projects.")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(doc.Blocks) != 1 {
+		t.Fatalf("blocks len = %d, want 1", len(doc.Blocks))
+	}
+	block := doc.Blocks[0]
+	if block.Kind != ListBlock {
+		t.Fatalf("kind = %q, want list", block.Kind)
+	}
+	if len(block.Items) != 1 {
+		t.Fatalf("items len = %d, want 1", len(block.Items))
+	}
+	item := block.Items[0]
+	if len(item.Lines) != 2 {
+		t.Fatalf("item lines len = %d, want 2", len(item.Lines))
+	}
+	if got := item.Lines[1].Spans[0].Text; got != "the same bot can operate on different projects." {
+		t.Fatalf("continuation text = %q", got)
 	}
 }

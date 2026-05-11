@@ -128,8 +128,21 @@ func (p *Parser) parseListItem() *BlockNode {
 	ordered := isOrderedListMarker(marker)
 	indent := markerTok.Indent
 	p.advance()
+
+	tokens, end := p.collectLineTokens()
+	lines := []*LineNode{lineFromTokens(tokens, start, end)}
+	for isListContinuationLine(p.cur, indent) {
+		tokens, end = p.collectLineTokens()
+		tokens = stripLineIndent(tokens, indent+2)
+		lines = append(lines, lineFromTokens(tokens, start, end))
+	}
+	item := &BlockNode{Kind: ListItemBlock, ListIndent: indent, Marker: marker, Ordered: ordered, Lines: lines, Span: Span{Start: start, End: lines[len(lines)-1].EndPos}}
+	return item
+}
+
+func (p *Parser) collectLineTokens() ([]Token, Position) {
 	var tokens []Token
-	end := start
+	end := p.cur.Span.Start
 	for p.cur.Kind != TokenEOF && p.cur.Kind != TokenBlankLine && p.cur.Kind != TokenNewline && p.cur.Kind != TokenFence && p.cur.Kind != TokenListMarker {
 		tokens = append(tokens, p.cur)
 		end = p.cur.Span.End
@@ -139,13 +152,57 @@ func (p *Parser) parseListItem() *BlockNode {
 		end = p.cur.Span.End
 		p.advance()
 	}
-	lineStart := start
+	return tokens, end
+}
+
+func lineFromTokens(tokens []Token, fallbackStart Position, end Position) *LineNode {
+	lineStart := fallbackStart
 	if len(tokens) > 0 {
 		lineStart = tokens[0].Span.Start
 	}
-	line := &LineNode{StartPos: lineStart, EndPos: end, Spans: parseInlineTokens(tokens)}
-	item := &BlockNode{Kind: ListItemBlock, ListIndent: indent, Marker: marker, Ordered: ordered, Lines: []*LineNode{line}, Span: Span{Start: start, End: end}}
-	return item
+	return &LineNode{StartPos: lineStart, EndPos: end, Spans: parseInlineTokens(tokens)}
+}
+
+func isListContinuationLine(tok Token, itemIndent int) bool {
+	if tok.Kind == TokenEOF || tok.Kind == TokenBlankLine || tok.Kind == TokenFence || tok.Kind == TokenListMarker {
+		return false
+	}
+	return tokenLeadingIndent(tok) >= itemIndent+2
+}
+
+func stripLineIndent(tokens []Token, indent int) []Token {
+	if len(tokens) == 0 || indent <= 0 || tokens[0].Kind != TokenText {
+		return tokens
+	}
+	out := append([]Token(nil), tokens...)
+	out[0].Text = stripTextIndent(out[0].Text, indent)
+	return out
+}
+
+func tokenLeadingIndent(tok Token) int {
+	if tok.Kind != TokenText || tok.Span.Start.Column != 1 {
+		return 0
+	}
+	indent := 0
+	for _, r := range tok.Text {
+		switch r {
+		case ' ':
+			indent++
+		case '\t':
+			indent += 4
+		default:
+			return indent
+		}
+	}
+	return indent
+}
+
+func stripTextIndent(text string, indent int) string {
+	removed := 0
+	for removed < len(text) && removed < indent && text[removed] == ' ' {
+		removed++
+	}
+	return text[removed:]
 }
 
 func isOrderedListMarker(marker string) bool {
@@ -163,6 +220,7 @@ func isOrderedListMarker(marker string) bool {
 func (p *Parser) parseCodeBlock() *BlockNode {
 	startTok := p.cur
 	fenceWidth := fenceTokenWidth(startTok)
+	fenceIndent := startTok.Indent
 	meta := map[string]string{}
 	if info := fenceTokenInfo(startTok, fenceWidth); info != "" {
 		meta["info"] = info
@@ -180,6 +238,7 @@ func (p *Parser) parseCodeBlock() *BlockNode {
 			lineEnd = p.cur.Span.End
 			p.advance()
 		}
+		text = stripFenceContentIndent(text, fenceIndent)
 		if p.cur.Kind == TokenNewline {
 			lineEnd = p.cur.Span.End
 			p.advance()
@@ -289,6 +348,10 @@ func fenceTokenInfo(tok Token, width int) string {
 
 func isMatchingFenceToken(tok Token, width int) bool {
 	return tok.Kind == TokenFence && fenceTokenWidth(tok) == width
+}
+
+func stripFenceContentIndent(text string, indent int) string {
+	return stripTextIndent(text, indent)
 }
 
 func mergeTextSpans(in []*SpanNode) []*SpanNode {

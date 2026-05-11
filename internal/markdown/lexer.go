@@ -61,7 +61,7 @@ func (l *Lexer) scanText() Token {
 			if _, ok := l.scanBlankLinePreview(); ok {
 				break
 			}
-			if l.matchFenceMarkerLength() > 0 || l.matchHeadingMarkerLength() > 0 || l.matchListMarkerLength() > 0 {
+			if l.matchIndentedFenceMarkerLength() > 0 || l.matchHeadingMarkerLength() > 0 || l.matchListMarkerLength() > 0 {
 				break
 			}
 		}
@@ -106,7 +106,12 @@ func (l *Lexer) scanBlankLinePreview() (Span, bool) {
 }
 
 func (l *Lexer) scanFence() (Token, bool) {
-	if l.matchFenceMarkerLength() == 0 {
+	startIdx := l.idx
+	lineStart := l.position()
+	indent := l.scanIndent()
+	if indent > 3 || l.matchFenceMarkerLength() == 0 {
+		l.idx = startIdx
+		l.restorePosition(lineStart)
 		return Token{}, false
 	}
 	start := l.position()
@@ -118,7 +123,7 @@ func (l *Lexer) scanFence() (Token, bool) {
 	if !l.eof() && l.peek() == '\n' {
 		l.advanceRune()
 	}
-	return Token{Kind: TokenFence, Text: b.String(), Span: Span{Start: start, End: l.position()}}, true
+	return Token{Kind: TokenFence, Text: b.String(), Span: Span{Start: start, End: l.position()}, Indent: indent}, true
 }
 
 func (l *Lexer) scanHeading() (Token, bool) {
@@ -212,6 +217,15 @@ func (l *Lexer) matchFenceMarkerLength() int {
 		return 0
 	}
 	return count
+}
+
+func (l *Lexer) matchIndentedFenceMarkerLength() int {
+	clone := *l
+	indent := clone.scanIndent()
+	if indent > 3 {
+		return 0
+	}
+	return clone.matchFenceMarkerLength()
 }
 
 func (l *Lexer) eof() bool { return l.idx >= len(l.src) }

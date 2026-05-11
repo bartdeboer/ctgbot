@@ -96,3 +96,25 @@ func TestLexerScansVariableFenceToken(t *testing.T) {
 		t.Fatalf("text = %q, want %q", tok.Text, "````go")
 	}
 }
+
+func TestLexerScansIndentedFenceToken(t *testing.T) {
+	lx := NewLexer("  ```go\nbody\n  ```\n")
+	tok := lx.Next()
+	if tok.Kind != TokenFence {
+		t.Fatalf("kind = %q, want fence", tok.Kind)
+	}
+	if tok.Text != "```go" {
+		t.Fatalf("text = %q, want %q", tok.Text, "```go")
+	}
+	if tok.Indent != 2 {
+		t.Fatalf("indent = %d, want 2", tok.Indent)
+	}
+}
+
+func TestLexerDoesNotScanFourSpaceIndentedFenceToken(t *testing.T) {
+	lx := NewLexer("    ```go\n")
+	tok := lx.Next()
+	if tok.Kind == TokenFence {
+		t.Fatalf("kind = fence, want non-fence for four-space indented marker")
+	}
+}

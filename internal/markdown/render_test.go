@@ -52,6 +52,21 @@ func TestRenderMarkdownCodeBlockInfo(t *testing.T) {
 	}
 }
 
+func TestRenderMarkdownIndentedFence(t *testing.T) {
+	doc, err := Parse("  ```go\n  fmt.Println(\"hi\")\n  ```")
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	got, err := doc.Render(RenderOptions{Format: RenderMarkdownV2})
+	if err != nil {
+		t.Fatalf("Render markdown: %v", err)
+	}
+	want := "```go\nfmt.Println(\"hi\")\n```"
+	if got != want {
+		t.Fatalf("markdown output = %q, want %q", got, want)
+	}
+}
+
 func TestRenderMarkdownCodeBlockEscapesOnlyCodeChars(t *testing.T) {
 	doc, err := Parse("```diff\n+ value := call(x)\npath := `quoted`\\here\n```")
 	if err != nil {
@@ -154,6 +169,23 @@ func TestRenderMarkdownListBlock(t *testing.T) {
 \- /workspace/inbox/photo\-1408\.jpg
   \- child\-item
 1\. item 3`
+	if got != want {
+		t.Fatalf("markdown = %q, want %q", got, want)
+	}
+}
+
+func TestRenderMarkdownListContinuationDoesNotCreateParagraphGap(t *testing.T) {
+	doc, err := Parse(`- **Workspace separation** — chats can be attached to named workspaces, so
+  the same bot can operate on different projects without mixing directories.`)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	got, err := doc.Render(RenderOptions{Format: RenderMarkdownV2})
+	if err != nil {
+		t.Fatalf("Render markdown: %v", err)
+	}
+	want := `\- *Workspace separation* — chats can be attached to named workspaces, so
+the same bot can operate on different projects without mixing directories\.`
 	if got != want {
 		t.Fatalf("markdown = %q, want %q", got, want)
 	}
