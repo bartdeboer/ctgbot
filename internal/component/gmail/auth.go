@@ -23,6 +23,11 @@ import (
 
 const DefaultCallbackPort = 1455
 
+var oauthScopes = []string{
+	gmailapi.GmailReadonlyScope,
+	gmailapi.GmailSendScope,
+}
+
 var (
 	errMissingAuthMaterial      = errors.New("missing gmail auth material")
 	errMissingGmailToken        = errors.New("gmail token not found")
@@ -168,7 +173,7 @@ func (c *Component) loadOAuthConfig() (*oauth2.Config, string, error) {
 			}
 			return nil, path, fmt.Errorf("read gmail oauth client config %s: %w", path, err)
 		}
-		config, err := google.ConfigFromJSON(data, gmailapi.GmailReadonlyScope)
+		config, err := google.ConfigFromJSON(data, oauthScopes...)
 		if err != nil {
 			return nil, path, fmt.Errorf("parse gmail oauth client config %s: %w", path, err)
 		}
