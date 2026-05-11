@@ -135,11 +135,6 @@ func (s *Sandbox) ensureReady(ctx context.Context) (EnsureAction, error) {
 	if s == nil {
 		return EnsureNoop, fmt.Errorf("missing sandbox")
 	}
-	if s.ImageBuilder != nil {
-		if err := s.ImageBuilder.EnsureImage(ctx); err != nil {
-			return EnsureNoop, err
-		}
-	}
 	container := s.ensureContainer()
 	if container == nil {
 		return EnsureNoop, fmt.Errorf("missing backing container")

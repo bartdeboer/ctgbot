@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/runtime/imageassets"
 )
 
@@ -23,7 +22,6 @@ const (
 )
 
 type Builder struct {
-	Config    *appstate.Config
 	Logger    *log.Logger
 	SourceDir string
 }
@@ -37,31 +35,6 @@ type Target struct {
 	Ref        string
 	Image      string
 	Dockerfile string
-}
-
-func (b *Builder) EnsureImage(ctx context.Context) error {
-	if b == nil || b.Config == nil {
-		return fmt.Errorf("missing config")
-	}
-	return b.EnsureTarget(ctx, DefaultTarget(b.Config))
-}
-
-func (b *Builder) EnsureTarget(ctx context.Context, target Target) error {
-	target, err := normalizeTarget(target)
-	if err != nil {
-		return err
-	}
-	if imageExists(ctx, target.Image) {
-		return nil
-	}
-	return b.BuildTarget(ctx, target, false)
-}
-
-func (b *Builder) Build(ctx context.Context, noCache bool) error {
-	if b == nil || b.Config == nil {
-		return fmt.Errorf("missing config")
-	}
-	return b.BuildTarget(ctx, DefaultTarget(b.Config), noCache)
 }
 
 func (b *Builder) BuildTarget(ctx context.Context, target Target, noCache bool) error {
@@ -87,18 +60,6 @@ func (b *Builder) BuildTarget(ctx context.Context, target Target, noCache bool) 
 		return fmt.Errorf("docker build: %w", err)
 	}
 	return nil
-}
-
-func DefaultTarget(cfg *appstate.Config) Target {
-	if cfg == nil {
-		return Target{}
-	}
-	return Target{
-		Name:       "codex",
-		Ref:        "codex",
-		Image:      strings.TrimSpace(cfg.Docker().Image()),
-		Dockerfile: strings.TrimSpace(cfg.Docker().Dockerfile()),
-	}
 }
 
 func dockerBuildArgs(target Target, noCache bool, labels map[string]string) []string {
@@ -185,9 +146,4 @@ func (b *Builder) logf(format string, args ...any) {
 	if b.Logger != nil {
 		b.Logger.Printf(format, args...)
 	}
-}
-
-func imageExists(ctx context.Context, image string) bool {
-	cmd := exec.CommandContext(ctx, "docker", "image", "inspect", image)
-	return cmd.Run() == nil
 }

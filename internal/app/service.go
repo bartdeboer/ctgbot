@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	inboundguard "github.com/bartdeboer/ctgbot/internal/guard"
@@ -35,17 +34,12 @@ type ChatRuntimeResolver interface {
 	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
 }
 
-type ConfigProvider interface {
-	AppConfig() *appstate.Config
-}
-
 type Service struct {
 	Storage             repository.Storage
 	Resolver            ComponentResolver
 	ComponentManager    ComponentManager
 	ChatRuntimeResolver ChatRuntimeResolver
 	WorkspaceValidator  WorkspaceValidator
-	Config              *appstate.Config
 	Logf                func(format string, args ...any)
 }
 
@@ -63,9 +57,6 @@ func NewServiceWithLogger(storage repository.Storage, resolver ComponentResolver
 	}
 	if validator, ok := resolver.(WorkspaceValidator); ok {
 		service.WorkspaceValidator = validator
-	}
-	if provider, ok := resolver.(ConfigProvider); ok {
-		service.Config = provider.AppConfig()
 	}
 	return service
 }

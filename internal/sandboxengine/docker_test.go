@@ -2,45 +2,10 @@ package sandboxengine
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 )
-
-type fakeImageBuilder struct {
-	ensureCalls int
-	ensureErr   error
-}
-
-func (f *fakeImageBuilder) EnsureImage(ctx context.Context) error {
-	f.ensureCalls++
-	return f.ensureErr
-}
-
-func (f *fakeImageBuilder) Build(ctx context.Context, noCache bool) error { return nil }
-
-func TestBuilderSetsImageBuilder(t *testing.T) {
-	t.Parallel()
-	img := &fakeImageBuilder{}
-	spec := NewBuilder("ctgbot-test").ImageBuilder(img).Build()
-	if spec.ImageBuilder != img {
-		t.Fatalf("image builder not attached")
-	}
-}
-
-func TestSandboxManagerExecEnsuresImageFirst(t *testing.T) {
-	t.Parallel()
-	img := &fakeImageBuilder{ensureErr: fmt.Errorf("boom")}
-	mgr := NewSandboxManager(nil)
-	sbx := mgr.CreateSandbox(&SandboxSpec{Name: "ctgbot-test", ImageBuilder: img})
-	if err := sbx.Exec(context.Background(), nil, nil, "codex", "exec"); err == nil {
-		t.Fatalf("expected ensure image error")
-	}
-	if img.ensureCalls != 1 {
-		t.Fatalf("ensure calls = %d, want 1", img.ensureCalls)
-	}
-}
 
 func TestNewSandboxManagerInitializesSharedState(t *testing.T) {
 	t.Parallel()

@@ -43,20 +43,12 @@ func registerImageRoutes(r *clir.Router, store *clistate.Store) {
 			return buildAllRuntimeImages(req, store, req.Extra)
 		})
 
-		b.Handle("image build", "Build the configured default runtime image", func(req *clir.Request) error {
+		b.Handle("image build", "Build all runtime image targets", func(req *clir.Request) error {
 			extra := append([]string(nil), req.Extra...)
 			if len(extra) > 0 && strings.EqualFold(strings.TrimSpace(extra[0]), "all") {
-				return buildAllRuntimeImages(req, store, extra[1:])
+				extra = extra[1:]
 			}
-			noCache, err := parseImageBuildFlags("image build", extra)
-			if err != nil {
-				return err
-			}
-			_, builder, err := openImageAppService(req, store)
-			if err != nil {
-				return err
-			}
-			return builder.Build(req.Context(), noCache)
+			return buildAllRuntimeImages(req, store, extra)
 		})
 	})
 }
@@ -109,6 +101,6 @@ func openImageAppService(req *clir.Request, store *clistate.Store) (*app.Service
 		logger = log.New(os.Stdout, "", log.LstdFlags)
 	}
 	appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logger.Printf)
-	builder := &runtimeimage.Builder{Config: rtSystem.Config, Logger: logger, SourceDir: rtSystem.RootDir}
+	builder := &runtimeimage.Builder{Logger: logger, SourceDir: rtSystem.RootDir}
 	return appService, builder, nil
 }

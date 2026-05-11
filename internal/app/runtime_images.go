@@ -43,13 +43,6 @@ func (s *Service) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Targe
 		}
 	}
 
-	if s.Config != nil {
-		// Legacy compatibility fallback: before runtime image targets were
-		// component-owned, docker.image/docker.dockerfile described the single
-		// global Codex image. Keep exposing that target until all runtime
-		// components own their image targets directly.
-		targets = append(targets, runtimeimage.DefaultTarget(s.Config))
-	}
 	return dedupeRuntimeImageTargets(targets), nil
 }
 

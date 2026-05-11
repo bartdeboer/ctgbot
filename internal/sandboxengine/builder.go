@@ -93,11 +93,6 @@ func (b Builder) Cmd(v []string) Builder {
 	return b
 }
 
-func (b Builder) ImageBuilder(v ImageBuilder) Builder {
-	b.spec.ImageBuilder = v
-	return b
-}
-
 func (b Builder) Build() *SandboxSpec {
 	return b.spec
 }

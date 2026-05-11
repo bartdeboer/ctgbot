@@ -31,11 +31,6 @@ type Mount struct {
 	ReadOnly bool
 }
 
-type ImageBuilder interface {
-	EnsureImage(ctx context.Context) error
-	Build(ctx context.Context, noCache bool) error
-}
-
 type SandboxSpec struct {
 	Name string
 
@@ -59,7 +54,6 @@ type SandboxSpec struct {
 	SecurityOpts []string
 	AddHosts     []string
 	Cmd          []string
-	ImageBuilder ImageBuilder
 }
 
 type Sandbox struct {
