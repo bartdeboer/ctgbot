@@ -58,11 +58,7 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			if rtSystem.Logger != nil {
 				logf = rtSystem.Logger.Printf
 			}
-			appService := app.NewServiceWithDeps(app.Deps{
-				Storage:  rtSystem.Storage,
-				Resolver: rtSystem,
-				Logf:     logf,
-			})
+			appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logf)
 			return broker.New(appService, logf).Run(runCtx)
 		})
 

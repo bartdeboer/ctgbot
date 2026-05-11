@@ -34,12 +34,6 @@ type ChatRuntimeResolver interface {
 	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
 }
 
-type Deps struct {
-	Storage  repository.Storage
-	Resolver ComponentResolver
-	Logf     func(format string, args ...any)
-}
-
 type Service struct {
 	Storage             repository.Storage
 	Resolver            ComponentResolver
@@ -50,12 +44,11 @@ type Service struct {
 }
 
 func NewService(storage repository.Storage, resolver ComponentResolver) *Service {
-	return NewServiceWithDeps(Deps{Storage: storage, Resolver: resolver})
+	return NewServiceWithLogger(storage, resolver, nil)
 }
 
-func NewServiceWithDeps(deps Deps) *Service {
-	service := &Service{Storage: deps.Storage, Resolver: deps.Resolver, Logf: deps.Logf}
-	resolver := deps.Resolver
+func NewServiceWithLogger(storage repository.Storage, resolver ComponentResolver, logf func(format string, args ...any)) *Service {
+	service := &Service{Storage: storage, Resolver: resolver, Logf: logf}
 	if manager, ok := resolver.(ComponentManager); ok {
 		service.ComponentManager = manager
 	}
