@@ -44,7 +44,7 @@ func TestGetMessageRequiresServiceAndMessageID(t *testing.T) {
 }
 
 func TestInboundEventFromMessage(t *testing.T) {
-	component := &Component{componentID: modeluuid.New(), componentConfig: ComponentConfig{MailboxEmail: "work@example.com"}.withDefaults()}
+	component := &Component{registration: testRegistration(), componentID: modeluuid.New(), componentConfig: ComponentConfig{MailboxEmail: "work@example.com"}.withDefaults()}
 	message := &gmailapi.Message{
 		Id:       " msg-123 ",
 		ThreadId: " thread-456 ",
@@ -54,6 +54,7 @@ func TestInboundEventFromMessage(t *testing.T) {
 			Headers: []*gmailapi.MessagePartHeader{
 				{Name: "From", Value: " sender@example.com "},
 				{Name: "Subject", Value: " Test subject "},
+				{Name: "Message-ID", Value: " <rfc-message-id@example.com> "},
 			},
 			Parts: []*gmailapi.MessagePart{{
 				MimeType: "text/plain",
@@ -82,7 +83,14 @@ func TestInboundEventFromMessage(t *testing.T) {
 	if got, want := payload.ProviderMessageID, "msg-123"; got != want {
 		t.Fatalf("ProviderMessageID = %q, want %q", got, want)
 	}
-	for _, want := range []string{"Subject: Test subject", "From: sender@example.com", "plain body"} {
+	for _, want := range []string{
+		"Subject: Test subject",
+		"From: sender@example.com",
+		"plain body",
+		"Gmail message id: msg-123",
+		"Gmail thread id: thread-456",
+		"hostbridge component gmail/work messages send --to 'sender@example.com' --subject 'Re: Test subject' --thread-id 'thread-456' --in-reply-to '<rfc-message-id@example.com>'",
+	} {
 		if !strings.Contains(payload.Text.Text, want) {
 			t.Fatalf("Text = %q, want contains %q", payload.Text.Text, want)
 		}
@@ -90,6 +98,36 @@ func TestInboundEventFromMessage(t *testing.T) {
 	actor := payload.ResolvedActor()
 	if got, want := actor.Label, "sender@example.com"; got != want {
 		t.Fatalf("Actor.Label = %q, want %q", got, want)
+	}
+}
+
+func TestInboundEventFromMessageOmitsInReplyToWithoutRFCMessageID(t *testing.T) {
+	component := &Component{registration: testRegistration(), componentID: modeluuid.New(), componentConfig: ComponentConfig{MailboxEmail: "work@example.com"}.withDefaults()}
+	message := &gmailapi.Message{
+		Id:       "gmail-msg-123",
+		ThreadId: "gmail-thread-456",
+		Snippet:  "hello from gmail",
+		Payload: &gmailapi.MessagePart{
+			Headers: []*gmailapi.MessagePartHeader{
+				{Name: "From", Value: "Sender <sender@example.com>"},
+				{Name: "Subject", Value: "Test subject"},
+			},
+		},
+	}
+
+	event := component.InboundEventFromMessage(message)
+	text := event.Payload.Text.Text
+	for _, want := range []string{
+		"Gmail message id: gmail-msg-123",
+		"Gmail thread id: gmail-thread-456",
+		"hostbridge component gmail/work messages send --to 'sender@example.com' --subject 'Re: Test subject' --thread-id 'gmail-thread-456'",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Text = %q, want contains %q", text, want)
+		}
+	}
+	if strings.Contains(text, "--in-reply-to") {
+		t.Fatalf("Text = %q, did not expect --in-reply-to without RFC Message-ID", text)
 	}
 }
 
@@ -342,6 +380,7 @@ type fakeGmailClient struct {
 	profileErrors []error
 	history       []*gmailapi.ListHistoryResponse
 	messages      map[string]*gmailapi.Message
+	sent          []*gmailapi.Message
 	onListHistory func()
 }
 
@@ -371,4 +410,10 @@ func (c *fakeGmailClient) ListHistory(ctx context.Context, userID string, startH
 func (c *fakeGmailClient) GetMessage(ctx context.Context, userID string, messageID string) (*gmailapi.Message, error) {
 	_, _ = ctx, userID
 	return c.messages[messageID], nil
+}
+
+func (c *fakeGmailClient) SendMessage(ctx context.Context, userID string, message *gmailapi.Message) (*gmailapi.Message, error) {
+	_, _ = ctx, userID
+	c.sent = append(c.sent, message)
+	return &gmailapi.Message{Id: "sent-message", ThreadId: strings.TrimSpace(message.ThreadId)}, nil
 }

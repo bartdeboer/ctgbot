@@ -107,3 +107,59 @@ func buildManagedFilePut(req *clir.Request) (any, error) {
 		Content:     append([]byte(nil), content...),
 	}, nil
 }
+
+type repeatStringFlag []string
+
+func (f *repeatStringFlag) String() string {
+	if f == nil {
+		return ""
+	}
+	return strings.Join(*f, ",")
+}
+
+func (f *repeatStringFlag) Set(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	*f = append(*f, value)
+	return nil
+}
+
+func buildMessagesSend(req *clir.Request) (any, error) {
+	componentRef := strings.TrimSpace(req.Params["component"])
+	if componentRef == "" {
+		return nil, fmt.Errorf("missing component")
+	}
+	fs := flag.NewFlagSet("component messages send", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var to repeatStringFlag
+	var cc repeatStringFlag
+	var bcc repeatStringFlag
+	fs.Var(&to, "to", "Recipient email address; repeat for multiple recipients")
+	fs.Var(&cc, "cc", "CC email address; repeat for multiple recipients")
+	fs.Var(&bcc, "bcc", "BCC email address; repeat for multiple recipients")
+	subject := fs.String("subject", "", "Message subject")
+	threadID := fs.String("thread-id", "", "Gmail thread id for replies")
+	inReplyTo := fs.String("in-reply-to", "", "RFC Message-ID being replied to")
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, err
+	}
+	if len(fs.Args()) > 0 {
+		return nil, fmt.Errorf("unexpected messages send arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	content, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return nil, fmt.Errorf("read stdin: %w", err)
+	}
+	return MessagesSendCommand{
+		Component: componentRef,
+		To:        append([]string(nil), to...),
+		Cc:        append([]string(nil), cc...),
+		Bcc:       append([]string(nil), bcc...),
+		Subject:   strings.TrimSpace(*subject),
+		Body:      string(content),
+		ThreadID:  strings.TrimSpace(*threadID),
+		InReplyTo: strings.TrimSpace(*inReplyTo),
+	}, nil
+}

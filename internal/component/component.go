@@ -158,6 +158,26 @@ type OutboundRelay interface {
 	StartChatAction(ctx context.Context, target message.ChatTarget, action message.ChatAction) (func(), error)
 }
 
+type MessageSendRequest struct {
+	To        []string
+	Cc        []string
+	Bcc       []string
+	Subject   string
+	Body      string
+	ThreadID  string
+	InReplyTo string
+}
+
+type MessageSendResult struct {
+	ID       string
+	ThreadID string
+}
+
+type MessageSender interface {
+	Component
+	SendMessage(ctx context.Context, request MessageSendRequest) (MessageSendResult, error)
+}
+
 type Agent interface {
 	Component
 	HandleTurn(ctx context.Context, turn Turn) (*TurnResult, error)

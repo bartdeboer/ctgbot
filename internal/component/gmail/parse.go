@@ -3,6 +3,7 @@ package gmail
 import (
 	"encoding/base64"
 	"html"
+	"net/mail"
 	"strings"
 	"unicode"
 
@@ -10,6 +11,10 @@ import (
 )
 
 func emailPromptText(message *gmailapi.Message) string {
+	return emailPromptTextForComponent("", message)
+}
+
+func emailPromptTextForComponent(componentRef string, message *gmailapi.Message) string {
 	if message == nil {
 		return ""
 	}
@@ -36,7 +41,80 @@ func emailPromptText(message *gmailapi.Message) string {
 		}
 		lines = append(lines, body)
 	}
+	if metadata := gmailReplyMetadata(componentRef, message, from, subject); metadata != "" {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, metadata)
+	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func gmailReplyMetadata(componentRef string, message *gmailapi.Message, from string, subject string) string {
+	if message == nil {
+		return ""
+	}
+	componentRef = strings.TrimSpace(componentRef)
+	if componentRef == "" {
+		componentRef = Type
+	}
+	messageID := strings.TrimSpace(message.Id)
+	threadID := strings.TrimSpace(message.ThreadId)
+	to := senderEmail(from)
+	replySubject := replySubject(subject)
+	inReplyTo := strings.TrimSpace(headerValue(message, "Message-ID"))
+
+	var lines []string
+	if messageID != "" {
+		lines = append(lines, "Gmail message id: "+messageID)
+	}
+	if threadID != "" {
+		lines = append(lines, "Gmail thread id: "+threadID)
+	}
+	if to != "" && replySubject != "" {
+		command := "printf 'Hi there!' | hostbridge component " + componentRef +
+			" messages send --to " + shellQuote(to) +
+			" --subject " + shellQuote(replySubject)
+		if threadID != "" {
+			command += " --thread-id " + shellQuote(threadID)
+		}
+		if inReplyTo != "" {
+			command += " --in-reply-to " + shellQuote(inReplyTo)
+		}
+		lines = append(lines, "Reply command:", command)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func senderEmail(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	address, err := mail.ParseAddress(value)
+	if err == nil && strings.TrimSpace(address.Address) != "" {
+		return strings.TrimSpace(address.Address)
+	}
+	return value
+}
+
+func replySubject(subject string) string {
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToLower(subject), "re:") {
+		return subject
+	}
+	return "Re: " + subject
+}
+
+func shellQuote(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func headerValue(message *gmailapi.Message, name string) string {

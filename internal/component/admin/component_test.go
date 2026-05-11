@@ -38,6 +38,17 @@ func (c *fakeProfileComponent) ManagedFiles() []componentpkg.ManagedFile {
 }
 func (c *fakeProfileComponent) Skill() componentpkg.Skill { return c.skill }
 
+type fakeMessageSenderComponent struct {
+	fakeProfileComponent
+	requests []componentpkg.MessageSendRequest
+}
+
+func (c *fakeMessageSenderComponent) SendMessage(ctx context.Context, request componentpkg.MessageSendRequest) (componentpkg.MessageSendResult, error) {
+	_ = ctx
+	c.requests = append(c.requests, request)
+	return componentpkg.MessageSendResult{ID: "sent-1", ThreadID: request.ThreadID}, nil
+}
+
 func TestComponentHelpReturnsSkillText(t *testing.T) {
 	engine, _ := newTestEngine(t, &fakeProfileComponent{
 		typeName: "gmail",
@@ -72,6 +83,9 @@ func TestHostbridgeAuthCommandIsNotRegistered(t *testing.T) {
 	}
 	if !strings.Contains(result.Text, "component <component> auth status") {
 		t.Fatalf("component help = %q, want auth status route", result.Text)
+	}
+	if !strings.Contains(result.Text, "component <component> messages send") {
+		t.Fatalf("component help = %q, want messages send route", result.Text)
 	}
 }
 
@@ -163,7 +177,54 @@ func TestManagedFileStatusDoesNotExposeSensitiveContents(t *testing.T) {
 	}
 }
 
-func newTestEngine(t *testing.T, fake *fakeProfileComponent) (*commandengine.Engine, string) {
+func TestMessagesSendCallsComponentSenderWithStdinBody(t *testing.T) {
+	sender := &fakeMessageSenderComponent{
+		fakeProfileComponent: fakeProfileComponent{typeName: "gmail"},
+	}
+	engine, _ := newTestEngine(t, sender)
+
+	body := " \nHi there!\n "
+	err := runWithStdin(t, body, func() error {
+		result, err := engine.Run(context.Background(), testRequest(), []string{
+			"component", "gmail/work", "messages", "send",
+			"--to", "sender@example.com",
+			"--subject", "Re: Test",
+			"--thread-id", "thread-1",
+			"--in-reply-to", "<message@example.com>",
+		})
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(result.Text, "message sent") || !strings.Contains(result.Text, "id: sent-1") {
+			t.Fatalf("result text = %q, want sent id", result.Text)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Run(messages send) error = %v", err)
+	}
+	if got, want := len(sender.requests), 1; got != want {
+		t.Fatalf("requests = %d, want %d", got, want)
+	}
+	request := sender.requests[0]
+	if got, want := request.To, []string{"sender@example.com"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("To = %#v, want %#v", got, want)
+	}
+	if got, want := request.Subject, "Re: Test"; got != want {
+		t.Fatalf("Subject = %q, want %q", got, want)
+	}
+	if got, want := request.Body, body; got != want {
+		t.Fatalf("Body = %q, want %q", got, want)
+	}
+	if got, want := request.ThreadID, "thread-1"; got != want {
+		t.Fatalf("ThreadID = %q, want %q", got, want)
+	}
+	if got, want := request.InReplyTo, "<message@example.com>"; got != want {
+		t.Fatalf("InReplyTo = %q, want %q", got, want)
+	}
+}
+
+func newTestEngine(t *testing.T, fake componentpkg.Component) (*commandengine.Engine, string) {
 	t.Helper()
 	ctx := context.Background()
 	storage := repository.NewMemory()

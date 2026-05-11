@@ -164,7 +164,7 @@ func (c *Component) InboundEventFromMessage(gmailMessage *gmailapi.Message) comp
 				Roles: []simplerbac.Role{simplerbac.RoleUser},
 			},
 			Text: message.TextMessage{
-				Text: emailPromptText(gmailMessage),
+				Text: emailPromptTextForComponent(c.registration.Ref(), gmailMessage),
 			},
 		},
 	}

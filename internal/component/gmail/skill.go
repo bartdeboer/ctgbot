@@ -46,6 +46,11 @@ Setup commands:
 6. Bind Gmail as a source for a chat:
    ctgbot chat <chatID> component add source gmail/work
 
+Replying:
+- Incoming Gmail prompts include Gmail message/thread ids and a ready-to-edit reply command.
+- Send a plain-text email/reply from stdin:
+   printf 'Hi there!' | hostbridge component gmail/work messages send --to you@example.com --subject 'Re: Subject' --thread-id <gmailThreadId> --in-reply-to <messageId>
+
 Safety notes:
 - Never paste OAuth client secrets or token.json into chat.
 - OAuth auth is intentionally a host CLI action; the blocking callback flow is not started through hostbridge.

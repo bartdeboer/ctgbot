@@ -12,6 +12,7 @@ type gmailClient interface {
 	GetProfile(ctx context.Context, userID string) (*gmailapi.Profile, error)
 	ListHistory(ctx context.Context, userID string, startHistoryID uint64, pageToken string) (*gmailapi.ListHistoryResponse, error)
 	GetMessage(ctx context.Context, userID string, messageID string) (*gmailapi.Message, error)
+	SendMessage(ctx context.Context, userID string, message *gmailapi.Message) (*gmailapi.Message, error)
 }
 
 type serviceClient struct {
@@ -65,6 +66,16 @@ func (c serviceClient) GetMessage(ctx context.Context, userID string, messageID 
 		return nil, fmt.Errorf("missing gmail message id")
 	}
 	return c.service.Users.Messages.Get(cleanUserID(userID), messageID).Format("full").Context(ctx).Do()
+}
+
+func (c serviceClient) SendMessage(ctx context.Context, userID string, message *gmailapi.Message) (*gmailapi.Message, error) {
+	if c.service == nil {
+		return nil, fmt.Errorf("missing gmail service")
+	}
+	if message == nil {
+		return nil, fmt.Errorf("missing gmail message")
+	}
+	return c.service.Users.Messages.Send(cleanUserID(userID), message).Context(ctx).Do()
 }
 
 func cleanUserID(value string) string {

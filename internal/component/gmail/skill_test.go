@@ -12,6 +12,7 @@ func TestSkillContainsSetupCommands(t *testing.T) {
 		"ctgbot component gmail/work auth",
 		"hostbridge component gmail/work auth status",
 		"ctgbot chat <chatID> component add source gmail/work",
+		"hostbridge component gmail/work messages send",
 		"mailbox_email",
 	} {
 		if !strings.Contains(text, want) {

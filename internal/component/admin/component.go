@@ -57,6 +57,17 @@ type ManagedFilePutCommand struct {
 	Content     []byte
 }
 
+type MessagesSendCommand struct {
+	Component string
+	To        []string
+	Cc        []string
+	Bcc       []string
+	Subject   string
+	Body      string
+	ThreadID  string
+	InReplyTo string
+}
+
 func RegisterGobTypes(register func(any)) {
 	register(HelpCommand{})
 	register(ListCommand{})
@@ -65,6 +76,7 @@ func RegisterGobTypes(register func(any)) {
 	register(ManagedFileListCommand{})
 	register(ManagedFileStatusCommand{})
 	register(ManagedFilePutCommand{})
+	register(MessagesSendCommand{})
 }
 
 func New(storage repository.Storage, resolver Resolver) *Component {
@@ -88,6 +100,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		componentCommand("component <component> managed-file list", "List declared managed files", buildManagedFileList, componentReadSources(), commandengine.InstructionDiscoverable),
 		componentCommand("component <component> managed-file status", "Show managed file presence", buildManagedFileStatus, componentReadSources(), commandengine.InstructionDiscoverable),
 		componentCommand("component <component> managed-file put <file>", "Write a declared managed file from stdin", buildManagedFilePut, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
+		componentCommand("component <component> messages send", "Send a message through a component from stdin", buildMessagesSend, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
 	}
 }
 
@@ -128,7 +141,10 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.Register[ManagedFileStatusCommand](registry, c.handleManagedFileStatus); err != nil {
 		return err
 	}
-	return commandengine.Register[ManagedFilePutCommand](registry, c.handleManagedFilePut)
+	if err := commandengine.Register[ManagedFilePutCommand](registry, c.handleManagedFilePut); err != nil {
+		return err
+	}
+	return commandengine.Register[MessagesSendCommand](registry, c.handleMessagesSend)
 }
 
 func (c *Component) handleHelp(ctx context.Context, req commandengine.Request, cmd HelpCommand) (commandengine.Result, error) {
@@ -230,6 +246,39 @@ func (c *Component) handleManagedFilePut(ctx context.Context, req commandengine.
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "managed file written: " + file.RelativePath}, nil
+}
+
+func (c *Component) handleMessagesSend(ctx context.Context, req commandengine.Request, cmd MessagesSendCommand) (commandengine.Result, error) {
+	_ = req
+	loaded, err := c.resolveLoaded(ctx, cmd.Component)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	sender, ok := loaded.Component.(component.MessageSender)
+	if !ok {
+		return commandengine.Result{}, fmt.Errorf("component does not support messages send: %s", loaded.Registration.Ref())
+	}
+	result, err := sender.SendMessage(ctx, component.MessageSendRequest{
+		To:        append([]string(nil), cmd.To...),
+		Cc:        append([]string(nil), cmd.Cc...),
+		Bcc:       append([]string(nil), cmd.Bcc...),
+		Subject:   strings.TrimSpace(cmd.Subject),
+		Body:      cmd.Body,
+		ThreadID:  strings.TrimSpace(cmd.ThreadID),
+		InReplyTo: strings.TrimSpace(cmd.InReplyTo),
+	})
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	var lines []string
+	lines = append(lines, "message sent")
+	if strings.TrimSpace(result.ID) != "" {
+		lines = append(lines, "id: "+strings.TrimSpace(result.ID))
+	}
+	if strings.TrimSpace(result.ThreadID) != "" {
+		lines = append(lines, "thread_id: "+strings.TrimSpace(result.ThreadID))
+	}
+	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
 
 func (c *Component) managedFiles(ctx context.Context, ref string) (*component.Loaded, []component.ManagedFile, error) {
