@@ -19,6 +19,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 )
 
 const (
@@ -106,7 +107,7 @@ func (c *Component) Type() string {
 	return Type
 }
 
-func (c *Component) RuntimeImageTargets(ctx context.Context) ([]component.RuntimeImageTarget, error) {
+func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error) {
 	_ = ctx
 	if c == nil {
 		return nil, nil
@@ -126,7 +127,7 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]component.Runtim
 	if dockerfile == "" {
 		dockerfile = "Dockerfile"
 	}
-	return []component.RuntimeImageTarget{{
+	return []runtimeimage.Target{{
 		Name:       Type,
 		Ref:        c.registration.Ref(),
 		Image:      image,

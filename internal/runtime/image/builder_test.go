@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	appstate "github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -55,7 +54,7 @@ func TestDockerBuildArgsIncludeConfiguredDockerfile(t *testing.T) {
 func TestDockerBuildArgsIncludeSortedLabels(t *testing.T) {
 	t.Parallel()
 
-	got := dockerBuildArgs(component.RuntimeImageTarget{
+	got := dockerBuildArgs(Target{
 		Image:      "ctgbot-codex:test",
 		Dockerfile: "Dockerfile",
 	}, false, map[string]string{

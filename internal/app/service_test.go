@@ -15,6 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
@@ -197,9 +198,9 @@ func (fakeCLI) RegisterCommandHandlers(registry *commandengine.Registry) error {
 type fakeImageProvider struct{ ref string }
 
 func (f fakeImageProvider) Type() string { return "image" }
-func (f fakeImageProvider) RuntimeImageTargets(ctx context.Context) ([]component.RuntimeImageTarget, error) {
+func (f fakeImageProvider) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error) {
 	_ = ctx
-	return []component.RuntimeImageTarget{{
+	return []runtimeimage.Target{{
 		Name:       "fake",
 		Ref:        f.ref,
 		Image:      "ctgbot-fake:latest",

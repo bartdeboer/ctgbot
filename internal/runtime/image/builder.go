@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/runtime/imageassets"
 )
 
@@ -29,6 +28,17 @@ type Builder struct {
 	SourceDir string
 }
 
+// Target describes one buildable Docker runtime image.
+//
+// Ref identifies the owning component instance when there is one. Name
+// identifies the build target when a component owns more than one image.
+type Target struct {
+	Name       string
+	Ref        string
+	Image      string
+	Dockerfile string
+}
+
 func (b *Builder) EnsureImage(ctx context.Context) error {
 	if b == nil || b.Config == nil {
 		return fmt.Errorf("missing config")
@@ -36,7 +46,7 @@ func (b *Builder) EnsureImage(ctx context.Context) error {
 	return b.EnsureTarget(ctx, DefaultTarget(b.Config))
 }
 
-func (b *Builder) EnsureTarget(ctx context.Context, target component.RuntimeImageTarget) error {
+func (b *Builder) EnsureTarget(ctx context.Context, target Target) error {
 	target, err := normalizeTarget(target)
 	if err != nil {
 		return err
@@ -54,7 +64,7 @@ func (b *Builder) Build(ctx context.Context, noCache bool) error {
 	return b.BuildTarget(ctx, DefaultTarget(b.Config), noCache)
 }
 
-func (b *Builder) BuildTarget(ctx context.Context, target component.RuntimeImageTarget, noCache bool) error {
+func (b *Builder) BuildTarget(ctx context.Context, target Target, noCache bool) error {
 	target, err := normalizeTarget(target)
 	if err != nil {
 		return err
@@ -79,11 +89,11 @@ func (b *Builder) BuildTarget(ctx context.Context, target component.RuntimeImage
 	return nil
 }
 
-func DefaultTarget(cfg *appstate.Config) component.RuntimeImageTarget {
+func DefaultTarget(cfg *appstate.Config) Target {
 	if cfg == nil {
-		return component.RuntimeImageTarget{}
+		return Target{}
 	}
-	return component.RuntimeImageTarget{
+	return Target{
 		Name:       "codex",
 		Ref:        "codex",
 		Image:      strings.TrimSpace(cfg.Docker().Image()),
@@ -91,7 +101,7 @@ func DefaultTarget(cfg *appstate.Config) component.RuntimeImageTarget {
 	}
 }
 
-func dockerBuildArgs(target component.RuntimeImageTarget, noCache bool, labels map[string]string) []string {
+func dockerBuildArgs(target Target, noCache bool, labels map[string]string) []string {
 	args := []string{
 		"build",
 		"-f", target.Dockerfile,
@@ -117,7 +127,7 @@ func dockerBuildArgs(target component.RuntimeImageTarget, noCache bool, labels m
 	return args
 }
 
-func normalizeTarget(target component.RuntimeImageTarget) (component.RuntimeImageTarget, error) {
+func normalizeTarget(target Target) (Target, error) {
 	target.Name = strings.TrimSpace(target.Name)
 	target.Ref = strings.TrimSpace(target.Ref)
 	target.Image = strings.TrimSpace(target.Image)
@@ -129,7 +139,7 @@ func normalizeTarget(target component.RuntimeImageTarget) (component.RuntimeImag
 		target.Name = target.Image
 	}
 	if target.Image == "" {
-		return component.RuntimeImageTarget{}, fmt.Errorf("missing runtime image")
+		return Target{}, fmt.Errorf("missing runtime image")
 	}
 	if target.Dockerfile == "" {
 		target.Dockerfile = "Dockerfile"
@@ -137,7 +147,7 @@ func normalizeTarget(target component.RuntimeImageTarget) (component.RuntimeImag
 	return target, nil
 }
 
-func (b *Builder) buildLabels(ctx context.Context, target component.RuntimeImageTarget) map[string]string {
+func (b *Builder) buildLabels(ctx context.Context, target Target) map[string]string {
 	labels := map[string]string{
 		LabelBuildTarget: firstNonEmpty(target.Ref, target.Name, target.Image),
 		LabelBuiltAt:     time.Now().UTC().Format(time.RFC3339Nano),

@@ -87,6 +87,10 @@ func buildAllRuntimeImages(req *clir.Request, store *clistate.Store, extra []str
 	if err != nil {
 		return err
 	}
+	if len(targets) == 0 {
+		os.Stdout.WriteString("no runtime image targets\n")
+		return nil
+	}
 	for _, target := range targets {
 		if err := builder.BuildTarget(req.Context(), target, noCache); err != nil {
 			return err

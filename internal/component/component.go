@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 )
 
 type Component interface {
@@ -270,22 +271,11 @@ type CompletionResult struct {
 	Final *coremodel.ThreadMessage
 }
 
-// RuntimeImageTarget describes a Docker runtime image a component can ask
-// ctgbot to build from the embedded runtime image context. Ref identifies the
-// owning component instance; Name identifies the target when a component owns
-// more than one image.
-type RuntimeImageTarget struct {
-	Name       string
-	Ref        string
-	Image      string
-	Dockerfile string
-}
-
 // RuntimeImageProvider lets components own their buildable runtime image
 // targets without making image commands know component-specific details.
 type RuntimeImageProvider interface {
 	Component
-	RuntimeImageTargets(ctx context.Context) ([]RuntimeImageTarget, error)
+	RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error)
 }
 
 type TurnInstructions struct {

@@ -10,12 +10,12 @@ import (
 	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 )
 
-func (s *Service) RuntimeImageTargets(ctx context.Context) ([]component.RuntimeImageTarget, error) {
+func (s *Service) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}
 
-	var targets []component.RuntimeImageTarget
+	var targets []runtimeimage.Target
 	registrations, err := s.Storage.Components().ListEnabled(ctx)
 	if err != nil {
 		return nil, err
@@ -44,13 +44,17 @@ func (s *Service) RuntimeImageTargets(ctx context.Context) ([]component.RuntimeI
 	}
 
 	if s.Config != nil {
+		// Legacy compatibility fallback: before runtime image targets were
+		// component-owned, docker.image/docker.dockerfile described the single
+		// global Codex image. Keep exposing that target until all runtime
+		// components own their image targets directly.
 		targets = append(targets, runtimeimage.DefaultTarget(s.Config))
 	}
 	return dedupeRuntimeImageTargets(targets), nil
 }
 
-func dedupeRuntimeImageTargets(targets []component.RuntimeImageTarget) []component.RuntimeImageTarget {
-	out := make([]component.RuntimeImageTarget, 0, len(targets))
+func dedupeRuntimeImageTargets(targets []runtimeimage.Target) []runtimeimage.Target {
+	out := make([]runtimeimage.Target, 0, len(targets))
 	seen := map[string]struct{}{}
 	for _, target := range targets {
 		target = cleanRuntimeImageTarget(target)
@@ -70,7 +74,7 @@ func dedupeRuntimeImageTargets(targets []component.RuntimeImageTarget) []compone
 	return out
 }
 
-func cleanRuntimeImageTarget(target component.RuntimeImageTarget) component.RuntimeImageTarget {
+func cleanRuntimeImageTarget(target runtimeimage.Target) runtimeimage.Target {
 	target.Name = strings.TrimSpace(target.Name)
 	target.Ref = strings.TrimSpace(target.Ref)
 	target.Image = strings.TrimSpace(target.Image)
@@ -87,7 +91,7 @@ func cleanRuntimeImageTarget(target component.RuntimeImageTarget) component.Runt
 	return target
 }
 
-func runtimeImageTargetSortKey(target component.RuntimeImageTarget) string {
+func runtimeImageTargetSortKey(target runtimeimage.Target) string {
 	return strings.Join([]string{target.Ref, target.Name, target.Image, target.Dockerfile}, "\x00")
 }
 
