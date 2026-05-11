@@ -24,7 +24,14 @@ type InstanceResolver interface {
 	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
 }
 
+type App interface {
+	Repository() repository.Storage
+	InstanceResolver
+	InboundFilters() []inbound.Filter
+}
+
 type Broker struct {
+	App            App
 	Storage        repository.Storage
 	Resolver       InstanceResolver
 	Mapper         ThreadComponentMapper
@@ -64,7 +71,16 @@ type RelayBinding struct {
 	Relay       component.OutboundRelay
 }
 
-func New(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any), filters ...inbound.Filter) *Broker {
+func New(app App, logf func(format string, args ...any)) *Broker {
+	if app == nil {
+		return NewWithDeps(nil, nil, logf)
+	}
+	broker := NewWithDeps(app.Repository(), app, logf, app.InboundFilters()...)
+	broker.App = app
+	return broker
+}
+
+func NewWithDeps(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any), filters ...inbound.Filter) *Broker {
 	return &Broker{
 		Storage:        storage,
 		Resolver:       resolver,
@@ -73,6 +89,28 @@ func New(storage repository.Storage, resolver InstanceResolver, logf func(format
 		Logf:           logf,
 		InboundFilters: inboundFilters(storage, filters...),
 	}
+}
+
+func (b *Broker) repository() repository.Storage {
+	if b == nil {
+		return nil
+	}
+	if b.App != nil {
+		if storage := b.App.Repository(); storage != nil {
+			return storage
+		}
+	}
+	return b.Storage
+}
+
+func (b *Broker) resolver() InstanceResolver {
+	if b == nil {
+		return nil
+	}
+	if b.App != nil {
+		return b.App
+	}
+	return b.Resolver
 }
 
 func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent) (EventOutcome, error) {
@@ -235,7 +273,7 @@ func (b *Broker) handleResolvedInboundTurn(
 				return failConversation(nil, nil, err)
 			}
 		}
-		workspacePath, resolveErr := b.Resolver.ResolveChatWorkspace(ctx, chat)
+		workspacePath, resolveErr := b.resolver().ResolveChatWorkspace(ctx, chat)
 		if resolveErr != nil {
 			return failConversation(nil, nil, resolveErr)
 		}
@@ -331,10 +369,10 @@ func agentType(binding AgentBinding) string {
 }
 
 func (b *Broker) ensureReady() error {
-	if b == nil || b.Storage == nil {
+	if b == nil || b.repository() == nil {
 		return fmt.Errorf("missing broker storage")
 	}
-	if b.Resolver == nil {
+	if b.resolver() == nil {
 		return fmt.Errorf("missing component resolver")
 	}
 	if b.Mapper == nil {
@@ -356,13 +394,15 @@ func (b *Broker) logf(format string, args ...any) {
 
 func (b *Broker) RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
 	allowed := hostbridgeserver.DefaultAllowedCommands()
-	if b != nil && b.Storage != nil && b.Resolver != nil && !req.Context.ChatID.IsNull() {
-		chat, err := b.Storage.Chats().GetByID(ctx, req.Context.ChatID)
+	storage := b.repository()
+	resolver := b.resolver()
+	if storage != nil && resolver != nil && !req.Context.ChatID.IsNull() {
+		chat, err := storage.Chats().GetByID(ctx, req.Context.ChatID)
 		if err != nil {
 			return commandengine.Result{}, err
 		}
 		if chat != nil {
-			extra, err := b.Resolver.ResolveChatHostbridgeAllowedCommands(ctx, *chat)
+			extra, err := resolver.ResolveChatHostbridgeAllowedCommands(ctx, *chat)
 			if err != nil {
 				return commandengine.Result{}, err
 			}
@@ -383,7 +423,7 @@ func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string
 	if chatID.IsNull() {
 		return "", fmt.Errorf("missing chat id")
 	}
-	chat, err := b.Storage.Chats().GetByID(ctx, chatID)
+	chat, err := b.repository().Chats().GetByID(ctx, chatID)
 	if err != nil {
 		return "", err
 	}

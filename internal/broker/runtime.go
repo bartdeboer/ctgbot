@@ -24,12 +24,15 @@ import (
 )
 
 func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*ChatRuntime, error) {
-	workspace, err := b.Resolver.ResolveChatWorkspace(ctx, chat)
+	storage := b.repository()
+	resolver := b.resolver()
+
+	workspace, err := resolver.ResolveChatWorkspace(ctx, chat)
 	if err != nil {
 		return nil, err
 	}
 
-	bindings, err := b.Storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
+	bindings, err := storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +52,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	for _, binding := range bindings {
 		instance := resolved[binding.ComponentID]
 		if instance == nil {
-			instance, err = b.Resolver.ResolveComponent(ctx, binding.ComponentID)
+			instance, err = resolver.ResolveComponent(ctx, binding.ComponentID)
 			if err != nil {
 				return nil, err
 			}
@@ -112,11 +115,11 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 
 	globalSurfaces = append(globalSurfaces,
-		componentadmin.New(b.Storage, b.Resolver),
+		componentadmin.New(storage, resolver),
 		brokercomponent.New(b),
-		messagingcomponent.New(messaging.New(b.Storage), b),
+		messagingcomponent.New(messaging.New(storage), b),
 	)
-	if provider, ok := b.Resolver.(interface{ AppConfig() *appstate.Config }); ok {
+	if provider, ok := resolver.(interface{ AppConfig() *appstate.Config }); ok {
 		configSurface, err := configcomponent.New(provider.AppConfig())
 		if err != nil {
 			return nil, err

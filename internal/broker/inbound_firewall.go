@@ -136,11 +136,12 @@ func (b *Broker) maybeHandleInboundFirewallInit(ctx context.Context, result inbo
 }
 
 func (b *Broker) sendInboundInitReply(ctx context.Context, result inbound.FilterResult) error {
-	if b == nil || b.Resolver == nil {
+	resolver := b.resolver()
+	if resolver == nil {
 		return nil
 	}
 	event := result.Envelope.Event
-	loaded, err := b.Resolver.ResolveComponent(ctx, event.ComponentID)
+	loaded, err := resolver.ResolveComponent(ctx, event.ComponentID)
 	if err != nil {
 		return err
 	}

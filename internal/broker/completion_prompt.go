@@ -10,7 +10,7 @@ import (
 )
 
 func (b *Broker) completionPrompt(ctx context.Context, threadID modeluuid.UUID, inbound coremodel.ThreadMessage) (component.CompletionPrompt, error) {
-	messages, err := b.Storage.Messages().ListByThreadID(ctx, threadID)
+	messages, err := b.repository().Messages().ListByThreadID(ctx, threadID)
 	if err != nil {
 		return component.CompletionPrompt{}, err
 	}

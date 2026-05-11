@@ -14,6 +14,7 @@ import (
 )
 
 func (b *Broker) storeInboundMessage(ctx context.Context, inbound component.ResolvedInbound) (*coremodel.ThreadMessage, error) {
+	storage := b.repository()
 	actor := inbound.Payload.ResolvedActor()
 	metadata := inboundMetadataJSON(inbound.Payload)
 	if len(inbound.Metadata) > 0 {
@@ -36,7 +37,7 @@ func (b *Broker) storeInboundMessage(ctx context.Context, inbound component.Reso
 	if strings.TrimSpace(actor.ID) != "" {
 		message.ActorID = strings.TrimSpace(actor.ID)
 	}
-	if err := b.Storage.Messages().Append(ctx, message); err != nil {
+	if err := storage.Messages().Append(ctx, message); err != nil {
 		return nil, err
 	}
 	for _, media := range inbound.Payload.Attachments {
@@ -50,7 +51,7 @@ func (b *Broker) storeInboundMessage(ctx context.Context, inbound component.Reso
 			Syntax:      strings.TrimSpace(media.Syntax),
 			Content:     append([]byte(nil), media.Content...),
 		}
-		if err := b.Storage.Artifacts().Append(ctx, artifact); err != nil {
+		if err := storage.Artifacts().Append(ctx, artifact); err != nil {
 			return nil, err
 		}
 	}
@@ -68,8 +69,9 @@ func (b *Broker) storeMessageArtifacts(ctx context.Context, message *coremodel.T
 	if message == nil {
 		return fmt.Errorf("missing message")
 	}
+	storage := b.repository()
 	for _, media := range attachments {
-		if err := b.Storage.Artifacts().Append(ctx, &coremodel.Artifact{
+		if err := storage.Artifacts().Append(ctx, &coremodel.Artifact{
 			ChatID:      message.ChatID,
 			ThreadID:    message.ThreadID,
 			MessageID:   message.ID,
@@ -89,7 +91,7 @@ func (b *Broker) storeOutboundMessage(ctx context.Context, message *coremodel.Th
 	if message == nil {
 		return fmt.Errorf("missing message")
 	}
-	if err := b.Storage.Messages().Append(ctx, message); err != nil {
+	if err := b.repository().Messages().Append(ctx, message); err != nil {
 		return err
 	}
 	return b.storeMessageArtifacts(ctx, message, attachments)
@@ -118,7 +120,9 @@ func (b *Broker) relayPayloadToRelayBindings(ctx context.Context, relayBindings 
 }
 
 func (b *Broker) resolveRelayBindingsForChat(ctx context.Context, chatID modeluuid.UUID) ([]RelayBinding, error) {
-	bindings, err := b.Storage.ChatComponents().ListEnabledByChatID(ctx, chatID)
+	storage := b.repository()
+	resolver := b.resolver()
+	bindings, err := storage.ChatComponents().ListEnabledByChatID(ctx, chatID)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +131,7 @@ func (b *Broker) resolveRelayBindingsForChat(ctx context.Context, chatID modeluu
 		if binding.Role != coremodel.ChatComponentRoleRelay {
 			continue
 		}
-		instance, err := b.Resolver.ResolveComponent(ctx, binding.ComponentID)
+		instance, err := resolver.ResolveComponent(ctx, binding.ComponentID)
 		if err != nil {
 			return nil, err
 		}

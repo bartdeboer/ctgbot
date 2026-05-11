@@ -12,14 +12,16 @@ func (b *Broker) Run(ctx context.Context) error {
 	if err := b.ensureReady(); err != nil {
 		return err
 	}
-	components, err := b.Storage.Components().ListEnabled(ctx)
+	storage := b.repository()
+	resolver := b.resolver()
+	components, err := storage.Components().ListEnabled(ctx)
 	if err != nil {
 		return err
 	}
 
 	var sources []component.InboundSource
 	for _, registration := range components {
-		instance, err := b.Resolver.ResolveComponent(ctx, registration.ID)
+		instance, err := resolver.ResolveComponent(ctx, registration.ID)
 		if err != nil {
 			return err
 		}

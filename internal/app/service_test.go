@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/app"
+	"github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -17,6 +18,8 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
+
+var _ broker.App = (*app.Service)(nil)
 
 type fakeResolver struct {
 	storage    repository.Storage

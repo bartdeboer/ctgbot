@@ -108,7 +108,7 @@ func TestGmailSourceRelaysOutboundElsewhere(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := brokerpkg.New(storage, system, nil, nil)
+		b := brokerpkg.NewWithDeps(storage, system, nil, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}

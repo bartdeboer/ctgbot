@@ -7,6 +7,9 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	inboundguard "github.com/bartdeboer/ctgbot/internal/guard"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	"github.com/bartdeboer/ctgbot/internal/inbound"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -26,22 +29,75 @@ type ComponentManager interface {
 	Runtime(kind string) (runtimepkg.Factory, error)
 }
 
+type ChatRuntimeResolver interface {
+	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
+	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
+}
+
+type Deps struct {
+	Storage  repository.Storage
+	Resolver ComponentResolver
+	Logf     func(format string, args ...any)
+}
+
 type Service struct {
-	Storage            repository.Storage
-	Resolver           ComponentResolver
-	ComponentManager   ComponentManager
-	WorkspaceValidator WorkspaceValidator
+	Storage             repository.Storage
+	Resolver            ComponentResolver
+	ComponentManager    ComponentManager
+	ChatRuntimeResolver ChatRuntimeResolver
+	WorkspaceValidator  WorkspaceValidator
+	Logf                func(format string, args ...any)
 }
 
 func NewService(storage repository.Storage, resolver ComponentResolver) *Service {
-	service := &Service{Storage: storage, Resolver: resolver}
+	return NewServiceWithDeps(Deps{Storage: storage, Resolver: resolver})
+}
+
+func NewServiceWithDeps(deps Deps) *Service {
+	service := &Service{Storage: deps.Storage, Resolver: deps.Resolver, Logf: deps.Logf}
+	resolver := deps.Resolver
 	if manager, ok := resolver.(ComponentManager); ok {
 		service.ComponentManager = manager
+	}
+	if runtimeResolver, ok := resolver.(ChatRuntimeResolver); ok {
+		service.ChatRuntimeResolver = runtimeResolver
 	}
 	if validator, ok := resolver.(WorkspaceValidator); ok {
 		service.WorkspaceValidator = validator
 	}
 	return service
+}
+
+func (s *Service) Repository() repository.Storage {
+	if s == nil {
+		return nil
+	}
+	return s.Storage
+}
+
+func (s *Service) ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error) {
+	return s.resolveLoadedComponent(ctx, componentID)
+}
+
+func (s *Service) ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error) {
+	if s == nil || s.ChatRuntimeResolver == nil {
+		return "", fmt.Errorf("missing chat runtime resolver")
+	}
+	return s.ChatRuntimeResolver.ResolveChatWorkspace(ctx, chat)
+}
+
+func (s *Service) ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error) {
+	if s == nil || s.ChatRuntimeResolver == nil {
+		return nil, fmt.Errorf("missing chat runtime resolver")
+	}
+	return s.ChatRuntimeResolver.ResolveChatHostbridgeAllowedCommands(ctx, chat)
+}
+
+func (s *Service) InboundFilters() []inbound.Filter {
+	if s == nil || s.Storage == nil {
+		return nil
+	}
+	return []inbound.Filter{inboundguard.NewInboundFilter(s.Storage, s, s.Logf)}
 }
 
 func (s *Service) componentManager() (ComponentManager, error) {

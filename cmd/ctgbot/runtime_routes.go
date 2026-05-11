@@ -22,7 +22,6 @@ import (
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	"github.com/bartdeboer/ctgbot/internal/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	inboundguard "github.com/bartdeboer/ctgbot/internal/guard"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -59,8 +58,12 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			if rtSystem.Logger != nil {
 				logf = rtSystem.Logger.Printf
 			}
-			guardFilter := inboundguard.NewInboundFilter(rtSystem.Storage, rtSystem, logf)
-			return broker.New(rtSystem.Storage, rtSystem, logf, guardFilter).Run(runCtx)
+			appService := app.NewServiceWithDeps(app.Deps{
+				Storage:  rtSystem.Storage,
+				Resolver: rtSystem,
+				Logf:     logf,
+			})
+			return broker.New(appService, logf).Run(runCtx)
 		})
 
 		b.Handle("workspace set <workspace>", "Configure a workspace", func(req *clir.Request) error {
