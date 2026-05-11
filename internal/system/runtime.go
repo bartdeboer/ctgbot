@@ -71,6 +71,11 @@ func (s *System) Workspace(name string) (Workspace, error) {
 	return workspace, nil
 }
 
+func (s *System) ValidateWorkspace(name string) error {
+	_, err := s.Workspace(name)
+	return err
+}
+
 func (s *System) Runtime(runtimeKind string) (runtimepkg.Factory, error) {
 	if s == nil {
 		return nil, fmt.Errorf("missing system")
@@ -202,33 +207,6 @@ func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind st
 	delete(s.loaded, registration.ID.String())
 	s.loadedMu.Unlock()
 	return registration, nil
-}
-
-func (s *System) SetChatWorkspace(ctx context.Context, chatID modeluuid.UUID, workspaceName string) (*coremodel.Chat, error) {
-	if s == nil || s.Storage == nil {
-		return nil, fmt.Errorf("missing system storage")
-	}
-	if chatID.IsNull() {
-		return nil, fmt.Errorf("missing chat id")
-	}
-	chat, err := s.Storage.Chats().GetByID(ctx, chatID)
-	if err != nil {
-		return nil, err
-	}
-	if chat == nil {
-		return nil, fmt.Errorf("chat not found: %s", chatID)
-	}
-	workspaceName = strings.TrimSpace(workspaceName)
-	if workspaceName != "" {
-		if _, err := s.Workspace(workspaceName); err != nil {
-			return nil, err
-		}
-	}
-	chat.Workspace = workspaceName
-	if err := s.Storage.Chats().Save(ctx, chat); err != nil {
-		return nil, err
-	}
-	return chat, nil
 }
 
 func (s *System) BindChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, ref string, externalChatID string) (*coremodel.ChatComponent, error) {

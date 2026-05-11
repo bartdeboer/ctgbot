@@ -43,6 +43,15 @@ func TestWorkspaceSetAndComponentRegister(t *testing.T) {
 			t.Fatalf("unexpected register output: %q", registerOutput)
 		}
 
+		listOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"component", "list"}); err != nil {
+				t.Fatalf("component list: %v", err)
+			}
+		})
+		if !strings.Contains(listOutput, "codex/work") || !strings.Contains(listOutput, "runtime=local") || !strings.Contains(listOutput, "host_home=") {
+			t.Fatalf("unexpected component list output: %q", listOutput)
+		}
+
 		expectedHome := filepath.Join(root, ".ctgbot", "components", "codex", "work")
 		assertDirExists(t, expectedHome)
 
@@ -59,6 +68,111 @@ func TestWorkspaceSetAndComponentRegister(t *testing.T) {
 		}
 		if componentRow.Runtime != "local" {
 			t.Fatalf("Runtime = %q, want local", componentRow.Runtime)
+		}
+	})
+}
+
+func TestRuntimeOverrideFlagsAreRejected(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		_ = root
+		store, err := clistate.NewCwd("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("NewCwd: %v", err)
+		}
+
+		router := clir.New()
+		registerRuntimeRoutes(router, store, nil)
+
+		tests := [][]string{
+			{"run", "--telegram-token", "token"},
+			{"component", "register", "codex/work", "--state-root", "other"},
+			{"component", "codex/work", "--image", "codex:test"},
+			{"chat", "create", "team", "--db-path", "other.db"},
+		}
+		for _, argv := range tests {
+			if err := router.Run(context.Background(), argv); err == nil {
+				t.Fatalf("router.Run(%v) error = nil, want removed flag error", argv)
+			}
+		}
+	})
+}
+
+func TestChatCreateListAndWorkspaceRoutes(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		_ = root
+		store, err := clistate.NewCwd("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("NewCwd: %v", err)
+		}
+
+		router := clir.New()
+		registerRuntimeRoutes(router, store, nil)
+
+		if err := router.Run(context.Background(), []string{"workspace", "set", "work", "--path", "workspaces/work-root"}); err != nil {
+			t.Fatalf("workspace set: %v", err)
+		}
+
+		createOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", "create", "team"}); err != nil {
+				t.Fatalf("chat create: %v", err)
+			}
+		})
+		if !strings.Contains(createOutput, "chat created") || !strings.Contains(createOutput, "label: team") {
+			t.Fatalf("unexpected chat create output: %q", createOutput)
+		}
+
+		system, err := systempkg.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
+		if err != nil {
+			t.Fatalf("open runtime: %v", err)
+		}
+		chats, err := system.Storage.Chats().List(context.Background())
+		if err != nil {
+			t.Fatalf("list chats: %v", err)
+		}
+		if got, want := len(chats), 1; got != want {
+			t.Fatalf("chat count = %d, want %d", got, want)
+		}
+		chat := chats[0]
+
+		listOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", "list"}); err != nil {
+				t.Fatalf("chat list: %v", err)
+			}
+		})
+		if !strings.Contains(listOutput, chat.ID.String()) || !strings.Contains(listOutput, "team") || !strings.Contains(listOutput, "enabled=true") {
+			t.Fatalf("unexpected chat list output: %q", listOutput)
+		}
+
+		setOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", chat.ID.String(), "workspace", "set", "work"}); err != nil {
+				t.Fatalf("chat workspace set: %v", err)
+			}
+		})
+		if !strings.Contains(setOutput, "chat workspace updated") || !strings.Contains(setOutput, "workspace: work") {
+			t.Fatalf("unexpected workspace set output: %q", setOutput)
+		}
+		updated, err := system.Storage.Chats().GetByID(context.Background(), chat.ID)
+		if err != nil {
+			t.Fatalf("get chat: %v", err)
+		}
+		if updated == nil || updated.Workspace != "work" {
+			t.Fatalf("chat after workspace set = %#v, want workspace work", updated)
+		}
+
+		clearOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", chat.ID.String(), "workspace", "clear"}); err != nil {
+				t.Fatalf("chat workspace clear: %v", err)
+			}
+		})
+		if !strings.Contains(clearOutput, "chat workspace cleared") || !strings.Contains(clearOutput, "chat_id: "+chat.ID.String()) {
+			t.Fatalf("unexpected workspace clear output: %q", clearOutput)
+		}
+		updated, err = system.Storage.Chats().GetByID(context.Background(), chat.ID)
+		if err != nil {
+			t.Fatalf("get chat after clear: %v", err)
+		}
+		if updated == nil || updated.Workspace != "" {
+			t.Fatalf("chat after workspace clear = %#v, want empty workspace", updated)
 		}
 	})
 }
@@ -116,6 +230,15 @@ func TestChatComponentAddBindsExternalChatID(t *testing.T) {
 		if bindings[0].ExternalChatID != "chat-1" {
 			t.Fatalf("ExternalChatID = %q, want chat-1", bindings[0].ExternalChatID)
 		}
+
+		listOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", chats[0].ID.String(), "component", "list"}); err != nil {
+				t.Fatalf("component list: %v", err)
+			}
+		})
+		if !strings.Contains(listOutput, "telegram") || !strings.Contains(listOutput, "role=source") || !strings.Contains(listOutput, "external_chat_id=chat-1") {
+			t.Fatalf("unexpected component list output: %q", listOutput)
+		}
 	})
 }
 
@@ -168,6 +291,9 @@ func TestComponentGuardSetStatusReplacesAndClearDisables(t *testing.T) {
 		})
 		if !strings.Contains(statusOutput, "component guard status") || !strings.Contains(statusOutput, "guard: llamacpp/qwen3-q5") {
 			t.Fatalf("unexpected guard status output: %q", statusOutput)
+		}
+		if err := router.Run(context.Background(), []string{"component", "gmail/work", "guard", "status", "--state-root", "other"}); err == nil {
+			t.Fatal("component guard status accepted removed state-root flag")
 		}
 
 		if err := router.Run(context.Background(), []string{"component", "gmail/work", "guard", "set", "llamacpp/gemma4-e4b"}); err != nil {
@@ -248,6 +374,15 @@ func TestComponentCommandRouteUsesBoundCLISurface(t *testing.T) {
 
 		if err := router.Run(context.Background(), []string{"component", "register", "process", "--runtime", "local"}); err != nil {
 			t.Fatalf("component register: %v", err)
+		}
+
+		helpOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"component", "process"}); err != nil {
+				t.Fatalf("component help: %v", err)
+			}
+		})
+		if !strings.Contains(helpOutput, "available component commands:") || !strings.Contains(helpOutput, "process quit") {
+			t.Fatalf("unexpected component help output: %q", helpOutput)
 		}
 
 		output := captureStdout(t, func() {
