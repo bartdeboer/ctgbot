@@ -17,7 +17,10 @@ import (
 type InboundRejectionAction string
 
 const (
-	InboundRejectionDrop       InboundRejectionAction = "drop"
+	InboundRejectionDrop InboundRejectionAction = "drop"
+	// InboundRejectionNotifyOnly is reserved for a future admission stage that
+	// notifies an operator without routing the inbound message. No current stage
+	// produces it.
 	InboundRejectionNotifyOnly InboundRejectionAction = "notify_only"
 	InboundRejectionQuarantine InboundRejectionAction = "quarantine"
 )
@@ -114,20 +117,24 @@ func (b *Broker) FilteredMessage(ctx context.Context, channel AllowedChannel) (c
 		if err != nil {
 			return component.InboundEvent{}, nil, err
 		}
-		if result.Drop {
+		switch result.Action {
+		case "", inbound.FilterActionPass:
+			current = result.Event
+			if current.ComponentID.IsNull() {
+				current = channel.Event
+			}
+		case inbound.FilterActionDrop, inbound.FilterActionQuarantine:
 			rejectedEvent := result.Event
 			if rejectedEvent.ComponentID.IsNull() {
 				rejectedEvent = current
 			}
 			action := InboundRejectionDrop
-			if strings.Contains(strings.ToLower(result.Reason), "quarantine") {
+			if result.Action == inbound.FilterActionQuarantine {
 				action = InboundRejectionQuarantine
 			}
 			return rejectedEvent, b.reject(rejectedEvent, &channel.Chat, &channel.SourceBinding, action, result.Reason, result.Details...), nil
-		}
-		current = result.Event
-		if current.ComponentID.IsNull() {
-			current = channel.Event
+		default:
+			return component.InboundEvent{}, nil, fmt.Errorf("unknown inbound filter action %q", result.Action)
 		}
 	}
 	return current, nil, nil

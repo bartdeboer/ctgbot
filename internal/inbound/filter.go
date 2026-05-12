@@ -17,9 +17,17 @@ type FilterInput struct {
 	SourceBinding coremodel.ChatComponent
 }
 
+type FilterAction string
+
+const (
+	FilterActionPass       FilterAction = "pass"
+	FilterActionDrop       FilterAction = "drop"
+	FilterActionQuarantine FilterAction = "quarantine"
+)
+
 type FilterResult struct {
 	Event   component.InboundEvent
-	Drop    bool
+	Action  FilterAction
 	Reason  string
 	Details []string
 }
@@ -29,9 +37,13 @@ type Filter interface {
 }
 
 func Pass(input FilterInput) FilterResult {
-	return FilterResult{Event: input.Event}
+	return FilterResult{Event: input.Event, Action: FilterActionPass}
 }
 
 func Drop(input FilterInput, reason string, details ...string) FilterResult {
-	return FilterResult{Event: input.Event, Drop: true, Reason: reason, Details: details}
+	return FilterResult{Event: input.Event, Action: FilterActionDrop, Reason: reason, Details: details}
+}
+
+func Quarantine(input FilterInput, reason string, details ...string) FilterResult {
+	return FilterResult{Event: input.Event, Action: FilterActionQuarantine, Reason: reason, Details: details}
 }

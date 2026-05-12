@@ -576,6 +576,42 @@ func TestInboundAdmissionStagesResolveChannelAndAllowDefaultSender(t *testing.T)
 	}
 }
 
+func TestFilteredMessageUsesExplicitFilterAction(t *testing.T) {
+	sourceID := modeluuid.New()
+	event := testInboundEvent(sourceID, "chat-1", "thread-1", "hello")
+	channel := broker.AllowedChannel{
+		Event: event,
+		Chat:  coremodel.Chat{ID: modeluuid.New(), Label: "team", Enabled: true},
+		SourceBinding: coremodel.ChatComponent{
+			ID:             modeluuid.New(),
+			ChatID:         modeluuid.New(),
+			ComponentID:    sourceID,
+			Role:           coremodel.ChatComponentRoleSource,
+			ExternalChatID: "chat-1",
+			Enabled:        true,
+		},
+	}
+	quarantine := inboundFilterFunc(func(ctx context.Context, input inboundpkg.FilterInput) (inboundpkg.FilterResult, error) {
+		_ = ctx
+		return inboundpkg.Quarantine(input, "manual-review", "score=high"), nil
+	})
+	b := broker.NewWithDeps(nil, nil, nil, quarantine)
+
+	_, rejection, err := b.FilteredMessage(context.Background(), channel)
+	if err != nil {
+		t.Fatalf("FilteredMessage() error = %v", err)
+	}
+	if rejection == nil {
+		t.Fatal("FilteredMessage() rejection = nil, want quarantine")
+	}
+	if rejection.Action != broker.InboundRejectionQuarantine {
+		t.Fatalf("rejection action = %q, want %q", rejection.Action, broker.InboundRejectionQuarantine)
+	}
+	if rejection.Reason != "manual-review" {
+		t.Fatalf("rejection reason = %q, want manual-review", rejection.Reason)
+	}
+}
+
 func TestInboundFirewallAllowsLowRiskRestrictedGuardResult(t *testing.T) {
 	fixture := newGuardedInboundFixture(t, lowRiskGuardJSON())
 
