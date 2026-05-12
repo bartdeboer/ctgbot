@@ -14,6 +14,7 @@ func Items(cfg *appstate.Config) []configengine.Item {
 		BuildCompilerPath(cfg),
 		ChatEnabled(cfg),
 		ChatProcessToolsEnabled(cfg),
+		ChatAgentDBAccessEnabled(cfg),
 		ChatInteractiveInterruptEnabled(cfg),
 		ChatContainerUserMode(cfg),
 		ChatWorkspaceHostPath(cfg),

@@ -32,6 +32,7 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 		{name: "component global direct", ref: "codex", in: []string{"component", "help"}, want: []string{"component", "help"}},
 		{name: "status global direct", ref: "codex", in: []string{"status"}, want: []string{"status"}},
 		{name: "thread global direct", ref: "codex", in: []string{"thread", "list"}, want: []string{"thread", "list"}},
+		{name: "sql direct", ref: "codex", in: []string{"sql", "SELECT 1"}, want: []string{"sql", "SELECT 1"}},
 	}
 
 	for _, tc := range tests {
@@ -72,6 +73,7 @@ func TestHostbridgeRouterUsesCodexDefinitions(t *testing.T) {
 		{argv: normalizedArgs([]string{"refresh"}, "codex"), want: "codex container refresh"},
 		{argv: normalizedArgs([]string{"interrupt"}, "codex"), want: "codex interrupt"},
 		{argv: normalizedArgs([]string{"model"}, "codex"), want: "codex model"},
+		{argv: normalizedArgs([]string{"sql", "SELECT 1"}, "codex"), want: "sql"},
 	}
 
 	for _, tc := range tests {

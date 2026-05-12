@@ -80,6 +80,15 @@ func (s *Service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, r
 	}
 
 	externalChatID = strings.TrimSpace(externalChatID)
+	if role == coremodel.ChatComponentRoleCommand {
+		loaded, err := s.resolveLoadedComponent(ctx, registration.ID)
+		if err != nil {
+			return ChatComponentAddResult{}, err
+		}
+		if _, ok := loaded.Component.(component.CommandSurface); !ok {
+			return ChatComponentAddResult{}, fmt.Errorf("component %s does not support command chat bindings", registration.Ref())
+		}
+	}
 	if externalChatID == "" && role == coremodel.ChatComponentRoleSource {
 		externalChatID, err = s.defaultSourceExternalChatID(ctx, registration.ID)
 		if err != nil {

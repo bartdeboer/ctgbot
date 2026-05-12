@@ -60,3 +60,12 @@ func ChatSkills(cfg *appstate.Config) configengine.Item {
 		rootOrElevated(),
 	)
 }
+
+func ChatAgentDBAccessEnabled(cfg *appstate.Config) configengine.Item {
+	return chatBoolWithPolicies("chat.enable-agent-db-access", "Enable trusted agent SQL access to the ctgbot database for the current chat", cfg,
+		func(chat appstate.ChatConfig) bool { return chat.AgentDBAccessEnabled() },
+		func(chat appstate.ChatConfig, value bool) error { return chat.SetAgentDBAccessEnabled(value) },
+		rootOrElevated(),
+		rootOnly(),
+	)
+}

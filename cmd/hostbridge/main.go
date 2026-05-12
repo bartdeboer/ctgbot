@@ -172,7 +172,7 @@ func hostbridgeRouter() (*commandengine.Router, error) {
 	return commandset.NewBoundRouterForSource(
 		commandengine.SourceHostbridge,
 		hostbridgeBoundSurfaces(),
-		cmdsurface.GlobalSurfaces()...,
+		append(cmdsurface.GlobalSurfaces(), cmdsurface.ParseOnlySurfaces()...)...,
 	)
 }
 

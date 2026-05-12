@@ -160,7 +160,7 @@ func printConfigSummary(cfg *appstate.Config, store *clistate.Store, globalStore
 			if title == "" {
 				title = "<untitled>"
 			}
-			fmt.Printf("    - internal_chat_id=%s provider=%s provider_chat_id=%q enabled=%t process_tools=%t title=%q\n", chat.ID.String(), chat.ProviderType, chat.ProviderChatID, chat.Enabled, cfg.Chat(chat.ID).ProcessToolsEnabled(), title)
+			fmt.Printf("    - internal_chat_id=%s provider=%s provider_chat_id=%q enabled=%t process_tools=%t db_access=%t title=%q\n", chat.ID.String(), chat.ProviderType, chat.ProviderChatID, chat.Enabled, cfg.Chat(chat.ID).ProcessToolsEnabled(), cfg.Chat(chat.ID).AgentDBAccessEnabled(), title)
 			fmt.Printf("      container_user_mode: %s\n", cfg.Chat(chat.ID).ContainerUserMode())
 			workspacePath := cfg.Chat(chat.ID).WorkspaceHostPath()
 			if workspacePath == "" {
@@ -195,6 +195,7 @@ func printConfigSummary(cfg *appstate.Config, store *clistate.Store, globalStore
 	fmt.Println("    list chat-aware items with: ctgbot config chat <chat-id> list")
 	fmt.Println("    enable a chat with: ctgbot config chat <chat-id> set chat.enabled true")
 	fmt.Println("    set chat process tools with: ctgbot config chat <chat-id> set chat.process-tools-enabled true")
+	fmt.Println("    enable trusted agent SQL access with: ctgbot config chat <chat-id> set chat.enable-agent-db-access true")
 	fmt.Println("    set chat container user mode with: ctgbot config chat <chat-id> set chat.container-user-mode host")
 	fmt.Println("    set a chat workspace with: ctgbot config chat <chat-id> set chat.workspace-host-path <path>")
 	fmt.Println("    set chat skills with: ctgbot config chat <chat-id> set chat.skills <absolute-skill-dir>[,<absolute-skill-dir>]")

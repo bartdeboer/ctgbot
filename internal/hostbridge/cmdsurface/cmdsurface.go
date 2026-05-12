@@ -12,6 +12,7 @@ import (
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	llamacppcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
+	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 )
 
@@ -48,6 +49,16 @@ func GlobalSurfaces() []componentpkg.CommandSurface {
 	}
 }
 
+// ParseOnlySurfaces are known hostbridge client-side command shapes whose
+// server-side availability is still decided by the bound chat runtime. They let
+// the hostbridge binary construct typed command DTOs without making the command
+// globally executable.
+func ParseOnlySurfaces() []componentpkg.CommandSurface {
+	return []componentpkg.CommandSurface{
+		(*sqlcomponent.Component)(nil),
+	}
+}
+
 func BoundSurfaces(ref string) []commandset.BoundSurface {
 	resolved := Resolve(ref)
 	surface, ok := surfaceForType(resolved.ComponentType)
@@ -73,6 +84,7 @@ func LegacyCodexShorthandEnabled(ref string) bool {
 
 func RegisterGobTypes(register func(any)) {
 	componentadmin.RegisterGobTypes(register)
+	sqlcomponent.RegisterGobTypes(register)
 	claudecomponent.RegisterGobTypes(register)
 	codexcomponent.RegisterGobTypes(register)
 	llamacppcomponent.RegisterGobTypes(register)
@@ -80,7 +92,7 @@ func RegisterGobTypes(register func(any)) {
 }
 
 func GlobalDirectPrefixes() []string {
-	return []string{"component", "status", "thread"}
+	return []string{"component", "status", "thread", "sql"}
 }
 
 func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
