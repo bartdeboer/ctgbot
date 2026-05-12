@@ -111,6 +111,143 @@ func TestThreadLabelSetDeniesUser(t *testing.T) {
 	}
 }
 
+func TestThreadComponentBindInfersProviderThreadIDFromSourceBinding(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
+	testSaveChatComponent(t, ctx, storage, coremodel.ChatComponent{
+		ChatID:         thread.ChatID,
+		ComponentID:    gmail.ID,
+		Role:           coremodel.ChatComponentRoleSource,
+		ExternalChatID: "bart@example.com",
+		Enabled:        true,
+	})
+	engine := testMessagingEngine(t, storage)
+
+	result, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "component", "bind", "gmail/personal"})
+	if err != nil {
+		t.Fatalf("Run(thread component bind) error = %v", err)
+	}
+	for _, want := range []string{
+		"thread component bound",
+		"thread_id: " + thread.ID.String(),
+		"component: gmail/personal",
+		"provider_thread_id: bart@example.com",
+	} {
+		if !strings.Contains(result.Text, want) {
+			t.Fatalf("result missing %q:\n%s", want, result.Text)
+		}
+	}
+	assertThreadComponentMapping(t, ctx, storage, thread.ID, gmail.ID, "bart@example.com")
+}
+
+func TestThreadComponentBindExplicitProviderThreadID(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
+	engine := testMessagingEngine(t, storage)
+
+	result, err := engine.Run(ctx, testMessagingRequest(modeluuid.Nil, simplerbac.RoleRoot), []string{"thread", thread.ID.String(), "component", "bind", "gmail/personal", "gmail-thread-123"})
+	if err != nil {
+		t.Fatalf("Run(thread component bind explicit) error = %v", err)
+	}
+	if !strings.Contains(result.Text, "provider_thread_id: gmail-thread-123") {
+		t.Fatalf("result = %q, want explicit provider thread id", result.Text)
+	}
+	assertThreadComponentMapping(t, ctx, storage, thread.ID, gmail.ID, "gmail-thread-123")
+}
+
+func TestThreadComponentBindErrorsWhenProviderThreadIDMissing(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	testRegisterComponent(t, ctx, storage, "gmail", "personal")
+	engine := testMessagingEngine(t, storage)
+
+	_, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "component", "bind", "gmail/personal"})
+	if err == nil || !strings.Contains(err.Error(), "cannot infer provider thread id") {
+		t.Fatalf("Run(thread component bind missing) error = %v, want inference error", err)
+	}
+}
+
+func TestThreadComponentBindErrorsWhenProviderThreadIDAmbiguous(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
+	for _, externalChatID := range []string{"mailbox-a", "mailbox-b"} {
+		testSaveChatComponent(t, ctx, storage, coremodel.ChatComponent{
+			ChatID:         thread.ChatID,
+			ComponentID:    gmail.ID,
+			Role:           coremodel.ChatComponentRoleSource,
+			ExternalChatID: externalChatID,
+			Enabled:        true,
+		})
+	}
+	engine := testMessagingEngine(t, storage)
+
+	_, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "component", "bind", "gmail/personal"})
+	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("Run(thread component bind ambiguous) error = %v, want ambiguous error", err)
+	}
+}
+
+func TestThreadComponentBindIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
+	if err := storage.ThreadComponentMappings().Save(ctx, &coremodel.ThreadComponentMapping{
+		ThreadID:          thread.ID,
+		ChatID:            thread.ChatID,
+		ComponentID:       gmail.ID,
+		ComponentThreadID: "bart@example.com",
+	}); err != nil {
+		t.Fatalf("Save(mapping) error = %v", err)
+	}
+	engine := testMessagingEngine(t, storage)
+
+	if _, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "component", "bind", "gmail/personal", "bart@example.com"}); err != nil {
+		t.Fatalf("Run(thread component bind idempotent) error = %v", err)
+	}
+	assertThreadComponentMapping(t, ctx, storage, thread.ID, gmail.ID, "bart@example.com")
+}
+
+func TestThreadComponentBindErrorsWhenProviderThreadIDBelongsToAnotherThread(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
+	otherThread := &coremodel.Thread{ChatID: thread.ChatID, Label: "other"}
+	if err := storage.Threads().Save(ctx, otherThread); err != nil {
+		t.Fatalf("Save(other thread) error = %v", err)
+	}
+	if err := storage.ThreadComponentMappings().Save(ctx, &coremodel.ThreadComponentMapping{
+		ThreadID:          otherThread.ID,
+		ChatID:            thread.ChatID,
+		ComponentID:       gmail.ID,
+		ComponentThreadID: "bart@example.com",
+	}); err != nil {
+		t.Fatalf("Save(mapping) error = %v", err)
+	}
+	engine := testMessagingEngine(t, storage)
+
+	_, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "component", "bind", "gmail/personal", "bart@example.com"})
+	if err == nil || !strings.Contains(err.Error(), "already bound") {
+		t.Fatalf("Run(thread component bind conflict) error = %v, want already-bound error", err)
+	}
+}
+
+func TestThreadComponentBindDeniesUser(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	testRegisterComponent(t, ctx, storage, "gmail", "personal")
+	engine := testMessagingEngine(t, storage)
+
+	for _, role := range []simplerbac.Role{simplerbac.RoleUser, simplerbac.RoleAgent} {
+		_, err := engine.Run(ctx, testMessagingRequest(thread.ID, role), []string{"thread", "component", "bind", "gmail/personal", "bart@example.com"})
+		if err == nil || !strings.Contains(err.Error(), "denied") {
+			t.Fatalf("Run(thread component bind as %s) error = %v, want denied", role, err)
+		}
+	}
+}
+
 func testMessagingStorage(t *testing.T, ctx context.Context) (*repository.MemoryStorage, coremodel.Thread) {
 	t.Helper()
 	storage := repository.NewMemory()
@@ -155,6 +292,36 @@ func testMessagingEngine(t *testing.T, storage repository.Storage) *commandengin
 		t.Fatalf("NewEngineForSource() error = %v", err)
 	}
 	return engine
+}
+
+func testRegisterComponent(t *testing.T, ctx context.Context, storage repository.Storage, componentType string, name string) *coremodel.Component {
+	t.Helper()
+	registration := &coremodel.Component{Type: componentType, Name: name, Enabled: true}
+	if err := storage.Components().Save(ctx, registration); err != nil {
+		t.Fatalf("Save(component %s/%s) error = %v", componentType, name, err)
+	}
+	return registration
+}
+
+func testSaveChatComponent(t *testing.T, ctx context.Context, storage repository.Storage, binding coremodel.ChatComponent) {
+	t.Helper()
+	if err := storage.ChatComponents().Save(ctx, &binding); err != nil {
+		t.Fatalf("Save(chat component) error = %v", err)
+	}
+}
+
+func assertThreadComponentMapping(t *testing.T, ctx context.Context, storage repository.Storage, threadID modeluuid.UUID, componentID modeluuid.UUID, providerThreadID string) {
+	t.Helper()
+	mapping, err := storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, threadID, componentID)
+	if err != nil {
+		t.Fatalf("GetByThreadAndComponent() error = %v", err)
+	}
+	if mapping == nil {
+		t.Fatalf("thread component mapping missing for thread=%s component=%s", threadID, componentID)
+	}
+	if got := strings.TrimSpace(mapping.ComponentThreadID); got != providerThreadID {
+		t.Fatalf("ComponentThreadID = %q, want %q", got, providerThreadID)
+	}
 }
 
 func testMessagingRequest(threadID modeluuid.UUID, roles ...simplerbac.Role) commandengine.Request {

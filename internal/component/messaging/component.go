@@ -46,6 +46,12 @@ type labelSetCommand struct {
 	Label     string
 }
 
+type componentBindCommand struct {
+	ThreadRef        string
+	ComponentRef     string
+	ProviderThreadID string
+}
+
 type messageListCommand struct {
 	ThreadRef string
 	Cursor    string
@@ -62,6 +68,7 @@ func RegisterGobTypes(register func(any)) {
 	register(currentStatusCommand{})
 	register(statusCommand{})
 	register(labelSetCommand{})
+	register(componentBindCommand{})
 	register(messageListCommand{})
 	register(messageSendCommand{})
 }
@@ -109,6 +116,16 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 		},
 		{
+			Pattern: "thread <thread> component bind <component>",
+			Help:    "Bind a component provider thread to a thread",
+			Build:   buildComponentBindCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+			Aliases: []commandengine.Route{
+				{Pattern: "thread component bind <component>", Absolute: true},
+			},
+		},
+		{
 			Pattern:               "thread list",
 			Help:                  "List recent active threads",
 			Build:                 buildListCommand,
@@ -148,6 +165,9 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.Register[labelSetCommand](registry, c.handleLabelSet); err != nil {
+		return err
+	}
+	if err := commandengine.Register[componentBindCommand](registry, c.handleComponentBind); err != nil {
 		return err
 	}
 	if err := commandengine.Register[messageListCommand](registry, c.handleMessageList); err != nil {
@@ -209,6 +229,24 @@ func (c *Component) handleLabelSet(ctx context.Context, req commandengine.Reques
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "thread label set: " + strings.TrimSpace(status.Label)}, nil
+}
+
+func (c *Component) handleComponentBind(ctx context.Context, req commandengine.Request, cmd componentBindCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	result, err := c.Service.BindThreadComponent(ctx, req.Context.Actor, threadID, messagingdomain.ThreadComponentBindRequest{
+		ComponentRef:     cmd.ComponentRef,
+		ProviderThreadID: cmd.ProviderThreadID,
+	})
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: formatThreadComponentBind(result)}, nil
 }
 
 func (c *Component) handleMessageList(ctx context.Context, req commandengine.Request, cmd messageListCommand) (commandengine.Result, error) {
@@ -379,6 +417,29 @@ func buildLabelSetCommand(req *clir.Request) (any, error) {
 	}, nil
 }
 
+func buildComponentBindCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	componentRef := strings.TrimSpace(req.Params["component"])
+	if componentRef == "" {
+		return nil, fmt.Errorf("missing component")
+	}
+	if len(req.Extra) > 1 {
+		return nil, fmt.Errorf("unexpected component bind arguments: %s", strings.Join(req.Extra[1:], " "))
+	}
+	providerThreadID := ""
+	if len(req.Extra) == 1 {
+		providerThreadID = strings.TrimSpace(req.Extra[0])
+	}
+	return componentBindCommand{
+		ThreadRef:        threadRef,
+		ComponentRef:     componentRef,
+		ProviderThreadID: providerThreadID,
+	}, nil
+}
+
 func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID modeluuid.UUID) string {
 	if len(threads) == 0 {
 		return "no recent threads"
@@ -453,6 +514,15 @@ func formatThreadStatus(status messagingdomain.ThreadStatus) string {
 		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatThreadComponentBind(result messagingdomain.ThreadComponentBindResult) string {
+	return strings.Join([]string{
+		"thread component bound",
+		"thread_id: " + result.ThreadID.String(),
+		"component: " + strings.TrimSpace(result.ComponentRef),
+		"provider_thread_id: " + strings.TrimSpace(result.ProviderThreadID),
+	}, "\n")
 }
 
 func formatMessagePage(threadID modeluuid.UUID, page messagingdomain.MessagePage) string {

@@ -53,3 +53,14 @@ type MessagePage struct {
 	Messages   []coremodel.ThreadMessage `json:"messages"`
 	NextCursor string                    `json:"next_cursor,omitempty"`
 }
+
+type ThreadComponentBindRequest struct {
+	ComponentRef     string `json:"component_ref"`
+	ProviderThreadID string `json:"provider_thread_id"`
+}
+
+type ThreadComponentBindResult struct {
+	ThreadID         modeluuid.UUID `json:"thread_id"`
+	ComponentRef     string         `json:"component_ref"`
+	ProviderThreadID string         `json:"provider_thread_id"`
+}
