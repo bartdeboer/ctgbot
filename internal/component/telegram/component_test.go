@@ -212,6 +212,9 @@ func TestNewAllowsMissingProfileTokenForManagedFileSetup(t *testing.T) {
 	if c.api != nil {
 		t.Fatalf("api = %#v, want nil before token is installed", c.api)
 	}
+	if got := c.componentConfig.renderFormat(); got != "html" {
+		t.Fatalf("default render format = %q, want html", got)
+	}
 }
 
 func TestRunInboundWaitsForMissingTokenUntilCancel(t *testing.T) {
@@ -337,6 +340,49 @@ func TestSendIgnoresZeroPayload(t *testing.T) {
 	}
 	if len(api.messageSnapshot()) != 0 {
 		t.Fatalf("messages = %#v, want none", api.messageSnapshot())
+	}
+}
+
+func TestSendUsesHTMLByDefault(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChatID:   "123",
+		ProviderThreadID: "4",
+		Text:             message.TextMessage{Text: "*hello*"},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 1 {
+		t.Fatalf("len(messages) = %d, want 1: %#v", len(messages), messages)
+	}
+	if messages[0].parseMode != "HTML" {
+		t.Fatalf("parse mode = %q, want HTML", messages[0].parseMode)
+	}
+	if !strings.Contains(messages[0].text, "<") {
+		t.Fatalf("message text = %q, want rendered HTML", messages[0].text)
+	}
+}
+
+func TestSendDefaultHTMLFallsBackToPlain(t *testing.T) {
+	api := &fakeTelegramAPI{sendMessageErrs: []error{fmt.Errorf("Bad Request: can't parse entities")}}
+	c := &Component{api: api}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChatID:   "123",
+		ProviderThreadID: "4",
+		Text:             message.TextMessage{Text: "*hello*"},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 2 {
+		t.Fatalf("len(messages) = %d, want 2: %#v", len(messages), messages)
+	}
+	if messages[0].parseMode != "HTML" || messages[1].parseMode != "" {
+		t.Fatalf("parse modes = %q, %q; want HTML then plain", messages[0].parseMode, messages[1].parseMode)
 	}
 }
 
