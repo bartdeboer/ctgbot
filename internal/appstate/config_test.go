@@ -59,8 +59,8 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	if err := store.PersistBool(cfg.Chat(chatID).key("enabled"), true); err != nil {
 		t.Fatalf("persist enabled: %v", err)
 	}
-	if err := store.PersistString(cfg.Chat(chatID).key("provider_chat_id"), "-1003759705932"); err != nil {
-		t.Fatalf("persist provider chat id: %v", err)
+	if err := store.PersistString(cfg.Chat(chatID).key("provider_channel_id"), "-1003759705932"); err != nil {
+		t.Fatalf("persist provider channel id: %v", err)
 	}
 	if err := store.PersistString(cfg.Chat(chatID).key("provider_chat_title"), "Codex #1"); err != nil {
 		t.Fatalf("persist title: %v", err)
@@ -92,8 +92,8 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	if !chat.Enabled() {
 		t.Fatal("Enabled() = false")
 	}
-	if got := chat.ProviderChatID(); got != "-1003759705932" {
-		t.Fatalf("ProviderChatID() = %q", got)
+	if got := chat.ProviderChannelID(); got != "-1003759705932" {
+		t.Fatalf("ProviderChannelID() = %q", got)
 	}
 	if got := chat.ProviderChatTitle(); got != "Codex #1" {
 		t.Fatalf("ProviderChatTitle() = %q", got)
@@ -198,8 +198,8 @@ func TestChatSettersAndKnownChats(t *testing.T) {
 	if err := chat.SetProviderType("telegram"); err != nil {
 		t.Fatalf("set provider: %v", err)
 	}
-	if err := chat.SetProviderChatID("123"); err != nil {
-		t.Fatalf("set provider chat id: %v", err)
+	if err := chat.SetProviderChannelID("123"); err != nil {
+		t.Fatalf("set provider channel id: %v", err)
 	}
 	if err := chat.SetProviderChatTitle("Test Chat"); err != nil {
 		t.Fatalf("set title: %v", err)
@@ -210,7 +210,7 @@ func TestChatSettersAndKnownChats(t *testing.T) {
 
 	found, err := cfg.FindProviderChat("telegram", "123")
 	if err != nil {
-		t.Fatalf("find provider chat: %v", err)
+		t.Fatalf("find provider channel: %v", err)
 	}
 	if found == nil || found.ID != chatID || !found.Enabled {
 		t.Fatalf("found = %#v", found)
@@ -224,7 +224,7 @@ func TestEnsureProviderChatCreatesDisabledChat(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 	entry, err := cfg.EnsureProviderChat("telegram", "456", "Created Chat")
 	if err != nil {
-		t.Fatalf("ensure provider chat: %v", err)
+		t.Fatalf("ensure provider channel: %v", err)
 	}
 	if entry == nil || entry.ID.IsNull() {
 		t.Fatalf("entry = %#v", entry)

@@ -180,7 +180,7 @@ func TestChatCreateListAndWorkspaceRoutes(t *testing.T) {
 	})
 }
 
-func TestChatComponentAddBindsExternalChatID(t *testing.T) {
+func TestChatComponentAddBindsExternalChannelID(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		_ = root
 		store, err := clistate.NewCwd("ctgbot", "config")
@@ -216,11 +216,11 @@ func TestChatComponentAddBindsExternalChatID(t *testing.T) {
 		shortChatID := shortChatIDForTest(t, system.Storage, chats[0].ID)
 
 		bindOutput := captureStdout(t, func() {
-			if err := router.Run(context.Background(), []string{"chat", chats[0].ID.String(), "component", "add", "source", "telegram", "--external-chat-id", "chat-1"}); err != nil {
+			if err := router.Run(context.Background(), []string{"chat", chats[0].ID.String(), "component", "add", "source", "telegram", "--external-channel-id", "chat-1"}); err != nil {
 				t.Fatalf("component add: %v", err)
 			}
 		})
-		if !strings.Contains(bindOutput, "chat component bound") || !strings.Contains(bindOutput, "external_chat_id: chat-1") {
+		if !strings.Contains(bindOutput, "chat component bound") || !strings.Contains(bindOutput, "external_channel_id: chat-1") {
 			t.Fatalf("unexpected bind output: %q", bindOutput)
 		}
 
@@ -231,8 +231,17 @@ func TestChatComponentAddBindsExternalChatID(t *testing.T) {
 		if len(bindings) != 1 {
 			t.Fatalf("binding count = %d, want 1", len(bindings))
 		}
-		if bindings[0].ExternalChatID != "chat-1" {
-			t.Fatalf("ExternalChatID = %q, want chat-1", bindings[0].ExternalChatID)
+		if bindings[0].ExternalChannelID != "chat-1" {
+			t.Fatalf("ExternalChannelID = %q, want chat-1", bindings[0].ExternalChannelID)
+		}
+
+		aliasOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", chats[0].ID.String(), "component", "add", "relay", "telegram", "--external-chat-id", "chat-2"}); err != nil {
+				t.Fatalf("component add with deprecated external-chat-id alias: %v", err)
+			}
+		})
+		if !strings.Contains(aliasOutput, "chat component bound") || !strings.Contains(aliasOutput, "external_channel_id: chat-2") {
+			t.Fatalf("unexpected alias bind output: %q", aliasOutput)
 		}
 
 		listOutput := captureStdout(t, func() {
@@ -240,7 +249,11 @@ func TestChatComponentAddBindsExternalChatID(t *testing.T) {
 				t.Fatalf("component list: %v", err)
 			}
 		})
-		if !strings.Contains(listOutput, "telegram") || !strings.Contains(listOutput, "role=source") || !strings.Contains(listOutput, "external_chat_id=chat-1") {
+		if !strings.Contains(listOutput, "telegram") ||
+			!strings.Contains(listOutput, "role=source") ||
+			!strings.Contains(listOutput, "external_channel_id=chat-1") ||
+			!strings.Contains(listOutput, "role=relay") ||
+			!strings.Contains(listOutput, "external_channel_id=chat-2") {
 			t.Fatalf("unexpected component list output: %q", listOutput)
 		}
 	})
@@ -440,14 +453,14 @@ func TestChatDroppedListsUnresolvedInboundChats(t *testing.T) {
 			t.Fatal("expected gmail registration")
 		}
 		if err := system.Storage.InboundDrops().Save(context.Background(), &coremodel.InboundDrop{
-			ComponentID:     registration.ID,
-			ExternalChatID:  "me",
-			ChatLabel:       "Inbox",
-			ActorLabel:      "Email",
-			LastTextPreview: "hello",
-			MessageCount:    1,
-			FirstSeenAt:     time.Now().Add(-time.Minute),
-			LastSeenAt:      time.Now(),
+			ComponentID:       registration.ID,
+			ExternalChannelID: "me",
+			ChatLabel:         "Inbox",
+			ActorLabel:        "Email",
+			LastTextPreview:   "hello",
+			MessageCount:      1,
+			FirstSeenAt:       time.Now().Add(-time.Minute),
+			LastSeenAt:        time.Now(),
 		}); err != nil {
 			t.Fatalf("Save drop: %v", err)
 		}
@@ -457,7 +470,7 @@ func TestChatDroppedListsUnresolvedInboundChats(t *testing.T) {
 				t.Fatalf("chat dropped: %v", err)
 			}
 		})
-		if !strings.Contains(output, "gmail") || !strings.Contains(output, "external_chat_id=me") || !strings.Contains(output, "preview=hello") {
+		if !strings.Contains(output, "gmail") || !strings.Contains(output, "external_channel_id=me") || !strings.Contains(output, "preview=hello") {
 			t.Fatalf("unexpected dropped output: %q", output)
 		}
 	})
@@ -489,13 +502,13 @@ func TestChatBindCreatesEnabledChatAndAutoBindsSupportedRoles(t *testing.T) {
 			t.Fatal("expected telegram registration")
 		}
 		if err := system.Storage.InboundDrops().Save(context.Background(), &coremodel.InboundDrop{
-			ComponentID:     registration.ID,
-			ExternalChatID:  "chat-1",
-			ChatLabel:       "Team room",
-			LastTextPreview: "hello",
-			MessageCount:    1,
-			FirstSeenAt:     time.Now().Add(-time.Minute),
-			LastSeenAt:      time.Now(),
+			ComponentID:       registration.ID,
+			ExternalChannelID: "chat-1",
+			ChatLabel:         "Team room",
+			LastTextPreview:   "hello",
+			MessageCount:      1,
+			FirstSeenAt:       time.Now().Add(-time.Minute),
+			LastSeenAt:        time.Now(),
 		}); err != nil {
 			t.Fatalf("Save drop: %v", err)
 		}

@@ -32,7 +32,7 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 						ExternalID: "alpha-1",
 						Payload: message.InboundPayload{
 							ProviderType:      "mockgmail",
-							ProviderChatID:    "gmail-alpha",
+							ProviderChannelID: "gmail-alpha",
 							ProviderThreadID:  "shared-thread",
 							ProviderMessageID: "alpha-1",
 							Actor:             actorWithRoles("", "alpha@example.com"),
@@ -43,7 +43,7 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 						ExternalID: "alpha-2",
 						Payload: message.InboundPayload{
 							ProviderType:      "mockgmail",
-							ProviderChatID:    "gmail-alpha",
+							ProviderChannelID: "gmail-alpha",
 							ProviderThreadID:  "shared-thread",
 							ProviderMessageID: "alpha-2",
 							Actor:             actorWithRoles("", "alpha@example.com"),
@@ -58,7 +58,7 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 						ExternalID: "beta-1",
 						Payload: message.InboundPayload{
 							ProviderType:      "mockgmail",
-							ProviderChatID:    "gmail-beta",
+							ProviderChannelID: "gmail-beta",
 							ProviderThreadID:  "shared-thread",
 							ProviderMessageID: "beta-1",
 							Actor:             actorWithRoles("", "beta@example.com"),
@@ -69,7 +69,7 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 						ExternalID: "beta-2",
 						Payload: message.InboundPayload{
 							ProviderType:      "mockgmail",
-							ProviderChatID:    "gmail-beta",
+							ProviderChannelID: "gmail-beta",
 							ProviderThreadID:  "beta-other-thread",
 							ProviderMessageID: "beta-2",
 							Actor:             actorWithRoles("", "beta@example.com"),
@@ -285,9 +285,9 @@ func (m *multiEventSource) RunInbound(ctx context.Context, emit component.Inboun
 	return nil
 }
 
-func mustBindChatComponent(t *testing.T, ctx context.Context, system *systempkg.System, chatID modeluuid.UUID, role coremodel.ChatComponentRole, ref string, externalChatID string) {
+func mustBindChatComponent(t *testing.T, ctx context.Context, system *systempkg.System, chatID modeluuid.UUID, role coremodel.ChatComponentRole, ref string, externalChannelID string) {
 	t.Helper()
-	if _, err := system.BindChatComponent(ctx, chatID, role, ref, externalChatID); err != nil {
+	if _, err := system.BindChatComponent(ctx, chatID, role, ref, externalChannelID); err != nil {
 		t.Fatalf("BindChatComponent(%s, %s) error = %v", role, ref, err)
 	}
 }
@@ -306,13 +306,13 @@ func findExecRecord(t *testing.T, records []execRecord, want string) execRecord 
 func assertRelayTargets(t *testing.T, payloads []message.OutboundPayload, wantChatID string) {
 	t.Helper()
 	for _, payload := range payloads {
-		if payload.ProviderChatID != wantChatID {
-			t.Fatalf("relay provider chat id = %q, want %q", payload.ProviderChatID, wantChatID)
+		if payload.ProviderChannelID != wantChatID {
+			t.Fatalf("relay provider channel id = %q, want %q", payload.ProviderChannelID, wantChatID)
 		}
 		if payload.ProviderThreadID != "" {
 			t.Fatalf("relay provider thread id = %q, want empty fallback", payload.ProviderThreadID)
 		}
-		if strings.HasPrefix(payload.ProviderChatID, "gmail-") {
+		if strings.HasPrefix(payload.ProviderChannelID, "gmail-") {
 			t.Fatalf("relay unexpectedly targeted gmail inbox: %#v", payload)
 		}
 	}

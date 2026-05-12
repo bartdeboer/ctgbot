@@ -125,12 +125,12 @@ func (c Component) Ref() string {
 }
 
 type ChatComponent struct {
-	ID             modeluuid.UUID    `gorm:"primaryKey"`
-	ChatID         modeluuid.UUID    `gorm:"index;uniqueIndex:idx_chat_component_role"`
-	ComponentID    modeluuid.UUID    `gorm:"uniqueIndex:idx_chat_component_role"`
-	Role           ChatComponentRole `gorm:"uniqueIndex:idx_chat_component_role"`
-	ExternalChatID string
-	Enabled        bool
+	ID                modeluuid.UUID    `gorm:"primaryKey"`
+	ChatID            modeluuid.UUID    `gorm:"index;uniqueIndex:idx_chat_component_role"`
+	ComponentID       modeluuid.UUID    `gorm:"uniqueIndex:idx_chat_component_role"`
+	Role              ChatComponentRole `gorm:"uniqueIndex:idx_chat_component_role"`
+	ExternalChannelID string
+	Enabled           bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -148,17 +148,17 @@ type ComponentBinding struct {
 }
 
 type InboundDrop struct {
-	ID               modeluuid.UUID `gorm:"primaryKey"`
-	ComponentID      modeluuid.UUID `gorm:"index;uniqueIndex:idx_inbound_drop_external_chat"`
-	ExternalChatID   string         `gorm:"uniqueIndex:idx_inbound_drop_external_chat"`
-	ExternalThreadID string
-	ChatLabel        string
-	ActorID          string
-	ActorLabel       string
-	LastTextPreview  string
-	MessageCount     int64
-	FirstSeenAt      time.Time
-	LastSeenAt       time.Time
+	ID                modeluuid.UUID `gorm:"primaryKey"`
+	ComponentID       modeluuid.UUID `gorm:"index;uniqueIndex:idx_inbound_drop_external_channel"`
+	ExternalChannelID string         `gorm:"uniqueIndex:idx_inbound_drop_external_channel"`
+	ExternalThreadID  string
+	ChatLabel         string
+	ActorID           string
+	ActorLabel        string
+	LastTextPreview   string
+	MessageCount      int64
+	FirstSeenAt       time.Time
+	LastSeenAt        time.Time
 }
 
 type ThreadComponentMapping struct {

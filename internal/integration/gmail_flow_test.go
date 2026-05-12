@@ -26,7 +26,7 @@ func TestGmailSourceRelaysOutboundElsewhere(t *testing.T) {
 				ExternalID: "gmail-msg-1",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockgmail",
-					ProviderChatID:    "gmail-inbox-1",
+					ProviderChannelID: "gmail-inbox-1",
 					ProviderThreadID:  "gmail-thread-1",
 					ProviderMessageID: "gmail-msg-1",
 					Actor:             actorWithRoles("", "bart@example.com"),
@@ -132,10 +132,10 @@ func TestGmailSourceRelaysOutboundElsewhere(t *testing.T) {
 		if payload.Text.Text != "done" {
 			t.Fatalf("relay text = %q, want done", payload.Text.Text)
 		}
-		if payload.ProviderChatID != "telegram-chat-1" {
-			t.Fatalf("relay provider chat id = %q, want telegram-chat-1", payload.ProviderChatID)
+		if payload.ProviderChannelID != "telegram-chat-1" {
+			t.Fatalf("relay provider channel id = %q, want telegram-chat-1", payload.ProviderChannelID)
 		}
-		if payload.ProviderChatID == "gmail-inbox-1" {
+		if payload.ProviderChannelID == "gmail-inbox-1" {
 			t.Fatalf("relay unexpectedly targeted gmail inbox: %#v", payload)
 		}
 		if payload.ProviderThreadID != "" {

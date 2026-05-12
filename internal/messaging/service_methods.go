@@ -321,10 +321,10 @@ func (s *Service) inferProviderThreadID(ctx context.Context, chat coremodel.Chat
 		if binding.ComponentID != registration.ID || binding.Role != coremodel.ChatComponentRoleSource {
 			continue
 		}
-		externalChatID := strings.TrimSpace(binding.ExternalChatID)
-		if externalChatID != "" && !seen[externalChatID] {
-			seen[externalChatID] = true
-			matches = append(matches, externalChatID)
+		externalChannelID := strings.TrimSpace(binding.ExternalChannelID)
+		if externalChannelID != "" && !seen[externalChannelID] {
+			seen[externalChannelID] = true
+			matches = append(matches, externalChannelID)
 		}
 	}
 	switch len(matches) {
@@ -512,9 +512,9 @@ func (s *Service) threadStatusComponents(ctx context.Context, chat coremodel.Cha
 			componentRef = registration.Ref()
 		}
 		statusComponent := ThreadStatusComponent{
-			Ref:            componentRef,
-			Role:           string(binding.Role),
-			ExternalChatID: strings.TrimSpace(binding.ExternalChatID),
+			Ref:               componentRef,
+			Role:              string(binding.Role),
+			ExternalChannelID: strings.TrimSpace(binding.ExternalChannelID),
 		}
 		mapping, err := s.Storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, thread.ID, binding.ComponentID)
 		if err != nil {

@@ -248,9 +248,9 @@ func TestRunInboundEmitsInboundEventAndRelaysResponse(t *testing.T) {
 	err := c.RunInbound(context.Background(), func(ctx context.Context, event componentpkg.InboundEvent) error {
 		events = append(events, event)
 		return c.Send(ctx, message.OutboundPayload{
-			ProviderChatID:   event.Payload.ProviderChatID,
-			ProviderThreadID: event.Payload.ProviderThreadID,
-			Text:             message.TextMessage{Text: " pong "},
+			ProviderChannelID: event.Payload.ProviderChannelID,
+			ProviderThreadID:  event.Payload.ProviderThreadID,
+			Text:              message.TextMessage{Text: " pong "},
 		})
 	})
 	if err != nil {
@@ -264,7 +264,7 @@ func TestRunInboundEmitsInboundEventAndRelaysResponse(t *testing.T) {
 	if event.ComponentID != componentID || event.ExternalID != "99" {
 		t.Fatalf("event id fields = component %s external %q", event.ComponentID, event.ExternalID)
 	}
-	if event.Payload.ProviderType != Type || event.Payload.ProviderChatID != "123" || event.Payload.ProviderThreadID != "4" {
+	if event.Payload.ProviderType != Type || event.Payload.ProviderChannelID != "123" || event.Payload.ProviderThreadID != "4" {
 		t.Fatalf("payload provider fields = %#v", event.Payload)
 	}
 	if event.Payload.Actor.ID != "7" || event.Payload.Actor.Label != "@bart" {
@@ -348,9 +348,9 @@ func TestSendUsesMarkdownV2ByDefault(t *testing.T) {
 	c := &Component{api: api}
 
 	if err := c.Send(context.Background(), message.OutboundPayload{
-		ProviderChatID:   "123",
-		ProviderThreadID: "4",
-		Text:             message.TextMessage{Text: "*hello*"},
+		ProviderChannelID: "123",
+		ProviderThreadID:  "4",
+		Text:              message.TextMessage{Text: "*hello*"},
 	}); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
@@ -368,9 +368,9 @@ func TestSendDefaultMarkdownV2FallsBackToHTMLThenPlain(t *testing.T) {
 	c := &Component{api: api}
 
 	if err := c.Send(context.Background(), message.OutboundPayload{
-		ProviderChatID:   "123",
-		ProviderThreadID: "4",
-		Text:             message.TextMessage{Text: "*hello*"},
+		ProviderChannelID: "123",
+		ProviderThreadID:  "4",
+		Text:              message.TextMessage{Text: "*hello*"},
 	}); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
@@ -389,9 +389,9 @@ func TestSendFallsBackFromMarkdownToHTML(t *testing.T) {
 	c := &Component{api: api, componentConfig: apiConfig}
 
 	if err := c.Send(context.Background(), message.OutboundPayload{
-		ProviderChatID:   "123",
-		ProviderThreadID: "4",
-		Text:             message.TextMessage{Text: "*hello*"},
+		ProviderChannelID: "123",
+		ProviderThreadID:  "4",
+		Text:              message.TextMessage{Text: "*hello*"},
 	}); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
@@ -408,9 +408,9 @@ func TestSendMediaImageUsesPhoto(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}
 	if err := c.Send(context.Background(), message.OutboundPayload{
-		ProviderChatID:   "123",
-		ProviderThreadID: "4",
-		Text:             message.TextMessage{Text: "caption"},
+		ProviderChannelID: "123",
+		ProviderThreadID:  "4",
+		Text:              message.TextMessage{Text: "caption"},
 		Attachments: []message.Media{{
 			Filename:    "image.png",
 			ContentType: "image/png",
@@ -431,8 +431,8 @@ func TestSendTextualSourceWithSyntaxUsesRenderedFence(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}
 	if err := c.Send(context.Background(), message.OutboundPayload{
-		ProviderChatID: "123",
-		Text:           message.TextMessage{Text: "Here"},
+		ProviderChannelID: "123",
+		Text:              message.TextMessage{Text: "Here"},
 		Attachments: []message.Media{{
 			Filename:    "main.go",
 			ContentType: "text/plain",
@@ -460,7 +460,7 @@ func TestStartChatActionSendsAndStopsHeartbeat(t *testing.T) {
 	c := &Component{api: api}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	stop, err := c.StartChatAction(ctx, message.ChatTarget{ProviderChatID: "123", ProviderThreadID: "4"}, message.ChatActionTyping)
+	stop, err := c.StartChatAction(ctx, message.ChatTarget{ProviderChannelID: "123", ProviderThreadID: "4"}, message.ChatActionTyping)
 	if err != nil {
 		t.Fatalf("StartChatAction() error = %v", err)
 	}

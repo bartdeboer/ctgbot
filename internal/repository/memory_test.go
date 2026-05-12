@@ -155,16 +155,16 @@ func TestMemoryInboundDropsSaveListGetDelete(t *testing.T) {
 	componentID := modeluuid.New()
 
 	drop := &coremodel.InboundDrop{
-		ComponentID:      componentID,
-		ExternalChatID:   "chat-1",
-		ExternalThreadID: "thread-9",
-		ChatLabel:        "New chat",
-		ActorID:          "bart",
-		ActorLabel:       "Bart",
-		LastTextPreview:  "hello",
-		MessageCount:     1,
-		FirstSeenAt:      time.Now().Add(-time.Minute),
-		LastSeenAt:       time.Now(),
+		ComponentID:       componentID,
+		ExternalChannelID: "chat-1",
+		ExternalThreadID:  "thread-9",
+		ChatLabel:         "New chat",
+		ActorID:           "bart",
+		ActorLabel:        "Bart",
+		LastTextPreview:   "hello",
+		MessageCount:      1,
+		FirstSeenAt:       time.Now().Add(-time.Minute),
+		LastSeenAt:        time.Now(),
 	}
 	if err := storage.InboundDrops().Save(ctx, drop); err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -173,12 +173,12 @@ func TestMemoryInboundDropsSaveListGetDelete(t *testing.T) {
 		t.Fatal("Save() did not assign ID")
 	}
 
-	loaded, err := storage.InboundDrops().GetByComponentAndExternalChatID(ctx, componentID, "chat-1")
+	loaded, err := storage.InboundDrops().GetByComponentAndExternalChannelID(ctx, componentID, "chat-1")
 	if err != nil {
-		t.Fatalf("GetByComponentAndExternalChatID() error = %v", err)
+		t.Fatalf("GetByComponentAndExternalChannelID() error = %v", err)
 	}
 	if loaded == nil {
-		t.Fatal("GetByComponentAndExternalChatID() = nil, want row")
+		t.Fatal("GetByComponentAndExternalChannelID() = nil, want row")
 	}
 	if got, want := loaded.ChatLabel, "New chat"; got != want {
 		t.Fatalf("ChatLabel = %q, want %q", got, want)
@@ -192,15 +192,15 @@ func TestMemoryInboundDropsSaveListGetDelete(t *testing.T) {
 		t.Fatalf("List() len = %d, want 1", len(list))
 	}
 
-	if err := storage.InboundDrops().DeleteByComponentAndExternalChatID(ctx, componentID, "chat-1"); err != nil {
-		t.Fatalf("DeleteByComponentAndExternalChatID() error = %v", err)
+	if err := storage.InboundDrops().DeleteByComponentAndExternalChannelID(ctx, componentID, "chat-1"); err != nil {
+		t.Fatalf("DeleteByComponentAndExternalChannelID() error = %v", err)
 	}
-	loaded, err = storage.InboundDrops().GetByComponentAndExternalChatID(ctx, componentID, "chat-1")
+	loaded, err = storage.InboundDrops().GetByComponentAndExternalChannelID(ctx, componentID, "chat-1")
 	if err != nil {
-		t.Fatalf("GetByComponentAndExternalChatID() after delete error = %v", err)
+		t.Fatalf("GetByComponentAndExternalChannelID() after delete error = %v", err)
 	}
 	if loaded != nil {
-		t.Fatalf("GetByComponentAndExternalChatID() after delete = %#v, want nil", loaded)
+		t.Fatalf("GetByComponentAndExternalChannelID() after delete = %#v, want nil", loaded)
 	}
 }
 

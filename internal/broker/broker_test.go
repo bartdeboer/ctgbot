@@ -327,8 +327,8 @@ func newGuardedInboundFixture(t *testing.T, guardOutput string, options ...func(
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: source.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: relay.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: source.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: relay.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: agent.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 	} {
 		binding := binding
@@ -351,13 +351,13 @@ func guardedInboundEvent(sourceID modeluuid.UUID, text string) component.Inbound
 	return testInboundEvent(sourceID, "chat-1", "thread-7", text)
 }
 
-func testInboundEvent(sourceID modeluuid.UUID, providerChatID string, providerThreadID string, text string) component.InboundEvent {
+func testInboundEvent(sourceID modeluuid.UUID, providerChannelID string, providerThreadID string, text string) component.InboundEvent {
 	return component.InboundEvent{
 		ComponentID: sourceID,
 		ExternalID:  "msg-1",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    providerChatID,
+			ProviderChannelID: providerChannelID,
 			ProviderThreadID:  providerThreadID,
 			ProviderMessageID: "msg-1",
 			Actor: message.Actor{
@@ -395,8 +395,8 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 	} {
 		binding := binding
@@ -410,7 +410,7 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 		ExternalID:  "msg-1",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    "chat-1",
+			ProviderChannelID: "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
 			Actor: message.Actor{
@@ -477,8 +477,8 @@ func TestInboundFilterCanTransformEventBeforeRouting(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 	} {
 		binding := binding
@@ -492,7 +492,7 @@ func TestInboundFilterCanTransformEventBeforeRouting(t *testing.T) {
 		ExternalID:  "msg-1",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    "chat-1",
+			ProviderChannelID: "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
 			Actor: message.Actor{
@@ -532,8 +532,8 @@ func TestInboundAdmissionStagesResolveChannelAndAllowDefaultSender(t *testing.T)
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 	} {
 		binding := binding
 		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
@@ -583,12 +583,12 @@ func TestFilteredMessageUsesExplicitFilterAction(t *testing.T) {
 		Event: event,
 		Chat:  coremodel.Chat{ID: modeluuid.New(), Label: "team", Enabled: true},
 		SourceBinding: coremodel.ChatComponent{
-			ID:             modeluuid.New(),
-			ChatID:         modeluuid.New(),
-			ComponentID:    sourceID,
-			Role:           coremodel.ChatComponentRoleSource,
-			ExternalChatID: "chat-1",
-			Enabled:        true,
+			ID:                modeluuid.New(),
+			ChatID:            modeluuid.New(),
+			ComponentID:       sourceID,
+			Role:              coremodel.ChatComponentRoleSource,
+			ExternalChannelID: "chat-1",
+			Enabled:           true,
 		},
 	}
 	quarantine := inboundFilterFunc(func(ctx context.Context, input inboundpkg.FilterInput) (inboundpkg.FilterResult, error) {
@@ -775,8 +775,8 @@ func TestHandleInboundSerializesTurnsPerThread(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 	} {
 		binding := binding
@@ -791,7 +791,7 @@ func TestHandleInboundSerializesTurnsPerThread(t *testing.T) {
 			ExternalID:  id,
 			Payload: message.InboundPayload{
 				ProviderType:      "telegram",
-				ProviderChatID:    "chat-1",
+				ProviderChannelID: "chat-1",
 				ProviderThreadID:  "thread-7",
 				ProviderMessageID: id,
 				Actor: message.Actor{
@@ -885,8 +885,8 @@ func TestHandleInboundInterruptCommandBypassesTurnGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 	} {
 		binding := binding
@@ -901,7 +901,7 @@ func TestHandleInboundInterruptCommandBypassesTurnGate(t *testing.T) {
 			ExternalID:  id,
 			Payload: message.InboundPayload{
 				ProviderType:      "telegram",
-				ProviderChatID:    "chat-1",
+				ProviderChannelID: "chat-1",
 				ProviderThreadID:  "thread-7",
 				ProviderMessageID: id,
 				Actor: message.Actor{
@@ -979,7 +979,7 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 	} {
 		binding := binding
@@ -1086,7 +1086,7 @@ func TestQueueResolvedInboundQueuesWhileThreadBusy(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 	} {
 		binding := binding
@@ -1188,8 +1188,8 @@ func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T)
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 	} {
 		binding := binding
@@ -1203,7 +1203,7 @@ func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T)
 		ExternalID:  "msg-1",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    "chat-1",
+			ProviderChannelID: "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
 			Actor: message.Actor{
@@ -1270,8 +1270,8 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 		}
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 		{ChatID: chat.ID, ComponentID: tools.ID, Role: coremodel.ChatComponentRoleCommand, Enabled: true},
 	} {
@@ -1286,7 +1286,7 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 		ExternalID:  "msg-1",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    "chat-1",
+			ProviderChannelID: "chat-1",
 			ProviderThreadID:  "thread-7",
 			ProviderMessageID: "msg-1",
 			Actor: message.Actor{
@@ -1358,11 +1358,11 @@ func TestHandleInboundDropsSourceOnlyChatWithoutRelay(t *testing.T) {
 		}
 	}
 	sourceBinding := &coremodel.ChatComponent{
-		ChatID:         chat.ID,
-		ComponentID:    telegram.ID,
-		Role:           coremodel.ChatComponentRoleSource,
-		ExternalChatID: "chat-1",
-		Enabled:        true,
+		ChatID:            chat.ID,
+		ComponentID:       telegram.ID,
+		Role:              coremodel.ChatComponentRoleSource,
+		ExternalChannelID: "chat-1",
+		Enabled:           true,
 	}
 	if err := storage.ChatComponents().Save(context.Background(), sourceBinding); err != nil {
 		t.Fatal(err)
@@ -1418,8 +1418,8 @@ func TestHandleInboundAllowsChatWithRelayBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 	} {
 		binding := binding
 		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
@@ -1476,8 +1476,8 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 		}
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 		{ChatID: chat.ID, ComponentID: process.ID, Role: coremodel.ChatComponentRoleCommand, Enabled: true},
 	} {
@@ -1493,7 +1493,7 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 			ExternalID:  "msg-" + strings.ReplaceAll(text, " ", "-"),
 			Payload: message.InboundPayload{
 				ProviderType:      "telegram",
-				ProviderChatID:    "chat-1",
+				ProviderChannelID: "chat-1",
 				ProviderThreadID:  "thread-7",
 				ProviderMessageID: "msg-" + strings.ReplaceAll(text, " ", "-"),
 				Actor: message.Actor{
@@ -1561,7 +1561,7 @@ func TestHandleInboundDropsUnknownChatAndRecordsDrop(t *testing.T) {
 		ExternalID:  "msg-unknown",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    "chat-new",
+			ProviderChannelID: "chat-new",
 			ProviderThreadID:  "thread-new",
 			ProviderMessageID: "msg-unknown",
 			ChatLabel:         "New chat",
@@ -1587,8 +1587,8 @@ func TestHandleInboundDropsUnknownChatAndRecordsDrop(t *testing.T) {
 		t.Fatalf("drop count = %d, want 1", len(drops))
 	}
 	drop := drops[0]
-	if got, want := drop.ExternalChatID, "chat-new"; got != want {
-		t.Fatalf("ExternalChatID = %q, want %q", got, want)
+	if got, want := drop.ExternalChannelID, "chat-new"; got != want {
+		t.Fatalf("ExternalChannelID = %q, want %q", got, want)
 	}
 	if got, want := drop.MessageCount, int64(1); got != want {
 		t.Fatalf("MessageCount = %d, want %d", got, want)
@@ -1602,7 +1602,7 @@ func TestHandleInboundDropsUnknownChatAndRecordsDrop(t *testing.T) {
 	if got := len(logs); got == 0 {
 		t.Fatal("expected drop log")
 	}
-	if logLine := logs[len(logs)-1]; !strings.Contains(logLine, `reason=no-source-binding`) || !strings.Contains(logLine, `external_chat="chat-new"`) || !strings.Contains(logLine, `preview="hello from new chat"`) {
+	if logLine := logs[len(logs)-1]; !strings.Contains(logLine, `reason=no-source-binding`) || !strings.Contains(logLine, `external_channel="chat-new"`) || !strings.Contains(logLine, `preview="hello from new chat"`) {
 		t.Fatalf("drop log = %q", logLine)
 	}
 }
@@ -1625,7 +1625,7 @@ func TestHandleInboundInitReplyGuidesUnknownChatActivation(t *testing.T) {
 		ExternalID:  "msg-init",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    "chat-new",
+			ProviderChannelID: "chat-new",
 			ProviderThreadID:  "thread-new",
 			ProviderMessageID: "msg-init",
 			ChatLabel:         "New chat",
@@ -1650,7 +1650,7 @@ func TestHandleInboundInitReplyGuidesUnknownChatActivation(t *testing.T) {
 	for _, want := range []string{
 		"chat is not bound",
 		"component: telegram",
-		"external_chat_id: chat-new",
+		"external_channel_id: chat-new",
 		`ctgbot chat bind telegram chat-new "New chat"`,
 	} {
 		if !strings.Contains(reply, want) {
@@ -1676,8 +1676,8 @@ func TestHandleInboundInitReplyGuidesDisabledChatEnable(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
 	} {
 		binding := binding
 		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
@@ -1690,7 +1690,7 @@ func TestHandleInboundInitReplyGuidesDisabledChatEnable(t *testing.T) {
 		ExternalID:  "msg-disabled",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    "chat-1",
+			ProviderChannelID: "chat-1",
 			ProviderThreadID:  "thread-1",
 			ProviderMessageID: "msg-disabled",
 			Text:              message.TextMessage{Text: "/init"},
@@ -1728,7 +1728,7 @@ func TestRunStartsEnabledInboundSources(t *testing.T) {
 		ExternalID: "msg-2",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    "chat-2",
+			ProviderChannelID: "chat-2",
 			ProviderThreadID:  "thread-9",
 			ProviderMessageID: "msg-2",
 			Actor: message.Actor{
@@ -1754,8 +1754,8 @@ func TestRunStartsEnabledInboundSources(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-2", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-2", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-2", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-2", Enabled: true},
 		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
 	} {
 		binding := binding

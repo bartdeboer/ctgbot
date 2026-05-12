@@ -31,7 +31,7 @@ func TestStatusShowsCurrentThread(t *testing.T) {
 		"chat_short_id: " + chatShortID,
 		"chat_label: Codex #1",
 		"thread_label: ctgbot 2",
-		"- telegram source external_chat_id=-100 external_thread_id=845",
+		"- telegram source external_channel_id=-100 external_thread_id=845",
 	} {
 		if !strings.Contains(result.Text, want) {
 			t.Fatalf("status missing %q:\n%s", want, result.Text)
@@ -116,11 +116,11 @@ func TestThreadComponentBindInfersProviderThreadIDFromSourceBinding(t *testing.T
 	storage, thread := testMessagingStorage(t, ctx)
 	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
 	testSaveChatComponent(t, ctx, storage, coremodel.ChatComponent{
-		ChatID:         thread.ChatID,
-		ComponentID:    gmail.ID,
-		Role:           coremodel.ChatComponentRoleSource,
-		ExternalChatID: "bart@example.com",
-		Enabled:        true,
+		ChatID:            thread.ChatID,
+		ComponentID:       gmail.ID,
+		Role:              coremodel.ChatComponentRoleSource,
+		ExternalChannelID: "bart@example.com",
+		Enabled:           true,
 	})
 	engine := testMessagingEngine(t, storage)
 
@@ -173,13 +173,13 @@ func TestThreadComponentBindErrorsWhenProviderThreadIDAmbiguous(t *testing.T) {
 	ctx := context.Background()
 	storage, thread := testMessagingStorage(t, ctx)
 	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
-	for _, externalChatID := range []string{"mailbox-a", "mailbox-b"} {
+	for _, externalChannelID := range []string{"mailbox-a", "mailbox-b"} {
 		testSaveChatComponent(t, ctx, storage, coremodel.ChatComponent{
-			ChatID:         thread.ChatID,
-			ComponentID:    gmail.ID,
-			Role:           coremodel.ChatComponentRoleSource,
-			ExternalChatID: externalChatID,
-			Enabled:        true,
+			ChatID:            thread.ChatID,
+			ComponentID:       gmail.ID,
+			Role:              coremodel.ChatComponentRoleSource,
+			ExternalChannelID: externalChannelID,
+			Enabled:           true,
 		})
 	}
 	engine := testMessagingEngine(t, storage)
@@ -196,11 +196,11 @@ func TestThreadComponentBindDedupesDuplicateInferredProviderThreadIDs(t *testing
 	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
 	for i := 0; i < 2; i++ {
 		testSaveChatComponent(t, ctx, storage, coremodel.ChatComponent{
-			ChatID:         thread.ChatID,
-			ComponentID:    gmail.ID,
-			Role:           coremodel.ChatComponentRoleSource,
-			ExternalChatID: "bart@example.com",
-			Enabled:        true,
+			ChatID:            thread.ChatID,
+			ComponentID:       gmail.ID,
+			Role:              coremodel.ChatComponentRoleSource,
+			ExternalChannelID: "bart@example.com",
+			Enabled:           true,
 		})
 	}
 	engine := testMessagingEngine(t, storage)
@@ -309,11 +309,11 @@ func testMessagingStorage(t *testing.T, ctx context.Context) (*repository.Memory
 		t.Fatalf("Save(component) error = %v", err)
 	}
 	binding := &coremodel.ChatComponent{
-		ChatID:         chat.ID,
-		ComponentID:    telegram.ID,
-		Role:           coremodel.ChatComponentRoleSource,
-		ExternalChatID: "-100",
-		Enabled:        true,
+		ChatID:            chat.ID,
+		ComponentID:       telegram.ID,
+		Role:              coremodel.ChatComponentRoleSource,
+		ExternalChannelID: "-100",
+		Enabled:           true,
 	}
 	if err := storage.ChatComponents().Save(ctx, binding); err != nil {
 		t.Fatalf("Save(chat component) error = %v", err)

@@ -84,7 +84,7 @@ func (c *Component) inboundPayload(ctx context.Context, update TelegramUpdate, t
 
 	payload := message.InboundPayload{
 		ProviderType:      Type,
-		ProviderChatID:    fmt.Sprintf("%d", update.ChatID),
+		ProviderChannelID: fmt.Sprintf("%d", update.ChatID),
 		ProviderThreadID:  fmt.Sprintf("%d", update.ThreadID),
 		ProviderMessageID: fmt.Sprintf("%d", update.MessageID),
 		ChatLabel:         strings.TrimSpace(update.ChatTitle),
@@ -113,7 +113,7 @@ func externalIDForPayload(payload message.InboundPayload) string {
 	if externalID != "" {
 		return externalID
 	}
-	return strings.TrimSpace(payload.ProviderChatID) + ":" + strings.TrimSpace(payload.ProviderThreadID)
+	return strings.TrimSpace(payload.ProviderChannelID) + ":" + strings.TrimSpace(payload.ProviderThreadID)
 }
 
 func telegramActorRoles(operator bool) []simplerbac.Role {

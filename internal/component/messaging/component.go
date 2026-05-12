@@ -505,8 +505,8 @@ func formatThreadStatus(status messagingdomain.ThreadStatus) string {
 		if role := strings.TrimSpace(component.Role); role != "" {
 			line += " " + role
 		}
-		if externalChatID := strings.TrimSpace(component.ExternalChatID); externalChatID != "" {
-			line += " external_chat_id=" + externalChatID
+		if externalChannelID := strings.TrimSpace(component.ExternalChannelID); externalChannelID != "" {
+			line += " external_channel_id=" + externalChannelID
 		}
 		if externalThreadID := strings.TrimSpace(component.ExternalThreadID); externalThreadID != "" {
 			line += " external_thread_id=" + externalThreadID

@@ -30,7 +30,7 @@ type ChatComponentInfo struct {
 	Runtime      string
 }
 
-func (s *Service) BindInboundChat(ctx context.Context, componentRef string, externalChatID string, label string, roleFlag string) (ChatBindResult, error) {
+func (s *Service) BindInboundChat(ctx context.Context, componentRef string, externalChannelID string, label string, roleFlag string) (ChatBindResult, error) {
 	if s == nil || s.Storage == nil {
 		return ChatBindResult{}, fmt.Errorf("missing app storage")
 	}
@@ -47,12 +47,12 @@ func (s *Service) BindInboundChat(ctx context.Context, componentRef string, exte
 		return ChatBindResult{}, err
 	}
 
-	externalChatID = strings.TrimSpace(externalChatID)
-	if externalChatID == "" {
-		return ChatBindResult{}, fmt.Errorf("missing external chat id")
+	externalChannelID = strings.TrimSpace(externalChannelID)
+	if externalChannelID == "" {
+		return ChatBindResult{}, fmt.Errorf("missing external channel id")
 	}
 	label = strings.TrimSpace(label)
-	drop, err := s.Storage.InboundDrops().GetByComponentAndExternalChatID(ctx, registration.ID, externalChatID)
+	drop, err := s.Storage.InboundDrops().GetByComponentAndExternalChannelID(ctx, registration.ID, externalChannelID)
 	if err != nil {
 		return ChatBindResult{}, err
 	}
@@ -60,17 +60,17 @@ func (s *Service) BindInboundChat(ctx context.Context, componentRef string, exte
 		label = strings.TrimSpace(drop.ChatLabel)
 	}
 	if label == "" {
-		label = externalChatID
+		label = externalChannelID
 	}
 
-	chat, bindings, err := s.createInboundChatBinding(ctx, *registration, externalChatID, label, roles)
+	chat, bindings, err := s.createInboundChatBinding(ctx, *registration, externalChannelID, label, roles)
 	if err != nil {
 		return ChatBindResult{}, err
 	}
 	return ChatBindResult{Chat: *chat, Component: *registration, Bindings: bindings}, nil
 }
 
-func (s *Service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, componentRef string, externalChatID string) (ChatComponentAddResult, error) {
+func (s *Service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, componentRef string, externalChannelID string) (ChatComponentAddResult, error) {
 	if s == nil || s.Storage == nil {
 		return ChatComponentAddResult{}, fmt.Errorf("missing app storage")
 	}
@@ -79,7 +79,7 @@ func (s *Service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, r
 		return ChatComponentAddResult{}, err
 	}
 
-	externalChatID = strings.TrimSpace(externalChatID)
+	externalChannelID = strings.TrimSpace(externalChannelID)
 	if role == coremodel.ChatComponentRoleCommand {
 		loaded, err := s.resolveLoadedComponent(ctx, registration.ID)
 		if err != nil {
@@ -89,13 +89,13 @@ func (s *Service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, r
 			return ChatComponentAddResult{}, fmt.Errorf("component %s does not support command chat bindings", registration.Ref())
 		}
 	}
-	if externalChatID == "" && role == coremodel.ChatComponentRoleSource {
-		externalChatID, err = s.defaultSourceExternalChatID(ctx, registration.ID)
+	if externalChannelID == "" && role == coremodel.ChatComponentRoleSource {
+		externalChannelID, err = s.defaultSourceExternalChannelID(ctx, registration.ID)
 		if err != nil {
 			return ChatComponentAddResult{}, err
 		}
 	}
-	binding, err := s.bindChatComponent(ctx, chatID, role, *registration, externalChatID)
+	binding, err := s.bindChatComponent(ctx, chatID, role, *registration, externalChannelID)
 	if err != nil {
 		return ChatComponentAddResult{}, err
 	}
@@ -139,7 +139,7 @@ func (s *Service) ListChatComponents(ctx context.Context, chatID modeluuid.UUID)
 	return out, nil
 }
 
-func (s *Service) defaultSourceExternalChatID(ctx context.Context, componentID modeluuid.UUID) (string, error) {
+func (s *Service) defaultSourceExternalChannelID(ctx context.Context, componentID modeluuid.UUID) (string, error) {
 	loaded, err := s.resolveLoadedComponent(ctx, componentID)
 	if err != nil {
 		return "", err
@@ -148,7 +148,7 @@ func (s *Service) defaultSourceExternalChatID(ctx context.Context, componentID m
 	if !ok {
 		return "", nil
 	}
-	return defaults.DefaultSourceExternalChatID(ctx)
+	return defaults.DefaultSourceExternalChannelID(ctx)
 }
 
 func resolveChatBindRoles(loaded *component.Loaded, roleFlag string) ([]coremodel.ChatComponentRole, error) {
@@ -190,17 +190,17 @@ func resolveChatBindRoles(loaded *component.Loaded, roleFlag string) ([]coremode
 	}
 }
 
-func (s *Service) createInboundChatBinding(ctx context.Context, registration coremodel.Component, externalChatID string, label string, roles []coremodel.ChatComponentRole) (*coremodel.Chat, []coremodel.ChatComponent, error) {
+func (s *Service) createInboundChatBinding(ctx context.Context, registration coremodel.Component, externalChannelID string, label string, roles []coremodel.ChatComponentRole) (*coremodel.Chat, []coremodel.ChatComponent, error) {
 	if s == nil || s.Storage == nil {
 		return nil, nil, fmt.Errorf("missing app storage")
 	}
-	externalChatID = strings.TrimSpace(externalChatID)
+	externalChannelID = strings.TrimSpace(externalChannelID)
 	label = strings.TrimSpace(label)
-	if externalChatID == "" {
-		return nil, nil, fmt.Errorf("missing external chat id")
+	if externalChannelID == "" {
+		return nil, nil, fmt.Errorf("missing external channel id")
 	}
 	if label == "" {
-		label = externalChatID
+		label = externalChannelID
 	}
 	if len(roles) == 0 {
 		return nil, nil, fmt.Errorf("missing chat bind roles")
@@ -210,12 +210,12 @@ func (s *Service) createInboundChatBinding(ctx context.Context, registration cor
 	var bindings []coremodel.ChatComponent
 	err := s.Storage.Transaction(ctx, func(tx repository.Storage) error {
 		for _, role := range roles {
-			existing, err := tx.ChatComponents().FindByComponentRoleAndExternalChatID(ctx, registration.ID, role, externalChatID)
+			existing, err := tx.ChatComponents().FindByComponentRoleAndExternalChannelID(ctx, registration.ID, role, externalChannelID)
 			if err != nil {
 				return err
 			}
 			if existing != nil {
-				return fmt.Errorf("external chat %q is already bound to chat %s as %s", externalChatID, existing.ChatID, role)
+				return fmt.Errorf("external channel %q is already bound to chat %s as %s", externalChannelID, existing.ChatID, role)
 			}
 		}
 
@@ -229,18 +229,18 @@ func (s *Service) createInboundChatBinding(ctx context.Context, registration cor
 		bindings = make([]coremodel.ChatComponent, 0, len(roles))
 		for _, role := range roles {
 			binding := coremodel.ChatComponent{
-				ChatID:         chat.ID,
-				ComponentID:    registration.ID,
-				Role:           role,
-				ExternalChatID: externalChatID,
-				Enabled:        true,
+				ChatID:            chat.ID,
+				ComponentID:       registration.ID,
+				Role:              role,
+				ExternalChannelID: externalChannelID,
+				Enabled:           true,
 			}
 			if err := tx.ChatComponents().Save(ctx, &binding); err != nil {
 				return err
 			}
 			bindings = append(bindings, binding)
 		}
-		return tx.InboundDrops().DeleteByComponentAndExternalChatID(ctx, registration.ID, externalChatID)
+		return tx.InboundDrops().DeleteByComponentAndExternalChannelID(ctx, registration.ID, externalChannelID)
 	})
 	if err != nil {
 		return nil, nil, err
@@ -248,7 +248,7 @@ func (s *Service) createInboundChatBinding(ctx context.Context, registration cor
 	return &chat, bindings, nil
 }
 
-func (s *Service) bindChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, registration coremodel.Component, externalChatID string) (*coremodel.ChatComponent, error) {
+func (s *Service) bindChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, registration coremodel.Component, externalChannelID string) (*coremodel.ChatComponent, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}
@@ -267,14 +267,14 @@ func (s *Service) bindChatComponent(ctx context.Context, chatID modeluuid.UUID, 
 		return nil, fmt.Errorf("chat not found: %s", chatID)
 	}
 
-	externalChatID = strings.TrimSpace(externalChatID)
+	externalChannelID = strings.TrimSpace(externalChannelID)
 	switch role {
 	case coremodel.ChatComponentRoleSource, coremodel.ChatComponentRoleRelay:
-		if externalChatID == "" {
-			return nil, fmt.Errorf("missing external chat id for role %q", role)
+		if externalChannelID == "" {
+			return nil, fmt.Errorf("missing external channel id for role %q", role)
 		}
 	default:
-		externalChatID = ""
+		externalChannelID = ""
 	}
 
 	binding, err := s.Storage.ChatComponents().GetByChatComponentRole(ctx, chatID, registration.ID, role)
@@ -288,7 +288,7 @@ func (s *Service) bindChatComponent(ctx context.Context, chatID modeluuid.UUID, 
 			Role:        role,
 		}
 	}
-	binding.ExternalChatID = externalChatID
+	binding.ExternalChannelID = externalChannelID
 	binding.Enabled = true
 	if err := s.Storage.ChatComponents().Save(ctx, binding); err != nil {
 		return nil, err

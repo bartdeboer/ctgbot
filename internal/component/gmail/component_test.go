@@ -74,8 +74,8 @@ func TestInboundEventFromMessage(t *testing.T) {
 	if got, want := payload.ProviderType, Type; got != want {
 		t.Fatalf("ProviderType = %q, want %q", got, want)
 	}
-	if got, want := payload.ProviderChatID, "work@example.com"; got != want {
-		t.Fatalf("ProviderChatID = %q, want %q", got, want)
+	if got, want := payload.ProviderChannelID, "work@example.com"; got != want {
+		t.Fatalf("ProviderChannelID = %q, want %q", got, want)
 	}
 	if got, want := payload.ProviderThreadID, "work@example.com"; got != want {
 		t.Fatalf("ProviderThreadID = %q, want %q", got, want)
@@ -144,8 +144,8 @@ func TestInboundEventFromNilMessageUsesDefaults(t *testing.T) {
 	if got, want := payload.ProviderType, Type; got != want {
 		t.Fatalf("ProviderType = %q, want %q", got, want)
 	}
-	if got, want := payload.ProviderChatID, DefaultUserID; got != want {
-		t.Fatalf("ProviderChatID = %q, want %q", got, want)
+	if got, want := payload.ProviderChannelID, DefaultUserID; got != want {
+		t.Fatalf("ProviderChannelID = %q, want %q", got, want)
 	}
 	actor := payload.ResolvedActor()
 	if got, want := actor.Label, "Email"; got != want {
@@ -213,44 +213,44 @@ func TestLoadComponentConfigIncludeSpamTrashStillSkipsSentAndDraft(t *testing.T)
 	}
 }
 
-func TestDefaultSourceExternalChatIDUsesMailboxEmailWithoutAuth(t *testing.T) {
+func TestDefaultSourceExternalChannelIDUsesMailboxEmailWithoutAuth(t *testing.T) {
 	component := testComponent(t)
 	component.mailboxEmail = ""
 	component.componentConfig = ComponentConfig{
 		UserID:       DefaultUserID,
 		MailboxEmail: "work@example.com",
 	}.withDefaults()
-	got, err := component.DefaultSourceExternalChatID(context.Background())
+	got, err := component.DefaultSourceExternalChannelID(context.Background())
 	if err != nil {
-		t.Fatalf("DefaultSourceExternalChatID() error = %v", err)
+		t.Fatalf("DefaultSourceExternalChannelID() error = %v", err)
 	}
 	if got != "work@example.com" {
-		t.Fatalf("DefaultSourceExternalChatID() = %q, want work@example.com", got)
+		t.Fatalf("DefaultSourceExternalChannelID() = %q, want work@example.com", got)
 	}
 }
 
-func TestDefaultSourceExternalChatIDUsesExplicitUserIDWithoutAuth(t *testing.T) {
+func TestDefaultSourceExternalChannelIDUsesExplicitUserIDWithoutAuth(t *testing.T) {
 	component := testComponent(t)
 	component.mailboxEmail = ""
 	component.componentConfig = ComponentConfig{UserID: "personal@example.com"}.withDefaults()
 	component.UserID = component.componentConfig.UserID
-	got, err := component.DefaultSourceExternalChatID(context.Background())
+	got, err := component.DefaultSourceExternalChannelID(context.Background())
 	if err != nil {
-		t.Fatalf("DefaultSourceExternalChatID() error = %v", err)
+		t.Fatalf("DefaultSourceExternalChannelID() error = %v", err)
 	}
 	if got != "personal@example.com" {
-		t.Fatalf("DefaultSourceExternalChatID() = %q, want personal@example.com", got)
+		t.Fatalf("DefaultSourceExternalChannelID() = %q, want personal@example.com", got)
 	}
 }
 
-func TestDefaultSourceExternalChatIDRequiresStableIdentityBeforeAuth(t *testing.T) {
+func TestDefaultSourceExternalChannelIDRequiresStableIdentityBeforeAuth(t *testing.T) {
 	component := testComponent(t)
 	component.mailboxEmail = ""
 	component.componentConfig = ComponentConfig{}.withDefaults()
 	component.UserID = DefaultUserID
-	_, err := component.DefaultSourceExternalChatID(context.Background())
+	_, err := component.DefaultSourceExternalChannelID(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "needs auth or component.json mailbox_email") {
-		t.Fatalf("DefaultSourceExternalChatID() error = %v, want stable identity error", err)
+		t.Fatalf("DefaultSourceExternalChannelID() error = %v, want stable identity error", err)
 	}
 }
 
