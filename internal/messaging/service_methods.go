@@ -208,7 +208,7 @@ func (s *Service) BindThreadComponent(ctx context.Context, actor coremodel.Actor
 				ProviderThreadID: providerThreadID,
 			}, nil
 		}
-		return ThreadComponentBindResult{}, fmt.Errorf("component %s provider thread %q is already bound to thread %s; choose another providerThreadID or repair the existing mapping first", registration.Ref(), providerThreadID, existing.ThreadID)
+		return ThreadComponentBindResult{}, fmt.Errorf("component %s provider thread %q is already bound to thread %s; choose another providerThreadID or repair the existing mapping first", registration.Ref(), providerThreadID, s.threadRefWithShortID(ctx, existing.ThreadID))
 	}
 
 	mapping, err := s.Storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, thread.ID, registration.ID)
@@ -324,6 +324,22 @@ func (s *Service) inferProviderThreadID(ctx context.Context, chat coremodel.Chat
 	default:
 		return "", fmt.Errorf("provider thread id for %s in chat %s is ambiguous; pass providerThreadID explicitly", registration.Ref(), chat.ID)
 	}
+}
+
+func (s *Service) threadRefWithShortID(ctx context.Context, threadID modeluuid.UUID) string {
+	if threadID.IsNull() {
+		return threadID.String()
+	}
+	out := threadID.String()
+	resolver, err := s.threadShortIDResolver(ctx)
+	if err != nil {
+		return out
+	}
+	shortID, err := resolver.ShortIDFor(threadID, 6)
+	if err != nil || strings.TrimSpace(shortID) == "" || shortID == out {
+		return out
+	}
+	return out + " (short_id: " + shortID + ")"
 }
 
 func (s *Service) ActorForThread(ctx context.Context, threadID modeluuid.UUID) (coremodel.Actor, error) {

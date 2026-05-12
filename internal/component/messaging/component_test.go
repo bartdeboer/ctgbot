@@ -232,6 +232,9 @@ func TestThreadComponentBindErrorsWhenProviderThreadIDBelongsToAnotherThread(t *
 	if err == nil || !strings.Contains(err.Error(), "already bound") {
 		t.Fatalf("Run(thread component bind conflict) error = %v, want already-bound error", err)
 	}
+	if !strings.Contains(err.Error(), otherThread.ID.String()) || !strings.Contains(err.Error(), "short_id:") {
+		t.Fatalf("conflict error = %v, want existing thread id and short id", err)
+	}
 }
 
 func TestThreadComponentBindDeniesUser(t *testing.T) {
