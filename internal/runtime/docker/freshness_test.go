@@ -37,7 +37,7 @@ func TestRuntimeFreshnessNoticesDetectImageGitMismatch(t *testing.T) {
 		"new",
 		"codex",
 	)
-	if len(notices) != 1 || notices[0] != imageStaleNotice {
+	if len(notices) != 1 || notices[0] != imageVersionNotice {
 		t.Fatalf("notices = %#v, want image stale notice", notices)
 	}
 }
@@ -52,7 +52,7 @@ func TestRuntimeFreshnessNoticesDetectUnstampedImage(t *testing.T) {
 		"new",
 		"codex",
 	)
-	if len(notices) != 1 || notices[0] != imageUnstampedNotice {
+	if len(notices) != 1 || notices[0] != imageVersionNotice {
 		t.Fatalf("notices = %#v, want unstamped image notice", notices)
 	}
 }
@@ -85,7 +85,7 @@ func TestRuntimeFreshnessNoticesPreferVersionMismatch(t *testing.T) {
 		"new",
 		"codex",
 	)
-	if len(notices) != 1 || notices[0] != imageStaleNotice {
+	if len(notices) != 1 || notices[0] != imageVersionNotice {
 		t.Fatalf("notices = %#v, want version-driven image stale notice", notices)
 	}
 }

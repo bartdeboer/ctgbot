@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	imageStaleNotice     = "[Runtime notice] The runtime image for this component is older than the installed ctgbot/hostbridge version. Ask the operator to run: /upgrade"
-	imageUnstampedNotice = "[Runtime notice] The runtime image for this component has no ctgbot freshness metadata. Some hostbridge commands may be missing or stale. Ask the operator to run: /upgrade"
+	imageVersionNotice = "[Runtime notice] The image version for this component is stale or unverifiable. The operator may need to upgrade the image or refresh the container."
 )
 
 type dockerImageInfo struct {
@@ -37,11 +36,8 @@ func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInf
 	currentVersion = strings.TrimSpace(currentVersion)
 	if currentVersion != "" && currentVersion != buildassets.FallbackVersion && strings.TrimSpace(image.ID) != "" {
 		imageVersion := strings.TrimSpace(image.Labels[runtimeimage.LabelVersion])
-		switch {
-		case imageVersion == "":
-			notices = append(notices, imageUnstampedNotice)
-		case imageVersion != currentVersion:
-			notices = append(notices, imageStaleNotice)
+		if imageVersion != currentVersion {
+			notices = append(notices, imageVersionNotice)
 		}
 		return notices
 	}
@@ -51,11 +47,8 @@ func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInf
 		return notices
 	}
 	imageGitCommit := strings.TrimSpace(image.Labels[runtimeimage.LabelGitCommit])
-	switch {
-	case imageGitCommit == "":
-		notices = append(notices, imageUnstampedNotice)
-	case imageGitCommit != currentGitCommit:
-		notices = append(notices, imageStaleNotice)
+	if imageGitCommit != currentGitCommit {
+		notices = append(notices, imageVersionNotice)
 	}
 	return notices
 }
@@ -63,9 +56,9 @@ func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInf
 func containerStaleNotice(componentType string) string {
 	componentType = strings.Trim(strings.TrimSpace(componentType), "/")
 	if componentType == "" {
-		return "[Runtime notice] Your runtime container was created from an older image. Some hostbridge commands may be missing or stale. Ask the operator to refresh this component's runtime container."
+		return "[Runtime notice] This runtime container was created from an older image. The operator may need to refresh it."
 	}
-	return fmt.Sprintf("[Runtime notice] Your runtime container was created from an older image. Some hostbridge commands may be missing or stale. Ask the operator to run: /%s container refresh", componentType)
+	return fmt.Sprintf("[Runtime notice] This runtime container was created from an older image. The operator may need to run: /%s container refresh", componentType)
 }
 
 func inspectDockerImage(ctx context.Context, image string) (dockerImageInfo, error) {
