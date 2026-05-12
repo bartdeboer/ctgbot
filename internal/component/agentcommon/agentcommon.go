@@ -37,6 +37,9 @@ func Thread(ctx context.Context, storage repository.Storage, req commandengine.R
 }
 
 func ThreadWorkspace(ctx context.Context, storage repository.Storage, resolveWorkspace func(context.Context, coremodel.Chat) (string, error), req commandengine.Request, missingPrefix string) (*coremodel.Thread, string, error) {
+	if resolveWorkspace == nil {
+		return nil, "", fmt.Errorf("missing workspace resolver")
+	}
 	thread, err := Thread(ctx, storage, req, missingPrefix)
 	if err != nil {
 		return nil, "", err
@@ -56,6 +59,9 @@ func ThreadWorkspace(ctx context.Context, storage repository.Storage, resolveWor
 }
 
 func ProviderThreadID(componentID modeluuid.UUID, turnRuntime component.TurnRuntime) (string, error) {
+	if turnRuntime == nil {
+		return "", fmt.Errorf("missing turn runtime")
+	}
 	componentThreadID, ok, err := turnRuntime.ComponentThreadID(componentID)
 	if err != nil || !ok {
 		return "", err
