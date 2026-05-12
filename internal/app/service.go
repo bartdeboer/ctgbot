@@ -86,7 +86,7 @@ func (s *Service) ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat
 	return s.ChatRuntimeResolver.ResolveChatHostbridgeAllowedCommands(ctx, chat)
 }
 
-func (s *Service) InboundFilters() []inbound.Filter {
+func (s *Service) InboundContentFilters() []inbound.Filter {
 	if s == nil || s.Storage == nil {
 		return nil
 	}

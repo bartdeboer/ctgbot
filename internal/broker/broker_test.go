@@ -25,10 +25,10 @@ import (
 	"github.com/bartdeboer/go-clir"
 )
 
-type inboundFilterFunc func(context.Context, inboundpkg.Envelope) (inboundpkg.FilterResult, error)
+type inboundFilterFunc func(context.Context, inboundpkg.FilterInput) (inboundpkg.FilterResult, error)
 
-func (f inboundFilterFunc) FilterInbound(ctx context.Context, envelope inboundpkg.Envelope) (inboundpkg.FilterResult, error) {
-	return f(ctx, envelope)
+func (f inboundFilterFunc) FilterInbound(ctx context.Context, input inboundpkg.FilterInput) (inboundpkg.FilterResult, error) {
+	return f(ctx, input)
 }
 
 type fakeRuntime struct {
@@ -457,10 +457,10 @@ func TestInboundFilterCanTransformEventBeforeRouting(t *testing.T) {
 	messengerRecorder := &fakeMessengerRecorder{}
 	agentRecorder := &fakeAgentRecorder{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	rewriteText := inboundFilterFunc(func(ctx context.Context, envelope inboundpkg.Envelope) (inboundpkg.FilterResult, error) {
+	rewriteText := inboundFilterFunc(func(ctx context.Context, input inboundpkg.FilterInput) (inboundpkg.FilterResult, error) {
 		_ = ctx
-		envelope.Event.Payload.Text.Text = "rewritten by filter"
-		return inboundpkg.Pass(envelope), nil
+		input.Event.Payload.Text.Text = "rewritten by filter"
+		return inboundpkg.Pass(input), nil
 	})
 	b := broker.NewWithDeps(storage, system, nil, rewriteText)
 
@@ -514,6 +514,101 @@ func TestInboundFilterCanTransformEventBeforeRouting(t *testing.T) {
 	}
 	if agentRecorder.prompts[0] != "rewritten by filter" {
 		t.Fatalf("agent prompt = %q, want rewritten text", agentRecorder.prompts[0])
+	}
+}
+
+func TestInboundAdmissionStagesResolveChannelAndAllowDefaultSender(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	system := newTestSystem(t, root, storage, &fakeMessengerRecorder{}, &fakeAgentRecorder{}, nil)
+	b := broker.NewWithDeps(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+	event := testInboundEvent(telegram.ID, "chat-1", "thread-1", "hello")
+
+	channel, rejection, err := b.AllowedChannel(context.Background(), event)
+	if err != nil {
+		t.Fatalf("AllowedChannel() error = %v", err)
+	}
+	if rejection != nil {
+		t.Fatalf("AllowedChannel() rejection = %#v, want allowed", rejection)
+	}
+	if channel.Chat.ID != chat.ID {
+		t.Fatalf("channel chat = %s, want %s", channel.Chat.ID, chat.ID)
+	}
+	if channel.SourceBinding.ComponentID != telegram.ID || channel.SourceBinding.Role != coremodel.ChatComponentRoleSource {
+		t.Fatalf("channel source binding = %#v, want telegram source binding", channel.SourceBinding)
+	}
+
+	rejection, err = b.AllowedSender(context.Background(), channel)
+	if err != nil {
+		t.Fatalf("AllowedSender() error = %v", err)
+	}
+	if rejection != nil {
+		t.Fatalf("AllowedSender() rejection = %#v, want default allow", rejection)
+	}
+
+	filtered, rejection, err := b.FilteredMessage(context.Background(), channel)
+	if err != nil {
+		t.Fatalf("FilteredMessage() error = %v", err)
+	}
+	if rejection != nil {
+		t.Fatalf("FilteredMessage() rejection = %#v, want no filters to allow", rejection)
+	}
+	if filtered.Payload.Text.Text != "hello" || filtered.Payload.ProviderThreadID != "thread-1" {
+		t.Fatalf("filtered event = %#v, want original event", filtered.Payload)
+	}
+}
+
+func TestFilteredMessageUsesExplicitFilterAction(t *testing.T) {
+	sourceID := modeluuid.New()
+	event := testInboundEvent(sourceID, "chat-1", "thread-1", "hello")
+	channel := broker.AllowedChannel{
+		Event: event,
+		Chat:  coremodel.Chat{ID: modeluuid.New(), Label: "team", Enabled: true},
+		SourceBinding: coremodel.ChatComponent{
+			ID:             modeluuid.New(),
+			ChatID:         modeluuid.New(),
+			ComponentID:    sourceID,
+			Role:           coremodel.ChatComponentRoleSource,
+			ExternalChatID: "chat-1",
+			Enabled:        true,
+		},
+	}
+	quarantine := inboundFilterFunc(func(ctx context.Context, input inboundpkg.FilterInput) (inboundpkg.FilterResult, error) {
+		_ = ctx
+		return inboundpkg.Quarantine(input, "manual-review", "score=high"), nil
+	})
+	b := broker.NewWithDeps(nil, nil, nil, quarantine)
+
+	_, rejection, err := b.FilteredMessage(context.Background(), channel)
+	if err != nil {
+		t.Fatalf("FilteredMessage() error = %v", err)
+	}
+	if rejection == nil {
+		t.Fatal("FilteredMessage() rejection = nil, want quarantine")
+	}
+	if rejection.Action != broker.InboundRejectionQuarantine {
+		t.Fatalf("rejection action = %q, want %q", rejection.Action, broker.InboundRejectionQuarantine)
+	}
+	if rejection.Reason != "manual-review" {
+		t.Fatalf("rejection reason = %q, want manual-review", rejection.Reason)
 	}
 }
 

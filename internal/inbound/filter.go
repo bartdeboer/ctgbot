@@ -7,31 +7,43 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 )
 
-// Envelope carries an inbound event through broker-owned filters.
-//
-// Filters may enrich it with routing data or, later, normalize/transform the
-// event before the broker turns it into a thread message.
-type Envelope struct {
+// FilterInput is the already-admitted inbound message context passed to
+// optional content filters. Channel/source resolution happens before this
+// stage in broker admission; filters may drop or transform the event, but they
+// do not discover routing state.
+type FilterInput struct {
 	Event         component.InboundEvent
-	SourceBinding *coremodel.ChatComponent
-	Chat          *coremodel.Chat
+	Chat          coremodel.Chat
+	SourceBinding coremodel.ChatComponent
 }
 
+type FilterAction string
+
+const (
+	FilterActionPass       FilterAction = "pass"
+	FilterActionDrop       FilterAction = "drop"
+	FilterActionQuarantine FilterAction = "quarantine"
+)
+
 type FilterResult struct {
-	Envelope Envelope
-	Drop     bool
-	Reason   string
-	Details  []string
+	Event   component.InboundEvent
+	Action  FilterAction
+	Reason  string
+	Details []string
 }
 
 type Filter interface {
-	FilterInbound(ctx context.Context, envelope Envelope) (FilterResult, error)
+	FilterInbound(ctx context.Context, input FilterInput) (FilterResult, error)
 }
 
-func Pass(envelope Envelope) FilterResult {
-	return FilterResult{Envelope: envelope}
+func Pass(input FilterInput) FilterResult {
+	return FilterResult{Event: input.Event, Action: FilterActionPass}
 }
 
-func Drop(envelope Envelope, reason string, details ...string) FilterResult {
-	return FilterResult{Envelope: envelope, Drop: true, Reason: reason, Details: details}
+func Drop(input FilterInput, reason string, details ...string) FilterResult {
+	return FilterResult{Event: input.Event, Action: FilterActionDrop, Reason: reason, Details: details}
+}
+
+func Quarantine(input FilterInput, reason string, details ...string) FilterResult {
+	return FilterResult{Event: input.Event, Action: FilterActionQuarantine, Reason: reason, Details: details}
 }

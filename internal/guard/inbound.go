@@ -37,6 +37,7 @@ type InboundInput struct {
 
 type Decision struct {
 	Allowed bool
+	Action  inbound.FilterAction
 	Reason  string
 	Details []string
 }
@@ -55,8 +56,8 @@ func NewInboundFilter(storage repository.Storage, resolver ComponentResolver, lo
 	return &Evaluator{Storage: storage, Resolver: resolver, Logf: logf}
 }
 
-func (e *Evaluator) FilterInbound(ctx context.Context, envelope inbound.Envelope) (inbound.FilterResult, error) {
-	event := envelope.Event
+func (e *Evaluator) FilterInbound(ctx context.Context, input inbound.FilterInput) (inbound.FilterResult, error) {
+	event := input.Event
 	decision, err := e.EvaluateInbound(ctx, InboundInput{
 		SourceComponentID: event.ComponentID,
 		ProviderType:      event.Payload.ProviderType,
@@ -73,9 +74,12 @@ func (e *Evaluator) FilterInbound(ctx context.Context, envelope inbound.Envelope
 		return inbound.FilterResult{}, err
 	}
 	if !decision.Allowed {
-		return inbound.Drop(envelope, decision.Reason, decision.Details...), nil
+		if decision.Action == inbound.FilterActionQuarantine {
+			return inbound.Quarantine(input, decision.Reason, decision.Details...), nil
+		}
+		return inbound.Drop(input, decision.Reason, decision.Details...), nil
 	}
-	return inbound.Pass(envelope), nil
+	return inbound.Pass(input), nil
 }
 
 func (e *Evaluator) EvaluateInbound(ctx context.Context, input InboundInput) (Decision, error) {
@@ -83,6 +87,7 @@ func (e *Evaluator) EvaluateInbound(ctx context.Context, input InboundInput) (De
 	if err != nil {
 		e.logf("inbound guard unavailable source_component=%s err=%v", input.SourceComponentID, err)
 		return Decision{
+			Action:  inbound.FilterActionQuarantine,
 			Reason:  "guard-quarantine",
 			Details: []string{"guard_error=" + logValue(err.Error())},
 		}, nil
@@ -100,6 +105,7 @@ func (e *Evaluator) EvaluateInbound(ctx context.Context, input InboundInput) (De
 	if err != nil {
 		e.logf("inbound guard failed source_component=%s guard=%s err=%v", input.SourceComponentID, ref, err)
 		return Decision{
+			Action:  inbound.FilterActionQuarantine,
 			Reason:  "guard-quarantine",
 			Details: []string{"guard=" + logValue(ref), "guard_error=" + logValue(err.Error())},
 		}, nil
@@ -109,6 +115,7 @@ func (e *Evaluator) EvaluateInbound(ctx context.Context, input InboundInput) (De
 	if err != nil {
 		e.logf("inbound guard returned invalid output source_component=%s guard=%s err=%v", input.SourceComponentID, ref, err)
 		return Decision{
+			Action:  inbound.FilterActionQuarantine,
 			Reason:  "guard-quarantine",
 			Details: []string{"guard=" + logValue(ref), "guard_error=invalid-output"},
 		}, nil
@@ -292,9 +299,9 @@ func (r restrictedGuardResult) firewallDecision(ref string) Decision {
 	details := r.logDetails(ref)
 	switch r.Decision {
 	case "deny":
-		return Decision{Reason: "guard-deny", Details: details}
+		return Decision{Action: inbound.FilterActionDrop, Reason: "guard-deny", Details: details}
 	case "quarantine":
-		return Decision{Reason: "guard-quarantine", Details: details}
+		return Decision{Action: inbound.FilterActionQuarantine, Reason: "guard-quarantine", Details: details}
 	}
 	if r.SpamScore >= restrictedGuardHighRiskScore ||
 		r.PersuasionScore >= restrictedGuardHighRiskScore ||
@@ -302,7 +309,7 @@ func (r restrictedGuardResult) firewallDecision(ref string) Decision {
 		r.PromptInjectionScore >= restrictedGuardHighRiskScore ||
 		r.PhishingScore >= restrictedGuardHighRiskScore ||
 		r.ToolRequestScore >= restrictedGuardHighRiskScore {
-		return Decision{Reason: "guard-quarantine", Details: details}
+		return Decision{Action: inbound.FilterActionQuarantine, Reason: "guard-quarantine", Details: details}
 	}
 	return Decision{Allowed: true, Reason: "allowed", Details: details}
 }
