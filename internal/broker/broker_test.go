@@ -451,7 +451,7 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	}
 }
 
-func TestInboundFilterCanTransformEventBeforeRouting(t *testing.T) {
+func TestInboundEventFilterCanTransformEventBeforeRouting(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	messengerRecorder := &fakeMessengerRecorder{}
@@ -517,7 +517,7 @@ func TestInboundFilterCanTransformEventBeforeRouting(t *testing.T) {
 	}
 }
 
-func TestInboundAdmissionStagesResolveChannelAndAllowDefaultSender(t *testing.T) {
+func TestInboundAdmissionResolvesChannelAndZeroEventFiltersPass(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	system := newTestSystem(t, root, storage, &fakeMessengerRecorder{}, &fakeAgentRecorder{}, nil)
@@ -556,27 +556,19 @@ func TestInboundAdmissionStagesResolveChannelAndAllowDefaultSender(t *testing.T)
 		t.Fatalf("channel source binding = %#v, want telegram source binding", channel.SourceBinding)
 	}
 
-	rejection, err = b.AllowedSender(context.Background(), channel)
+	filtered, rejection, err := b.FilteredEvent(context.Background(), channel)
 	if err != nil {
-		t.Fatalf("AllowedSender() error = %v", err)
+		t.Fatalf("FilteredEvent() error = %v", err)
 	}
 	if rejection != nil {
-		t.Fatalf("AllowedSender() rejection = %#v, want default allow", rejection)
-	}
-
-	filtered, rejection, err := b.FilteredMessage(context.Background(), channel)
-	if err != nil {
-		t.Fatalf("FilteredMessage() error = %v", err)
-	}
-	if rejection != nil {
-		t.Fatalf("FilteredMessage() rejection = %#v, want no filters to allow", rejection)
+		t.Fatalf("FilteredEvent() rejection = %#v, want no event filters to allow", rejection)
 	}
 	if filtered.Payload.Text.Text != "hello" || filtered.Payload.ProviderThreadID != "thread-1" {
 		t.Fatalf("filtered event = %#v, want original event", filtered.Payload)
 	}
 }
 
-func TestFilteredMessageUsesExplicitFilterAction(t *testing.T) {
+func TestFilteredEventUsesExplicitFilterAction(t *testing.T) {
 	sourceID := modeluuid.New()
 	event := testInboundEvent(sourceID, "chat-1", "thread-1", "hello")
 	channel := broker.AllowedChannel{
@@ -597,12 +589,12 @@ func TestFilteredMessageUsesExplicitFilterAction(t *testing.T) {
 	})
 	b := broker.NewWithDeps(nil, nil, nil, quarantine)
 
-	_, rejection, err := b.FilteredMessage(context.Background(), channel)
+	_, rejection, err := b.FilteredEvent(context.Background(), channel)
 	if err != nil {
-		t.Fatalf("FilteredMessage() error = %v", err)
+		t.Fatalf("FilteredEvent() error = %v", err)
 	}
 	if rejection == nil {
-		t.Fatal("FilteredMessage() rejection = nil, want quarantine")
+		t.Fatal("FilteredEvent() rejection = nil, want quarantine")
 	}
 	if rejection.Action != broker.InboundRejectionQuarantine {
 		t.Fatalf("rejection action = %q, want %q", rejection.Action, broker.InboundRejectionQuarantine)

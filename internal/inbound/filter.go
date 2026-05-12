@@ -8,9 +8,9 @@ import (
 )
 
 // FilterInput is the already-admitted inbound message context passed to
-// optional content filters. Channel/source resolution happens before this
-// stage in broker admission; filters may drop or transform the event, but they
-// do not discover routing state.
+// optional event filters. Channel/source resolution happens before this stage
+// in broker admission; filters may drop or transform the event, but they do
+// not discover routing state.
 type FilterInput struct {
 	Event         component.InboundEvent
 	Chat          coremodel.Chat

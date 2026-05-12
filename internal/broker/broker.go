@@ -27,17 +27,17 @@ type InstanceResolver interface {
 type App interface {
 	Repository() repository.Storage
 	InstanceResolver
-	InboundContentFilters() []inbound.Filter
+	InboundEventFilters() []inbound.Filter
 }
 
 type Broker struct {
-	App            App
-	Storage        repository.Storage
-	Resolver       InstanceResolver
-	Mapper         ThreadComponentMapper
-	Turns          *ThreadTurnGate
-	Logf           func(format string, args ...any)
-	InboundFilters []inbound.Filter
+	App                 App
+	Storage             repository.Storage
+	Resolver            InstanceResolver
+	Mapper              ThreadComponentMapper
+	Turns               *ThreadTurnGate
+	Logf                func(format string, args ...any)
+	InboundEventFilters []inbound.Filter
 }
 
 type EventOutcome struct {
@@ -75,19 +75,19 @@ func New(app App, logf func(format string, args ...any)) *Broker {
 	if app == nil {
 		return NewWithDeps(nil, nil, logf)
 	}
-	broker := NewWithDeps(app.Repository(), app, logf, app.InboundContentFilters()...)
+	broker := NewWithDeps(app.Repository(), app, logf, app.InboundEventFilters()...)
 	broker.App = app
 	return broker
 }
 
 func NewWithDeps(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any), filters ...inbound.Filter) *Broker {
 	return &Broker{
-		Storage:        storage,
-		Resolver:       resolver,
-		Mapper:         NewThreadComponentMapper(storage),
-		Turns:          NewThreadTurnGate(),
-		Logf:           logf,
-		InboundFilters: contentFilters(filters...),
+		Storage:             storage,
+		Resolver:            resolver,
+		Mapper:              NewThreadComponentMapper(storage),
+		Turns:               NewThreadTurnGate(),
+		Logf:                logf,
+		InboundEventFilters: eventFilters(filters...),
 	}
 }
 
@@ -130,16 +130,7 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		return EventOutcome{Dropped: true}, nil
 	}
 
-	rejection, err = b.AllowedSender(ctx, channel)
-	if err != nil {
-		return EventOutcome{}, err
-	}
-	if rejection != nil {
-		b.handleInboundRejection(ctx, rejection)
-		return EventOutcome{Dropped: true}, nil
-	}
-
-	routedEvent, rejection, err := b.FilteredMessage(ctx, channel)
+	routedEvent, rejection, err := b.FilteredEvent(ctx, channel)
 	if err != nil {
 		return EventOutcome{}, err
 	}

@@ -41,7 +41,7 @@ type InboundRejection struct {
 	Details       []string
 }
 
-func contentFilters(filters ...inbound.Filter) []inbound.Filter {
+func eventFilters(filters ...inbound.Filter) []inbound.Filter {
 	out := make([]inbound.Filter, 0, len(filters))
 	for _, filter := range filters {
 		if filter != nil {
@@ -97,14 +97,9 @@ func (b *Broker) AllowedChannel(ctx context.Context, event component.InboundEven
 	return AllowedChannel{Event: event, Chat: *chat, SourceBinding: *sourceBinding}, nil, nil
 }
 
-func (b *Broker) AllowedSender(ctx context.Context, channel AllowedChannel) (*InboundRejection, error) {
-	_, _ = ctx, channel
-	return nil, nil
-}
-
-func (b *Broker) FilteredMessage(ctx context.Context, channel AllowedChannel) (component.InboundEvent, *InboundRejection, error) {
+func (b *Broker) FilteredEvent(ctx context.Context, channel AllowedChannel) (component.InboundEvent, *InboundRejection, error) {
 	current := channel.Event
-	for _, filter := range b.InboundFilters {
+	for _, filter := range b.InboundEventFilters {
 		if filter == nil {
 			continue
 		}
@@ -134,7 +129,7 @@ func (b *Broker) FilteredMessage(ctx context.Context, channel AllowedChannel) (c
 			}
 			return rejectedEvent, b.reject(rejectedEvent, &channel.Chat, &channel.SourceBinding, action, result.Reason, result.Details...), nil
 		default:
-			return component.InboundEvent{}, nil, fmt.Errorf("unknown inbound filter action %q", result.Action)
+			return component.InboundEvent{}, nil, fmt.Errorf("unknown inbound event filter action %q", result.Action)
 		}
 	}
 	return current, nil, nil
