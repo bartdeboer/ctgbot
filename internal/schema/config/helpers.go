@@ -12,16 +12,12 @@ import (
 )
 
 func chatBool(key string, help string, cfg *appstate.Config, get func(appstate.ChatConfig) bool, set func(appstate.ChatConfig, bool) error, writePolicy simplerbac.Rule) configengine.Item {
-	return chatBoolWithPolicies(key, help, cfg, get, set, anyOperator(), writePolicy)
-}
-
-func chatBoolWithPolicies(key string, help string, cfg *appstate.Config, get func(appstate.ChatConfig) bool, set func(appstate.ChatConfig, bool) error, readPolicy simplerbac.Rule, writePolicy simplerbac.Rule) configengine.Item {
 	return configengine.Item{
 		Key:         key,
 		Help:        help,
 		Scope:       configengine.ScopeChat,
 		ValueType:   configengine.ValueBool,
-		ReadPolicy:  readPolicy,
+		ReadPolicy:  anyOperator(),
 		WritePolicy: writePolicy,
 		Get: func(ctx commandengine.Context) (configengine.Value, error) {
 			if cfg == nil {

@@ -207,15 +207,6 @@ func TestChatSettersAndKnownChats(t *testing.T) {
 	if err := chat.SetEnabled(true); err != nil {
 		t.Fatalf("set enabled: %v", err)
 	}
-	if chat.AgentDBAccessEnabled() {
-		t.Fatal("agent DB access should default false")
-	}
-	if err := chat.SetAgentDBAccessEnabled(true); err != nil {
-		t.Fatalf("set agent DB access: %v", err)
-	}
-	if !chat.AgentDBAccessEnabled() {
-		t.Fatal("agent DB access was not persisted")
-	}
 
 	found, err := cfg.FindProviderChat("telegram", "123")
 	if err != nil {

@@ -40,10 +40,6 @@ func (c ChatConfig) ProcessToolsEnabled() bool {
 	return c.cfg.bool(c.key("process_tools"), false)
 }
 
-func (c ChatConfig) AgentDBAccessEnabled() bool {
-	return c.cfg.bool(c.key("agent_db_access"), false)
-}
-
 func (c ChatConfig) InteractiveInterruptEnabled() bool {
 	return c.cfg.bool(c.key("interactive_interrupt"), true)
 }

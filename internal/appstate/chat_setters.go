@@ -29,10 +29,6 @@ func (c ChatConfig) SetProcessToolsEnabled(enabled bool) error {
 	return c.persistBool("process_tools", enabled)
 }
 
-func (c ChatConfig) SetAgentDBAccessEnabled(enabled bool) error {
-	return c.persistBool("agent_db_access", enabled)
-}
-
 func (c ChatConfig) SetInteractiveInterruptEnabled(enabled bool) error {
 	return c.persistBool("interactive_interrupt", enabled)
 }

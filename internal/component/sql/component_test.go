@@ -7,12 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	"github.com/bartdeboer/go-clistate"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -31,7 +29,7 @@ func TestSQLCommandDefinitionIsHostbridgeOnly(t *testing.T) {
 }
 
 func TestSQLCommandDeniesWithoutChatID(t *testing.T) {
-	engine, _, _ := newSQLEngine(t)
+	engine, _ := newSQLEngine(t)
 
 	_, err := engine.Run(context.Background(), agentRequest(modeluuid.Nil), []string{"sql", "SELECT 1"})
 	if err == nil || !strings.Contains(err.Error(), "missing chat context") {
@@ -39,18 +37,8 @@ func TestSQLCommandDeniesWithoutChatID(t *testing.T) {
 	}
 }
 
-func TestSQLCommandDeniesWhenGateDisabled(t *testing.T) {
-	engine, _, chatID := newSQLEngine(t)
-
-	_, err := engine.Run(context.Background(), agentRequest(chatID), []string{"sql", "SELECT 1"})
-	if err == nil || !strings.Contains(err.Error(), "chat.enable-agent-db-access true") {
-		t.Fatalf("Run(sql) error = %v, want config gate denial", err)
-	}
-}
-
 func TestSQLSelectReturnsRowsWithLimit(t *testing.T) {
-	engine, cfg, chatID := newSQLEngine(t)
-	enableSQLAccess(t, cfg, chatID)
+	engine, chatID := newSQLEngine(t)
 
 	result, err := engine.Run(context.Background(), agentRequest(chatID), []string{"sql", "--limit", "1", "SELECT id, label FROM items ORDER BY id"})
 	if err != nil {
@@ -68,8 +56,7 @@ func TestSQLSelectReturnsRowsWithLimit(t *testing.T) {
 }
 
 func TestSQLWriteRequiresWriteFlag(t *testing.T) {
-	engine, cfg, chatID := newSQLEngine(t)
-	enableSQLAccess(t, cfg, chatID)
+	engine, chatID := newSQLEngine(t)
 
 	_, err := engine.Run(context.Background(), agentRequest(chatID), []string{"sql", "DELETE FROM items WHERE id = 1"})
 	if err == nil || !strings.Contains(err.Error(), "requires --write") {
@@ -78,8 +65,7 @@ func TestSQLWriteRequiresWriteFlag(t *testing.T) {
 }
 
 func TestSQLWriteWithFlagExecutesSingleStatement(t *testing.T) {
-	engine, cfg, chatID := newSQLEngine(t)
-	enableSQLAccess(t, cfg, chatID)
+	engine, chatID := newSQLEngine(t)
 
 	result, err := engine.Run(context.Background(), agentRequest(chatID), []string{"sql", "--write", "DELETE FROM items WHERE id = 1"})
 	if err != nil {
@@ -99,8 +85,7 @@ func TestSQLWriteWithFlagExecutesSingleStatement(t *testing.T) {
 }
 
 func TestSQLRejectsMultipleStatements(t *testing.T) {
-	engine, cfg, chatID := newSQLEngine(t)
-	enableSQLAccess(t, cfg, chatID)
+	engine, chatID := newSQLEngine(t)
 
 	_, err := engine.Run(context.Background(), agentRequest(chatID), []string{"sql", "SELECT 1; SELECT 2"})
 	if err == nil || !strings.Contains(err.Error(), "multiple SQL statements") {
@@ -109,8 +94,7 @@ func TestSQLRejectsMultipleStatements(t *testing.T) {
 }
 
 func TestSQLCommandUsesStdinWhenQueryArgMissing(t *testing.T) {
-	engine, cfg, chatID := newSQLEngine(t)
-	enableSQLAccess(t, cfg, chatID)
+	engine, chatID := newSQLEngine(t)
 
 	err := runWithStdin(t, "SELECT label FROM items WHERE id = 2", func() error {
 		result, err := engine.Run(context.Background(), agentRequest(chatID), []string{"sql"})
@@ -128,8 +112,7 @@ func TestSQLCommandUsesStdinWhenQueryArgMissing(t *testing.T) {
 }
 
 func TestSQLCellOutputIsSafeAndTruncated(t *testing.T) {
-	engine, cfg, chatID := newSQLEngine(t)
-	enableSQLAccess(t, cfg, chatID)
+	engine, chatID := newSQLEngine(t)
 
 	result, err := engine.Run(context.Background(), agentRequest(chatID), []string{"sql", "SELECT note, payload FROM blobs"})
 	if err != nil {
@@ -159,7 +142,7 @@ func TestSQLCommandNotAvailableWithoutBoundSurface(t *testing.T) {
 	}
 }
 
-func newSQLEngine(t *testing.T) (*commandengine.Engine, *appstate.Config, modeluuid.UUID) {
+func newSQLEngine(t *testing.T) (*commandengine.Engine, modeluuid.UUID) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -179,8 +162,7 @@ func newSQLEngine(t *testing.T) (*commandengine.Engine, *appstate.Config, modelu
 		t.Fatalf("insert blobs: %v", err)
 	}
 
-	cfg := newTestConfig(t)
-	component, err := New(db, cfg)
+	component, err := New(db)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -192,32 +174,7 @@ func newSQLEngine(t *testing.T) (*commandengine.Engine, *appstate.Config, modelu
 	if err != nil {
 		t.Fatalf("NewBoundEngineForSource() error = %v", err)
 	}
-	return engine, cfg, modeluuid.New()
-}
-
-func newTestConfig(t *testing.T) *appstate.Config {
-	t.Helper()
-	root := t.TempDir()
-	prev, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(prev) })
-	store, err := clistate.NewCwd("ctgbot", "config")
-	if err != nil {
-		t.Fatalf("new cwd store: %v", err)
-	}
-	return appstate.New(t.TempDir(), store)
-}
-
-func enableSQLAccess(t *testing.T, cfg *appstate.Config, chatID modeluuid.UUID) {
-	t.Helper()
-	if err := cfg.Chat(chatID).SetAgentDBAccessEnabled(true); err != nil {
-		t.Fatalf("SetAgentDBAccessEnabled() error = %v", err)
-	}
+	return engine, modeluuid.New()
 }
 
 func agentRequest(chatID modeluuid.UUID) commandengine.Request {

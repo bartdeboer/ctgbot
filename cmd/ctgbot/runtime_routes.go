@@ -629,7 +629,7 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(sqlcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		_, _, _, _ = ctx, registration, runtime, home
-		return sqlcomponent.New(rtSystem.DB, rtSystem.Config)
+		return sqlcomponent.New(rtSystem.DB)
 	}); err != nil {
 		return nil, err
 	}

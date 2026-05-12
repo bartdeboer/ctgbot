@@ -5,7 +5,6 @@ import (
 	databasesql "database/sql"
 	"fmt"
 
-	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -27,7 +26,6 @@ type Executor interface {
 
 type Component struct {
 	Executor Executor
-	Config   *appstate.Config
 }
 
 var _ component.Component = (*Component)(nil)
@@ -39,19 +37,19 @@ type Command struct {
 	Limit int
 }
 
-func New(db *gorm.DB, cfg *appstate.Config) (*Component, error) {
+func New(db *gorm.DB) (*Component, error) {
 	if db == nil {
-		return &Component{Config: cfg}, nil
+		return &Component{}, nil
 	}
 	raw, err := db.DB()
 	if err != nil {
 		return nil, err
 	}
-	return NewWithExecutor(raw, cfg), nil
+	return NewWithExecutor(raw), nil
 }
 
-func NewWithExecutor(executor Executor, cfg *appstate.Config) *Component {
-	return &Component{Executor: executor, Config: cfg}
+func NewWithExecutor(executor Executor) *Component {
+	return &Component{Executor: executor}
 }
 
 func (c *Component) Type() string { return Type }

@@ -46,9 +46,6 @@ func TestConfigCommandsUseConfigItemRBAC(t *testing.T) {
 	if containsLine(list.Text, "git.user-name") {
 		t.Fatalf("list = %q, did not expect git.user-name for user", list.Text)
 	}
-	if containsLine(list.Text, "chat.enable-agent-db-access") {
-		t.Fatalf("list = %q, did not expect chat.enable-agent-db-access for user", list.Text)
-	}
 	if _, err := engine.Run(context.Background(), userReq, []string{"config", "set", "chat.enabled", "true"}); err == nil || !strings.Contains(err.Error(), "set chat.enabled denied") {
 		t.Fatalf("user set error = %v, want item RBAC denial", err)
 	}
@@ -127,7 +124,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		"build.compiler-path",
 		"chat.codex-profile-host-path",
 		"chat.enabled",
-		"chat.enable-agent-db-access",
 		"chat.interactive-interrupt-enabled",
 		"chat.process-tools-enabled",
 		"chat.skills",
@@ -165,7 +161,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		{key: "git.user_email", value: "registry@example.com", wantReply: "git.user-email=registry@example.com"},
 		{key: "hostbridge.tcp-listen-addr", value: "127.0.0.1:9999", wantReply: "hostbridge.tcp-listen-addr=127.0.0.1:9999"},
 		{key: "chat.process-tools-enabled", value: "true", wantReply: "chat.process-tools-enabled=true"},
-		{key: "chat.enable_agent_db_access", value: "true", wantReply: "chat.enable-agent-db-access=true"},
 		{key: "chat.interactive-interrupt-enabled", value: "false", wantReply: "chat.interactive-interrupt-enabled=false"},
 		{key: "chat.workspace-host-path", value: workspace, wantReply: "chat.workspace-host-path=" + workspace},
 		{key: "chat.skills", value: skill, wantReply: "chat.skills=" + skill},
@@ -201,9 +196,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 	}
 	if got := cfg.Chat(chatID).Skills(); len(got) != 1 || got[0] != skill {
 		t.Fatalf("chat skills = %#v, want %q", got, skill)
-	}
-	if !cfg.Chat(chatID).AgentDBAccessEnabled() {
-		t.Fatal("chat agent DB access was not persisted")
 	}
 }
 

@@ -12,12 +12,6 @@ func (c *Component) handleSQL(ctx context.Context, req commandengine.Request, cm
 	if req.Context.ChatID.IsNull() {
 		return commandengine.Result{}, fmt.Errorf("sql access denied: missing chat context")
 	}
-	if c == nil || c.Config == nil {
-		return commandengine.Result{}, fmt.Errorf("sql access denied: missing config")
-	}
-	if !c.Config.Chat(req.Context.ChatID).AgentDBAccessEnabled() {
-		return commandengine.Result{}, fmt.Errorf("sql access denied: enable with `ctgbot config chat %s set chat.enable-agent-db-access true`", req.Context.ChatID)
-	}
 	if c.Executor == nil {
 		return commandengine.Result{}, fmt.Errorf("missing sql executor")
 	}
