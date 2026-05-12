@@ -224,7 +224,7 @@ func (s *Service) BindThreadComponent(ctx context.Context, actor coremodel.Actor
 				ProviderThreadID: providerThreadID,
 			}, nil
 		}
-		return ThreadComponentBindResult{}, fmt.Errorf("thread %s component %s is already bound to provider thread %q; no force/repair mode is available, pass the existing providerThreadID or repair the mapping manually", thread.ID, registration.Ref(), currentProviderThreadID)
+		return ThreadComponentBindResult{}, fmt.Errorf("component %s is already bound on this thread to provider thread %q; repair the existing mapping first", registration.Ref(), currentProviderThreadID)
 	}
 	mapping = &coremodel.ThreadComponentMapping{
 		ThreadID:    thread.ID,

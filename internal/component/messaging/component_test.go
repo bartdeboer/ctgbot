@@ -246,7 +246,7 @@ func TestThreadComponentBindErrorsWhenCurrentThreadComponentHasDifferentProvider
 	engine := testMessagingEngine(t, storage)
 
 	_, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "component", "bind", "gmail/personal", "new-provider-thread"})
-	if err == nil || !strings.Contains(err.Error(), "already bound to provider thread") || !strings.Contains(err.Error(), "old-provider-thread") {
+	if err == nil || !strings.Contains(err.Error(), "already bound on this thread to provider thread") || !strings.Contains(err.Error(), "old-provider-thread") {
 		t.Fatalf("Run(thread component bind current conflict) error = %v, want current-thread conflict", err)
 	}
 	assertThreadComponentMapping(t, ctx, storage, thread.ID, gmail.ID, "old-provider-thread")
