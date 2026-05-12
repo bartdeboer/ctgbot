@@ -15,7 +15,7 @@ const (
 
 	defaultPollTimeout    = time.Minute
 	defaultDebounceWindow = 800 * time.Millisecond
-	defaultRenderFormat   = "plain"
+	defaultRenderFormat   = "markdown_v2"
 )
 
 type ComponentConfig struct {
@@ -92,7 +92,9 @@ func (c ComponentConfig) renderFormat() string {
 
 func normalizeTelegramRenderFormat(format string) string {
 	switch strings.ToLower(strings.TrimSpace(format)) {
-	case "", "text", "plain":
+	case "":
+		return defaultRenderFormat
+	case "text", "plain":
 		return "plain"
 	case "html":
 		return "html"

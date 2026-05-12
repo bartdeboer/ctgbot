@@ -24,8 +24,10 @@ Optional component.json settings:
   "operators": [123456789],
   "poll_timeout": "60s",
   "debounce_window": "800ms",
-  "render_format": "plain"
+  "render_format": "markdown_v2"
 }
+
+render_format options: markdown_v2 (default), html, plain.
 
 Setup commands:
 1. Register the component:
@@ -35,7 +37,7 @@ Setup commands:
    printf '%s' "$TELEGRAM_BOT_TOKEN" | hostbridge component telegram/telegram managed-file put token.txt
 
 3. Optionally install component.json:
-   printf '{"operators":[123456789],"render_format":"plain"}' | hostbridge component telegram/telegram managed-file put component.json --type application/json
+   printf '{"operators":[123456789],"render_format":"markdown_v2"}' | hostbridge component telegram/telegram managed-file put component.json --type application/json
 
 4. Check managed files:
    hostbridge component telegram/telegram managed-file list
