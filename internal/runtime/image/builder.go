@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/runtime/imageassets"
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 )
 
 const (
@@ -19,6 +19,7 @@ const (
 	LabelBuiltAt     = "ctgbot.built_at"
 	LabelGitCommit   = "ctgbot.git_commit"
 	LabelHostbridge  = "ctgbot.hostbridge"
+	LabelVersion     = "ctgbot.version"
 )
 
 type Builder struct {
@@ -43,7 +44,7 @@ func (b *Builder) BuildTarget(ctx context.Context, target Target, noCache bool) 
 	if err != nil {
 		return err
 	}
-	buildContext, err := imageassets.BuildContextTar()
+	buildContext, err := buildassets.BuildContextTar()
 	if err != nil {
 		return err
 	}
@@ -114,6 +115,7 @@ func (b *Builder) buildLabels(ctx context.Context, target Target) map[string]str
 		LabelBuildTarget: firstNonEmpty(target.Ref, target.Name, target.Image),
 		LabelBuiltAt:     time.Now().UTC().Format(time.RFC3339Nano),
 		LabelHostbridge:  "embedded",
+		LabelVersion:     buildassets.Version(),
 	}
 	if commit := CurrentGitCommit(ctx, b.SourceDir); commit != "" {
 		labels[LabelGitCommit] = commit

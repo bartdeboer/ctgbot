@@ -24,7 +24,7 @@ The project’s main responsibilities are:
 - `internal/configengine`: config registry/get/set enforcement
 - `internal/schema`: shared command and config definitions
 - `internal/hostbridge`: hostbridge request/response transport, client, and server
-- `internal/runtime/imageassets`: embedded Docker build context tarball source
+- `internal/buildassets`: embedded Docker build context tarball source
 - `internal/runtime/image`: shared runtime image build helpers
 - `internal/broker`, `internal/component`, `internal/system`, `internal/runtime`: the real runtime path
 - `docker/Dockerfile`: source Dockerfile for the embedded image build context
@@ -126,7 +126,7 @@ For the more detailed design model, see:
 - Keep runtime behavior in `internal/broker`, `internal/component`, `internal/system`, and `internal/runtime`.
 - Keep message transport types in `internal/message`.
 - Keep config/state access in `internal/appstate`.
-- Prefer updating the embedded build-context source files and then regenerating `internal/runtime/imageassets/assets/src.tar.gz`.
+- Prefer updating the embedded build-context source files and then regenerating `internal/buildassets/assets/src.tar.gz`.
 - Do not commit local runtime data from `./.ctgbot/`.
 
 ## Good First Checks

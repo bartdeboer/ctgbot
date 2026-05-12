@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
@@ -27,10 +28,22 @@ type dockerContainerInfo struct {
 	Labels  map[string]string
 }
 
-func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInfo, currentGitCommit string, componentType string) []string {
+func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInfo, currentVersion string, currentGitCommit string, componentType string) []string {
 	var notices []string
 	if container.State != sandboxengine.StateMissing && strings.TrimSpace(container.ImageID) != "" && strings.TrimSpace(image.ID) != "" && container.ImageID != image.ID {
 		notices = append(notices, containerStaleNotice(componentType))
+	}
+
+	currentVersion = strings.TrimSpace(currentVersion)
+	if currentVersion != "" && currentVersion != buildassets.FallbackVersion && strings.TrimSpace(image.ID) != "" {
+		imageVersion := strings.TrimSpace(image.Labels[runtimeimage.LabelVersion])
+		switch {
+		case imageVersion == "":
+			notices = append(notices, imageUnstampedNotice)
+		case imageVersion != currentVersion:
+			notices = append(notices, imageStaleNotice)
+		}
+		return notices
 	}
 
 	currentGitCommit = strings.TrimSpace(currentGitCommit)

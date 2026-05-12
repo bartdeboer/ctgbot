@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 
-	"github.com/bartdeboer/ctgbot/internal/runtime/imageassets"
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 )
 
 func main() {
@@ -13,7 +14,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	outPath := filepath.Join(root, "internal", "runtime", "imageassets", "assets", "src.tar.gz")
+	if _, err := buildassets.WriteVersionFile(context.Background(), root); err != nil {
+		panic(err)
+	}
+	outPath := buildassets.SourceTarGzipPath(root)
 	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
 		panic(err)
 	}
@@ -23,7 +27,7 @@ func main() {
 	}
 	defer out.Close()
 
-	if err := imageassets.WriteBuildContextGzip(out); err != nil {
+	if err := buildassets.WriteBuildContextGzip(out); err != nil {
 		panic(err)
 	}
 }

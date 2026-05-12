@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -373,7 +374,7 @@ func (r *Runtime) runtimeNotices(ctx context.Context, sbx *sandboxengine.Sandbox
 	if err != nil {
 		return nil
 	}
-	return runtimeFreshnessNotices(container, image, runtimeimage.CurrentGitCommit(ctx, r.rootDir), r.registration.Type)
+	return runtimeFreshnessNotices(container, image, buildassets.Version(), runtimeimage.CurrentGitCommit(ctx, r.rootDir), r.registration.Type)
 }
 
 func authSandboxName(registration coremodel.Component) string {

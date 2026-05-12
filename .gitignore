@@ -1,3 +1,4 @@
 .ctgbot/
 chats/
-internal/runtime/imageassets/assets/src.tar.gz
+internal/buildassets/assets/src.tar.gz
+internal/buildassets/assets/version.txt

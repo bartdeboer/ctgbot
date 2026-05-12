@@ -1,4 +1,4 @@
-package imageassets
+package buildassets
 
 import "strings"
 

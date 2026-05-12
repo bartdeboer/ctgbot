@@ -28,6 +28,7 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 		{name: "run alias", ref: "codex", in: []string{"whoami"}, want: []string{"run", "whoami"}},
 		{name: "direct hostbridge", ref: "codex", in: []string{"sendstdin"}, want: []string{"sendstdin"}},
 		{name: "config", ref: "codex", in: []string{"config", "list"}, want: []string{"config", "list"}},
+		{name: "version", ref: "codex", in: []string{"version"}, want: []string{"version"}},
 		{name: "component global direct", ref: "codex", in: []string{"component", "help"}, want: []string{"component", "help"}},
 		{name: "status global direct", ref: "codex", in: []string{"status"}, want: []string{"status"}},
 		{name: "thread global direct", ref: "codex", in: []string{"thread", "list"}, want: []string{"thread", "list"}},

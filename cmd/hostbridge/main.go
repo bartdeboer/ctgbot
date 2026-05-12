@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
@@ -21,6 +22,10 @@ func main() {
 	args := normalizedArgs(os.Args[1:], currentComponentRef())
 	if len(args) == 0 || (len(args) == 1 && args[0] == "help") {
 		printHelp()
+		return
+	}
+	if len(args) == 1 && args[0] == "version" {
+		fmt.Fprintln(os.Stdout, buildassets.Version())
 		return
 	}
 
@@ -96,7 +101,7 @@ func normalizedArgs(args []string, componentRef string) []string {
 
 func isDirectHostbridgeCommand(arg string, componentRef string) bool {
 	switch arg {
-	case "", "run", "sendfile", "sendstdin", "config", "help":
+	case "", "run", "sendfile", "sendstdin", "config", "help", "version":
 		return true
 	}
 	for _, prefix := range cmdsurface.GlobalDirectPrefixes() {
@@ -148,6 +153,7 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "usage: hostbridge <command> [args...]")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "Commands for ctgbot hostbridge:")
+	fmt.Fprintln(os.Stdout, "version - Show embedded hostbridge version")
 	printDefinitionHelp(hostbridgeDefinitions())
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "environment:")
