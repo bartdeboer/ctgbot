@@ -27,16 +27,16 @@ type dockerContainerInfo struct {
 	Labels  map[string]string
 }
 
-func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInfo, currentVersion string, currentGitCommit string, componentType string) []string {
+func runtimeFreshnessNotices(container dockerContainerInfo, image dockerImageInfo, currentVersion buildassets.VersionInfo, currentGitCommit string, componentType string) []string {
 	var notices []string
 	if container.State != sandboxengine.StateMissing && strings.TrimSpace(container.ImageID) != "" && strings.TrimSpace(image.ID) != "" && container.ImageID != image.ID {
 		notices = append(notices, containerStaleNotice(componentType))
 	}
 
-	currentVersion = strings.TrimSpace(currentVersion)
-	if currentVersion != "" && currentVersion != buildassets.FallbackVersion && strings.TrimSpace(image.ID) != "" {
+	currentVersion.Version = strings.TrimSpace(currentVersion.Version)
+	if currentVersion.Generated && currentVersion.Version != "" && strings.TrimSpace(image.ID) != "" {
 		imageVersion := strings.TrimSpace(image.Labels[runtimeimage.LabelVersion])
-		if imageVersion != currentVersion {
+		if imageVersion != currentVersion.Version {
 			notices = append(notices, imageVersionNotice)
 		}
 		return notices

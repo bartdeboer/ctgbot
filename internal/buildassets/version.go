@@ -11,25 +11,26 @@ import (
 	"strings"
 )
 
-const (
-	BaseVersion     = "v0.1.0"
-	FallbackVersion = BaseVersion + "-dev"
-)
+const BaseVersion = "v0.0.0"
 
-const versionAssetPath = "assets/version.txt"
+const (
+	versionAssetPath = "assets/version.txt"
+	devVersionSuffix = "-dev"
+)
 
 var semverTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$`)
 
+type VersionInfo struct {
+	Version   string
+	Generated bool
+}
+
+func Info() VersionInfo {
+	return versionInfoFromEmbeddedText(embeddedVersionText())
+}
+
 func Version() string {
-	body, err := embeddedVersionText()
-	if err != nil {
-		return FallbackVersion
-	}
-	version := strings.TrimSpace(string(body))
-	if version == "" {
-		return FallbackVersion
-	}
-	return version
+	return Info().Version
 }
 
 func DeriveVersion(ctx context.Context, root string) string {
@@ -66,22 +67,33 @@ type gitVersionState struct {
 func deriveVersionFromGitState(state gitVersionState) string {
 	exactTag := cleanSemverTag(state.ExactTag)
 	nearestTag := cleanSemverTag(state.NearestTag)
-	base := firstNonEmptyString(nearestTag, exactTag, BaseVersion)
 	if exactTag != "" && !state.Dirty {
 		return exactTag
 	}
+
 	shortCommit := strings.TrimSpace(state.ShortCommit)
 	if shortCommit == "" {
-		if state.Dirty {
-			return base + "-dev"
-		}
-		return FallbackVersion
+		return BaseVersion + devVersionSuffix
 	}
+
+	base := firstNonEmptyString(nearestTag, exactTag, BaseVersion)
 	version := base + "-" + shortCommit
 	if state.Dirty {
-		version += "-dev"
+		version += devVersionSuffix
 	}
 	return version
+}
+
+func versionInfoFromEmbeddedText(body []byte, err error) VersionInfo {
+	fallback := VersionInfo{Version: BaseVersion + devVersionSuffix}
+	if err != nil {
+		return fallback
+	}
+	version := strings.TrimSpace(string(body))
+	if version == "" {
+		return fallback
+	}
+	return VersionInfo{Version: version, Generated: true}
 }
 
 func firstNonEmptyString(values ...string) string {

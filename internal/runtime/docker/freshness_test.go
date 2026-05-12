@@ -15,7 +15,7 @@ func TestRuntimeFreshnessNoticesDetectContainerImageMismatch(t *testing.T) {
 	notices := runtimeFreshnessNotices(
 		dockerContainerInfo{State: sandboxengine.StateRunning, ImageID: "sha256:old"},
 		dockerImageInfo{ID: "sha256:new", Labels: map[string]string{runtimeimage.LabelGitCommit: "abc"}},
-		buildassets.FallbackVersion,
+		buildassets.VersionInfo{Version: "v0.0.0-dev"},
 		"abc",
 		"claude",
 	)
@@ -33,7 +33,7 @@ func TestRuntimeFreshnessNoticesDetectImageGitMismatch(t *testing.T) {
 	notices := runtimeFreshnessNotices(
 		dockerContainerInfo{State: sandboxengine.StateMissing},
 		dockerImageInfo{ID: "sha256:new", Labels: map[string]string{runtimeimage.LabelGitCommit: "old"}},
-		buildassets.FallbackVersion,
+		buildassets.VersionInfo{Version: "v0.0.0-dev"},
 		"new",
 		"codex",
 	)
@@ -48,7 +48,7 @@ func TestRuntimeFreshnessNoticesDetectUnstampedImage(t *testing.T) {
 	notices := runtimeFreshnessNotices(
 		dockerContainerInfo{State: sandboxengine.StateMissing},
 		dockerImageInfo{ID: "sha256:new"},
-		buildassets.FallbackVersion,
+		buildassets.VersionInfo{Version: "v0.0.0-dev"},
 		"new",
 		"codex",
 	)
@@ -63,7 +63,7 @@ func TestRuntimeFreshnessNoticesCleanWhenImageAndCommitMatch(t *testing.T) {
 	notices := runtimeFreshnessNotices(
 		dockerContainerInfo{State: sandboxengine.StateRunning, ImageID: "sha256:new"},
 		dockerImageInfo{ID: "sha256:new", Labels: map[string]string{runtimeimage.LabelGitCommit: "new"}},
-		buildassets.FallbackVersion,
+		buildassets.VersionInfo{Version: "v0.0.0-dev"},
 		"new",
 		"codex",
 	)
@@ -81,7 +81,7 @@ func TestRuntimeFreshnessNoticesPreferVersionMismatch(t *testing.T) {
 			runtimeimage.LabelVersion:   "v0.1.0-old",
 			runtimeimage.LabelGitCommit: "new",
 		}},
-		"v0.1.0-new",
+		buildassets.VersionInfo{Version: "v0.1.0-new", Generated: true},
 		"new",
 		"codex",
 	)
