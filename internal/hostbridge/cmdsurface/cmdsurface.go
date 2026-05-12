@@ -7,6 +7,7 @@ import (
 	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
 	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
+	claudecomponent "github.com/bartdeboer/ctgbot/internal/component/claude"
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	llamacppcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
@@ -72,6 +73,7 @@ func LegacyCodexShorthandEnabled(ref string) bool {
 
 func RegisterGobTypes(register func(any)) {
 	componentadmin.RegisterGobTypes(register)
+	claudecomponent.RegisterGobTypes(register)
 	codexcomponent.RegisterGobTypes(register)
 	llamacppcomponent.RegisterGobTypes(register)
 	messagingcomponent.RegisterGobTypes(register)
@@ -83,6 +85,8 @@ func GlobalDirectPrefixes() []string {
 
 func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 	switch strings.TrimSpace(componentType) {
+	case claudecomponent.Type:
+		return (*claudecomponent.Component)(nil), true
 	case codexcomponent.Type:
 		return (*codexcomponent.Component)(nil), true
 	case llamacppcomponent.Type:

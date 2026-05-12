@@ -17,6 +17,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/component/claude"
 	"github.com/bartdeboer/ctgbot/internal/component/codex"
 	"github.com/bartdeboer/ctgbot/internal/component/gmail"
 	"github.com/bartdeboer/ctgbot/internal/component/llamacpp"
@@ -607,6 +608,11 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(codex.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return codex.New(ctx, registration, runtime, home, storage, rtSystem.Config, rtSystem.ResolveChatWorkspace, rtSystem.Logger, "")
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(claude.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return claude.New(ctx, registration, runtime, home, storage, rtSystem.ResolveChatWorkspace, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}
