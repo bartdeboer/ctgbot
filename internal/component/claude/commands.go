@@ -8,6 +8,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
@@ -245,43 +246,11 @@ func (c *Component) modelClear(ctx context.Context, req commandengine.Request) (
 }
 
 func (c *Component) thread(ctx context.Context, req commandengine.Request) (*coremodel.Thread, error) {
-	if c == nil || c.storage == nil {
-		return nil, fmt.Errorf("missing claude storage")
-	}
-	threadID := req.Context.ThreadID
-	if threadID.IsNull() {
-		threadID = req.Context.SandboxID
-	}
-	if threadID.IsNull() {
-		return nil, fmt.Errorf("missing thread id")
-	}
-	thread, err := c.storage.Threads().GetByID(ctx, threadID)
-	if err != nil {
-		return nil, err
-	}
-	if thread == nil {
-		return nil, fmt.Errorf("thread not found: %s", threadID)
-	}
-	return thread, nil
+	return agentcommon.Thread(ctx, c.storage, req, Type)
 }
 
 func (c *Component) threadWorkspace(ctx context.Context, req commandengine.Request) (*coremodel.Thread, string, error) {
-	thread, err := c.thread(ctx, req)
-	if err != nil {
-		return nil, "", err
-	}
-	chat, err := c.storage.Chats().GetByID(ctx, thread.ChatID)
-	if err != nil {
-		return nil, "", err
-	}
-	if chat == nil {
-		return nil, "", fmt.Errorf("chat not found: %s", thread.ChatID)
-	}
-	workspacePath, err := c.resolveWorkspace(ctx, *chat)
-	if err != nil {
-		return nil, "", err
-	}
-	return thread, workspacePath, nil
+	return agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, Type)
 }
 
 func claudeCommand(pattern string, command any, help string) commandengine.Definition {

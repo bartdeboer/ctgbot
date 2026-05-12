@@ -12,6 +12,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -178,42 +179,19 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 }
 
 func (c *Component) providerThreadID(turnRuntime component.TurnRuntime) (string, error) {
-	componentThreadID, ok, err := turnRuntime.ComponentThreadID(c.registration.ID)
-	if err != nil || !ok {
-		return "", err
-	}
-	return strings.TrimSpace(componentThreadID), nil
+	return agentcommon.ProviderThreadID(c.registration.ID, turnRuntime)
 }
 
 func (c *Component) runtimeNotices(ctx context.Context, workspacePath string, threadID modeluuid.UUID) []string {
-	if c == nil || c.runtime == nil {
-		return nil
-	}
-	status, err := c.runtime.Status(ctx, workspacePath, threadID)
-	if err != nil {
-		c.logf("runtime notice status check failed thread=%s err=%v", threadID, err)
-		return nil
-	}
-	return append([]string(nil), status.RuntimeNotices...)
+	return agentcommon.RuntimeNotices(ctx, c.runtime, workspacePath, threadID, c.logf)
 }
 
 func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, providerThreadID string) error {
-	providerThreadID = strings.TrimSpace(providerThreadID)
-	if providerThreadID == "" {
-		return nil
-	}
-	return turnRuntime.BindComponentThreadID(c.registration.ID, providerThreadID)
+	return agentcommon.BindProviderThreadID(c.registration.ID, turnRuntime, providerThreadID)
 }
 
 func (c *Component) stopAfterTurn(workspacePath string, threadID modeluuid.UUID) {
-	if c == nil || c.runtime == nil {
-		return
-	}
-	stopCtx, cancel := context.WithTimeout(context.Background(), stopAfterTurnTimeout)
-	defer cancel()
-	if err := c.runtime.Stop(stopCtx, workspacePath, threadID); err != nil {
-		c.logf("claude stop-after-turn failed thread=%s err=%v", threadID, err)
-	}
+	agentcommon.StopAfterTurn(c.runtime, workspacePath, threadID, stopAfterTurnTimeout, c.logf)
 }
 
 func componentBindConfig(config runtimepkg.BindConfig, componentConfig ComponentConfig, runtimeHomePath string) runtimepkg.BindConfig {
