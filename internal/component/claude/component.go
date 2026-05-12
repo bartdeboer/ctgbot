@@ -130,7 +130,9 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}
 	workspacePath := turn.Runtime.WorkspacePath()
 	runtimeWorkspacePath := c.runtime.RuntimeWorkspacePath(workspacePath)
-	bootstrapText := claudeBootstrap(runtimeWorkspacePath, turn.Runtime.Instructions())
+	instructions := turn.Runtime.Instructions()
+	instructions.RuntimeNotices = append(instructions.RuntimeNotices, c.runtimeNotices(ctx, workspacePath, turn.Thread.ID)...)
+	bootstrapText := claudeBootstrap(runtimeWorkspacePath, instructions)
 	if err := PrepareHome(HomeSpec{HostHome: c.runtime.ComponentHome().Path, BootstrapText: bootstrapText}); err != nil {
 		return nil, err
 	}
@@ -181,6 +183,18 @@ func (c *Component) providerThreadID(turnRuntime component.TurnRuntime) (string,
 		return "", err
 	}
 	return strings.TrimSpace(componentThreadID), nil
+}
+
+func (c *Component) runtimeNotices(ctx context.Context, workspacePath string, threadID modeluuid.UUID) []string {
+	if c == nil || c.runtime == nil {
+		return nil
+	}
+	status, err := c.runtime.Status(ctx, workspacePath, threadID)
+	if err != nil {
+		c.logf("runtime notice status check failed thread=%s err=%v", threadID, err)
+		return nil
+	}
+	return append([]string(nil), status.RuntimeNotices...)
 }
 
 func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, providerThreadID string) error {
@@ -243,6 +257,11 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 		lines = append(lines, "Useful hostbridge control commands:")
 		for _, command := range instructions.HostbridgeControlCommands {
 			lines = append(lines, "- `"+command+"`")
+		}
+	}
+	for _, notice := range instructions.RuntimeNotices {
+		if notice = strings.TrimSpace(notice); notice != "" {
+			lines = append(lines, notice)
 		}
 	}
 	return strings.Join(lines, "\n")

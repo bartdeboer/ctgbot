@@ -16,9 +16,12 @@ const (
 )
 
 type ComponentConfig struct {
-	Image             string `json:"image"`
-	Dockerfile        string `json:"dockerfile"`
-	Model             string `json:"model"`
+	Image      string `json:"image"`
+	Dockerfile string `json:"dockerfile"`
+	Model      string `json:"model"`
+	// PermissionMode is passed to Claude Code as --permission-mode. The
+	// default bypassPermissions is acceptable only because Claude runs inside
+	// ctgbot's per-thread sandbox with the same isolation used for Codex.
 	PermissionMode    string `json:"permission_mode"`
 	SessionTimeoutSec int    `json:"session_timeout_sec"`
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -184,6 +185,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 		return commandengine.Result{}, err
 	}
 	lines := []string{
+		"ctgbot_version: " + buildassets.Version(),
 		"chat_id: " + thread.ChatID.String(), "thread_id: " + thread.ID.String(), fmt.Sprintf("keep_running: %t", settings.KeepRunning),
 		"runtime: " + c.runtime.Kind(), "container: " + status.Name, "container_state: " + status.State, "workspace: " + workspacePath,
 		"runtime_workspace: " + status.RuntimeWorkspacePath, "runtime_home: " + status.RuntimeHomePath, "provider_session_id: " + providerValue,
@@ -191,6 +193,11 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 	}
 	if status.ActiveCommandName != "" {
 		lines = append(lines, "active_command: "+strings.TrimSpace(status.ActiveCommandName+" "+strings.Join(status.ActiveCommandArgs, " ")))
+	}
+	for _, notice := range status.RuntimeNotices {
+		if notice = strings.TrimSpace(notice); notice != "" {
+			lines = append(lines, "runtime_notice: "+notice)
+		}
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
