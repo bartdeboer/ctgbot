@@ -27,7 +27,7 @@ type InstanceResolver interface {
 type App interface {
 	Repository() repository.Storage
 	InstanceResolver
-	InboundFilters() []inbound.Filter
+	InboundContentFilters() []inbound.Filter
 }
 
 type Broker struct {
@@ -75,7 +75,7 @@ func New(app App, logf func(format string, args ...any)) *Broker {
 	if app == nil {
 		return NewWithDeps(nil, nil, logf)
 	}
-	broker := NewWithDeps(app.Repository(), app, logf, app.InboundFilters()...)
+	broker := NewWithDeps(app.Repository(), app, logf, app.InboundContentFilters()...)
 	broker.App = app
 	return broker
 }
@@ -87,7 +87,7 @@ func NewWithDeps(storage repository.Storage, resolver InstanceResolver, logf fun
 		Mapper:         NewThreadComponentMapper(storage),
 		Turns:          NewThreadTurnGate(),
 		Logf:           logf,
-		InboundFilters: inboundFilters(storage, filters...),
+		InboundFilters: contentFilters(filters...),
 	}
 }
 
@@ -121,45 +121,39 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		return EventOutcome{}, fmt.Errorf("missing inbound component id")
 	}
 
-	envelope, filterResult, err := b.filterInbound(ctx, inbound.Envelope{Event: event})
+	channel, rejection, err := b.AllowedChannel(ctx, event)
 	if err != nil {
 		return EventOutcome{}, err
 	}
-	if filterResult.Drop {
-		dropEvent := filterResult.Envelope.Event
-		if dropEvent.ComponentID.IsNull() {
-			dropEvent = event
-		}
-		actor := dropEvent.Payload.ResolvedActor()
-		details := strings.Join(filterResult.Details, " ")
-		b.logf(
-			"inbound dropped component=%s external_chat=%q external_thread=%q reason=%s actor_id=%q actor_label=%q chat_label=%q preview=%q details=%q",
-			dropEvent.ComponentID,
-			strings.TrimSpace(dropEvent.Payload.ProviderChatID),
-			strings.TrimSpace(dropEvent.Payload.ProviderThreadID),
-			filterResult.Reason,
-			strings.TrimSpace(actor.ID),
-			strings.TrimSpace(actor.Label),
-			strings.TrimSpace(dropEvent.Payload.ChatLabel),
-			inboundPreview(dropEvent.Payload.Text.Text),
-			details,
-		)
-		b.maybeHandleInboundFirewallInit(ctx, filterResult)
+	if rejection != nil {
+		b.handleInboundRejection(ctx, rejection)
 		return EventOutcome{Dropped: true}, nil
 	}
-	sourceBinding := envelope.SourceBinding
-	chat := envelope.Chat
-	if sourceBinding == nil || chat == nil {
-		return EventOutcome{}, fmt.Errorf("inbound filters did not resolve chat routing")
-	}
-	routedEvent := envelope.Event
 
-	thread, err := b.Mapper.EnsureThread(ctx, *sourceBinding, strings.TrimSpace(routedEvent.Payload.ProviderThreadID))
+	rejection, err = b.AllowedSender(ctx, channel)
+	if err != nil {
+		return EventOutcome{}, err
+	}
+	if rejection != nil {
+		b.handleInboundRejection(ctx, rejection)
+		return EventOutcome{Dropped: true}, nil
+	}
+
+	routedEvent, rejection, err := b.FilteredMessage(ctx, channel)
+	if err != nil {
+		return EventOutcome{}, err
+	}
+	if rejection != nil {
+		b.handleInboundRejection(ctx, rejection)
+		return EventOutcome{Dropped: true}, nil
+	}
+
+	thread, err := b.Mapper.EnsureThread(ctx, channel.SourceBinding, strings.TrimSpace(routedEvent.Payload.ProviderThreadID))
 	if err != nil {
 		return EventOutcome{}, err
 	}
 	delivery, err := b.HandleResolvedInbound(ctx, component.ResolvedInbound{
-		Chat:        *chat,
+		Chat:        channel.Chat,
 		Thread:      *thread,
 		ComponentID: routedEvent.ComponentID,
 		ExternalID:  strings.TrimSpace(routedEvent.ExternalID),

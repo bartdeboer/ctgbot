@@ -55,8 +55,8 @@ func NewInboundFilter(storage repository.Storage, resolver ComponentResolver, lo
 	return &Evaluator{Storage: storage, Resolver: resolver, Logf: logf}
 }
 
-func (e *Evaluator) FilterInbound(ctx context.Context, envelope inbound.Envelope) (inbound.FilterResult, error) {
-	event := envelope.Event
+func (e *Evaluator) FilterInbound(ctx context.Context, input inbound.FilterInput) (inbound.FilterResult, error) {
+	event := input.Event
 	decision, err := e.EvaluateInbound(ctx, InboundInput{
 		SourceComponentID: event.ComponentID,
 		ProviderType:      event.Payload.ProviderType,
@@ -73,9 +73,9 @@ func (e *Evaluator) FilterInbound(ctx context.Context, envelope inbound.Envelope
 		return inbound.FilterResult{}, err
 	}
 	if !decision.Allowed {
-		return inbound.Drop(envelope, decision.Reason, decision.Details...), nil
+		return inbound.Drop(input, decision.Reason, decision.Details...), nil
 	}
-	return inbound.Pass(envelope), nil
+	return inbound.Pass(input), nil
 }
 
 func (e *Evaluator) EvaluateInbound(ctx context.Context, input InboundInput) (Decision, error) {
