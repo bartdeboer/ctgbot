@@ -348,13 +348,17 @@ func newGuardedInboundFixture(t *testing.T, guardOutput string, options ...func(
 }
 
 func guardedInboundEvent(sourceID modeluuid.UUID, text string) component.InboundEvent {
+	return testInboundEvent(sourceID, "chat-1", "thread-7", text)
+}
+
+func testInboundEvent(sourceID modeluuid.UUID, providerChatID string, providerThreadID string, text string) component.InboundEvent {
 	return component.InboundEvent{
 		ComponentID: sourceID,
 		ExternalID:  "msg-1",
 		Payload: message.InboundPayload{
 			ProviderType:      "telegram",
-			ProviderChatID:    "chat-1",
-			ProviderThreadID:  "thread-7",
+			ProviderChatID:    providerChatID,
+			ProviderThreadID:  providerThreadID,
 			ProviderMessageID: "msg-1",
 			Actor: message.Actor{
 				ID:    "bart",
@@ -1234,6 +1238,112 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 	}
 	if got, want := messages[0].Text, "pong"; got != want {
 		t.Fatalf("stored message text = %q, want %q", got, want)
+	}
+}
+
+func TestHandleInboundDropsSourceOnlyChatWithoutRelay(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	agentRecorder := &fakeAgentRecorder{}
+	system := newTestSystem(t, root, storage, &fakeMessengerRecorder{}, agentRecorder, nil)
+	var logs []string
+	b := broker.NewWithDeps(storage, system, func(format string, args ...any) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}, nil)
+
+	chat := &coremodel.Chat{Label: "source only", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	for _, registration := range []*coremodel.Component{telegram, codex} {
+		if err := storage.Components().Save(context.Background(), registration); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sourceBinding := &coremodel.ChatComponent{
+		ChatID:         chat.ID,
+		ComponentID:    telegram.ID,
+		Role:           coremodel.ChatComponentRoleSource,
+		ExternalChatID: "chat-1",
+		Enabled:        true,
+	}
+	if err := storage.ChatComponents().Save(context.Background(), sourceBinding); err != nil {
+		t.Fatal(err)
+	}
+	agentBinding := &coremodel.ChatComponent{
+		ChatID:      chat.ID,
+		ComponentID: codex.ID,
+		Role:        coremodel.ChatComponentRoleAgent,
+		Enabled:     true,
+	}
+	if err := storage.ChatComponents().Save(context.Background(), agentBinding); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := b.HandleInbound(context.Background(), testInboundEvent(telegram.ID, "chat-1", "thread-1", "hello"))
+	if err != nil {
+		t.Fatalf("HandleInbound() error = %v", err)
+	}
+	if !outcome.Dropped {
+		t.Fatal("expected source-only event to be dropped")
+	}
+	if outcome.Inbound != nil || len(outcome.Outbound) != 0 {
+		t.Fatalf("outcome = %#v, want no stored/relayed messages", outcome)
+	}
+	if len(agentRecorder.prompts) != 0 {
+		t.Fatalf("agent prompts = %#v, want no hidden agent turn", agentRecorder.prompts)
+	}
+	if len(logs) == 0 || !strings.Contains(logs[0], "no-relay-binding") {
+		t.Fatalf("logs = %#v, want no-relay-binding reason", logs)
+	}
+	threads, err := storage.Threads().ListByChatID(context.Background(), chat.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(threads) != 0 {
+		t.Fatalf("threads = %d, want none for dropped source-only inbound", len(threads))
+	}
+}
+
+func TestHandleInboundAllowsChatWithRelayBinding(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	system := newTestSystem(t, root, storage, messengerRecorder, nil, nil)
+	b := broker.NewWithDeps(storage, system, nil, nil)
+
+	chat := &coremodel.Chat{Label: "visible", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChatID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChatID: "chat-1", Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	outcome, err := b.HandleInbound(context.Background(), testInboundEvent(telegram.ID, "chat-1", "thread-1", "hello"))
+	if err != nil {
+		t.Fatalf("HandleInbound() error = %v", err)
+	}
+	if outcome.Dropped {
+		t.Fatal("expected relay-bound event to be routed")
+	}
+	if outcome.Inbound == nil {
+		t.Fatal("expected inbound message to be stored")
+	}
+	if len(messengerRecorder.payloads) != 0 {
+		t.Fatalf("relay payloads = %#v, want none without agent response", messengerRecorder.payloads)
 	}
 }
 

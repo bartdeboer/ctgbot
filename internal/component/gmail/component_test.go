@@ -77,7 +77,7 @@ func TestInboundEventFromMessage(t *testing.T) {
 	if got, want := payload.ProviderChatID, "work@example.com"; got != want {
 		t.Fatalf("ProviderChatID = %q, want %q", got, want)
 	}
-	if got, want := payload.ProviderThreadID, "thread-456"; got != want {
+	if got, want := payload.ProviderThreadID, "work@example.com"; got != want {
 		t.Fatalf("ProviderThreadID = %q, want %q", got, want)
 	}
 	if got, want := payload.ProviderMessageID, "msg-123"; got != want {

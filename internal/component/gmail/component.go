@@ -155,7 +155,7 @@ func (c *Component) InboundEventFromMessage(gmailMessage *gmailapi.Message) comp
 		Payload: message.InboundPayload{
 			ProviderType:      Type,
 			ProviderChatID:    c.providerChatID(),
-			ProviderThreadID:  strings.TrimSpace(gmailMessage.ThreadId),
+			ProviderThreadID:  c.providerChatID(),
 			ProviderMessageID: strings.TrimSpace(gmailMessage.Id),
 			ChatLabel:         c.providerChatID(),
 			Actor: message.Actor{

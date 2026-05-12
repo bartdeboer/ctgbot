@@ -575,6 +575,25 @@ func (r memoryThreadMappings) FindByChatComponentAndThreadID(ctx context.Context
 	return nil, nil
 }
 
+func (r memoryThreadMappings) ListByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadComponentMapping, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	out := make([]coremodel.ThreadComponentMapping, 0)
+	for _, mapping := range r.s.threadComponentMappings {
+		if mapping.ChatID == chatID {
+			out = append(out, mapping)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].ID.String() < out[j].ID.String()
+		}
+		return out[i].CreatedAt.Before(out[j].CreatedAt)
+	})
+	return out, nil
+}
+
 func (r memoryThreadMappings) DeleteByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) error {
 	_ = ctx
 	r.s.mu.Lock()

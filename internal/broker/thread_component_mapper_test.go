@@ -138,3 +138,93 @@ func TestThreadComponentMapperRelayTargetFallsBackToExternalChatID(t *testing.T)
 		t.Fatalf("ProviderThreadID = %q, want empty", target.ProviderThreadID)
 	}
 }
+
+func TestThreadComponentMapperReusesVisibleDefaultThreadForMailboxMapping(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	mapper := broker.NewThreadComponentMapper(storage)
+
+	chat := &coremodel.Chat{Label: "mailbox", Enabled: true}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Enabled: true}
+	gmail := &coremodel.Component{Type: "gmail", Name: "work", Enabled: true}
+	for _, registration := range []*coremodel.Component{telegram, gmail} {
+		if err := storage.Components().Save(ctx, registration); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := storage.Chats().Save(ctx, chat); err != nil {
+		t.Fatal(err)
+	}
+
+	visibleThread := &coremodel.Thread{ChatID: chat.ID, Label: "visible"}
+	if err := storage.Threads().Save(ctx, visibleThread); err != nil {
+		t.Fatal(err)
+	}
+	if err := mapper.BindComponentThreadID(ctx, visibleThread.ID, telegram.ID, "0"); err != nil {
+		t.Fatalf("BindComponentThreadID(telegram) error = %v", err)
+	}
+
+	gmailBinding := coremodel.ChatComponent{
+		ChatID:         chat.ID,
+		ComponentID:    gmail.ID,
+		Role:           coremodel.ChatComponentRoleSource,
+		ExternalChatID: "bart@example.com",
+		Enabled:        true,
+	}
+	thread, err := mapper.EnsureThread(ctx, gmailBinding, "bart@example.com")
+	if err != nil {
+		t.Fatalf("EnsureThread(gmail) error = %v", err)
+	}
+	if thread.ID != visibleThread.ID {
+		t.Fatalf("EnsureThread(gmail) thread = %s, want visible thread %s", thread.ID, visibleThread.ID)
+	}
+
+	componentThreadID, ok, err := mapper.ComponentThreadID(ctx, visibleThread.ID, gmail.ID)
+	if err != nil {
+		t.Fatalf("ComponentThreadID(gmail) error = %v", err)
+	}
+	if !ok || componentThreadID != "bart@example.com" {
+		t.Fatalf("ComponentThreadID(gmail) = (%q, %t), want mailbox mapping", componentThreadID, ok)
+	}
+}
+
+func TestThreadComponentMapperDoesNotReuseVisibleDefaultThreadForNonMailboxMapping(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	mapper := broker.NewThreadComponentMapper(storage)
+
+	chat := &coremodel.Chat{Label: "chat", Enabled: true}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Enabled: true}
+	source := &coremodel.Component{Type: "other", Name: "source", Enabled: true}
+	for _, registration := range []*coremodel.Component{telegram, source} {
+		if err := storage.Components().Save(ctx, registration); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := storage.Chats().Save(ctx, chat); err != nil {
+		t.Fatal(err)
+	}
+
+	visibleThread := &coremodel.Thread{ChatID: chat.ID, Label: "visible"}
+	if err := storage.Threads().Save(ctx, visibleThread); err != nil {
+		t.Fatal(err)
+	}
+	if err := mapper.BindComponentThreadID(ctx, visibleThread.ID, telegram.ID, "0"); err != nil {
+		t.Fatalf("BindComponentThreadID(telegram) error = %v", err)
+	}
+
+	sourceBinding := coremodel.ChatComponent{
+		ChatID:         chat.ID,
+		ComponentID:    source.ID,
+		Role:           coremodel.ChatComponentRoleSource,
+		ExternalChatID: "chat-1",
+		Enabled:        true,
+	}
+	thread, err := mapper.EnsureThread(ctx, sourceBinding, "api-thread-1")
+	if err != nil {
+		t.Fatalf("EnsureThread(source) error = %v", err)
+	}
+	if thread.ID == visibleThread.ID {
+		t.Fatalf("EnsureThread(source) reused visible thread for non-mailbox mapping %s", visibleThread.ID)
+	}
+}

@@ -428,6 +428,15 @@ func (r *gormThreadComponentMappings) FindByChatComponentAndThreadID(ctx context
 	return &mapping, nil
 }
 
+func (r *gormThreadComponentMappings) ListByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadComponentMapping, error) {
+	var mappings []coremodel.ThreadComponentMapping
+	err := r.db.WithContext(ctx).
+		Where("chat_id = ?", chatID).
+		Order("created_at ASC").
+		Find(&mappings).Error
+	return mappings, err
+}
+
 func (r *gormThreadComponentMappings) DeleteByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) error {
 	return r.db.WithContext(ctx).
 		Where("thread_id = ? AND component_id = ?", threadID, componentID).

@@ -11,6 +11,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/inbound"
 	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 )
 
@@ -85,7 +86,30 @@ func (f *SourceBindingFilter) FilterInbound(ctx context.Context, envelope inboun
 	if !chat.Enabled {
 		return inbound.Drop(envelope, "chat-disabled"), nil
 	}
+	hasRelay, err := f.hasRelayBinding(ctx, chat.ID)
+	if err != nil {
+		return inbound.FilterResult{}, err
+	}
+	if !hasRelay {
+		return inbound.Drop(envelope, "no-relay-binding"), nil
+	}
 	return inbound.Pass(envelope), nil
+}
+
+func (f *SourceBindingFilter) hasRelayBinding(ctx context.Context, chatID modeluuid.UUID) (bool, error) {
+	if chatID.IsNull() {
+		return false, nil
+	}
+	bindings, err := f.Storage.ChatComponents().ListEnabledByChatID(ctx, chatID)
+	if err != nil {
+		return false, err
+	}
+	for _, binding := range bindings {
+		if binding.Role == coremodel.ChatComponentRoleRelay {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (f *SourceBindingFilter) recordInboundDrop(ctx context.Context, event component.InboundEvent) error {
