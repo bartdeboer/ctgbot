@@ -33,10 +33,10 @@ type ThreadStatus struct {
 }
 
 type ThreadStatusComponent struct {
-	Ref              string `json:"ref"`
-	Role             string `json:"role"`
-	ExternalChatID   string `json:"external_chat_id"`
-	ExternalThreadID string `json:"external_thread_id"`
+	Ref               string `json:"ref"`
+	Role              string `json:"role"`
+	ExternalChannelID string `json:"external_channel_id"`
+	ExternalThreadID  string `json:"external_thread_id"`
 }
 
 type ListThreadsRequest struct {

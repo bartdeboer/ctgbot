@@ -52,20 +52,20 @@ func contentFilters(filters ...inbound.Filter) []inbound.Filter {
 }
 
 func (b *Broker) AllowedChannel(ctx context.Context, event component.InboundEvent) (AllowedChannel, *InboundRejection, error) {
-	externalChatID := strings.TrimSpace(event.Payload.ProviderChatID)
-	if externalChatID == "" {
-		return AllowedChannel{}, nil, fmt.Errorf("missing inbound provider chat id")
+	externalChannelID := strings.TrimSpace(event.Payload.ProviderChannelID)
+	if externalChannelID == "" {
+		return AllowedChannel{}, nil, fmt.Errorf("missing inbound provider channel id")
 	}
 	storage := b.repository()
 	if storage == nil {
 		return AllowedChannel{}, nil, fmt.Errorf("missing inbound channel storage")
 	}
 
-	sourceBinding, err := storage.ChatComponents().FindByComponentRoleAndExternalChatID(
+	sourceBinding, err := storage.ChatComponents().FindByComponentRoleAndExternalChannelID(
 		ctx,
 		event.ComponentID,
 		coremodel.ChatComponentRoleSource,
-		externalChatID,
+		externalChannelID,
 	)
 	if err != nil {
 		return AllowedChannel{}, nil, err
@@ -159,9 +159,9 @@ func (b *Broker) handleInboundRejection(ctx context.Context, rejection *InboundR
 	actor := dropEvent.Payload.ResolvedActor()
 	details := strings.Join(rejection.Details, " ")
 	b.logf(
-		"inbound dropped component=%s external_chat=%q external_thread=%q reason=%s actor_id=%q actor_label=%q chat_label=%q preview=%q details=%q",
+		"inbound dropped component=%s external_channel=%q external_thread=%q reason=%s actor_id=%q actor_label=%q chat_label=%q preview=%q details=%q",
 		dropEvent.ComponentID,
-		strings.TrimSpace(dropEvent.Payload.ProviderChatID),
+		strings.TrimSpace(dropEvent.Payload.ProviderChannelID),
 		strings.TrimSpace(dropEvent.Payload.ProviderThreadID),
 		rejection.Reason,
 		strings.TrimSpace(actor.ID),
@@ -194,9 +194,9 @@ func (b *Broker) hasRelayBinding(ctx context.Context, chatID modeluuid.UUID) (bo
 }
 
 func (b *Broker) recordInboundDrop(ctx context.Context, event component.InboundEvent) error {
-	externalChatID := strings.TrimSpace(event.Payload.ProviderChatID)
-	if externalChatID == "" {
-		return fmt.Errorf("missing inbound provider chat id")
+	externalChannelID := strings.TrimSpace(event.Payload.ProviderChannelID)
+	if externalChannelID == "" {
+		return fmt.Errorf("missing inbound provider channel id")
 	}
 	storage := b.repository()
 	if storage == nil {
@@ -205,15 +205,15 @@ func (b *Broker) recordInboundDrop(ctx context.Context, event component.InboundE
 	actor := event.Payload.ResolvedActor()
 	now := time.Now()
 
-	drop, err := storage.InboundDrops().GetByComponentAndExternalChatID(ctx, event.ComponentID, externalChatID)
+	drop, err := storage.InboundDrops().GetByComponentAndExternalChannelID(ctx, event.ComponentID, externalChannelID)
 	if err != nil {
 		return err
 	}
 	if drop == nil {
 		drop = &coremodel.InboundDrop{
-			ComponentID:    event.ComponentID,
-			ExternalChatID: externalChatID,
-			FirstSeenAt:    now,
+			ComponentID:       event.ComponentID,
+			ExternalChannelID: externalChannelID,
+			FirstSeenAt:       now,
 		}
 	}
 	drop.ExternalThreadID = strings.TrimSpace(event.Payload.ProviderThreadID)
@@ -243,7 +243,7 @@ func (b *Broker) maybeHandleInboundInitReply(ctx context.Context, rejection *Inb
 		return
 	}
 	if err := b.sendInboundInitReply(ctx, rejection); err != nil {
-		b.logf("inbound init reply failed component=%s external_chat=%q reason=%s err=%v", event.ComponentID, strings.TrimSpace(event.Payload.ProviderChatID), rejection.Reason, err)
+		b.logf("inbound init reply failed component=%s external_channel=%q reason=%s err=%v", event.ComponentID, strings.TrimSpace(event.Payload.ProviderChannelID), rejection.Reason, err)
 	}
 }
 
@@ -266,7 +266,7 @@ func (b *Broker) sendInboundInitReply(ctx context.Context, rejection *InboundRej
 	if componentRef == "" {
 		componentRef = event.ComponentID.String()
 	}
-	externalChatID := strings.TrimSpace(event.Payload.ProviderChatID)
+	externalChannelID := strings.TrimSpace(event.Payload.ProviderChannelID)
 	externalThreadID := strings.TrimSpace(event.Payload.ProviderThreadID)
 	label := strings.TrimSpace(event.Payload.ChatLabel)
 
@@ -278,7 +278,7 @@ func (b *Broker) sendInboundInitReply(ctx context.Context, rejection *InboundRej
 	lines := []string{
 		status,
 		"component: " + componentRef,
-		"external_chat_id: " + externalChatID,
+		"external_channel_id: " + externalChannelID,
 		"external_thread_id: " + externalThreadID,
 		"",
 		"Console:",
@@ -289,7 +289,7 @@ func (b *Broker) sendInboundInitReply(ctx context.Context, rejection *InboundRej
 			"ctgbot config chat "+rejection.Chat.ID.String()+" set chat.enabled true",
 		)
 	default:
-		bind := "ctgbot chat bind " + componentRef + " " + externalChatID
+		bind := "ctgbot chat bind " + componentRef + " " + externalChannelID
 		if label != "" {
 			bind += " " + strconv.Quote(label)
 		}
@@ -297,9 +297,9 @@ func (b *Broker) sendInboundInitReply(ctx context.Context, rejection *InboundRej
 	}
 
 	return relay.Send(ctx, message.OutboundPayload{
-		ProviderChatID:   externalChatID,
-		ProviderThreadID: externalThreadID,
-		Text:             message.TextMessage{Text: strings.Join(lines, "\n")},
+		ProviderChannelID: externalChannelID,
+		ProviderThreadID:  externalThreadID,
+		Text:              message.TextMessage{Text: strings.Join(lines, "\n")},
 	})
 }
 

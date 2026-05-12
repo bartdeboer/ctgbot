@@ -402,9 +402,9 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 				return nil
 			}
 			for _, drop := range drops {
-				fmt.Printf("%s\texternal_chat_id=%s\tmessages=%d\tlast_seen=%s\tlabel=%s\tactor=%s\tpreview=%s\n",
+				fmt.Printf("%s\texternal_channel_id=%s\tmessages=%d\tlast_seen=%s\tlabel=%s\tactor=%s\tpreview=%s\n",
 					drop.ComponentRef,
-					drop.ExternalChatID,
+					drop.ExternalChannelID,
 					drop.MessageCount,
 					drop.LastSeenAt.Format(time.RFC3339),
 					drop.ChatLabel,
@@ -415,7 +415,7 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			return nil
 		})
 
-		b.Handle("chat bind <component> <externalChatID>", "Create an enabled chat for a dropped inbound external chat and bind the inbound component", func(req *clir.Request) error {
+		b.Handle("chat bind <component> <externalChannelID>", "Create an enabled chat for a dropped inbound external channel and bind the inbound component", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("chat bind", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
 			roleFlag := fs.String("role", "", "Binding role override (source, relay, or all)")
@@ -428,9 +428,9 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 				return err
 			}
 			componentRef := strings.TrimSpace(req.Params["component"])
-			externalChatID := strings.TrimSpace(req.Params["externalChatID"])
+			externalChannelID := strings.TrimSpace(req.Params["externalChannelID"])
 			label := strings.TrimSpace(strings.Join(fs.Args(), " "))
-			result, err := appService.BindInboundChat(req.Context(), componentRef, externalChatID, label, strings.TrimSpace(*roleFlag))
+			result, err := appService.BindInboundChat(req.Context(), componentRef, externalChannelID, label, strings.TrimSpace(*roleFlag))
 			if err != nil {
 				return err
 			}
@@ -438,7 +438,7 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			fmt.Printf("chat_id: %s\n", result.Chat.ID)
 			fmt.Printf("label: %s\n", result.Chat.Label)
 			for _, binding := range result.Bindings {
-				fmt.Printf("binding: role=%s component=%s external_chat_id=%s\n", binding.Role, result.Component.Ref(), binding.ExternalChatID)
+				fmt.Printf("binding: role=%s component=%s external_channel_id=%s\n", binding.Role, result.Component.Ref(), binding.ExternalChannelID)
 			}
 			return nil
 		})
@@ -495,9 +495,14 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 		b.Handle("chat <chatID> component add <role> <component>", "Bind a registered component to a chat by role", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("chat component add", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
-			externalChatID := fs.String("external-chat-id", "", "External provider chat id for source/relay bindings")
+			externalChannelID := fs.String("external-channel-id", "", "External provider channel id for source/relay bindings")
+			externalChatID := fs.String("external-chat-id", "", "Deprecated alias for --external-channel-id")
 			if err := fs.Parse(req.Extra); err != nil {
 				return err
+			}
+			externalChannelIDValue := strings.TrimSpace(*externalChannelID)
+			if externalChannelIDValue == "" {
+				externalChannelIDValue = strings.TrimSpace(*externalChatID)
 			}
 
 			appService, err := openAppServiceForRoutes(req, store)
@@ -510,7 +515,7 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			}
 			role := coremodel.ChatComponentRole(strings.TrimSpace(req.Params["role"]))
 			componentRef := strings.TrimSpace(req.Params["component"])
-			result, err := appService.AddChatComponent(req.Context(), chatID, role, componentRef, strings.TrimSpace(*externalChatID))
+			result, err := appService.AddChatComponent(req.Context(), chatID, role, componentRef, externalChannelIDValue)
 			if err != nil {
 				return err
 			}
@@ -524,8 +529,8 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 				fmt.Printf("component_id: %s\n", result.Binding.ComponentID)
 			}
 			fmt.Printf("role: %s\n", result.Binding.Role)
-			if result.Binding.ExternalChatID != "" {
-				fmt.Printf("external_chat_id: %s\n", result.Binding.ExternalChatID)
+			if result.Binding.ExternalChannelID != "" {
+				fmt.Printf("external_channel_id: %s\n", result.Binding.ExternalChannelID)
 			}
 			return nil
 		})
@@ -554,7 +559,7 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 				return nil
 			}
 			for _, binding := range bindings {
-				fmt.Printf("%s\truntime=%s\trole=%s\texternal_chat_id=%s\n", binding.ComponentRef, binding.Runtime, binding.Binding.Role, binding.Binding.ExternalChatID)
+				fmt.Printf("%s\truntime=%s\trole=%s\texternal_channel_id=%s\n", binding.ComponentRef, binding.Runtime, binding.Binding.Role, binding.Binding.ExternalChannelID)
 			}
 			return nil
 		})

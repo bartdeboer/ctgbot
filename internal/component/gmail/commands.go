@@ -65,8 +65,8 @@ func (c *Component) status(ctx context.Context) (commandengine.Result, error) {
 			lines = append(lines, "last_message_id: "+state.LastMessageID)
 		}
 	}
-	if defaultID, err := c.DefaultSourceExternalChatID(ctx); err == nil && strings.TrimSpace(defaultID) != "" {
-		lines = append(lines, "default_external_chat_id: "+defaultID)
+	if defaultID, err := c.DefaultSourceExternalChannelID(ctx); err == nil && strings.TrimSpace(defaultID) != "" {
+		lines = append(lines, "default_external_channel_id: "+defaultID)
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
@@ -85,11 +85,11 @@ func (c *Component) authSummary(ctx context.Context) (string, string) {
 	return account, "authenticated"
 }
 
-func (c *Component) DefaultSourceExternalChatID(ctx context.Context) (string, error) {
+func (c *Component) DefaultSourceExternalChannelID(ctx context.Context) (string, error) {
 	if c == nil {
 		return "", fmt.Errorf("missing gmail component")
 	}
-	if value, ok := c.localProviderChatID(); ok {
+	if value, ok := c.localProviderChannelID(); ok {
 		return value, nil
 	}
 	service, err := c.serviceFromStoredToken(ctx)
@@ -102,7 +102,7 @@ func (c *Component) DefaultSourceExternalChatID(ctx context.Context) (string, er
 	}
 	c.mailboxEmail = strings.TrimSpace(profile.EmailAddress)
 	if c.mailboxEmail == "" {
-		if value, ok := c.localProviderChatID(); ok {
+		if value, ok := c.localProviderChannelID(); ok {
 			return value, nil
 		}
 		return "", fmt.Errorf("gmail source binding needs auth or component.json mailbox_email")

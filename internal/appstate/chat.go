@@ -24,8 +24,8 @@ func (c ChatConfig) ProviderType() string {
 	return c.cfg.string(c.key("chat_provider_type"), c.cfg.string(c.key("type"), ""))
 }
 
-func (c ChatConfig) ProviderChatID() string {
-	return c.cfg.string(c.key("provider_chat_id"), "")
+func (c ChatConfig) ProviderChannelID() string {
+	return c.cfg.string(c.key("provider_channel_id"), "")
 }
 
 func (c ChatConfig) ProviderChatTitle() string {
@@ -153,7 +153,7 @@ func normalizeSkillPaths(skills []string) []string {
 type ChatConfigEntry struct {
 	ID                          modeluuid.UUID
 	ProviderType                string
-	ProviderChatID              string
+	ProviderChannelID           string
 	ProviderChatTitle           string
 	Enabled                     bool
 	InteractiveInterruptEnabled bool
@@ -163,14 +163,14 @@ func (c *Config) FindChatByID(chatID modeluuid.UUID) (*ChatConfigEntry, error) {
 	return c.findChatByID(chatID), nil
 }
 
-func (c *Config) FindProviderChat(providerType string, providerChatID string) (*ChatConfigEntry, error) {
+func (c *Config) FindProviderChat(providerType string, providerChannelID string) (*ChatConfigEntry, error) {
 	providerType = strings.TrimSpace(providerType)
-	providerChatID = strings.TrimSpace(providerChatID)
-	if providerType == "" || providerChatID == "" {
+	providerChannelID = strings.TrimSpace(providerChannelID)
+	if providerType == "" || providerChannelID == "" {
 		return nil, nil
 	}
 	for _, chat := range c.KnownChats() {
-		if chat.ProviderType == providerType && chat.ProviderChatID == providerChatID {
+		if chat.ProviderType == providerType && chat.ProviderChannelID == providerChannelID {
 			entry := chat
 			return &entry, nil
 		}
@@ -178,20 +178,20 @@ func (c *Config) FindProviderChat(providerType string, providerChatID string) (*
 	return nil, nil
 }
 
-func (c *Config) EnsureProviderChat(providerType string, providerChatID string, title string) (*ChatConfigEntry, error) {
+func (c *Config) EnsureProviderChat(providerType string, providerChannelID string, title string) (*ChatConfigEntry, error) {
 	if c == nil || c.store == nil {
 		return nil, fmt.Errorf("config store not available")
 	}
 	providerType = strings.TrimSpace(providerType)
-	providerChatID = strings.TrimSpace(providerChatID)
+	providerChannelID = strings.TrimSpace(providerChannelID)
 	title = strings.TrimSpace(title)
 	if providerType == "" {
 		return nil, fmt.Errorf("provider type is empty")
 	}
-	if providerChatID == "" {
-		return nil, fmt.Errorf("provider chat id is empty")
+	if providerChannelID == "" {
+		return nil, fmt.Errorf("provider channel id is empty")
 	}
-	existing, err := c.FindProviderChat(providerType, providerChatID)
+	existing, err := c.FindProviderChat(providerType, providerChannelID)
 	if err != nil {
 		return nil, err
 	}
@@ -204,12 +204,12 @@ func (c *Config) EnsureProviderChat(providerType string, providerChatID string, 
 		}
 		return existing, nil
 	}
-	entry := &ChatConfigEntry{ID: modeluuid.New(), ProviderType: providerType, ProviderChatID: providerChatID, ProviderChatTitle: title}
+	entry := &ChatConfigEntry{ID: modeluuid.New(), ProviderType: providerType, ProviderChannelID: providerChannelID, ProviderChatTitle: title}
 	chat := c.Chat(entry.ID)
 	if err := chat.SetProviderType(providerType); err != nil {
 		return nil, err
 	}
-	if err := chat.SetProviderChatID(providerChatID); err != nil {
+	if err := chat.SetProviderChannelID(providerChannelID); err != nil {
 		return nil, err
 	}
 	if err := chat.SetProviderChatTitle(title); err != nil {
@@ -243,7 +243,7 @@ func (c *Config) KnownChats() []ChatConfigEntry {
 		out = append(out, ChatConfigEntry{
 			ID:                id,
 			ProviderType:      firstNonEmptyString(entryMap["chat_provider_type"], entryMap["type"]),
-			ProviderChatID:    stringFromAny(entryMap["provider_chat_id"]),
+			ProviderChannelID: stringFromAny(entryMap["provider_channel_id"]),
 			ProviderChatTitle: stringFromAny(entryMap["provider_chat_title"]),
 			Enabled:           boolFromAny(entryMap["enabled"]),
 		})
@@ -258,8 +258,8 @@ func (c *Config) KnownChats() []ChatConfigEntry {
 		if out[i].ProviderChatTitle != out[j].ProviderChatTitle {
 			return out[i].ProviderChatTitle < out[j].ProviderChatTitle
 		}
-		if out[i].ProviderChatID != out[j].ProviderChatID {
-			return out[i].ProviderChatID < out[j].ProviderChatID
+		if out[i].ProviderChannelID != out[j].ProviderChannelID {
+			return out[i].ProviderChannelID < out[j].ProviderChannelID
 		}
 		return out[i].ID.String() < out[j].ID.String()
 	})
@@ -277,7 +277,7 @@ func (c *Config) findChatByID(chatID modeluuid.UUID) *ChatConfigEntry {
 	return &ChatConfigEntry{
 		ID:                chatID,
 		ProviderType:      chat.ProviderType(),
-		ProviderChatID:    chat.ProviderChatID(),
+		ProviderChannelID: chat.ProviderChannelID(),
 		ProviderChatTitle: chat.ProviderChatTitle(),
 		Enabled:           chat.Enabled(),
 	}
@@ -287,7 +287,7 @@ func (c ChatConfig) Exists() bool {
 	if c.cfg == nil || c.cfg.store == nil || c.chatID.IsNull() {
 		return false
 	}
-	for _, key := range []string{"chat_provider_type", "type", "provider_chat_id", "provider_chat_title", "enabled"} {
+	for _, key := range []string{"chat_provider_type", "type", "provider_channel_id", "provider_chat_title", "enabled"} {
 		if c.cfg.store.Get(c.key(key), nil) != nil {
 			return true
 		}

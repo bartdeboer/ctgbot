@@ -427,13 +427,13 @@ func (r memoryChatComponents) ListEnabledByChatID(ctx context.Context, chatID mo
 	return out, nil
 }
 
-func (r memoryChatComponents) FindByComponentRoleAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChatID string) (*coremodel.ChatComponent, error) {
+func (r memoryChatComponents) FindByComponentRoleAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChannelID string) (*coremodel.ChatComponent, error) {
 	_ = ctx
-	externalChatID = strings.TrimSpace(externalChatID)
+	externalChannelID = strings.TrimSpace(externalChannelID)
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
 	for _, binding := range r.s.chatComponents {
-		if binding.ComponentID == componentID && binding.Role == role && strings.TrimSpace(binding.ExternalChatID) == externalChatID && binding.Enabled {
+		if binding.ComponentID == componentID && binding.Role == role && strings.TrimSpace(binding.ExternalChannelID) == externalChannelID && binding.Enabled {
 			copy := binding
 			return &copy, nil
 		}
@@ -448,7 +448,7 @@ func (r memoryInboundDrops) Save(ctx context.Context, drop *coremodel.InboundDro
 	if drop == nil {
 		return nil
 	}
-	drop.ExternalChatID = strings.TrimSpace(drop.ExternalChatID)
+	drop.ExternalChannelID = strings.TrimSpace(drop.ExternalChannelID)
 	drop.ExternalThreadID = strings.TrimSpace(drop.ExternalThreadID)
 	drop.ChatLabel = strings.TrimSpace(drop.ChatLabel)
 	drop.ActorID = strings.TrimSpace(drop.ActorID)
@@ -459,7 +459,7 @@ func (r memoryInboundDrops) Save(ctx context.Context, drop *coremodel.InboundDro
 	now := time.Now()
 	if drop.ID.IsNull() {
 		for id, existing := range r.s.inboundDrops {
-			if existing.ComponentID == drop.ComponentID && strings.TrimSpace(existing.ExternalChatID) == drop.ExternalChatID {
+			if existing.ComponentID == drop.ComponentID && strings.TrimSpace(existing.ExternalChannelID) == drop.ExternalChannelID {
 				drop.ID = id
 				if drop.FirstSeenAt.IsZero() {
 					drop.FirstSeenAt = existing.FirstSeenAt
@@ -483,13 +483,13 @@ func (r memoryInboundDrops) Save(ctx context.Context, drop *coremodel.InboundDro
 	return nil
 }
 
-func (r memoryInboundDrops) GetByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) (*coremodel.InboundDrop, error) {
+func (r memoryInboundDrops) GetByComponentAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, externalChannelID string) (*coremodel.InboundDrop, error) {
 	_ = ctx
-	externalChatID = strings.TrimSpace(externalChatID)
+	externalChannelID = strings.TrimSpace(externalChannelID)
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
 	for _, drop := range r.s.inboundDrops {
-		if drop.ComponentID == componentID && strings.TrimSpace(drop.ExternalChatID) == externalChatID {
+		if drop.ComponentID == componentID && strings.TrimSpace(drop.ExternalChannelID) == externalChannelID {
 			copy := drop
 			return &copy, nil
 		}
@@ -514,13 +514,13 @@ func (r memoryInboundDrops) List(ctx context.Context) ([]coremodel.InboundDrop, 
 	return out, nil
 }
 
-func (r memoryInboundDrops) DeleteByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) error {
+func (r memoryInboundDrops) DeleteByComponentAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, externalChannelID string) error {
 	_ = ctx
-	externalChatID = strings.TrimSpace(externalChatID)
+	externalChannelID = strings.TrimSpace(externalChannelID)
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
 	for id, drop := range r.s.inboundDrops {
-		if drop.ComponentID == componentID && strings.TrimSpace(drop.ExternalChatID) == externalChatID {
+		if drop.ComponentID == componentID && strings.TrimSpace(drop.ExternalChannelID) == externalChannelID {
 			delete(r.s.inboundDrops, id)
 		}
 	}

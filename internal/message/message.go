@@ -28,15 +28,15 @@ const (
 )
 
 type ChatTarget struct {
-	ProviderChatID   string
-	ProviderThreadID string
+	ProviderChannelID string
+	ProviderThreadID  string
 }
 
 type Actor = coremodel.Actor
 
 type InboundPayload struct {
 	ProviderType      string
-	ProviderChatID    string
+	ProviderChannelID string
 	ProviderThreadID  string
 	ProviderMessageID string
 	ChatLabel         string
@@ -54,10 +54,10 @@ func (p InboundPayload) ResolvedActor() Actor {
 }
 
 type OutboundPayload struct {
-	ProviderChatID   string
-	ProviderThreadID string
-	Text             TextMessage
-	Attachments      []Media
+	ProviderChannelID string
+	ProviderThreadID  string
+	Text              TextMessage
+	Attachments       []Media
 }
 
 func (p OutboundPayload) IsZero() bool {

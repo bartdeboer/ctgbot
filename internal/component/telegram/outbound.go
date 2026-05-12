@@ -20,7 +20,7 @@ func (c *Component) Send(ctx context.Context, payload message.OutboundPayload) e
 	if c == nil || c.api == nil {
 		return fmt.Errorf("missing telegram api")
 	}
-	chatID, err := strconv.ParseInt(strings.TrimSpace(payload.ProviderChatID), 10, 64)
+	chatID, err := strconv.ParseInt(strings.TrimSpace(payload.ProviderChannelID), 10, 64)
 	if err != nil {
 		return fmt.Errorf("parse telegram chat id: %w", err)
 	}
@@ -48,7 +48,7 @@ func (c *Component) StartChatAction(ctx context.Context, target message.ChatTarg
 	if c == nil || c.api == nil {
 		return nil, fmt.Errorf("missing telegram api")
 	}
-	chatID, err := strconv.ParseInt(strings.TrimSpace(target.ProviderChatID), 10, 64)
+	chatID, err := strconv.ParseInt(strings.TrimSpace(target.ProviderChannelID), 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("parse telegram chat id: %w", err)
 	}

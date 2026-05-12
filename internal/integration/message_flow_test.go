@@ -31,7 +31,7 @@ func TestMockComponentsEndToEnd(t *testing.T) {
 				ExternalID: "msg-1",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
@@ -147,8 +147,8 @@ func TestMockComponentsEndToEnd(t *testing.T) {
 		if payload.Text.Text != "done" {
 			t.Fatalf("relay text = %q, want done", payload.Text.Text)
 		}
-		if payload.ProviderChatID != "chat-1" {
-			t.Fatalf("relay provider chat id = %q, want chat-1", payload.ProviderChatID)
+		if payload.ProviderChannelID != "chat-1" {
+			t.Fatalf("relay provider channel id = %q, want chat-1", payload.ProviderChannelID)
 		}
 		if payload.ProviderThreadID != "provider-thread-1" {
 			t.Fatalf("relay provider thread id = %q, want provider-thread-1", payload.ProviderThreadID)
@@ -175,7 +175,7 @@ func TestInboundAttachmentsMaterializeIntoWorkspaceInboxAndInjectPrompt(t *testi
 				ExternalID: "msg-attach",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-attach",
 					Actor:             actorWithRoles("", "bart"),
@@ -313,7 +313,7 @@ func TestAttachmentOnlyInboundReturnsUploadSavedMessage(t *testing.T) {
 				ExternalID: "msg-upload-only",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-upload-only",
 					Actor:             actorWithRoles("", "bart"),
@@ -412,7 +412,7 @@ func TestConversationErrorIsReportedToChatAndDoesNotStopSource(t *testing.T) {
 					ExternalID: "msg-1",
 					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
-						ProviderChatID:    "chat-1",
+						ProviderChannelID: "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "msg-1",
 						Actor:             actorWithRoles("", "bart"),
@@ -423,7 +423,7 @@ func TestConversationErrorIsReportedToChatAndDoesNotStopSource(t *testing.T) {
 					ExternalID: "msg-2",
 					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
-						ProviderChatID:    "chat-1",
+						ProviderChannelID: "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "msg-2",
 						Actor:             actorWithRoles("", "bart"),

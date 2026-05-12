@@ -57,14 +57,14 @@ type ChatComponentRepository interface {
 	Save(ctx context.Context, binding *coremodel.ChatComponent) error
 	GetByChatComponentRole(ctx context.Context, chatID modeluuid.UUID, componentID modeluuid.UUID, role coremodel.ChatComponentRole) (*coremodel.ChatComponent, error)
 	ListEnabledByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
-	FindByComponentRoleAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChatID string) (*coremodel.ChatComponent, error)
+	FindByComponentRoleAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChannelID string) (*coremodel.ChatComponent, error)
 }
 
 type InboundDropRepository interface {
 	Save(ctx context.Context, drop *coremodel.InboundDrop) error
-	GetByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) (*coremodel.InboundDrop, error)
+	GetByComponentAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, externalChannelID string) (*coremodel.InboundDrop, error)
 	List(ctx context.Context) ([]coremodel.InboundDrop, error)
-	DeleteByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) error
+	DeleteByComponentAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, externalChannelID string) error
 }
 
 type ThreadComponentMappingRepository interface {

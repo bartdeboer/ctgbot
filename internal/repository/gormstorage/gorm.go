@@ -53,6 +53,9 @@ func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
 }
 
 func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
+	if err := s.migrateProviderChannelColumns(ctx); err != nil {
+		return err
+	}
 	if err := s.db.WithContext(ctx).AutoMigrate(
 		&coremodel.Chat{},
 		&coremodel.Thread{},
@@ -66,6 +69,28 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.Artifact{},
 	); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (s *GORMStorage) migrateProviderChannelColumns(ctx context.Context) error {
+	migrator := s.db.WithContext(ctx).Migrator()
+	for _, migration := range []struct {
+		model any
+		old   string
+		new   string
+	}{
+		{model: &coremodel.ChatComponent{}, old: "external_chat_id", new: "external_channel_id"},
+		{model: &coremodel.InboundDrop{}, old: "external_chat_id", new: "external_channel_id"},
+	} {
+		if !migrator.HasTable(migration.model) {
+			continue
+		}
+		if migrator.HasColumn(migration.model, migration.old) && !migrator.HasColumn(migration.model, migration.new) {
+			if err := migrator.RenameColumn(migration.model, migration.old, migration.new); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -282,7 +307,7 @@ func (r *gormComponentBindings) ListEnabledBySourceAndRole(ctx context.Context, 
 type gormChatComponents struct{ db *gorm.DB }
 
 func (r *gormChatComponents) Save(ctx context.Context, binding *coremodel.ChatComponent) error {
-	binding.ExternalChatID = clean(binding.ExternalChatID)
+	binding.ExternalChannelID = clean(binding.ExternalChannelID)
 	if binding.ID.IsNull() {
 		existing, err := r.GetByChatComponentRole(ctx, binding.ChatID, binding.ComponentID, binding.Role)
 		if err != nil {
@@ -318,10 +343,10 @@ func (r *gormChatComponents) ListEnabledByChatID(ctx context.Context, chatID mod
 	return bindings, err
 }
 
-func (r *gormChatComponents) FindByComponentRoleAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChatID string) (*coremodel.ChatComponent, error) {
+func (r *gormChatComponents) FindByComponentRoleAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChannelID string) (*coremodel.ChatComponent, error) {
 	var binding coremodel.ChatComponent
 	if err := first(r.db.WithContext(ctx).
-		Where("component_id = ? AND role = ? AND external_chat_id = ? AND enabled = ?", componentID, role, clean(externalChatID), true).
+		Where("component_id = ? AND role = ? AND external_channel_id = ? AND enabled = ?", componentID, role, clean(externalChannelID), true).
 		First(&binding)); err != nil {
 		return nil, err
 	}
@@ -334,14 +359,14 @@ func (r *gormChatComponents) FindByComponentRoleAndExternalChatID(ctx context.Co
 type gormInboundDrops struct{ db *gorm.DB }
 
 func (r *gormInboundDrops) Save(ctx context.Context, drop *coremodel.InboundDrop) error {
-	drop.ExternalChatID = clean(drop.ExternalChatID)
+	drop.ExternalChannelID = clean(drop.ExternalChannelID)
 	drop.ExternalThreadID = clean(drop.ExternalThreadID)
 	drop.ChatLabel = strings.TrimSpace(drop.ChatLabel)
 	drop.ActorID = clean(drop.ActorID)
 	drop.ActorLabel = strings.TrimSpace(drop.ActorLabel)
 	drop.LastTextPreview = strings.TrimSpace(drop.LastTextPreview)
 	if drop.ID.IsNull() {
-		existing, err := r.GetByComponentAndExternalChatID(ctx, drop.ComponentID, drop.ExternalChatID)
+		existing, err := r.GetByComponentAndExternalChannelID(ctx, drop.ComponentID, drop.ExternalChannelID)
 		if err != nil {
 			return err
 		}
@@ -356,10 +381,10 @@ func (r *gormInboundDrops) Save(ctx context.Context, drop *coremodel.InboundDrop
 	return r.db.WithContext(ctx).Save(drop).Error
 }
 
-func (r *gormInboundDrops) GetByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) (*coremodel.InboundDrop, error) {
+func (r *gormInboundDrops) GetByComponentAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, externalChannelID string) (*coremodel.InboundDrop, error) {
 	var drop coremodel.InboundDrop
 	if err := first(r.db.WithContext(ctx).
-		Where("component_id = ? AND external_chat_id = ?", componentID, clean(externalChatID)).
+		Where("component_id = ? AND external_channel_id = ?", componentID, clean(externalChannelID)).
 		First(&drop)); err != nil {
 		return nil, err
 	}
@@ -378,9 +403,9 @@ func (r *gormInboundDrops) List(ctx context.Context) ([]coremodel.InboundDrop, e
 	return drops, err
 }
 
-func (r *gormInboundDrops) DeleteByComponentAndExternalChatID(ctx context.Context, componentID modeluuid.UUID, externalChatID string) error {
+func (r *gormInboundDrops) DeleteByComponentAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, externalChannelID string) error {
 	return r.db.WithContext(ctx).
-		Where("component_id = ? AND external_chat_id = ?", componentID, clean(externalChatID)).
+		Where("component_id = ? AND external_channel_id = ?", componentID, clean(externalChannelID)).
 		Delete(&coremodel.InboundDrop{}).
 		Error
 }

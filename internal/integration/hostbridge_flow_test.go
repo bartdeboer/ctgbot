@@ -73,7 +73,7 @@ func TestHostbridgeFlow(t *testing.T) {
 				ExternalID: "msg-1",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
@@ -218,7 +218,7 @@ func TestHostbridgeSendMediaFlow(t *testing.T) {
 				ExternalID: "msg-1",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
@@ -375,7 +375,7 @@ func TestHostbridgeRunCommandFlow(t *testing.T) {
 				ExternalID: "msg-run",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-run",
 					Actor:             actorWithRoles("", "bart"),
@@ -489,7 +489,7 @@ func TestHostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 				ExternalID: "msg-run-workspace",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-run-workspace",
 					Actor:             actorWithRoles("", "bart"),

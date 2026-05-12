@@ -160,17 +160,17 @@ func (m *threadComponentMapper) RelayTarget(ctx context.Context, threadID modelu
 		return nil, false, err
 	}
 	if !ok {
-		externalChatID := strings.TrimSpace(binding.ExternalChatID)
-		if externalChatID == "" {
+		externalChannelID := strings.TrimSpace(binding.ExternalChannelID)
+		if externalChannelID == "" {
 			return nil, false, nil
 		}
 		return &message.ChatTarget{
-			ProviderChatID: externalChatID,
+			ProviderChannelID: externalChannelID,
 		}, true, nil
 	}
 	return &message.ChatTarget{
-		ProviderChatID:   strings.TrimSpace(binding.ExternalChatID),
-		ProviderThreadID: componentThreadID,
+		ProviderChannelID: strings.TrimSpace(binding.ExternalChannelID),
+		ProviderThreadID:  componentThreadID,
 	}, true, nil
 }
 
@@ -186,8 +186,8 @@ func normalizeComponentThreadID(value string) string {
 
 func isSourceDefaultThreadID(binding coremodel.ChatComponent, componentThreadID string) bool {
 	componentThreadID = strings.TrimSpace(componentThreadID)
-	externalChatID := strings.TrimSpace(binding.ExternalChatID)
-	return componentThreadID != "" && componentThreadID == externalChatID
+	externalChannelID := strings.TrimSpace(binding.ExternalChannelID)
+	return componentThreadID != "" && componentThreadID == externalChannelID
 }
 
 func isVisibleDefaultComponentThreadID(value string) bool {

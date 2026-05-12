@@ -110,7 +110,7 @@ func (b *Broker) relayPayloadToRelayBindings(ctx context.Context, relayBindings 
 			continue
 		}
 		outbound := payload
-		outbound.ProviderChatID = target.ProviderChatID
+		outbound.ProviderChannelID = target.ProviderChannelID
 		outbound.ProviderThreadID = target.ProviderThreadID
 		if err := relayBinding.Relay.Send(ctx, outbound); err != nil {
 			return err
@@ -199,8 +199,8 @@ func inboundMetadataJSON(payload message.InboundPayload) string {
 	if payload.ProviderType != "" {
 		metadata = append(metadata, "provider="+strings.TrimSpace(payload.ProviderType))
 	}
-	if payload.ProviderChatID != "" {
-		metadata = append(metadata, "chat="+strings.TrimSpace(payload.ProviderChatID))
+	if payload.ProviderChannelID != "" {
+		metadata = append(metadata, "channel="+strings.TrimSpace(payload.ProviderChannelID))
 	}
 	if payload.ProviderThreadID != "" {
 		metadata = append(metadata, "thread="+strings.TrimSpace(payload.ProviderThreadID))

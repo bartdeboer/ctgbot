@@ -152,7 +152,7 @@ func (fakeSource) RunInbound(ctx context.Context, emit component.InboundEmitter)
 	_, _ = ctx, emit
 	return nil
 }
-func (fakeSource) DefaultSourceExternalChatID(ctx context.Context) (string, error) {
+func (fakeSource) DefaultSourceExternalChannelID(ctx context.Context) (string, error) {
 	_ = ctx
 	return "source-default", nil
 }
@@ -439,14 +439,14 @@ func TestServiceListInboundDropsResolvesComponentRefs(t *testing.T) {
 	source := saveComponent(t, storage, "source", "inbox")
 	lastSeen := time.Date(2026, 5, 11, 12, 0, 0, 0, time.UTC)
 	if err := storage.InboundDrops().Save(ctx, &coremodel.InboundDrop{
-		ComponentID:     source.ID,
-		ExternalChatID:  "external-1",
-		ChatLabel:       "Inbox",
-		ActorLabel:      "Alice",
-		ActorID:         "alice@example.com",
-		LastTextPreview: "hello",
-		MessageCount:    2,
-		LastSeenAt:      lastSeen,
+		ComponentID:       source.ID,
+		ExternalChannelID: "external-1",
+		ChatLabel:         "Inbox",
+		ActorLabel:        "Alice",
+		ActorID:           "alice@example.com",
+		LastTextPreview:   "hello",
+		MessageCount:      2,
+		LastSeenAt:        lastSeen,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +460,7 @@ func TestServiceListInboundDropsResolvesComponentRefs(t *testing.T) {
 	}
 	drop := drops[0]
 	if drop.ComponentRef != "source/inbox" ||
-		drop.ExternalChatID != "external-1" ||
+		drop.ExternalChannelID != "external-1" ||
 		drop.MessageCount != 2 ||
 		!drop.LastSeenAt.Equal(lastSeen) ||
 		drop.ChatLabel != "Inbox" ||
@@ -477,12 +477,12 @@ func TestServiceBindInboundChat(t *testing.T) {
 	svc := app.NewService(storage, fakeResolver{storage: storage})
 	source := saveComponent(t, storage, "source", "inbox")
 	if err := storage.InboundDrops().Save(ctx, &coremodel.InboundDrop{
-		ComponentID:     source.ID,
-		ExternalChatID:  "external-1",
-		ChatLabel:       "Inbox",
-		LastTextPreview: "hello",
-		MessageCount:    1,
-		LastSeenAt:      time.Now(),
+		ComponentID:       source.ID,
+		ExternalChannelID: "external-1",
+		ChatLabel:         "Inbox",
+		LastTextPreview:   "hello",
+		MessageCount:      1,
+		LastSeenAt:        time.Now(),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -501,7 +501,7 @@ func TestServiceBindInboundChat(t *testing.T) {
 		t.Fatalf("bindings = %d, want %d", got, want)
 	}
 	binding := result.Bindings[0]
-	if binding.Role != coremodel.ChatComponentRoleSource || binding.ExternalChatID != "external-1" {
+	if binding.Role != coremodel.ChatComponentRoleSource || binding.ExternalChannelID != "external-1" {
 		t.Fatalf("binding = %#v, want source external-1", binding)
 	}
 	drops, err := storage.InboundDrops().List(ctx)
@@ -530,7 +530,7 @@ func TestServiceAddAndListChatComponents(t *testing.T) {
 	if result.ComponentRef != "source/inbox" || result.Runtime != "local" {
 		t.Fatalf("add result component = %q runtime=%q, want source/inbox local", result.ComponentRef, result.Runtime)
 	}
-	if result.Binding.Role != coremodel.ChatComponentRoleSource || result.Binding.ExternalChatID != "source-default" {
+	if result.Binding.Role != coremodel.ChatComponentRoleSource || result.Binding.ExternalChannelID != "source-default" {
 		t.Fatalf("binding = %#v, want source role with default external id", result.Binding)
 	}
 
@@ -545,7 +545,7 @@ func TestServiceAddAndListChatComponents(t *testing.T) {
 	if info.ComponentRef != "source/inbox" ||
 		info.Runtime != "local" ||
 		info.Binding.Role != coremodel.ChatComponentRoleSource ||
-		info.Binding.ExternalChatID != "source-default" {
+		info.Binding.ExternalChannelID != "source-default" {
 		t.Fatalf("component info = %#v", info)
 	}
 }

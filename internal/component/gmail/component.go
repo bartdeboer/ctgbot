@@ -132,9 +132,9 @@ func (c *Component) InboundEventFromMessage(gmailMessage *gmailapi.Message) comp
 		return component.InboundEvent{
 			ComponentID: c.componentID,
 			Payload: message.InboundPayload{
-				ProviderType:   Type,
-				ProviderChatID: c.providerChatID(),
-				ChatLabel:      c.providerChatID(),
+				ProviderType:      Type,
+				ProviderChannelID: c.providerChannelID(),
+				ChatLabel:         c.providerChannelID(),
 				Actor: message.Actor{
 					ID:    "email",
 					Label: "Email",
@@ -154,10 +154,10 @@ func (c *Component) InboundEventFromMessage(gmailMessage *gmailapi.Message) comp
 		ExternalID:  strings.TrimSpace(gmailMessage.Id),
 		Payload: message.InboundPayload{
 			ProviderType:      Type,
-			ProviderChatID:    c.providerChatID(),
-			ProviderThreadID:  c.providerChatID(),
+			ProviderChannelID: c.providerChannelID(),
+			ProviderThreadID:  c.providerChannelID(),
 			ProviderMessageID: strings.TrimSpace(gmailMessage.Id),
-			ChatLabel:         c.providerChatID(),
+			ChatLabel:         c.providerChannelID(),
 			Actor: message.Actor{
 				ID:    sender,
 				Label: sender,
@@ -177,17 +177,17 @@ func (c *Component) userID() string {
 	return strings.TrimSpace(c.UserID)
 }
 
-func (c *Component) providerChatID() string {
+func (c *Component) providerChannelID() string {
 	if c == nil {
 		return DefaultUserID
 	}
-	if value, ok := c.localProviderChatID(); ok {
+	if value, ok := c.localProviderChannelID(); ok {
 		return value
 	}
 	return c.userID()
 }
 
-func (c *Component) localProviderChatID() (string, bool) {
+func (c *Component) localProviderChannelID() (string, bool) {
 	if c == nil {
 		return "", false
 	}

@@ -150,7 +150,7 @@ type InboundSource interface {
 // cannot infer this value should not implement it.
 type SourceBindingDefaults interface {
 	Component
-	DefaultSourceExternalChatID(ctx context.Context) (string, error)
+	DefaultSourceExternalChannelID(ctx context.Context) (string, error)
 }
 
 type OutboundRelay interface {

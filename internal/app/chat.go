@@ -19,14 +19,14 @@ type ChatInfo struct {
 }
 
 type InboundDropInfo struct {
-	ComponentRef    string
-	ExternalChatID  string
-	MessageCount    int64
-	LastSeenAt      time.Time
-	ChatLabel       string
-	ActorLabel      string
-	ActorID         string
-	LastTextPreview string
+	ComponentRef      string
+	ExternalChannelID string
+	MessageCount      int64
+	LastSeenAt        time.Time
+	ChatLabel         string
+	ActorLabel        string
+	ActorID           string
+	LastTextPreview   string
 }
 
 func (s *Service) CreateChat(ctx context.Context, label string, workspace string) (coremodel.Chat, error) {
@@ -119,14 +119,14 @@ func (s *Service) ListInboundDrops(ctx context.Context) ([]InboundDropInfo, erro
 			ref = registration.Ref()
 		}
 		out = append(out, InboundDropInfo{
-			ComponentRef:    ref,
-			ExternalChatID:  drop.ExternalChatID,
-			MessageCount:    drop.MessageCount,
-			LastSeenAt:      drop.LastSeenAt,
-			ChatLabel:       drop.ChatLabel,
-			ActorLabel:      drop.ActorLabel,
-			ActorID:         drop.ActorID,
-			LastTextPreview: drop.LastTextPreview,
+			ComponentRef:      ref,
+			ExternalChannelID: drop.ExternalChannelID,
+			MessageCount:      drop.MessageCount,
+			LastSeenAt:        drop.LastSeenAt,
+			ChatLabel:         drop.ChatLabel,
+			ActorLabel:        drop.ActorLabel,
+			ActorID:           drop.ActorID,
+			LastTextPreview:   drop.LastTextPreview,
 		})
 	}
 	return out, nil

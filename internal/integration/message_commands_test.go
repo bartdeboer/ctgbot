@@ -31,7 +31,7 @@ func TestMessageCommandRunsAndSkipsAgent(t *testing.T) {
 				ExternalID: "msg-1",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
@@ -126,7 +126,7 @@ func TestUnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 				ExternalID: "msg-1",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-1",
 					Actor:             actorWithRoles("", "bart"),
@@ -215,7 +215,7 @@ func TestAgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.T)
 				ExternalID: "msg-agent-surface",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-agent-surface",
 					Actor:             actorWithRoles("", "bart"),
@@ -283,7 +283,7 @@ func TestMultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
 				ExternalID: "msg-agent-full-ref",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-agent-full-ref",
 					Actor:             actorWithRoles("", "bart"),
@@ -358,7 +358,7 @@ func TestMultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
 				ExternalID: "msg-agent-short",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "msg-agent-short",
 					Actor:             actorWithRoles("", "bart"),
@@ -434,7 +434,7 @@ func TestProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 					ExternalID: "msg-" + text,
 					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
-						ProviderChatID:    "chat-1",
+						ProviderChannelID: "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "msg-" + text,
 						Actor:             actorWithRoles("", "bart"),
@@ -525,7 +525,7 @@ func TestProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 					ExternalID: "operator-" + text,
 					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
-						ProviderChatID:    "chat-1",
+						ProviderChannelID: "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "operator-" + text,
 						Actor:             actorWithRoles("13145044", "bart", simplerbac.RoleUser, simplerbac.RoleRoot),
@@ -630,7 +630,7 @@ func TestProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 					ExternalID: "operator-" + tc.text,
 					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
-						ProviderChatID:    "chat-1",
+						ProviderChannelID: "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "operator-" + tc.text,
 						Actor:             actorWithRoles("13145044", "bart", simplerbac.RoleUser, simplerbac.RoleRoot),
@@ -716,7 +716,7 @@ func TestHelpListsActiveMessageCommands(t *testing.T) {
 				ExternalID: "help",
 				Payload: message.InboundPayload{
 					ProviderType:      "mockmsg",
-					ProviderChatID:    "chat-1",
+					ProviderChannelID: "chat-1",
 					ProviderThreadID:  "provider-thread-1",
 					ProviderMessageID: "help",
 					Actor:             actorWithRoles("", "bart"),
@@ -801,7 +801,7 @@ func TestConfigMessageCommands(t *testing.T) {
 					ExternalID: "cfg-" + strings.ReplaceAll(text, " ", "-"),
 					Payload: message.InboundPayload{
 						ProviderType:      "mockmsg",
-						ProviderChatID:    "chat-1",
+						ProviderChannelID: "chat-1",
 						ProviderThreadID:  "provider-thread-1",
 						ProviderMessageID: "cfg-" + strings.ReplaceAll(text, " ", "-"),
 						Actor:             actorWithRoles("13145044", "bart", simplerbac.RoleUser, simplerbac.RoleRoot),

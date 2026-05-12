@@ -209,7 +209,7 @@ func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind st
 	return registration, nil
 }
 
-func (s *System) BindChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, ref string, externalChatID string) (*coremodel.ChatComponent, error) {
+func (s *System) BindChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, ref string, externalChannelID string) (*coremodel.ChatComponent, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing system storage")
 	}
@@ -233,14 +233,14 @@ func (s *System) BindChatComponent(ctx context.Context, chatID modeluuid.UUID, r
 		return nil, err
 	}
 
-	externalChatID = strings.TrimSpace(externalChatID)
+	externalChannelID = strings.TrimSpace(externalChannelID)
 	switch role {
 	case coremodel.ChatComponentRoleSource, coremodel.ChatComponentRoleRelay:
-		if externalChatID == "" {
-			return nil, fmt.Errorf("missing external chat id for role %q", role)
+		if externalChannelID == "" {
+			return nil, fmt.Errorf("missing external channel id for role %q", role)
 		}
 	default:
-		externalChatID = ""
+		externalChannelID = ""
 	}
 
 	binding, err := s.Storage.ChatComponents().GetByChatComponentRole(ctx, chatID, registration.ID, role)
@@ -254,7 +254,7 @@ func (s *System) BindChatComponent(ctx context.Context, chatID modeluuid.UUID, r
 			Role:        role,
 		}
 	}
-	binding.ExternalChatID = externalChatID
+	binding.ExternalChannelID = externalChannelID
 	binding.Enabled = true
 	if err := s.Storage.ChatComponents().Save(ctx, binding); err != nil {
 		return nil, err

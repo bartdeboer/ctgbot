@@ -13,8 +13,8 @@ func (c ChatConfig) SetProviderType(providerType string) error {
 	return c.persistString("chat_provider_type", strings.TrimSpace(providerType))
 }
 
-func (c ChatConfig) SetProviderChatID(providerChatID string) error {
-	return c.persistString("provider_chat_id", strings.TrimSpace(providerChatID))
+func (c ChatConfig) SetProviderChannelID(providerChannelID string) error {
+	return c.persistString("provider_channel_id", strings.TrimSpace(providerChannelID))
 }
 
 func (c ChatConfig) SetProviderChatTitle(title string) error {

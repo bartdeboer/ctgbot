@@ -295,16 +295,16 @@ func TestInboundDropsSaveListGetDelete(t *testing.T) {
 	now := time.Now()
 
 	drop := &coremodel.InboundDrop{
-		ComponentID:      componentID,
-		ExternalChatID:   "chat-1",
-		ExternalThreadID: "thread-9",
-		ChatLabel:        "New chat",
-		ActorID:          "bart",
-		ActorLabel:       "Bart",
-		LastTextPreview:  "hello",
-		MessageCount:     2,
-		FirstSeenAt:      now.Add(-time.Minute),
-		LastSeenAt:       now,
+		ComponentID:       componentID,
+		ExternalChannelID: "chat-1",
+		ExternalThreadID:  "thread-9",
+		ChatLabel:         "New chat",
+		ActorID:           "bart",
+		ActorLabel:        "Bart",
+		LastTextPreview:   "hello",
+		MessageCount:      2,
+		FirstSeenAt:       now.Add(-time.Minute),
+		LastSeenAt:        now,
 	}
 	if err := store.InboundDrops().Save(ctx, drop); err != nil {
 		t.Fatalf("InboundDrops().Save() error = %v", err)
@@ -313,12 +313,12 @@ func TestInboundDropsSaveListGetDelete(t *testing.T) {
 		t.Fatal("InboundDrops().Save() did not assign ID")
 	}
 
-	loaded, err := store.InboundDrops().GetByComponentAndExternalChatID(ctx, componentID, "chat-1")
+	loaded, err := store.InboundDrops().GetByComponentAndExternalChannelID(ctx, componentID, "chat-1")
 	if err != nil {
-		t.Fatalf("InboundDrops().GetByComponentAndExternalChatID() error = %v", err)
+		t.Fatalf("InboundDrops().GetByComponentAndExternalChannelID() error = %v", err)
 	}
 	if loaded == nil {
-		t.Fatal("InboundDrops().GetByComponentAndExternalChatID() = nil, want row")
+		t.Fatal("InboundDrops().GetByComponentAndExternalChannelID() = nil, want row")
 	}
 	if got, want := loaded.MessageCount, int64(2); got != want {
 		t.Fatalf("MessageCount = %d, want %d", got, want)
@@ -332,15 +332,104 @@ func TestInboundDropsSaveListGetDelete(t *testing.T) {
 		t.Fatalf("InboundDrops().List() len = %d, want 1", len(list))
 	}
 
-	if err := store.InboundDrops().DeleteByComponentAndExternalChatID(ctx, componentID, "chat-1"); err != nil {
-		t.Fatalf("InboundDrops().DeleteByComponentAndExternalChatID() error = %v", err)
+	if err := store.InboundDrops().DeleteByComponentAndExternalChannelID(ctx, componentID, "chat-1"); err != nil {
+		t.Fatalf("InboundDrops().DeleteByComponentAndExternalChannelID() error = %v", err)
 	}
-	loaded, err = store.InboundDrops().GetByComponentAndExternalChatID(ctx, componentID, "chat-1")
+	loaded, err = store.InboundDrops().GetByComponentAndExternalChannelID(ctx, componentID, "chat-1")
 	if err != nil {
-		t.Fatalf("InboundDrops().GetByComponentAndExternalChatID() after delete error = %v", err)
+		t.Fatalf("InboundDrops().GetByComponentAndExternalChannelID() after delete error = %v", err)
 	}
 	if loaded != nil {
-		t.Fatalf("InboundDrops().GetByComponentAndExternalChatID() after delete = %#v, want nil", loaded)
+		t.Fatalf("InboundDrops().GetByComponentAndExternalChannelID() after delete = %#v, want nil", loaded)
+	}
+}
+
+func TestAutoMigrateRenamesExternalChannelColumns(t *testing.T) {
+	ctx := context.Background()
+	name := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
+	dsn := fmt.Sprintf("file:%s-%s?mode=memory&cache=shared", name, modeluuid.New().String())
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("gorm.Open() error = %v", err)
+	}
+
+	for _, stmt := range []string{
+		`CREATE TABLE chat_components (
+			id BLOB PRIMARY KEY,
+			chat_id BLOB,
+			component_id BLOB,
+			role TEXT,
+			external_chat_id TEXT,
+			enabled NUMERIC,
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+		`CREATE TABLE inbound_drops (
+			id BLOB PRIMARY KEY,
+			component_id BLOB,
+			external_chat_id TEXT,
+			external_thread_id TEXT,
+			chat_label TEXT,
+			actor_id TEXT,
+			actor_label TEXT,
+			last_text_preview TEXT,
+			message_count INTEGER,
+			first_seen_at DATETIME,
+			last_seen_at DATETIME
+		)`,
+	} {
+		if err := db.Exec(stmt).Error; err != nil {
+			t.Fatalf("create legacy table: %v", err)
+		}
+	}
+
+	chatID := modeluuid.New()
+	componentID := modeluuid.New()
+	if err := db.Exec(
+		`INSERT INTO chat_components (id, chat_id, component_id, role, external_chat_id, enabled, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		modeluuid.New(), chatID, componentID, string(coremodel.ChatComponentRoleSource), "legacy-channel", true, time.Now(), time.Now(),
+	).Error; err != nil {
+		t.Fatalf("insert legacy chat component: %v", err)
+	}
+	if err := db.Exec(
+		`INSERT INTO inbound_drops (id, component_id, external_chat_id, external_thread_id, chat_label, actor_id, actor_label, last_text_preview, message_count, first_seen_at, last_seen_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		modeluuid.New(), componentID, "legacy-channel", "thread-1", "Legacy", "actor-1", "Actor", "hello", 3, time.Now(), time.Now(),
+	).Error; err != nil {
+		t.Fatalf("insert legacy inbound drop: %v", err)
+	}
+
+	store := New(db)
+	if err := store.AutoMigrate(ctx); err != nil {
+		t.Fatalf("AutoMigrate() error = %v", err)
+	}
+	if db.Migrator().HasColumn(&coremodel.ChatComponent{}, "external_chat_id") {
+		t.Fatal("chat_components.external_chat_id still exists")
+	}
+	if !db.Migrator().HasColumn(&coremodel.ChatComponent{}, "external_channel_id") {
+		t.Fatal("chat_components.external_channel_id missing")
+	}
+	if db.Migrator().HasColumn(&coremodel.InboundDrop{}, "external_chat_id") {
+		t.Fatal("inbound_drops.external_chat_id still exists")
+	}
+	if !db.Migrator().HasColumn(&coremodel.InboundDrop{}, "external_channel_id") {
+		t.Fatal("inbound_drops.external_channel_id missing")
+	}
+
+	binding, err := store.ChatComponents().FindByComponentRoleAndExternalChannelID(ctx, componentID, coremodel.ChatComponentRoleSource, "legacy-channel")
+	if err != nil {
+		t.Fatalf("FindByComponentRoleAndExternalChannelID() error = %v", err)
+	}
+	if binding == nil || binding.ChatID != chatID {
+		t.Fatalf("binding after migration = %#v, want chat %s", binding, chatID)
+	}
+	drop, err := store.InboundDrops().GetByComponentAndExternalChannelID(ctx, componentID, "legacy-channel")
+	if err != nil {
+		t.Fatalf("GetByComponentAndExternalChannelID() error = %v", err)
+	}
+	if drop == nil || drop.MessageCount != 3 {
+		t.Fatalf("drop after migration = %#v, want message_count 3", drop)
 	}
 }
 

@@ -32,20 +32,20 @@ func TestThreadComponentMapperScopesInboundThreadIDsPerChat(t *testing.T) {
 	}
 
 	bindingA := coremodel.ChatComponent{
-		ID:             modeluuid.New(),
-		ChatID:         chatA.ID,
-		ComponentID:    component.ID,
-		Role:           coremodel.ChatComponentRoleSource,
-		ExternalChatID: "chat-a",
-		Enabled:        true,
+		ID:                modeluuid.New(),
+		ChatID:            chatA.ID,
+		ComponentID:       component.ID,
+		Role:              coremodel.ChatComponentRoleSource,
+		ExternalChannelID: "chat-a",
+		Enabled:           true,
 	}
 	bindingB := coremodel.ChatComponent{
-		ID:             modeluuid.New(),
-		ChatID:         chatB.ID,
-		ComponentID:    component.ID,
-		Role:           coremodel.ChatComponentRoleSource,
-		ExternalChatID: "chat-b",
-		Enabled:        true,
+		ID:                modeluuid.New(),
+		ChatID:            chatB.ID,
+		ComponentID:       component.ID,
+		Role:              coremodel.ChatComponentRoleSource,
+		ExternalChannelID: "chat-b",
+		Enabled:           true,
 	}
 
 	threadA, err := mapper.EnsureThread(ctx, bindingA, "")
@@ -84,21 +84,21 @@ func TestThreadComponentMapperScopesInboundThreadIDsPerChat(t *testing.T) {
 	}
 
 	target, ok, err := mapper.RelayTarget(ctx, threadA.ID, coremodel.ChatComponent{
-		ChatID:         chatA.ID,
-		ComponentID:    component.ID,
-		Role:           coremodel.ChatComponentRoleRelay,
-		ExternalChatID: "chat-a",
-		Enabled:        true,
+		ChatID:            chatA.ID,
+		ComponentID:       component.ID,
+		Role:              coremodel.ChatComponentRoleRelay,
+		ExternalChannelID: "chat-a",
+		Enabled:           true,
 	})
 	if err != nil {
 		t.Fatalf("RelayTarget(alpha) error = %v", err)
 	}
-	if !ok || target.ProviderChatID != "chat-a" || target.ProviderThreadID != "default" {
+	if !ok || target.ProviderChannelID != "chat-a" || target.ProviderThreadID != "default" {
 		t.Fatalf("RelayTarget(alpha) = %#v, ok=%t", target, ok)
 	}
 }
 
-func TestThreadComponentMapperRelayTargetFallsBackToExternalChatID(t *testing.T) {
+func TestThreadComponentMapperRelayTargetFallsBackToExternalChannelID(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
 	mapper := broker.NewThreadComponentMapper(storage)
@@ -119,11 +119,11 @@ func TestThreadComponentMapperRelayTargetFallsBackToExternalChatID(t *testing.T)
 	}
 
 	target, ok, err := mapper.RelayTarget(ctx, thread.ID, coremodel.ChatComponent{
-		ChatID:         chat.ID,
-		ComponentID:    component.ID,
-		Role:           coremodel.ChatComponentRoleRelay,
-		ExternalChatID: "telegram-chat-1",
-		Enabled:        true,
+		ChatID:            chat.ID,
+		ComponentID:       component.ID,
+		Role:              coremodel.ChatComponentRoleRelay,
+		ExternalChannelID: "telegram-chat-1",
+		Enabled:           true,
 	})
 	if err != nil {
 		t.Fatalf("RelayTarget() error = %v", err)
@@ -131,8 +131,8 @@ func TestThreadComponentMapperRelayTargetFallsBackToExternalChatID(t *testing.T)
 	if !ok {
 		t.Fatal("RelayTarget() = not found, want fallback target")
 	}
-	if target.ProviderChatID != "telegram-chat-1" {
-		t.Fatalf("ProviderChatID = %q, want telegram-chat-1", target.ProviderChatID)
+	if target.ProviderChannelID != "telegram-chat-1" {
+		t.Fatalf("ProviderChannelID = %q, want telegram-chat-1", target.ProviderChannelID)
 	}
 	if target.ProviderThreadID != "" {
 		t.Fatalf("ProviderThreadID = %q, want empty", target.ProviderThreadID)
@@ -165,11 +165,11 @@ func TestThreadComponentMapperReusesVisibleDefaultThreadForSourceDefaultMapping(
 	}
 
 	sourceBinding := coremodel.ChatComponent{
-		ChatID:         chat.ID,
-		ComponentID:    source.ID,
-		Role:           coremodel.ChatComponentRoleSource,
-		ExternalChatID: "mailbox-personal",
-		Enabled:        true,
+		ChatID:            chat.ID,
+		ComponentID:       source.ID,
+		Role:              coremodel.ChatComponentRoleSource,
+		ExternalChannelID: "mailbox-personal",
+		Enabled:           true,
 	}
 	thread, err := mapper.EnsureThread(ctx, sourceBinding, "mailbox-personal")
 	if err != nil {
@@ -214,11 +214,11 @@ func TestThreadComponentMapperDoesNotReuseVisibleDefaultThreadForNonMatchingSour
 	}
 
 	sourceBinding := coremodel.ChatComponent{
-		ChatID:         chat.ID,
-		ComponentID:    source.ID,
-		Role:           coremodel.ChatComponentRoleSource,
-		ExternalChatID: "chat-1",
-		Enabled:        true,
+		ChatID:            chat.ID,
+		ComponentID:       source.ID,
+		Role:              coremodel.ChatComponentRoleSource,
+		ExternalChannelID: "chat-1",
+		Enabled:           true,
 	}
 	thread, err := mapper.EnsureThread(ctx, sourceBinding, "api-thread-1")
 	if err != nil {
