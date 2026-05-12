@@ -139,15 +139,15 @@ func TestThreadComponentMapperRelayTargetFallsBackToExternalChatID(t *testing.T)
 	}
 }
 
-func TestThreadComponentMapperReusesVisibleDefaultThreadForMailboxMapping(t *testing.T) {
+func TestThreadComponentMapperReusesVisibleDefaultThreadForSourceDefaultMapping(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
 	mapper := broker.NewThreadComponentMapper(storage)
 
-	chat := &coremodel.Chat{Label: "mailbox", Enabled: true}
+	chat := &coremodel.Chat{Label: "source default", Enabled: true}
 	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Enabled: true}
-	gmail := &coremodel.Component{Type: "gmail", Name: "work", Enabled: true}
-	for _, registration := range []*coremodel.Component{telegram, gmail} {
+	source := &coremodel.Component{Type: "mailbox", Name: "personal", Enabled: true}
+	for _, registration := range []*coremodel.Component{telegram, source} {
 		if err := storage.Components().Save(ctx, registration); err != nil {
 			t.Fatal(err)
 		}
@@ -164,31 +164,31 @@ func TestThreadComponentMapperReusesVisibleDefaultThreadForMailboxMapping(t *tes
 		t.Fatalf("BindComponentThreadID(telegram) error = %v", err)
 	}
 
-	gmailBinding := coremodel.ChatComponent{
+	sourceBinding := coremodel.ChatComponent{
 		ChatID:         chat.ID,
-		ComponentID:    gmail.ID,
+		ComponentID:    source.ID,
 		Role:           coremodel.ChatComponentRoleSource,
-		ExternalChatID: "bart@example.com",
+		ExternalChatID: "mailbox-personal",
 		Enabled:        true,
 	}
-	thread, err := mapper.EnsureThread(ctx, gmailBinding, "bart@example.com")
+	thread, err := mapper.EnsureThread(ctx, sourceBinding, "mailbox-personal")
 	if err != nil {
-		t.Fatalf("EnsureThread(gmail) error = %v", err)
+		t.Fatalf("EnsureThread(source) error = %v", err)
 	}
 	if thread.ID != visibleThread.ID {
-		t.Fatalf("EnsureThread(gmail) thread = %s, want visible thread %s", thread.ID, visibleThread.ID)
+		t.Fatalf("EnsureThread(source) thread = %s, want visible thread %s", thread.ID, visibleThread.ID)
 	}
 
-	componentThreadID, ok, err := mapper.ComponentThreadID(ctx, visibleThread.ID, gmail.ID)
+	componentThreadID, ok, err := mapper.ComponentThreadID(ctx, visibleThread.ID, source.ID)
 	if err != nil {
-		t.Fatalf("ComponentThreadID(gmail) error = %v", err)
+		t.Fatalf("ComponentThreadID(source) error = %v", err)
 	}
-	if !ok || componentThreadID != "bart@example.com" {
-		t.Fatalf("ComponentThreadID(gmail) = (%q, %t), want mailbox mapping", componentThreadID, ok)
+	if !ok || componentThreadID != "mailbox-personal" {
+		t.Fatalf("ComponentThreadID(source) = (%q, %t), want source-default mapping", componentThreadID, ok)
 	}
 }
 
-func TestThreadComponentMapperDoesNotReuseVisibleDefaultThreadForNonMailboxMapping(t *testing.T) {
+func TestThreadComponentMapperDoesNotReuseVisibleDefaultThreadForNonMatchingSourceThread(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
 	mapper := broker.NewThreadComponentMapper(storage)
@@ -225,6 +225,6 @@ func TestThreadComponentMapperDoesNotReuseVisibleDefaultThreadForNonMailboxMappi
 		t.Fatalf("EnsureThread(source) error = %v", err)
 	}
 	if thread.ID == visibleThread.ID {
-		t.Fatalf("EnsureThread(source) reused visible thread for non-mailbox mapping %s", visibleThread.ID)
+		t.Fatalf("EnsureThread(source) reused visible thread for non-matching source thread %s", visibleThread.ID)
 	}
 }

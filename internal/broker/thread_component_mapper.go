@@ -78,7 +78,7 @@ func (m *threadComponentMapper) EnsureThread(ctx context.Context, binding coremo
 }
 
 func (m *threadComponentMapper) reusableVisibleThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error) {
-	if !isMailboxComponentThreadID(componentThreadID) {
+	if !isSourceDefaultThreadID(binding, componentThreadID) {
 		return nil, nil
 	}
 	mappings, err := m.storage.ThreadComponentMappings().ListByChatID(ctx, binding.ChatID)
@@ -184,8 +184,10 @@ func normalizeComponentThreadID(value string) string {
 	return value
 }
 
-func isMailboxComponentThreadID(value string) bool {
-	return strings.Contains(strings.TrimSpace(value), "@")
+func isSourceDefaultThreadID(binding coremodel.ChatComponent, componentThreadID string) bool {
+	componentThreadID = strings.TrimSpace(componentThreadID)
+	externalChatID := strings.TrimSpace(binding.ExternalChatID)
+	return componentThreadID != "" && componentThreadID == externalChatID
 }
 
 func isVisibleDefaultComponentThreadID(value string) bool {
