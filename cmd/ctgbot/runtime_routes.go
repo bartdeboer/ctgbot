@@ -22,6 +22,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component/gmail"
 	"github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
+	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
 	"github.com/bartdeboer/ctgbot/internal/component/telegram"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/repository"
@@ -623,6 +624,12 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(llamacpp.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return llamacpp.New(ctx, registration, runtime, home, storage, rtSystem.Logger)
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(sqlcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		_, _, _, _ = ctx, registration, runtime, home
+		return sqlcomponent.New(rtSystem.DB)
 	}); err != nil {
 		return nil, err
 	}
