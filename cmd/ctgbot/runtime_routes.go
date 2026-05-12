@@ -15,6 +15,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/app"
 	"github.com/bartdeboer/ctgbot/internal/broker"
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/component/codex"
 	"github.com/bartdeboer/ctgbot/internal/component/gmail"
@@ -50,6 +51,7 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			}
 
 			fmt.Println("ctgbot runtime initialized")
+			fmt.Printf("ctgbot_version: %s\n", buildassets.Version())
 			fmt.Printf("state_root: %s\n", rtSystem.StateRoot)
 			fmt.Printf("database: %s\n", rtSystem.DBPath)
 

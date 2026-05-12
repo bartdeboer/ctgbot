@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -425,6 +426,7 @@ func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID m
 func formatThreadStatus(status messagingdomain.ThreadStatus) string {
 	lines := []string{
 		"thread status",
+		"ctgbot_version: " + buildassets.Version(),
 		"chat_id: " + status.ChatID.String(),
 		"chat_short_id: " + strings.TrimSpace(status.ChatShortID),
 		"chat_label: " + strings.TrimSpace(status.ChatLabel),

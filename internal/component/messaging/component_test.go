@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -26,6 +27,7 @@ func TestStatusShowsCurrentThread(t *testing.T) {
 	chatShortID := shortChatIDForMessagingTest(t, storage, thread.ChatID)
 	for _, want := range []string{
 		"thread status",
+		"ctgbot_version: " + buildassets.Version(),
 		"chat_short_id: " + chatShortID,
 		"chat_label: Codex #1",
 		"thread_label: ctgbot 2",

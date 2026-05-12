@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -145,6 +146,7 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 			t.Fatalf("status error = %v", err)
 		}
 		for _, want := range []string{
+			"ctgbot_version: " + buildassets.Version(),
 			"container_state: running",
 			"keep_running: false",
 			"codex_model: gpt-test",

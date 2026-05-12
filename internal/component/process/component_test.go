@@ -1,9 +1,13 @@
 package process
 
 import (
+	"context"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/commandset"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 func TestProcessCommandDefinitions(t *testing.T) {
@@ -44,6 +48,16 @@ func TestProcessCommandDefinitions(t *testing.T) {
 			source:        commandengine.SourceCLI,
 			visibleRoutes: []string{"quit"},
 		},
+		{
+			pattern:       "version",
+			source:        commandengine.SourceMessage,
+			visibleRoutes: []string{"version", "version"},
+		},
+		{
+			pattern:       "version",
+			source:        commandengine.SourceCLI,
+			visibleRoutes: []string{"version"},
+		},
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("len(CommandDefinitions) = %d, want %d", len(definitions), len(want))
@@ -65,6 +79,29 @@ func TestProcessCommandDefinitions(t *testing.T) {
 				t.Fatalf("definition[%d] route[%d] = %q, want %q", defIndex, routeIndex, gotPattern, got.visibleRoutes[routeIndex])
 			}
 		}
+	}
+}
+
+func TestProcessVersionCommandAllowsUser(t *testing.T) {
+	engine, err := commandset.NewBoundEngineForSource(commandengine.SourceMessage, []commandset.BoundSurface{{
+		Surface:       New(nil),
+		ComponentRef:  Type,
+		ComponentType: Type,
+	}})
+	if err != nil {
+		t.Fatalf("NewBoundEngineForSource() error = %v", err)
+	}
+	result, err := engine.Run(context.Background(), commandengine.Request{
+		Context: commandengine.Context{
+			Source: commandengine.SourceMessage,
+			Actor:  commandengine.Actor{ID: "user", Roles: []simplerbac.Role{simplerbac.RoleUser}},
+		},
+	}, []string{"version"})
+	if err != nil {
+		t.Fatalf("Run(version) error = %v", err)
+	}
+	if got, want := result.Text, buildassets.Version(); got != want {
+		t.Fatalf("version text = %q, want %q", got, want)
 	}
 }
 

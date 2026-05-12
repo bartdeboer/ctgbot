@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -29,6 +30,7 @@ var _ component.LocalCommandSurface = (*Component)(nil)
 type installCommand struct{}
 type upgradeCommand struct{}
 type quitCommand struct{}
+type versionCommand struct{}
 
 func New(actions Actions) *Component {
 	return &Component{Actions: actions}
@@ -39,24 +41,34 @@ func (c *Component) Type() string {
 }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	definitions := make([]commandengine.Definition, 0, 6)
+	definitions := make([]commandengine.Definition, 0, 8)
 	definitions = append(definitions, processCommandDefinitions(
 		"install",
 		"Install ctgbot binaries from source",
 		buildInstallCommand,
 		[]commandengine.Route{{Pattern: "install", Absolute: true}},
+		simplerbac.Any(simplerbac.RoleRoot),
 	)...)
 	definitions = append(definitions, processCommandDefinitions(
 		"upgrade",
 		"Upgrade ctgbot",
 		buildUpgradeCommand,
 		[]commandengine.Route{{Pattern: "upgrade", Absolute: true}},
+		simplerbac.Any(simplerbac.RoleRoot),
 	)...)
 	definitions = append(definitions, processCommandDefinitions(
 		"quit",
 		"Stop ctgbot",
 		buildQuitCommand,
 		[]commandengine.Route{{Pattern: "quit", Absolute: true}},
+		simplerbac.Any(simplerbac.RoleRoot),
+	)...)
+	definitions = append(definitions, processCommandDefinitions(
+		"version",
+		"Show ctgbot version",
+		buildVersionCommand,
+		[]commandengine.Route{{Pattern: "version", Absolute: true}},
+		simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
 	)...)
 	return definitions
 }
@@ -83,11 +95,17 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	return registerProcessPattern[quitCommand](registry, "quit", func(ctx context.Context) (commandengine.Result, error) {
+	if err := registerProcessPattern[quitCommand](registry, "quit", func(ctx context.Context) (commandengine.Result, error) {
 		if err := c.quit(ctx); err != nil {
 			return commandengine.Result{}, err
 		}
 		return commandengine.Result{Text: "quit requested"}, nil
+	}); err != nil {
+		return err
+	}
+	return registerProcessPattern[versionCommand](registry, "version", func(ctx context.Context) (commandengine.Result, error) {
+		_ = ctx
+		return commandengine.Result{Text: buildassets.Version()}, nil
 	})
 }
 
@@ -112,20 +130,20 @@ func (c *Component) quit(ctx context.Context) error {
 	return c.Actions.Quit(ctx)
 }
 
-func processCommandDefinitions(localPattern string, help string, build commandengine.BuildFunc, aliases []commandengine.Route) []commandengine.Definition {
+func processCommandDefinitions(localPattern string, help string, build commandengine.BuildFunc, aliases []commandengine.Route, policy simplerbac.Rule) []commandengine.Definition {
 	return []commandengine.Definition{
-		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceMessage}, aliases),
-		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceCLI}, nil),
+		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceMessage}, aliases, policy),
+		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceCLI}, nil, policy),
 	}
 }
 
-func processCommandDefinition(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source, aliases []commandengine.Route) commandengine.Definition {
+func processCommandDefinition(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source, aliases []commandengine.Route, policy simplerbac.Rule) commandengine.Definition {
 	return commandengine.Definition{
 		Pattern: pattern,
 		Help:    help,
 		Build:   build,
 		Sources: sources,
-		Policy:  simplerbac.Any(simplerbac.RoleRoot),
+		Policy:  policy,
 		Aliases: aliases,
 	}
 }
@@ -160,4 +178,9 @@ func buildUpgradeCommand(req *clir.Request) (any, error) {
 func buildQuitCommand(req *clir.Request) (any, error) {
 	_ = req
 	return quitCommand{}, nil
+}
+
+func buildVersionCommand(req *clir.Request) (any, error) {
+	_ = req
+	return versionCommand{}, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -257,6 +258,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 		return commandengine.Result{}, err
 	}
 	lines := []string{
+		"ctgbot_version: " + buildassets.Version(),
 		"chat_id: " + thread.ChatID.String(),
 		"thread_id: " + thread.ID.String(),
 		fmt.Sprintf("keep_running: %t", settings.KeepRunning),
