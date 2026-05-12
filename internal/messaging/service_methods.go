@@ -215,12 +215,21 @@ func (s *Service) BindThreadComponent(ctx context.Context, actor coremodel.Actor
 	if err != nil {
 		return ThreadComponentBindResult{}, err
 	}
-	if mapping == nil {
-		mapping = &coremodel.ThreadComponentMapping{
-			ThreadID:    thread.ID,
-			ChatID:      chat.ID,
-			ComponentID: registration.ID,
+	if mapping != nil {
+		currentProviderThreadID := strings.TrimSpace(mapping.ComponentThreadID)
+		if currentProviderThreadID == providerThreadID {
+			return ThreadComponentBindResult{
+				ThreadID:         thread.ID,
+				ComponentRef:     registration.Ref(),
+				ProviderThreadID: providerThreadID,
+			}, nil
 		}
+		return ThreadComponentBindResult{}, fmt.Errorf("thread %s component %s is already bound to provider thread %q; no force/repair mode is available, pass the existing providerThreadID or repair the mapping manually", thread.ID, registration.Ref(), currentProviderThreadID)
+	}
+	mapping = &coremodel.ThreadComponentMapping{
+		ThreadID:    thread.ID,
+		ChatID:      chat.ID,
+		ComponentID: registration.ID,
 	}
 	mapping.ChatID = chat.ID
 	mapping.ComponentThreadID = providerThreadID
@@ -307,12 +316,14 @@ func (s *Service) inferProviderThreadID(ctx context.Context, chat coremodel.Chat
 		return "", err
 	}
 	var matches []string
+	seen := map[string]bool{}
 	for _, binding := range bindings {
 		if binding.ComponentID != registration.ID || binding.Role != coremodel.ChatComponentRoleSource {
 			continue
 		}
 		externalChatID := strings.TrimSpace(binding.ExternalChatID)
-		if externalChatID != "" {
+		if externalChatID != "" && !seen[externalChatID] {
+			seen[externalChatID] = true
 			matches = append(matches, externalChatID)
 		}
 	}

@@ -190,6 +190,27 @@ func TestThreadComponentBindErrorsWhenProviderThreadIDAmbiguous(t *testing.T) {
 	}
 }
 
+func TestThreadComponentBindDedupesDuplicateInferredProviderThreadIDs(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
+	for i := 0; i < 2; i++ {
+		testSaveChatComponent(t, ctx, storage, coremodel.ChatComponent{
+			ChatID:         thread.ChatID,
+			ComponentID:    gmail.ID,
+			Role:           coremodel.ChatComponentRoleSource,
+			ExternalChatID: "bart@example.com",
+			Enabled:        true,
+		})
+	}
+	engine := testMessagingEngine(t, storage)
+
+	if _, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "component", "bind", "gmail/personal"}); err != nil {
+		t.Fatalf("Run(thread component bind duplicate inferred ids) error = %v", err)
+	}
+	assertThreadComponentMapping(t, ctx, storage, thread.ID, gmail.ID, "bart@example.com")
+}
+
 func TestThreadComponentBindIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	storage, thread := testMessagingStorage(t, ctx)
@@ -208,6 +229,27 @@ func TestThreadComponentBindIsIdempotent(t *testing.T) {
 		t.Fatalf("Run(thread component bind idempotent) error = %v", err)
 	}
 	assertThreadComponentMapping(t, ctx, storage, thread.ID, gmail.ID, "bart@example.com")
+}
+
+func TestThreadComponentBindErrorsWhenCurrentThreadComponentHasDifferentProviderThreadID(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	gmail := testRegisterComponent(t, ctx, storage, "gmail", "personal")
+	if err := storage.ThreadComponentMappings().Save(ctx, &coremodel.ThreadComponentMapping{
+		ThreadID:          thread.ID,
+		ChatID:            thread.ChatID,
+		ComponentID:       gmail.ID,
+		ComponentThreadID: "old-provider-thread",
+	}); err != nil {
+		t.Fatalf("Save(mapping) error = %v", err)
+	}
+	engine := testMessagingEngine(t, storage)
+
+	_, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "component", "bind", "gmail/personal", "new-provider-thread"})
+	if err == nil || !strings.Contains(err.Error(), "already bound to provider thread") || !strings.Contains(err.Error(), "old-provider-thread") {
+		t.Fatalf("Run(thread component bind current conflict) error = %v, want current-thread conflict", err)
+	}
+	assertThreadComponentMapping(t, ctx, storage, thread.ID, gmail.ID, "old-provider-thread")
 }
 
 func TestThreadComponentBindErrorsWhenProviderThreadIDBelongsToAnotherThread(t *testing.T) {
