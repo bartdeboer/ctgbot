@@ -2,9 +2,11 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/message"
@@ -15,11 +17,19 @@ func (c *Component) RunInbound(ctx context.Context, emit componentpkg.InboundEmi
 	if c == nil {
 		return fmt.Errorf("missing telegram component")
 	}
-	if c.api == nil {
-		return fmt.Errorf("missing telegram api")
-	}
-	if c.cfg == nil {
-		return fmt.Errorf("missing config")
+	for c.api == nil {
+		if err := c.loadAPIFromProfile(); err != nil {
+			if !errors.Is(err, errMissingTelegramToken) {
+				return err
+			}
+			c.logf("telegram token missing; waiting for %s in component profile", TokenFilename)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(30 * time.Second):
+				continue
+			}
+		}
 	}
 	if emit == nil {
 		return fmt.Errorf("missing inbound emitter")
@@ -28,11 +38,11 @@ func (c *Component) RunInbound(ctx context.Context, emit componentpkg.InboundEmi
 	handle := func(cbCtx context.Context, update TelegramUpdate) {
 		c.handleUpdate(cbCtx, update, emit)
 	}
-	telegramCfg := c.cfg.Telegram()
-	if window := telegramCfg.DebounceWindow(); window > 0 {
-		return NewDebouncer(window, c.logger, handle).Run(ctx, c.api, telegramCfg.PollTimeout())
+	config := c.componentConfig.withDefaults()
+	if window := config.debounceWindow(); window > 0 {
+		return NewDebouncer(window, c.logger, handle).Run(ctx, c.api, config.pollTimeout())
 	}
-	return c.api.Run(ctx, telegramCfg.PollTimeout(), handle)
+	return c.api.Run(ctx, config.pollTimeout(), handle)
 }
 
 func (c *Component) handleUpdate(ctx context.Context, update TelegramUpdate, emit componentpkg.InboundEmitter) {
@@ -63,8 +73,8 @@ func (c *Component) emitUpdate(ctx context.Context, update TelegramUpdate, text 
 
 func (c *Component) inboundPayload(ctx context.Context, update TelegramUpdate, text string) (message.InboundPayload, error) {
 	operator := false
-	if c.cfg != nil && update.UserID != 0 {
-		for _, userID := range c.cfg.Telegram().OperatorUserIDs() {
+	if update.UserID != 0 {
+		for _, userID := range c.componentConfig.withDefaults().Operators {
 			if userID == update.UserID {
 				operator = true
 				break

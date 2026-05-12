@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -28,67 +27,6 @@ func newTestConfig(t *testing.T) (*Config, *clistate.Store) {
 		t.Fatalf("new cwd store: %v", err)
 	}
 	return New(filepath.Join(root, ".ctgbot"), store), store
-}
-
-func TestGroupedRootConfigReadsRealShapedTelegramConfig(t *testing.T) {
-	cfg, store := newTestConfig(t)
-
-	if err := store.PersistString("telegram.token", "secret"); err != nil {
-		t.Fatalf("persist token: %v", err)
-	}
-	if err := store.PersistString("telegram.defaults.render_format", "markdown"); err != nil {
-		t.Fatalf("persist render: %v", err)
-	}
-	if err := store.PersistInt("telegram.defaults.debounce_ms", 800); err != nil {
-		t.Fatalf("persist debounce: %v", err)
-	}
-
-	telegram := cfg.Telegram()
-	if got := telegram.Token(); got != "secret" {
-		t.Fatalf("Token() = %q", got)
-	}
-	if got := telegram.RenderFormat(); got != "markdown_v2" {
-		t.Fatalf("RenderFormat() = %q", got)
-	}
-	if got := telegram.DebounceWindow(); got != 800*time.Millisecond {
-		t.Fatalf("DebounceWindow() = %s", got)
-	}
-}
-
-func TestTelegramConfigReadsGroupedOperatorsAndToken(t *testing.T) {
-	cfg, store := newTestConfig(t)
-
-	if err := store.PersistStruct("telegram", map[string]any{
-		"token":     "grouped-secret",
-		"operators": []int64{13145044, 6789, 13145044, 0},
-	}); err != nil {
-		t.Fatalf("persist grouped telegram config: %v", err)
-	}
-
-	telegram := cfg.Telegram()
-	if got := telegram.Token(); got != "grouped-secret" {
-		t.Fatalf("Token() = %q, want grouped-secret", got)
-	}
-	if got := telegram.OperatorUserIDs(); len(got) != 2 || got[0] != 13145044 || got[1] != 6789 {
-		t.Fatalf("OperatorUserIDs() = %#v", got)
-	}
-}
-
-func TestTelegramConfigIgnoresLegacyOperatorSettings(t *testing.T) {
-	cfg, store := newTestConfig(t)
-
-	if err := store.PersistStruct("operators", map[string]any{
-		"telegram_user_ids": []int64{13145044},
-	}); err != nil {
-		t.Fatalf("persist legacy operators: %v", err)
-	}
-	if err := store.PersistInt("telegram.admin_user_id", 13145044); err != nil {
-		t.Fatalf("persist legacy telegram admin user id: %v", err)
-	}
-
-	if got := cfg.Telegram().OperatorUserIDs(); got != nil {
-		t.Fatalf("OperatorUserIDs() = %#v, want nil", got)
-	}
 }
 
 func TestDockerfileConfigDefaultsAndValidation(t *testing.T) {
@@ -398,12 +336,6 @@ func TestRootSettersAndGlobalConfig(t *testing.T) {
 	}
 	cfg.global = global
 
-	if err := cfg.Telegram().SetToken("secret"); err != nil {
-		t.Fatalf("set token: %v", err)
-	}
-	if got := cfg.Telegram().Token(); got != "secret" {
-		t.Fatalf("token = %q", got)
-	}
 	if err := cfg.Docker().SetImage("ctgbot:test"); err != nil {
 		t.Fatalf("set image: %v", err)
 	}

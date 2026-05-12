@@ -590,18 +590,18 @@ func openSystemForRoutes(req *clir.Request, store *clistate.Store, processAction
 	if err != nil {
 		return nil, err
 	}
-	rtSystem.Registry, err = newRuntimeRegistry(rtSystem, resolveTelegramToken("", store), processActions)
+	rtSystem.Registry, err = newRuntimeRegistry(rtSystem, processActions)
 	if err != nil {
 		return nil, err
 	}
 	return rtSystem, nil
 }
 
-func newRuntimeRegistry(rtSystem *systempkg.System, telegramToken string, processActions processcomponent.Actions) (*component.Registry, error) {
+func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcomponent.Actions) (*component.Registry, error) {
 	registry := component.NewRegistry()
 
 	if err := registry.Add(telegram.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return telegram.New(ctx, registration, runtime, home, storage, telegramToken, rtSystem.Config, rtSystem.Logger)
+		return telegram.New(ctx, registration, runtime, home, storage, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}

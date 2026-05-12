@@ -11,12 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/appstate"
 	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/repository"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	"github.com/bartdeboer/go-clistate"
 )
 
 type sentMessage struct {
@@ -149,29 +150,85 @@ func (f *fakeTelegramAPI) actionCount() int {
 	return len(f.actions)
 }
 
-func newTelegramTestConfig(t *testing.T) (*appstate.Config, *clistate.Store) {
-	t.Helper()
-	root := t.TempDir()
-	prev, err := os.Getwd()
+func telegramTestConfig(config ComponentConfig) ComponentConfig {
+	return config.withDefaults()
+}
+
+func noDebounceConfig() ComponentConfig {
+	return telegramTestConfig(ComponentConfig{DebounceWindow: "0s"})
+}
+
+func TestManagedFiles(t *testing.T) {
+	c := &Component{}
+	files := c.ManagedFiles()
+	if len(files) != 2 {
+		t.Fatalf("len(ManagedFiles) = %d, want 2", len(files))
+	}
+	if files[0].RelativePath != TokenFilename || !files[0].Required || !files[0].Sensitive {
+		t.Fatalf("token managed file = %#v", files[0])
+	}
+	if files[1].RelativePath != ComponentConfigFilename || files[1].Required || files[1].Sensitive {
+		t.Fatalf("config managed file = %#v", files[1])
+	}
+}
+
+func TestNewLoadsProfileTokenAndConfig(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, TokenFilename), []byte("123:abc\n"), 0o600); err != nil {
+		t.Fatalf("write token: %v", err)
+	}
+	configJSON := `{"operators":[42,42,0],"poll_timeout":"2s","debounce_window":"0s","render_format":"html"}`
+	if err := os.WriteFile(filepath.Join(home, ComponentConfigFilename), []byte(configJSON), 0o644); err != nil {
+		t.Fatalf("write component config: %v", err)
+	}
+	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Home{Path: home}, repository.NewMemory(), nil)
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("New() error = %v", err)
 	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir: %v", err)
+	c := loaded.(*Component)
+	if c.api == nil {
+		t.Fatalf("api is nil")
 	}
-	t.Cleanup(func() { _ = os.Chdir(prev) })
-	store, err := clistate.NewCwd("ctgbot", "config")
+	if got := c.componentConfig.Operators; len(got) != 1 || got[0] != 42 {
+		t.Fatalf("operators = %#v, want [42]", got)
+	}
+	if got := c.componentConfig.pollTimeout(); got != 2*time.Second {
+		t.Fatalf("poll timeout = %s, want 2s", got)
+	}
+	if got := c.componentConfig.debounceWindow(); got != 0 {
+		t.Fatalf("debounce = %s, want 0", got)
+	}
+	if got := c.componentConfig.renderFormat(); got != "html" {
+		t.Fatalf("render format = %q, want html", got)
+	}
+}
+
+func TestNewAllowsMissingProfileTokenForManagedFileSetup(t *testing.T) {
+	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Home{Path: t.TempDir()}, repository.NewMemory(), nil)
 	if err != nil {
-		t.Fatalf("NewCwd: %v", err)
+		t.Fatalf("New() error = %v", err)
 	}
-	return appstate.New(filepath.Join(root, ".ctgbot"), store), store
+	c := loaded.(*Component)
+	if c.api != nil {
+		t.Fatalf("api = %#v, want nil before token is installed", c.api)
+	}
+}
+
+func TestRunInboundWaitsForMissingTokenUntilCancel(t *testing.T) {
+	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Home{Path: t.TempDir()}, repository.NewMemory(), nil)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	c := loaded.(*Component)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := c.RunInbound(ctx, func(context.Context, componentpkg.InboundEvent) error { return nil }); !errors.Is(err, context.Canceled) {
+		t.Fatalf("RunInbound() error = %v, want context.Canceled", err)
+	}
 }
 
 func TestRunInboundEmitsInboundEventAndRelaysResponse(t *testing.T) {
-	cfg, store := newTelegramTestConfig(t)
-	if err := store.PersistInt("telegram.defaults.debounce_ms", 0); err != nil {
-		t.Fatalf("PersistInt debounce: %v", err)
-	}
+	apiConfig := noDebounceConfig()
 	api := &fakeTelegramAPI{updates: []TelegramUpdate{{
 		ChatID:    123,
 		ChatTitle: "Project chat",
@@ -182,7 +239,7 @@ func TestRunInboundEmitsInboundEventAndRelaysResponse(t *testing.T) {
 		UserID:    7,
 	}}}
 	componentID := modeluuid.New()
-	c := &Component{componentID: componentID, api: api, cfg: cfg}
+	c := &Component{componentID: componentID, api: api, componentConfig: apiConfig}
 
 	var events []componentpkg.InboundEvent
 	err := c.RunInbound(context.Background(), func(ctx context.Context, event componentpkg.InboundEvent) error {
@@ -217,12 +274,9 @@ func TestRunInboundEmitsInboundEventAndRelaysResponse(t *testing.T) {
 }
 
 func TestRunInboundDoesNotReturnEmitError(t *testing.T) {
-	cfg, store := newTelegramTestConfig(t)
-	if err := store.PersistInt("telegram.defaults.debounce_ms", 0); err != nil {
-		t.Fatalf("PersistInt debounce: %v", err)
-	}
+	apiConfig := noDebounceConfig()
 	api := &fakeTelegramAPI{updates: []TelegramUpdate{{ChatID: 1, ThreadID: 2, MessageID: 3, Text: "hi"}}}
-	c := &Component{componentID: modeluuid.New(), api: api, cfg: cfg}
+	c := &Component{componentID: modeluuid.New(), api: api, componentConfig: apiConfig}
 
 	errBoom := errors.New("boom")
 	if err := c.RunInbound(context.Background(), func(ctx context.Context, event componentpkg.InboundEvent) error { return errBoom }); err != nil {
@@ -231,11 +285,7 @@ func TestRunInboundDoesNotReturnEmitError(t *testing.T) {
 }
 
 func TestInboundPayloadMarksConfiguredOperatorAsRoot(t *testing.T) {
-	cfg, store := newTelegramTestConfig(t)
-	if err := store.PersistStruct("telegram", map[string]any{"operators": []int64{42}}); err != nil {
-		t.Fatalf("PersistStruct telegram: %v", err)
-	}
-	c := &Component{api: &fakeTelegramAPI{}, cfg: cfg}
+	c := &Component{api: &fakeTelegramAPI{}, componentConfig: telegramTestConfig(ComponentConfig{Operators: []int64{42}})}
 
 	payload, err := c.inboundPayload(context.Background(), TelegramUpdate{
 		ChatID:    1,
@@ -253,9 +303,8 @@ func TestInboundPayloadMarksConfiguredOperatorAsRoot(t *testing.T) {
 }
 
 func TestInboundPayloadDownloadsAttachments(t *testing.T) {
-	cfg, _ := newTelegramTestConfig(t)
 	api := &fakeTelegramAPI{downloads: map[string][]byte{"file-1": []byte("contents")}}
-	c := &Component{api: api, cfg: cfg}
+	c := &Component{api: api}
 
 	payload, err := c.inboundPayload(context.Background(), TelegramUpdate{
 		ChatID:    1,
@@ -292,12 +341,9 @@ func TestSendIgnoresZeroPayload(t *testing.T) {
 }
 
 func TestSendFallsBackFromMarkdownToHTML(t *testing.T) {
-	cfg, store := newTelegramTestConfig(t)
-	if err := store.PersistString("telegram.defaults.render_format", "markdown"); err != nil {
-		t.Fatalf("PersistString render format: %v", err)
-	}
+	apiConfig := telegramTestConfig(ComponentConfig{RenderFormat: "markdown"})
 	api := &fakeTelegramAPI{sendMessageErrs: []error{fmt.Errorf("Bad Request: can't parse entities")}}
-	c := &Component{api: api, cfg: cfg}
+	c := &Component{api: api, componentConfig: apiConfig}
 
 	if err := c.Send(context.Background(), message.OutboundPayload{
 		ProviderChatID:   "123",

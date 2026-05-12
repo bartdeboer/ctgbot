@@ -84,8 +84,8 @@ func TestRegisterConfigRoutes_ShowAndMutate(t *testing.T) {
 	if !strings.Contains(output, "Current config:") {
 		t.Fatalf("expected config output, got %q", output)
 	}
-	if !strings.Contains(output, "telegram.operators: []int64(nil)") {
-		t.Fatalf("expected telegram operators in output, got %q", output)
+	if !strings.Contains(output, "telegram: component profile") {
+		t.Fatalf("expected telegram profile note in output, got %q", output)
 	}
 	if strings.Contains(output, "codex.full_auto") {
 		t.Fatalf("did not expect dead codex.full_auto config in output: %q", output)

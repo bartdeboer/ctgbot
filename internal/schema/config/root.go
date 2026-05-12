@@ -5,38 +5,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/configengine"
 )
 
-func TelegramToken(cfg *appstate.Config) configengine.Item {
-	return rootString("telegram.token", "Telegram bot token", configengine.ValueString, cfg,
-		func(cfg *appstate.Config) string { return cfg.Telegram().Token() },
-		func(cfg *appstate.Config, value string) error { return cfg.Telegram().SetToken(value) },
-		rootOnly(), rootOnly(),
-	)
-}
-
-func TelegramPollTimeout(cfg *appstate.Config) configengine.Item {
-	return rootString("telegram.poll-timeout", "Telegram long-poll timeout", configengine.ValueDuration, cfg,
-		func(cfg *appstate.Config) string { return cfg.Telegram().PollTimeout().String() },
-		func(cfg *appstate.Config, value string) error { return cfg.Telegram().SetPollTimeout(value) },
-		rootOnly(), rootOnly(),
-	)
-}
-
-func TelegramDebounceWindow(cfg *appstate.Config) configengine.Item {
-	return rootString("telegram.debounce-window", "Telegram message debounce window", configengine.ValueDuration, cfg,
-		func(cfg *appstate.Config) string { return cfg.Telegram().DebounceWindow().String() },
-		func(cfg *appstate.Config, value string) error { return cfg.Telegram().SetDebounceWindow(value) },
-		rootOnly(), rootOnly(),
-	)
-}
-
-func TelegramRenderFormat(cfg *appstate.Config) configengine.Item {
-	return rootString("telegram.render-format", "Telegram outbound render format", configengine.ValueString, cfg,
-		func(cfg *appstate.Config) string { return cfg.Telegram().RenderFormat() },
-		func(cfg *appstate.Config, value string) error { return cfg.Telegram().SetRenderFormat(value) },
-		rootOnly(), rootOnly(),
-	)
-}
-
 func BuildCompilerPath(cfg *appstate.Config) configengine.Item {
 	return rootString("build.compiler-path", "Compiler path used for local builds", configengine.ValueString, cfg,
 		func(cfg *appstate.Config) string { return cfg.Global().BuildCompilerPath() },

@@ -140,10 +140,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		"git.user-email",
 		"git.user-name",
 		"hostbridge.tcp-listen-addr",
-		"telegram.debounce-window",
-		"telegram.poll-timeout",
-		"telegram.render-format",
-		"telegram.token",
 	} {
 		if !containsLine(list.Text, want) {
 			t.Fatalf("config list missing %q:\n%s", want, list.Text)
@@ -160,7 +156,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		value     string
 		wantReply string
 	}{
-		{key: "telegram.render-format", value: "markdown", wantReply: "telegram.render-format=markdown_v2"},
 		{key: "codex.model", value: "gpt-test", wantReply: "codex.model=gpt-test"},
 		{key: "git.user_name", value: "Registry User", wantReply: "git.user-name=Registry User"},
 		{key: "git.user_email", value: "registry@example.com", wantReply: "git.user-email=registry@example.com"},
@@ -192,9 +187,6 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		if result.Text != tc.wantReply {
 			t.Fatalf("config get %s reply = %q, want %q", tc.key, result.Text, tc.wantReply)
 		}
-	}
-	if got := cfg.Telegram().RenderFormat(); got != "markdown_v2" {
-		t.Fatalf("render format = %q, want markdown_v2", got)
 	}
 	if got := cfg.Git().UserName(); got != "Registry User" {
 		t.Fatalf("git user name = %q, want Registry User", got)

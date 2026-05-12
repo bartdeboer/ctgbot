@@ -32,9 +32,5 @@ func Items(cfg *appstate.Config) []configengine.Item {
 		GitUserEmail(cfg),
 		GitUserName(cfg),
 		HostbridgeTCPListenAddr(cfg),
-		TelegramDebounceWindow(cfg),
-		TelegramPollTimeout(cfg),
-		TelegramRenderFormat(cfg),
-		TelegramToken(cfg),
 	}
 }

@@ -2,11 +2,11 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -16,43 +16,76 @@ import (
 
 const Type = "telegram"
 
+var errMissingTelegramToken = errors.New("missing telegram token")
+
 func New(
 	ctx context.Context,
 	registration coremodel.Component,
 	runtime runtimepkg.Factory,
 	home runtimepkg.Home,
 	storage repository.Storage,
-	token string,
-	cfg *appstate.Config,
 	logger *log.Logger,
 ) (component.Component, error) {
-	_, _, _, _ = ctx, runtime, home, storage
+	_, _, _ = ctx, runtime, storage
 
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return nil, fmt.Errorf("missing telegram token")
-	}
-	api, err := NewTelegramAPIV2(token)
+	config, err := loadComponentConfig(home.Path)
 	if err != nil {
 		return nil, err
 	}
-	return &Component{
-		componentID: registration.ID,
-		api:         api,
-		cfg:         cfg,
-		logger:      logger,
-	}, nil
+	c := &Component{
+		componentID:     registration.ID,
+		home:            home,
+		componentConfig: config,
+		logger:          logger,
+	}
+	if err := c.loadAPIFromProfile(); err != nil && !errors.Is(err, errMissingTelegramToken) {
+		return nil, err
+	}
+	return c, nil
 }
 
 type Component struct {
-	componentID modeluuid.UUID
-	api         TelegramAPI
-	cfg         *appstate.Config
-	logger      *log.Logger
+	componentID     modeluuid.UUID
+	home            runtimepkg.Home
+	componentConfig ComponentConfig
+	api             TelegramAPI
+	logger          *log.Logger
 }
+
+var _ component.Component = (*Component)(nil)
+var _ component.InboundSource = (*Component)(nil)
+var _ component.ProfileOwner = (*Component)(nil)
+var _ component.OutboundRelay = (*Component)(nil)
 
 func (c *Component) Type() string {
 	return Type
+}
+
+func (c *Component) ManagedFiles() []component.ManagedFile {
+	return []component.ManagedFile{
+		{RelativePath: TokenFilename, Required: true, Sensitive: true},
+		{RelativePath: ComponentConfigFilename, Required: false, Sensitive: false},
+	}
+}
+
+func (c *Component) loadAPIFromProfile() error {
+	if c == nil {
+		return fmt.Errorf("missing telegram component")
+	}
+	token, err := loadToken(c.home.Path)
+	if err != nil {
+		return err
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return errMissingTelegramToken
+	}
+	api, err := NewTelegramAPIV2(token)
+	if err != nil {
+		return err
+	}
+	c.api = api
+	return nil
 }
 
 func (c *Component) logf(format string, args ...any) {

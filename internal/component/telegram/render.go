@@ -90,8 +90,8 @@ func (c *Component) sendDocumentChunk(ctx context.Context, chatID int64, threadI
 
 func (c *Component) telegramRenderAttempts() []telegramRenderAttempt {
 	preferred := telegramRenderAttempt{format: markdown.RenderPlain, parseMode: "", name: "plain"}
-	if c != nil && c.cfg != nil {
-		switch c.cfg.Telegram().RenderFormat() {
+	if c != nil {
+		switch c.componentConfig.withDefaults().renderFormat() {
 		case "html":
 			preferred = telegramRenderAttempt{format: markdown.RenderHTML, parseMode: "HTML", name: "html"}
 		case "markdown_v2":

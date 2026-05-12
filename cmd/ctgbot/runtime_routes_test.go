@@ -470,10 +470,6 @@ func TestChatBindCreatesEnabledChatAndAutoBindsSupportedRoles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewCwd: %v", err)
 		}
-		if err := store.PersistString("telegram.token", "test-token"); err != nil {
-			t.Fatalf("PersistString: %v", err)
-		}
-
 		router := clir.New()
 		registerRuntimeRoutes(router, store, nil)
 
