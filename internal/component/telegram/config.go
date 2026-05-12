@@ -15,7 +15,7 @@ const (
 
 	defaultPollTimeout    = time.Minute
 	defaultDebounceWindow = 800 * time.Millisecond
-	defaultRenderFormat   = "html"
+	defaultRenderFormat   = "markdown_v2"
 )
 
 type ComponentConfig struct {

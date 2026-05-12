@@ -212,8 +212,8 @@ func TestNewAllowsMissingProfileTokenForManagedFileSetup(t *testing.T) {
 	if c.api != nil {
 		t.Fatalf("api = %#v, want nil before token is installed", c.api)
 	}
-	if got := c.componentConfig.renderFormat(); got != "html" {
-		t.Fatalf("default render format = %q, want html", got)
+	if got := c.componentConfig.renderFormat(); got != "markdown_v2" {
+		t.Fatalf("default render format = %q, want markdown_v2", got)
 	}
 }
 
@@ -343,7 +343,7 @@ func TestSendIgnoresZeroPayload(t *testing.T) {
 	}
 }
 
-func TestSendUsesHTMLByDefault(t *testing.T) {
+func TestSendUsesMarkdownV2ByDefault(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}
 
@@ -358,16 +358,13 @@ func TestSendUsesHTMLByDefault(t *testing.T) {
 	if len(messages) != 1 {
 		t.Fatalf("len(messages) = %d, want 1: %#v", len(messages), messages)
 	}
-	if messages[0].parseMode != "HTML" {
-		t.Fatalf("parse mode = %q, want HTML", messages[0].parseMode)
-	}
-	if !strings.Contains(messages[0].text, "<") {
-		t.Fatalf("message text = %q, want rendered HTML", messages[0].text)
+	if messages[0].parseMode != "MarkdownV2" {
+		t.Fatalf("parse mode = %q, want MarkdownV2", messages[0].parseMode)
 	}
 }
 
-func TestSendDefaultHTMLFallsBackToPlain(t *testing.T) {
-	api := &fakeTelegramAPI{sendMessageErrs: []error{fmt.Errorf("Bad Request: can't parse entities")}}
+func TestSendDefaultMarkdownV2FallsBackToHTMLThenPlain(t *testing.T) {
+	api := &fakeTelegramAPI{sendMessageErrs: []error{fmt.Errorf("Bad Request: can't parse entities"), fmt.Errorf("Bad Request: can't parse entities")}}
 	c := &Component{api: api}
 
 	if err := c.Send(context.Background(), message.OutboundPayload{
@@ -378,11 +375,11 @@ func TestSendDefaultHTMLFallsBackToPlain(t *testing.T) {
 		t.Fatalf("Send() error = %v", err)
 	}
 	messages := api.messageSnapshot()
-	if len(messages) != 2 {
-		t.Fatalf("len(messages) = %d, want 2: %#v", len(messages), messages)
+	if len(messages) != 3 {
+		t.Fatalf("len(messages) = %d, want 3: %#v", len(messages), messages)
 	}
-	if messages[0].parseMode != "HTML" || messages[1].parseMode != "" {
-		t.Fatalf("parse modes = %q, %q; want HTML then plain", messages[0].parseMode, messages[1].parseMode)
+	if messages[0].parseMode != "MarkdownV2" || messages[1].parseMode != "HTML" || messages[2].parseMode != "" {
+		t.Fatalf("parse modes = %q, %q, %q; want MarkdownV2 then HTML then plain", messages[0].parseMode, messages[1].parseMode, messages[2].parseMode)
 	}
 }
 
