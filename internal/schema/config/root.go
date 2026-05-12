@@ -106,7 +106,7 @@ func CodexLoginCallbackPort() configengine.Item {
 }
 
 func DockerImage(cfg *appstate.Config) configengine.Item {
-	return rootString("docker.image", "Docker image used for agent containers", configengine.ValueString, cfg,
+	return rootString("docker.image", "Docker image used for ctgbot runtime containers", configengine.ValueString, cfg,
 		func(cfg *appstate.Config) string { return cfg.Docker().Image() },
 		func(cfg *appstate.Config, value string) error { return cfg.Docker().SetImage(value) },
 		rootOrAgent(), rootOnly(),

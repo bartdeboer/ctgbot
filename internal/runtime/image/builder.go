@@ -26,10 +26,11 @@ type Builder struct {
 	SourceDir string
 }
 
-// Target describes one buildable Docker runtime image.
+// Target describes one ctgbot runtime image build target.
 //
-// Ref identifies the owning component instance when there is one. Name
-// identifies the build target when a component owns more than one image.
+// It is not a generic Docker build target. Name and Ref are ctgbot ownership
+// metadata used for discovery/status output. Image and Dockerfile are the
+// Docker build fields consumed by the standard runtime image builder.
 type Target struct {
 	Name       string
 	Ref        string

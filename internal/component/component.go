@@ -271,8 +271,11 @@ type CompletionResult struct {
 	Final *coremodel.ThreadMessage
 }
 
-// RuntimeImageProvider lets components own their buildable runtime image
-// targets without making image commands know component-specific details.
+// RuntimeImageProvider lets components declare ctgbot-managed runtime/sandbox
+// image targets. It is intentionally not a generic hook for arbitrary
+// component-private Docker images; targets returned here are built by ctgbot's
+// standard runtime image builder and may be refreshed by operator image
+// commands such as `ctgbot image build`.
 type RuntimeImageProvider interface {
 	Component
 	RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error)
