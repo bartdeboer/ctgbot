@@ -53,6 +53,15 @@ func (m *threadComponentMapper) EnsureThread(ctx context.Context, binding coremo
 		return thread, nil
 	}
 
+	if reusable, err := m.reusableVisibleThread(ctx, binding, componentThreadID); err != nil {
+		return nil, err
+	} else if reusable != nil {
+		if err := m.BindComponentThreadID(ctx, reusable.ID, binding.ComponentID, componentThreadID); err != nil {
+			return nil, err
+		}
+		return reusable, nil
+	}
+
 	thread := &coremodel.Thread{
 		ChatID: binding.ChatID,
 	}
@@ -66,6 +75,32 @@ func (m *threadComponentMapper) EnsureThread(ctx context.Context, binding coremo
 		return nil, err
 	}
 	return thread, nil
+}
+
+func (m *threadComponentMapper) reusableVisibleThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error) {
+	if !isSourceDefaultThreadID(binding, componentThreadID) {
+		return nil, nil
+	}
+	mappings, err := m.storage.ThreadComponentMappings().ListByChatID(ctx, binding.ChatID)
+	if err != nil {
+		return nil, err
+	}
+	for _, mapping := range mappings {
+		if mapping.ComponentID == binding.ComponentID {
+			continue
+		}
+		if !isVisibleDefaultComponentThreadID(mapping.ComponentThreadID) {
+			continue
+		}
+		thread, err := m.storage.Threads().GetByID(ctx, mapping.ThreadID)
+		if err != nil {
+			return nil, err
+		}
+		if thread != nil {
+			return thread, nil
+		}
+	}
+	return nil, nil
 }
 
 func (m *threadComponentMapper) ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error) {
@@ -147,4 +182,19 @@ func normalizeComponentThreadID(value string) string {
 		return defaultComponentThreadID
 	}
 	return value
+}
+
+func isSourceDefaultThreadID(binding coremodel.ChatComponent, componentThreadID string) bool {
+	componentThreadID = strings.TrimSpace(componentThreadID)
+	externalChatID := strings.TrimSpace(binding.ExternalChatID)
+	return componentThreadID != "" && componentThreadID == externalChatID
+}
+
+func isVisibleDefaultComponentThreadID(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "0", defaultComponentThreadID:
+		return true
+	default:
+		return false
+	}
 }

@@ -173,6 +173,76 @@ func (s *Service) SetThreadLabel(ctx context.Context, actor coremodel.Actor, thr
 	return s.ThreadStatus(ctx, actor, threadID)
 }
 
+func (s *Service) BindThreadComponent(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, req ThreadComponentBindRequest) (ThreadComponentBindResult, error) {
+	if err := s.ensureStorage(); err != nil {
+		return ThreadComponentBindResult{}, err
+	}
+	if err := requireActor(actor); err != nil {
+		return ThreadComponentBindResult{}, err
+	}
+	thread, chat, err := s.loadThreadAndChat(ctx, threadID)
+	if err != nil {
+		return ThreadComponentBindResult{}, err
+	}
+	registration, err := s.resolveComponentRef(ctx, req.ComponentRef)
+	if err != nil {
+		return ThreadComponentBindResult{}, err
+	}
+	providerThreadID := strings.TrimSpace(req.ProviderThreadID)
+	if providerThreadID == "" {
+		providerThreadID, err = s.inferProviderThreadID(ctx, *chat, *registration)
+		if err != nil {
+			return ThreadComponentBindResult{}, err
+		}
+	}
+
+	existing, err := s.Storage.ThreadComponentMappings().FindByChatComponentAndThreadID(ctx, chat.ID, registration.ID, providerThreadID)
+	if err != nil {
+		return ThreadComponentBindResult{}, err
+	}
+	if existing != nil {
+		if existing.ThreadID == thread.ID {
+			return ThreadComponentBindResult{
+				ThreadID:         thread.ID,
+				ComponentRef:     registration.Ref(),
+				ProviderThreadID: providerThreadID,
+			}, nil
+		}
+		return ThreadComponentBindResult{}, fmt.Errorf("component %s provider thread %q is already bound to thread %s; choose another providerThreadID or repair the existing mapping first", registration.Ref(), providerThreadID, s.threadRefWithShortID(ctx, existing.ThreadID))
+	}
+
+	mapping, err := s.Storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, thread.ID, registration.ID)
+	if err != nil {
+		return ThreadComponentBindResult{}, err
+	}
+	if mapping != nil {
+		currentProviderThreadID := strings.TrimSpace(mapping.ComponentThreadID)
+		if currentProviderThreadID == providerThreadID {
+			return ThreadComponentBindResult{
+				ThreadID:         thread.ID,
+				ComponentRef:     registration.Ref(),
+				ProviderThreadID: providerThreadID,
+			}, nil
+		}
+		return ThreadComponentBindResult{}, fmt.Errorf("component %s is already bound on this thread to provider thread %q; repair the existing mapping first", registration.Ref(), currentProviderThreadID)
+	}
+	mapping = &coremodel.ThreadComponentMapping{
+		ThreadID:    thread.ID,
+		ChatID:      chat.ID,
+		ComponentID: registration.ID,
+	}
+	mapping.ChatID = chat.ID
+	mapping.ComponentThreadID = providerThreadID
+	if err := s.Storage.ThreadComponentMappings().Save(ctx, mapping); err != nil {
+		return ThreadComponentBindResult{}, err
+	}
+	return ThreadComponentBindResult{
+		ThreadID:         thread.ID,
+		ComponentRef:     registration.Ref(),
+		ProviderThreadID: providerThreadID,
+	}, nil
+}
+
 func (s *Service) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
 	if err := s.ensureStorage(); err != nil {
 		return modeluuid.Nil, err
@@ -214,6 +284,73 @@ func (s *Service) ResolveThreadRef(ctx context.Context, ref string) (modeluuid.U
 		return modeluuid.Nil, err
 	}
 	return modeluuid.Nil, fmt.Errorf("thread not found: %s", ref)
+}
+
+func (s *Service) resolveComponentRef(ctx context.Context, ref string) (*coremodel.Component, error) {
+	parsed, err := coremodel.ParseComponentRef(ref)
+	if err != nil {
+		return nil, err
+	}
+	if !parsed.ExplicitName {
+		registration, err := s.Storage.Components().GetDefaultByType(ctx, parsed.Type)
+		if err != nil {
+			return nil, err
+		}
+		if registration != nil {
+			return registration, nil
+		}
+	}
+	registration, err := s.Storage.Components().GetByTypeAndName(ctx, parsed.Type, parsed.ResolvedName())
+	if err != nil {
+		return nil, err
+	}
+	if registration == nil {
+		return nil, fmt.Errorf("component not registered: %s", parsed.Ref())
+	}
+	return registration, nil
+}
+
+func (s *Service) inferProviderThreadID(ctx context.Context, chat coremodel.Chat, registration coremodel.Component) (string, error) {
+	bindings, err := s.Storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
+	if err != nil {
+		return "", err
+	}
+	var matches []string
+	seen := map[string]bool{}
+	for _, binding := range bindings {
+		if binding.ComponentID != registration.ID || binding.Role != coremodel.ChatComponentRoleSource {
+			continue
+		}
+		externalChatID := strings.TrimSpace(binding.ExternalChatID)
+		if externalChatID != "" && !seen[externalChatID] {
+			seen[externalChatID] = true
+			matches = append(matches, externalChatID)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("cannot infer provider thread id for %s in chat %s; pass providerThreadID explicitly", registration.Ref(), chat.ID)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("provider thread id for %s in chat %s is ambiguous; pass providerThreadID explicitly", registration.Ref(), chat.ID)
+	}
+}
+
+func (s *Service) threadRefWithShortID(ctx context.Context, threadID modeluuid.UUID) string {
+	if threadID.IsNull() {
+		return threadID.String()
+	}
+	out := threadID.String()
+	resolver, err := s.threadShortIDResolver(ctx)
+	if err != nil {
+		return out
+	}
+	shortID, err := resolver.ShortIDFor(threadID, 6)
+	if err != nil || strings.TrimSpace(shortID) == "" || shortID == out {
+		return out
+	}
+	return out + " (short_id: " + shortID + ")"
 }
 
 func (s *Service) ActorForThread(ctx context.Context, threadID modeluuid.UUID) (coremodel.Actor, error) {
