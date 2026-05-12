@@ -39,16 +39,8 @@ func registerImageRoutes(r *clir.Router, store *clistate.Store) {
 			return nil
 		})
 
-		b.Handle("image build all", "Build all runtime image targets", func(req *clir.Request) error {
-			return buildAllRuntimeImages(req, store, req.Extra)
-		})
-
-		b.Handle("image build", "Build all runtime image targets", func(req *clir.Request) error {
-			extra := append([]string(nil), req.Extra...)
-			if len(extra) > 0 && strings.EqualFold(strings.TrimSpace(extra[0]), "all") {
-				extra = extra[1:]
-			}
-			return buildAllRuntimeImages(req, store, extra)
+		b.Handle("image build", "Build runtime image targets", func(req *clir.Request) error {
+			return buildRuntimeImages(req, store, req.Extra)
 		})
 	})
 }
@@ -66,8 +58,8 @@ func parseImageBuildFlags(name string, extra []string) (bool, error) {
 	return *noCache, nil
 }
 
-func buildAllRuntimeImages(req *clir.Request, store *clistate.Store, extra []string) error {
-	noCache, err := parseImageBuildFlags("image build all", extra)
+func buildRuntimeImages(req *clir.Request, store *clistate.Store, extra []string) error {
+	noCache, err := parseImageBuildFlags("image build", extra)
 	if err != nil {
 		return err
 	}

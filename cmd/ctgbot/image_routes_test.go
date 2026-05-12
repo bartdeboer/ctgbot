@@ -30,7 +30,7 @@ func TestImageListShowsNoTargetsWithoutProviders(t *testing.T) {
 	})
 }
 
-func TestImageBuildAliasesAllAndSkipsWhenNoTargets(t *testing.T) {
+func TestImageBuildSkipsWhenNoTargets(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		_ = root
 		store, err := clistate.NewCwd("ctgbot", "config")
