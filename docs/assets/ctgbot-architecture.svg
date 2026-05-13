@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="400" viewBox="0 0 980 400" role="img" aria-labelledby="title desc">
+  <title id="title">ctgbot architecture</title>
+  <desc id="desc">Messages from Telegram or Gmail flow into ctgbot, which routes chats and threads to separate Docker containers, each running its own agent thread with hostbridge access.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0b1020; }
+      .panel { fill: #111936; stroke: #33446f; stroke-width: 2; }
+      .ctg { fill: #183b56; stroke: #5bc0eb; stroke-width: 2; }
+      .container { fill: #101b2d; stroke: #3d5a80; stroke-width: 2; }
+      .agent { fill: #162d22; stroke: #6ee7a8; stroke-width: 2; }
+      .bridgeBox { fill: #271c36; stroke: #c084fc; stroke-width: 2; }
+      .text { fill: #eef4ff; font: 600 18px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { fill: #b8c7e0; font: 500 13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .tiny { fill: #94a3b8; font: 500 11px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .arrow { stroke: #8fb3ff; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .reply { stroke: #8fb3ff; stroke-width: 3; fill: none; marker-end: url(#arrow); opacity: 0.75; }
+      .thread { stroke: #6ee7a8; stroke-width: 3; fill: none; marker-end: url(#arrowGreen); }
+      .bridge { stroke: #c084fc; stroke-width: 2.5; fill: none; stroke-dasharray: 7 5; marker-end: url(#arrowPurple); }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#8fb3ff" />
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#6ee7a8" />
+    </marker>
+    <marker id="arrowPurple" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L8,3 z" fill="#c084fc" />
+    </marker>
+  </defs>
+
+  <rect class="bg" width="980" height="400" rx="24" />
+
+  <rect x="50" y="115" width="190" height="120" rx="18" class="panel" />
+  <text x="145" y="150" text-anchor="middle" class="text">messengers</text>
+  <text x="145" y="178" text-anchor="middle" class="small">Telegram · Gmail</text>
+  <text x="145" y="202" text-anchor="middle" class="tiny">source + relay components</text>
+
+  <rect x="335" y="95" width="230" height="150" rx="20" class="ctg" />
+  <text x="450" y="133" text-anchor="middle" class="text">ctgbot</text>
+  <text x="450" y="163" text-anchor="middle" class="small">broker</text>
+  <text x="450" y="185" text-anchor="middle" class="small">runtime orchestrator</text>
+  <text x="450" y="209" text-anchor="middle" class="tiny">canonical chats + threads</text>
+
+  <path class="arrow" d="M240 162 C285 162 292 162 335 162" />
+  <path class="reply" d="M335 192 C292 192 285 192 240 192" />
+
+  <text x="795" y="44" text-anchor="middle" class="small">separate Docker containers</text>
+
+  <g id="container-a">
+    <rect x="660" y="54" width="270" height="118" rx="16" class="container" />
+    <text x="685" y="82" class="tiny">Docker container A</text>
+    <rect x="720" y="98" width="150" height="28" rx="8" class="agent" />
+    <text x="795" y="117" text-anchor="middle" class="tiny">agent thread A</text>
+    <rect x="740" y="136" width="110" height="24" rx="8" class="bridgeBox" />
+    <text x="795" y="153" text-anchor="middle" class="tiny">hostbridge</text>
+  </g>
+
+  <g id="container-b">
+    <rect x="660" y="184" width="270" height="118" rx="16" class="container" />
+    <text x="685" y="212" class="tiny">Docker container B</text>
+    <rect x="720" y="228" width="150" height="28" rx="8" class="agent" />
+    <text x="795" y="247" text-anchor="middle" class="tiny">agent thread B</text>
+    <rect x="740" y="266" width="110" height="24" rx="8" class="bridgeBox" />
+    <text x="795" y="283" text-anchor="middle" class="tiny">hostbridge</text>
+  </g>
+
+  <g id="container-c" opacity="0.88">
+    <rect x="660" y="320" width="270" height="58" rx="16" class="container" />
+    <text x="795" y="346" text-anchor="middle" class="tiny">Docker container C</text>
+    <text x="795" y="368" text-anchor="middle" class="tiny">more agent threads...</text>
+  </g>
+
+  <path class="thread" d="M565 130 C610 130 650 112 720 112" />
+  <path class="bridge" d="M740 149 C660 172 610 162 565 150" />
+
+  <path class="thread" d="M565 192 C610 192 650 242 720 242" />
+  <path class="bridge" d="M740 279 C660 292 610 238 565 215" />
+
+  <path class="thread" d="M565 222 C610 260 625 350 660 350" />
+
+</svg>

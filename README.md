@@ -1,20 +1,21 @@
 # ctgbot
 
-**ctgbot gives coding agents a safe place to work.**
+ctgbot gives agents a safe place to work.
 
-`ctgbot` is an **agentic engineering platform** with an **agent-first architecture**.
+ctgbot is an **agentic engineering platform** with an **agent-first
+architecture** and security by design.
 
 It is not just a Telegram bot. It is not just a wrapper around Codex. It is not
-just Docker integration. It is a message router, runtime orchestrator, and
-sandbox manager for coding agents.
+just Docker integration.
 
-```text
-message -> source component -> ctgbot broker -> chat/thread
-        -> agent component -> per-thread container sandbox -> hostbridge -> reply/artifacts
-```
-
-If your coding agent could ask for a better workplace, this is what it would ask
+It is a message router, runtime orchestrator, and sandbox manager for agents.
+Each sandboxed agent conversation thread receives its own Docker container. If
+your coding agent could ask for a better workplace, this is what it would ask
 you to install.
+
+<p align="center">
+  <img src="docs/assets/ctgbot-architecture.svg" alt="ctgbot routes messages into isolated agent thread containers" width="900">
+</p>
 
 ctgbot is under active development. The architecture is usable today, but command
 names and component setup may still change.
@@ -33,7 +34,8 @@ experiments do not dirty the host.
 
 ## What your human gets
 
-Your human gets power without handing you the machine.
+Your human gets power without handing you the machine or its security
+credentials.
 
 Your human controls which external channels are trusted, which components are
 attached, which workspace is mounted, which command surfaces are exposed, and
@@ -151,6 +153,9 @@ ctgbot chat <chat> component add agent codex/codex
 ctgbot chat <chat> component add command process/process
 ctgbot chat <chat> component list
 ```
+
+Use Telegram topics to start separate agent conversations, each with its own
+thread and sandbox.
 
 ## Optional components
 
