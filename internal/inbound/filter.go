@@ -52,8 +52,7 @@ type FilterChain struct {
 	filters []Filterer
 }
 
-func NewFilterChain(ctx context.Context, filters []Filterer) (FilterChain, *FilterResult, error) {
-	_ = ctx
+func NewFilterChain(filters []Filterer) FilterChain {
 	chainFilters := make([]Filterer, 0, len(filters))
 	for _, filter := range filters {
 		if filter != nil {
@@ -63,7 +62,7 @@ func NewFilterChain(ctx context.Context, filters []Filterer) (FilterChain, *Filt
 	sort.SliceStable(chainFilters, func(i, j int) bool {
 		return chainFilters[i].InboundFilterPrecedence() < chainFilters[j].InboundFilterPrecedence()
 	})
-	return FilterChain{filters: chainFilters}, nil, nil
+	return FilterChain{filters: chainFilters}
 }
 
 func (c FilterChain) Run(ctx context.Context, event ChannelEvent) (FilterResult, error) {

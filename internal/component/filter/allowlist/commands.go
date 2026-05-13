@@ -177,17 +177,16 @@ func (c *Component) sourceBindingHasAllowlistFilter(ctx context.Context, sourceB
 	if err != nil {
 		return false, err
 	}
-	if len(bindings) == 0 {
-		return false, nil
+	for _, binding := range bindings {
+		registration, err := c.Storage.Components().GetByID(ctx, binding.FilterComponentID)
+		if err != nil {
+			return false, err
+		}
+		if IsRegistration(registration) {
+			return true, nil
+		}
 	}
-	if len(bindings) > 1 {
-		return false, fmt.Errorf("multiple inbound filters configured for source binding %s", sourceBindingID)
-	}
-	registration, err := c.Storage.Components().GetByID(ctx, bindings[0].FilterComponentID)
-	if err != nil {
-		return false, err
-	}
-	return IsRegistration(registration), nil
+	return false, nil
 }
 
 func formatDroppedEvent(drop coremodel.DroppedEvent) string {

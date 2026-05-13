@@ -31,13 +31,7 @@ func TestFilterChainRunsByPrecedenceAndTransforms(t *testing.T) {
 		req.Event.Payload.Text.Text += " first"
 		return Pass(req)
 	}}
-	chain, failure, err := NewFilterChain(context.Background(), []Filterer{first, second})
-	if err != nil {
-		t.Fatalf("NewFilterChain() error = %v", err)
-	}
-	if failure != nil {
-		t.Fatalf("NewFilterChain() failure = %#v", failure)
-	}
+	chain := NewFilterChain([]Filterer{first, second})
 	result, err := chain.Run(context.Background(), ChannelEvent{Event: component.InboundEvent{ComponentID: modeluuid.New()}})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -49,13 +43,10 @@ func TestFilterChainRunsByPrecedenceAndTransforms(t *testing.T) {
 
 func TestFilterChainStopsOnDrop(t *testing.T) {
 	ranSecond := false
-	chain, failure, err := NewFilterChain(context.Background(), []Filterer{
+	chain := NewFilterChain([]Filterer{
 		testFilter{precedence: 10, fn: func(req ChannelEvent) FilterResult { return Drop(req, "blocked") }},
 		testFilter{precedence: 20, fn: func(req ChannelEvent) FilterResult { ranSecond = true; return Pass(req) }},
 	})
-	if err != nil || failure != nil {
-		t.Fatalf("NewFilterChain() err=%v failure=%#v", err, failure)
-	}
 	result, err := chain.Run(context.Background(), ChannelEvent{Event: component.InboundEvent{}})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)

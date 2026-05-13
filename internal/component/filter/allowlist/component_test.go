@@ -98,10 +98,12 @@ func seedAllowlistScope(t *testing.T, storage repository.Storage) (*coremodel.Ch
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	source := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true}
 	filter := &coremodel.Component{Type: Type, Name: Name, Runtime: "local", Enabled: true}
+	guardFilter := &coremodel.Component{Type: "guard", Name: "qwen", Runtime: "local", Enabled: true}
 	for _, save := range []func(context.Context) error{
 		func(ctx context.Context) error { return storage.Chats().Save(ctx, chat) },
 		func(ctx context.Context) error { return storage.Components().Save(ctx, source) },
 		func(ctx context.Context) error { return storage.Components().Save(ctx, filter) },
+		func(ctx context.Context) error { return storage.Components().Save(ctx, guardFilter) },
 	} {
 		if err := save(ctx); err != nil {
 			t.Fatal(err)
@@ -113,6 +115,10 @@ func seedAllowlistScope(t *testing.T, storage repository.Storage) (*coremodel.Ch
 	}
 	filterBinding := coremodel.InboundFilterBinding{SourceBindingID: sourceBinding.ID, FilterComponentID: filter.ID, Enabled: true}
 	if err := storage.InboundFilterBindings().Save(ctx, &filterBinding); err != nil {
+		t.Fatal(err)
+	}
+	guardBinding := coremodel.InboundFilterBinding{SourceBindingID: sourceBinding.ID, FilterComponentID: guardFilter.ID, Enabled: true}
+	if err := storage.InboundFilterBindings().Save(ctx, &guardBinding); err != nil {
 		t.Fatal(err)
 	}
 	return chat, sourceBinding

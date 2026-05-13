@@ -703,13 +703,7 @@ func TestFilterChainUsesExplicitFilterAction(t *testing.T) {
 		_ = ctx
 		return inboundpkg.Quarantine(input, "manual-review", "score=high"), nil
 	})
-	chain, failure, err := inboundpkg.NewFilterChain(context.Background(), []inboundpkg.Filterer{quarantine})
-	if err != nil {
-		t.Fatalf("NewFilterChain() error = %v", err)
-	}
-	if failure != nil {
-		t.Fatalf("NewFilterChain() failure = %#v", failure)
-	}
+	chain := inboundpkg.NewFilterChain([]inboundpkg.Filterer{quarantine})
 	result, err := chain.Run(context.Background(), inboundpkg.ChannelEvent{Channel: channel, Event: event})
 	if err != nil {
 		t.Fatalf("FilterChain.Run() error = %v", err)
