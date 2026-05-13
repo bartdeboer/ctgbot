@@ -19,6 +19,8 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/component/claude"
 	"github.com/bartdeboer/ctgbot/internal/component/codex"
+	allowlistfilter "github.com/bartdeboer/ctgbot/internal/component/filter/allowlist"
+	guardcomponent "github.com/bartdeboer/ctgbot/internal/component/filter/guard"
 	"github.com/bartdeboer/ctgbot/internal/component/gmail"
 	"github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
@@ -180,76 +182,6 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			return nil
 		})
 
-		b.Handle("component <source> guard set <guard>", "Set the inbound guard component for a source component", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("component guard set", flag.ContinueOnError)
-			fs.SetOutput(os.Stdout)
-			if err := fs.Parse(req.Extra); err != nil {
-				return err
-			}
-
-			appService, err := openAppServiceForRoutes(req, store)
-			if err != nil {
-				return err
-			}
-			result, err := appService.SetComponentGuard(req.Context(), strings.TrimSpace(req.Params["source"]), strings.TrimSpace(req.Params["guard"]))
-			if err != nil {
-				return err
-			}
-			fmt.Println("component guard set")
-			fmt.Printf("source: %s\n", result.Source.Ref())
-			fmt.Printf("guard: %s\n", result.Guard.Ref())
-			fmt.Printf("binding_id: %s\n", result.Binding.ID)
-			return nil
-		})
-
-		b.Handle("component <source> guard clear", "Clear the inbound guard component for a source component", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("component guard clear", flag.ContinueOnError)
-			fs.SetOutput(os.Stdout)
-			if err := fs.Parse(req.Extra); err != nil {
-				return err
-			}
-
-			appService, err := openAppServiceForRoutes(req, store)
-			if err != nil {
-				return err
-			}
-			result, err := appService.ClearComponentGuard(req.Context(), strings.TrimSpace(req.Params["source"]))
-			if err != nil {
-				return err
-			}
-			fmt.Println("component guard cleared")
-			fmt.Printf("source: %s\n", result.Source.Ref())
-			fmt.Printf("disabled: %d\n", result.Disabled)
-			return nil
-		})
-
-		b.Handle("component <source> guard status", "Show the inbound guard component for a source component", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("component guard status", flag.ContinueOnError)
-			fs.SetOutput(os.Stdout)
-			if err := fs.Parse(req.Extra); err != nil {
-				return err
-			}
-
-			appService, err := openAppServiceForRoutes(req, store)
-			if err != nil {
-				return err
-			}
-			result, err := appService.ComponentGuardStatus(req.Context(), strings.TrimSpace(req.Params["source"]))
-			if err != nil {
-				return err
-			}
-			fmt.Println("component guard status")
-			fmt.Printf("source: %s\n", result.Source.Ref())
-			if len(result.Bindings) == 0 {
-				fmt.Println("guard: none")
-				return nil
-			}
-			for _, binding := range result.Bindings {
-				fmt.Printf("guard: %s\tbinding_id=%s\n", binding.GuardRef, binding.Binding.ID)
-			}
-			return nil
-		})
-
 		b.Handle("component <component>", "Run a registered component CLI command", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("component", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
@@ -290,49 +222,6 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			}
 			return nil
 		})
-
-		b.Handle("source <source> guard set <guard>", "Set the inbound guard component for a source component", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("source guard set", flag.ContinueOnError)
-			fs.SetOutput(os.Stdout)
-			if err := fs.Parse(req.Extra); err != nil {
-				return err
-			}
-
-			appService, err := openAppServiceForRoutes(req, store)
-			if err != nil {
-				return err
-			}
-			result, err := appService.SetComponentGuard(req.Context(), strings.TrimSpace(req.Params["source"]), strings.TrimSpace(req.Params["guard"]))
-			if err != nil {
-				return err
-			}
-			fmt.Println("source guard set")
-			fmt.Printf("source: %s\n", result.Source.Ref())
-			fmt.Printf("guard: %s\n", result.Guard.Ref())
-			fmt.Printf("binding_id: %s\n", result.Binding.ID)
-			return nil
-		}, clir.Hidden())
-
-		b.Handle("source <source> guard clear", "Clear the inbound guard component for a source component", func(req *clir.Request) error {
-			fs := flag.NewFlagSet("source guard clear", flag.ContinueOnError)
-			fs.SetOutput(os.Stdout)
-			if err := fs.Parse(req.Extra); err != nil {
-				return err
-			}
-
-			appService, err := openAppServiceForRoutes(req, store)
-			if err != nil {
-				return err
-			}
-			result, err := appService.ClearComponentGuard(req.Context(), strings.TrimSpace(req.Params["source"]))
-			if err != nil {
-				return err
-			}
-			fmt.Println("source guard cleared")
-			fmt.Printf("source: %s\n", result.Source.Ref())
-			fmt.Printf("disabled: %d\n", result.Disabled)
-			return nil
-		}, clir.Hidden())
 
 		b.Handle("chat create <label>", "Create a chat", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("chat create", flag.ContinueOnError)
@@ -563,6 +452,110 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			}
 			return nil
 		})
+
+		b.Handle("chat <chatID> component <source> filter add <filter>", "Add an inbound event filter for a chat source binding", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat component filter add", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			externalChannelID := fs.String("external-channel-id", "", "External provider channel id when the source has multiple bindings in the chat")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			appService, err := openAppServiceForRoutes(req, store)
+			if err != nil {
+				return err
+			}
+			result, err := appService.AddChatComponentFilter(req.Context(), strings.TrimSpace(req.Params["chatID"]), strings.TrimSpace(req.Params["source"]), strings.TrimSpace(*externalChannelID), strings.TrimSpace(req.Params["filter"]))
+			if err != nil {
+				return err
+			}
+			fmt.Println("chat component filter added")
+			fmt.Printf("chat_id: %s\n", result.Chat.ID)
+			fmt.Printf("source: %s\n", result.Source.Ref())
+			fmt.Printf("external_channel_id: %s\n", result.SourceBinding.ExternalChannelID)
+			fmt.Printf("filter: %s\n", result.Filter.Ref())
+			fmt.Printf("binding_id: %s\n", result.Binding.ID)
+			return nil
+		})
+
+		b.Handle("chat <chatID> component <source> filter remove <filter>", "Remove an inbound event filter from a chat source binding", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat component filter remove", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			externalChannelID := fs.String("external-channel-id", "", "External provider channel id when the source has multiple bindings in the chat")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			appService, err := openAppServiceForRoutes(req, store)
+			if err != nil {
+				return err
+			}
+			result, err := appService.RemoveChatComponentFilter(req.Context(), strings.TrimSpace(req.Params["chatID"]), strings.TrimSpace(req.Params["source"]), strings.TrimSpace(*externalChannelID), strings.TrimSpace(req.Params["filter"]))
+			if err != nil {
+				return err
+			}
+			fmt.Println("chat component filter removed")
+			fmt.Printf("chat_id: %s\n", result.Chat.ID)
+			fmt.Printf("source: %s\n", result.Source.Ref())
+			fmt.Printf("external_channel_id: %s\n", result.SourceBinding.ExternalChannelID)
+			fmt.Printf("filter: %s\n", result.Filter.Ref())
+			fmt.Printf("disabled: %t\n", result.Disabled)
+			return nil
+		})
+
+		b.Handle("chat <chatID> component <source> filter clear", "Clear inbound event filters for a chat source binding", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat component filter clear", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			externalChannelID := fs.String("external-channel-id", "", "External provider channel id when the source has multiple bindings in the chat")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			appService, err := openAppServiceForRoutes(req, store)
+			if err != nil {
+				return err
+			}
+			result, err := appService.ClearChatComponentFilters(req.Context(), strings.TrimSpace(req.Params["chatID"]), strings.TrimSpace(req.Params["source"]), strings.TrimSpace(*externalChannelID))
+			if err != nil {
+				return err
+			}
+			fmt.Println("chat component filter cleared")
+			fmt.Printf("chat_id: %s\n", result.Chat.ID)
+			fmt.Printf("source: %s\n", result.Source.Ref())
+			fmt.Printf("external_channel_id: %s\n", result.SourceBinding.ExternalChannelID)
+			fmt.Printf("disabled: %d\n", result.Disabled)
+			return nil
+		})
+
+		b.Handle("chat <chatID> component <source> filter list", "List inbound event filters for a chat source binding", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat component filter list", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			externalChannelID := fs.String("external-channel-id", "", "External provider channel id when the source has multiple bindings in the chat")
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			appService, err := openAppServiceForRoutes(req, store)
+			if err != nil {
+				return err
+			}
+			result, err := appService.ListChatComponentFilters(req.Context(), strings.TrimSpace(req.Params["chatID"]), strings.TrimSpace(req.Params["source"]), strings.TrimSpace(*externalChannelID))
+			if err != nil {
+				return err
+			}
+			fmt.Println("chat component filter list")
+			fmt.Printf("chat_id: %s\n", result.Chat.ID)
+			fmt.Printf("source: %s\n", result.Source.Ref())
+			fmt.Printf("external_channel_id: %s\n", result.SourceBinding.ExternalChannelID)
+			if len(result.Bindings) == 0 {
+				fmt.Println("no filters")
+				return nil
+			}
+			for _, binding := range result.Bindings {
+				fmt.Printf("filter: %s\tbinding_id=%s\n", binding.FilterRef, binding.Binding.ID)
+			}
+			return nil
+		})
 	})
 }
 
@@ -624,6 +617,20 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(gmail.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return gmail.NewWithOptions(ctx, registration, runtime, home, storage, gmail.Options{OAuthClientConfigPath: filepath.Join(rtSystem.StateRoot, "google", "oauth_client.json"), Logger: rtSystem.Logger})
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(allowlistfilter.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		_, _, _, _ = ctx, runtime, home, registration
+		if strings.TrimSpace(registration.Name) != allowlistfilter.Name {
+			return nil, fmt.Errorf("unsupported filters component: %s", registration.Ref())
+		}
+		return allowlistfilter.New(storage), nil
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(guardcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return guardcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
 	}); err != nil {
 		return nil, err
 	}

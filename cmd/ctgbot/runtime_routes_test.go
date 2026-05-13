@@ -272,7 +272,7 @@ func shortChatIDForTest(t *testing.T, storage repository.Storage, chatID modeluu
 	return shortID
 }
 
-func TestComponentGuardSetStatusReplacesAndClearDisables(t *testing.T) {
+func TestChatComponentFilterRoutesBindSourceBinding(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		_ = root
 		store, err := clistate.NewCwd("ctgbot", "config")
@@ -283,112 +283,89 @@ func TestComponentGuardSetStatusReplacesAndClearDisables(t *testing.T) {
 		router := clir.New()
 		registerRuntimeRoutes(router, store, nil)
 
-		if err := router.Run(context.Background(), []string{"component", "register", "gmail/work", "--runtime", "local"}); err != nil {
-			t.Fatalf("register source: %v", err)
-		}
-		if err := router.Run(context.Background(), []string{"component", "register", "llamacpp/qwen3-q5", "--runtime", "backend"}); err != nil {
-			t.Fatalf("register first guard: %v", err)
-		}
-		if err := router.Run(context.Background(), []string{"component", "register", "llamacpp/gemma4-e4b", "--runtime", "backend"}); err != nil {
-			t.Fatalf("register second guard: %v", err)
+		for _, argv := range [][]string{
+			{"component", "register", "gmail/work", "--runtime", "local"},
+			{"component", "register", "filters/allowlist", "--runtime", "local"},
+			{"component", "register", "guard/qwen", "--runtime", "local"},
+			{"chat", "create", "team"},
+		} {
+			if err := router.Run(context.Background(), argv); err != nil {
+				t.Fatalf("router.Run(%v): %v", argv, err)
+			}
 		}
 
-		output := captureStdout(t, func() {
-			if err := router.Run(context.Background(), []string{"component", "gmail/work", "guard", "set", "llamacpp/qwen3-q5"}); err != nil {
-				t.Fatalf("component guard set: %v", err)
+		system, err := systempkg.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
+		if err != nil {
+			t.Fatalf("open runtime: %v", err)
+		}
+		chats, err := system.Storage.Chats().List(context.Background())
+		if err != nil {
+			t.Fatalf("list chats: %v", err)
+		}
+		if len(chats) != 1 {
+			t.Fatalf("chat count = %d, want 1", len(chats))
+		}
+		chatID := chats[0].ID.String()
+		if err := router.Run(context.Background(), []string{"chat", chatID, "component", "add", "source", "gmail/work", "--external-channel-id", "work@example.com"}); err != nil {
+			t.Fatalf("component add source: %v", err)
+		}
+
+		setOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", chatID, "component", "gmail/work", "filter", "add", "filters/allowlist"}); err != nil {
+				t.Fatalf("filter add: %v", err)
 			}
 		})
-		if !strings.Contains(output, "component guard set") || !strings.Contains(output, "source: gmail/work") || !strings.Contains(output, "guard: llamacpp/qwen3-q5") {
-			t.Fatalf("unexpected guard set output: %q", output)
+		if !strings.Contains(setOutput, "chat component filter add") || !strings.Contains(setOutput, "external_channel_id: work@example.com") || !strings.Contains(setOutput, "filter: filters/allowlist") {
+			t.Fatalf("unexpected filter add output: %q", setOutput)
 		}
 
-		system, source, firstGuard, secondGuard := openSourceGuardTestSystem(t, store)
-		bindings, err := system.Storage.ComponentBindings().ListEnabledBySourceAndRole(context.Background(), source.ID, coremodel.ComponentBindingRoleGuard)
+		system, err = systempkg.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
 		if err != nil {
-			t.Fatalf("list guard bindings: %v", err)
+			t.Fatalf("reopen runtime: %v", err)
+		}
+		source, err := system.Storage.Components().GetByTypeAndName(context.Background(), "gmail", "work")
+		if err != nil || source == nil {
+			t.Fatalf("source = %#v err=%v", source, err)
+		}
+		sourceBinding, err := system.Storage.ChatComponents().FindByComponentRoleAndExternalChannelID(context.Background(), source.ID, coremodel.ChatComponentRoleSource, "work@example.com")
+		if err != nil || sourceBinding == nil {
+			t.Fatalf("source binding = %#v err=%v", sourceBinding, err)
+		}
+		bindings, err := system.Storage.InboundFilterBindings().ListEnabledBySourceBindingID(context.Background(), sourceBinding.ID)
+		if err != nil {
+			t.Fatalf("list inbound filter bindings: %v", err)
 		}
 		if got, want := len(bindings), 1; got != want {
-			t.Fatalf("enabled guard bindings = %d, want %d", got, want)
-		}
-		if bindings[0].TargetComponentID != firstGuard.ID {
-			t.Fatalf("guard target = %s, want %s", bindings[0].TargetComponentID, firstGuard.ID)
+			t.Fatalf("enabled filter bindings = %d, want %d", got, want)
 		}
 
 		statusOutput := captureStdout(t, func() {
-			if err := router.Run(context.Background(), []string{"component", "gmail/work", "guard", "status"}); err != nil {
-				t.Fatalf("component guard status: %v", err)
+			if err := router.Run(context.Background(), []string{"chat", chatID, "component", "gmail/work", "filter", "list"}); err != nil {
+				t.Fatalf("filter list: %v", err)
 			}
 		})
-		if !strings.Contains(statusOutput, "component guard status") || !strings.Contains(statusOutput, "guard: llamacpp/qwen3-q5") {
-			t.Fatalf("unexpected guard status output: %q", statusOutput)
-		}
-		if err := router.Run(context.Background(), []string{"component", "gmail/work", "guard", "status", "--state-root", "other"}); err == nil {
-			t.Fatal("component guard status accepted removed state-root flag")
-		}
-
-		if err := router.Run(context.Background(), []string{"component", "gmail/work", "guard", "set", "llamacpp/gemma4-e4b"}); err != nil {
-			t.Fatalf("replace component guard: %v", err)
-		}
-		system, source, _, secondGuard = openSourceGuardTestSystem(t, store)
-		bindings, err = system.Storage.ComponentBindings().ListEnabledBySourceAndRole(context.Background(), source.ID, coremodel.ComponentBindingRoleGuard)
-		if err != nil {
-			t.Fatalf("list replaced guard bindings: %v", err)
-		}
-		if got, want := len(bindings), 1; got != want {
-			t.Fatalf("enabled guard bindings after replace = %d, want %d", got, want)
-		}
-		if bindings[0].TargetComponentID != secondGuard.ID {
-			t.Fatalf("replaced guard target = %s, want %s", bindings[0].TargetComponentID, secondGuard.ID)
+		if !strings.Contains(statusOutput, "chat component filter list") || !strings.Contains(statusOutput, "filter: filters/allowlist") {
+			t.Fatalf("unexpected filter list output: %q", statusOutput)
 		}
 
 		clearOutput := captureStdout(t, func() {
-			if err := router.Run(context.Background(), []string{"component", "gmail/work", "guard", "clear"}); err != nil {
-				t.Fatalf("component guard clear: %v", err)
+			if err := router.Run(context.Background(), []string{"chat", chatID, "component", "gmail/work", "filter", "clear"}); err != nil {
+				t.Fatalf("filter clear: %v", err)
 			}
 		})
-		if !strings.Contains(clearOutput, "component guard cleared") || !strings.Contains(clearOutput, "disabled: 1") {
-			t.Fatalf("unexpected guard clear output: %q", clearOutput)
+		if !strings.Contains(clearOutput, "chat component filter cleared") || !strings.Contains(clearOutput, "disabled: 1") {
+			t.Fatalf("unexpected filter clear output: %q", clearOutput)
 		}
-		system, source, _, _ = openSourceGuardTestSystem(t, store)
-		bindings, err = system.Storage.ComponentBindings().ListEnabledBySourceAndRole(context.Background(), source.ID, coremodel.ComponentBindingRoleGuard)
-		if err != nil {
-			t.Fatalf("list cleared guard bindings: %v", err)
-		}
-		if got := len(bindings); got != 0 {
-			t.Fatalf("enabled guard bindings after clear = %d, want 0", got)
+
+		guardOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"chat", chatID, "component", "gmail/work", "filter", "add", "guard/qwen"}); err != nil {
+				t.Fatalf("guard filter add: %v", err)
+			}
+		})
+		if !strings.Contains(guardOutput, "chat component filter add") || !strings.Contains(guardOutput, "filter: guard/qwen") {
+			t.Fatalf("unexpected guard filter add output: %q", guardOutput)
 		}
 	})
-}
-
-func openSourceGuardTestSystem(t *testing.T, store *clistate.Store) (*systempkg.System, *coremodel.Component, *coremodel.Component, *coremodel.Component) {
-	t.Helper()
-
-	system, err := systempkg.Open(context.Background(), "", "", store, log.New(io.Discard, "", 0))
-	if err != nil {
-		t.Fatalf("open runtime: %v", err)
-	}
-	source, err := system.Storage.Components().GetByTypeAndName(context.Background(), "gmail", "work")
-	if err != nil {
-		t.Fatalf("get source: %v", err)
-	}
-	if source == nil {
-		t.Fatal("expected source component")
-	}
-	firstGuard, err := system.Storage.Components().GetByTypeAndName(context.Background(), "llamacpp", "qwen3-q5")
-	if err != nil {
-		t.Fatalf("get first guard: %v", err)
-	}
-	if firstGuard == nil {
-		t.Fatal("expected first guard component")
-	}
-	secondGuard, err := system.Storage.Components().GetByTypeAndName(context.Background(), "llamacpp", "gemma4-e4b")
-	if err != nil {
-		t.Fatalf("get second guard: %v", err)
-	}
-	if secondGuard == nil {
-		t.Fatal("expected second guard component")
-	}
-	return system, source, firstGuard, secondGuard
 }
 
 func TestComponentCommandRouteUsesBoundCLISurface(t *testing.T) {

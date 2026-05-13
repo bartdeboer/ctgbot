@@ -12,6 +12,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/inbound"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -54,8 +55,8 @@ func (r fakeResolver) ResolveComponent(ctx context.Context, id modeluuid.UUID) (
 	switch registration.Type {
 	case "source":
 		impl = fakeSource{}
-	case "guard":
-		impl = fakeGuard{}
+	case "filters":
+		impl = fakeFilter{}
 	case "cli":
 		impl = fakeCLI{}
 	case "image":
@@ -157,12 +158,13 @@ func (fakeSource) DefaultSourceExternalChannelID(ctx context.Context) (string, e
 	return "source-default", nil
 }
 
-type fakeGuard struct{}
+type fakeFilter struct{}
 
-func (fakeGuard) Type() string { return "guard" }
-func (fakeGuard) HandleCompletion(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
-	_, _ = ctx, request
-	return nil, nil
+func (fakeFilter) InboundFilterPrecedence() int { return 10000 }
+func (fakeFilter) Type() string                 { return "filters" }
+func (fakeFilter) FilterInbound(ctx context.Context, input inbound.ChannelEvent) (inbound.FilterResult, error) {
+	_ = ctx
+	return inbound.Drop(input, "fake-filter"), nil
 }
 
 type fakeCLI struct{}
@@ -208,61 +210,121 @@ func (f fakeImageProvider) RuntimeImageTargets(ctx context.Context) ([]runtimeim
 	}}, nil
 }
 
-func TestServiceSetStatusClearComponentGuard(t *testing.T) {
+func TestServiceAddListRemoveClearChatComponentFilters(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
 	svc := app.NewService(storage, fakeResolver{storage: storage})
 
+	chat := saveChat(t, storage, "Team")
 	source := saveComponent(t, storage, "source", "inbox")
-	firstGuard := saveComponent(t, storage, "guard", "qwen")
-	secondGuard := saveComponent(t, storage, "guard", "gemma")
+	firstFilter := saveComponent(t, storage, "filters", "allowlist")
+	secondFilter := saveComponent(t, storage, "filters", "other")
+	sourceBinding := saveChatComponent(t, storage, chat.ID, source.ID, coremodel.ChatComponentRoleSource, "inbox")
 
-	set, err := svc.SetComponentGuard(ctx, "source/inbox", "guard/qwen")
+	add, err := svc.AddChatComponentFilter(ctx, chat.ID.String(), "source/inbox", "", "filters/allowlist")
 	if err != nil {
-		t.Fatalf("SetComponentGuard() error = %v", err)
+		t.Fatalf("AddChatComponentFilter() error = %v", err)
 	}
-	if set.Source.ID != source.ID || set.Guard.ID != firstGuard.ID || set.Binding.TargetComponentID != firstGuard.ID {
-		t.Fatalf("unexpected set result: %#v", set)
+	if add.Source.ID != source.ID || add.Filter.ID != firstFilter.ID || add.SourceBinding.ID != sourceBinding.ID || add.Binding.FilterComponentID != firstFilter.ID {
+		t.Fatalf("unexpected add result: %#v", add)
 	}
 
-	status, err := svc.ComponentGuardStatus(ctx, "source/inbox")
+	list, err := svc.ListChatComponentFilters(ctx, chat.ID.String(), "source/inbox", "")
 	if err != nil {
-		t.Fatalf("ComponentGuardStatus() error = %v", err)
+		t.Fatalf("ListChatComponentFilters() error = %v", err)
 	}
-	if got, want := len(status.Bindings), 1; got != want {
-		t.Fatalf("status bindings = %d, want %d", got, want)
+	if got, want := len(list.Bindings), 1; got != want {
+		t.Fatalf("list bindings = %d, want %d", got, want)
 	}
-	if status.Bindings[0].GuardRef != "guard/qwen" {
-		t.Fatalf("guard ref = %q, want guard/qwen", status.Bindings[0].GuardRef)
+	if list.Bindings[0].FilterRef != "filters/allowlist" {
+		t.Fatalf("filter ref = %q, want filters/allowlist", list.Bindings[0].FilterRef)
 	}
 
-	if _, err := svc.SetComponentGuard(ctx, "source/inbox", "guard/gemma"); err != nil {
-		t.Fatalf("replace SetComponentGuard() error = %v", err)
+	if _, err := svc.AddChatComponentFilter(ctx, chat.ID.String(), "source/inbox", "", "filters/other"); err != nil {
+		t.Fatalf("second AddChatComponentFilter() error = %v", err)
 	}
-	bindings, err := storage.ComponentBindings().ListEnabledBySourceAndRole(ctx, source.ID, coremodel.ComponentBindingRoleGuard)
+	bindings, err := storage.InboundFilterBindings().ListEnabledBySourceBindingID(ctx, sourceBinding.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(bindings), 2; got != want {
+		t.Fatalf("enabled bindings = %d, want %d", got, want)
+	}
+	remove, err := svc.RemoveChatComponentFilter(ctx, chat.ID.String(), "source/inbox", "", "filters/other")
+	if err != nil {
+		t.Fatalf("RemoveChatComponentFilter() error = %v", err)
+	}
+	if !remove.Disabled || remove.Filter.ID != secondFilter.ID {
+		t.Fatalf("remove result = %#v, want disabled second filter", remove)
+	}
+	bindings, err = storage.InboundFilterBindings().ListEnabledBySourceBindingID(ctx, sourceBinding.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, want := len(bindings), 1; got != want {
-		t.Fatalf("enabled bindings = %d, want %d", got, want)
+		t.Fatalf("enabled bindings after remove = %d, want %d", got, want)
 	}
-	if bindings[0].TargetComponentID != secondGuard.ID {
-		t.Fatalf("enabled guard = %s, want %s", bindings[0].TargetComponentID, secondGuard.ID)
+	if bindings[0].FilterComponentID != firstFilter.ID {
+		t.Fatalf("remaining filter = %s, want %s", bindings[0].FilterComponentID, firstFilter.ID)
 	}
 
-	clear, err := svc.ClearComponentGuard(ctx, "source/inbox")
+	clear, err := svc.ClearChatComponentFilters(ctx, chat.ID.String(), "source/inbox", "")
 	if err != nil {
-		t.Fatalf("ClearComponentGuard() error = %v", err)
+		t.Fatalf("ClearChatComponentFilters() error = %v", err)
 	}
 	if clear.Disabled != 1 {
 		t.Fatalf("disabled = %d, want 1", clear.Disabled)
 	}
-	bindings, err = storage.ComponentBindings().ListEnabledBySourceAndRole(ctx, source.ID, coremodel.ComponentBindingRoleGuard)
+	bindings, err = storage.InboundFilterBindings().ListEnabledBySourceBindingID(ctx, sourceBinding.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := len(bindings); got != 0 {
 		t.Fatalf("enabled bindings after clear = %d, want 0", got)
+	}
+}
+
+func TestServiceComponentFilterRequiresExternalChannelForAmbiguousSourceBindings(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+	chat := saveChat(t, storage, "Team")
+	source := saveComponent(t, storage, "source", "inbox")
+	filter := saveComponent(t, storage, "filters", "allowlist")
+	first := saveChatComponent(t, storage, chat.ID, source.ID, coremodel.ChatComponentRoleSource, "inbox-a")
+	second := saveChatComponent(t, storage, chat.ID, source.ID, coremodel.ChatComponentRoleSource, "inbox-b")
+
+	_, err := svc.AddChatComponentFilter(ctx, chat.ID.String(), "source/inbox", "", "filters/allowlist")
+	if err == nil || !strings.Contains(err.Error(), "specify --external-channel-id") {
+		t.Fatalf("ambiguous error = %v, want external-channel-id hint", err)
+	}
+	add, err := svc.AddChatComponentFilter(ctx, chat.ID.String(), "source/inbox", "inbox-b", "filters/allowlist")
+	if err != nil {
+		t.Fatalf("AddChatComponentFilter(explicit) error = %v", err)
+	}
+	if add.Filter.ID != filter.ID || add.SourceBinding.ID != second.ID || add.SourceBinding.ID == first.ID {
+		t.Fatalf("add result = %#v, want second binding", add)
+	}
+}
+
+func TestServiceComponentFilterValidatesCapabilities(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+	chat := saveChat(t, storage, "Team")
+
+	saveComponent(t, storage, "plain", "not-source")
+	source := saveComponent(t, storage, "source", "inbox")
+	saveComponent(t, storage, "plain", "not-filter")
+	saveChatComponent(t, storage, chat.ID, source.ID, coremodel.ChatComponentRoleSource, "inbox")
+
+	_, err := svc.AddChatComponentFilter(ctx, chat.ID.String(), "plain/not-source", "", "plain/not-filter")
+	if err == nil || !strings.Contains(err.Error(), "does not support inbound source") {
+		t.Fatalf("source validation error = %v, want inbound source error", err)
+	}
+	_, err = svc.AddChatComponentFilter(ctx, chat.ID.String(), "source/inbox", "", "plain/not-filter")
+	if err == nil || !strings.Contains(err.Error(), "does not support inbound event filtering") {
+		t.Fatalf("filter validation error = %v, want inbound event filtering error", err)
 	}
 }
 
@@ -550,25 +612,6 @@ func TestServiceAddAndListChatComponents(t *testing.T) {
 	}
 }
 
-func TestServiceComponentGuardValidatesCapabilities(t *testing.T) {
-	ctx := context.Background()
-	storage := repository.NewMemory()
-	svc := app.NewService(storage, fakeResolver{storage: storage})
-
-	saveComponent(t, storage, "plain", "not-source")
-	saveComponent(t, storage, "source", "inbox")
-	saveComponent(t, storage, "plain", "not-guard")
-
-	_, err := svc.SetComponentGuard(ctx, "plain/not-source", "plain/not-guard")
-	if err == nil || !strings.Contains(err.Error(), "does not support inbound source") {
-		t.Fatalf("source validation error = %v, want inbound source error", err)
-	}
-	_, err = svc.SetComponentGuard(ctx, "source/inbox", "plain/not-guard")
-	if err == nil || !strings.Contains(err.Error(), "does not support completion provider") {
-		t.Fatalf("guard validation error = %v, want completion provider error", err)
-	}
-}
-
 func TestServiceRuntimeImageTargetsDiscoversProviders(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
@@ -596,4 +639,22 @@ func saveComponent(t *testing.T, storage repository.Storage, typ string, name st
 		t.Fatal(err)
 	}
 	return registration
+}
+
+func saveChat(t *testing.T, storage repository.Storage, label string) *coremodel.Chat {
+	t.Helper()
+	chat := &coremodel.Chat{Label: label, Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	return chat
+}
+
+func saveChatComponent(t *testing.T, storage repository.Storage, chatID modeluuid.UUID, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChannelID string) coremodel.ChatComponent {
+	t.Helper()
+	binding := coremodel.ChatComponent{ChatID: chatID, ComponentID: componentID, Role: role, ExternalChannelID: externalChannelID, Enabled: true}
+	if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+		t.Fatal(err)
+	}
+	return binding
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -21,9 +22,11 @@ type GORMStorage struct {
 	chats                   *gormChats
 	threads                 *gormThreads
 	components              *gormComponents
-	componentBindings       *gormComponentBindings
 	chatComponents          *gormChatComponents
+	inboundFilterBindings   *gormInboundFilterBindings
 	inboundDrops            *gormInboundDrops
+	droppedEvents           *gormDroppedEvents
+	allowlistSenders        *gormAllowlistSenders
 	threadComponentMappings *gormThreadComponentMappings
 	threadComponentStates   *gormThreadComponentStates
 	messages                *gormMessages
@@ -42,9 +45,11 @@ func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
 		chats:                   &gormChats{db: db},
 		threads:                 &gormThreads{db: db},
 		components:              &gormComponents{db: db},
-		componentBindings:       &gormComponentBindings{db: db},
 		chatComponents:          &gormChatComponents{db: db},
+		inboundFilterBindings:   &gormInboundFilterBindings{db: db},
 		inboundDrops:            &gormInboundDrops{db: db},
+		droppedEvents:           &gormDroppedEvents{db: db},
+		allowlistSenders:        &gormAllowlistSenders{db: db},
 		threadComponentMappings: &gormThreadComponentMappings{db: db},
 		threadComponentStates:   &gormThreadComponentStates{db: db},
 		messages:                &gormMessages{db: db},
@@ -60,9 +65,11 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.Chat{},
 		&coremodel.Thread{},
 		&coremodel.Component{},
-		&coremodel.ComponentBinding{},
 		&coremodel.ChatComponent{},
+		&coremodel.InboundFilterBinding{},
 		&coremodel.InboundDrop{},
+		&coremodel.DroppedEvent{},
+		&coremodel.AllowlistSender{},
 		&coremodel.ThreadComponentMapping{},
 		&coremodel.ThreadComponentState{},
 		&coremodel.ThreadMessage{},
@@ -104,14 +111,18 @@ func (s *GORMStorage) Transaction(ctx context.Context, fn func(repository.Storag
 	})
 }
 
-func (s *GORMStorage) Chats() repository.ChatRepository           { return s.chats }
-func (s *GORMStorage) Threads() repository.ThreadRepository       { return s.threads }
-func (s *GORMStorage) Components() repository.ComponentRepository { return s.components }
-func (s *GORMStorage) ComponentBindings() repository.ComponentBindingRepository {
-	return s.componentBindings
-}
+func (s *GORMStorage) Chats() repository.ChatRepository                   { return s.chats }
+func (s *GORMStorage) Threads() repository.ThreadRepository               { return s.threads }
+func (s *GORMStorage) Components() repository.ComponentRepository         { return s.components }
 func (s *GORMStorage) ChatComponents() repository.ChatComponentRepository { return s.chatComponents }
-func (s *GORMStorage) InboundDrops() repository.InboundDropRepository     { return s.inboundDrops }
+func (s *GORMStorage) InboundFilterBindings() repository.InboundFilterBindingRepository {
+	return s.inboundFilterBindings
+}
+func (s *GORMStorage) InboundDrops() repository.InboundDropRepository   { return s.inboundDrops }
+func (s *GORMStorage) DroppedEvents() repository.DroppedEventRepository { return s.droppedEvents }
+func (s *GORMStorage) AllowlistSenders() repository.AllowlistSenderRepository {
+	return s.allowlistSenders
+}
 func (s *GORMStorage) ThreadComponentMappings() repository.ThreadComponentMappingRepository {
 	return s.threadComponentMappings
 }
@@ -266,44 +277,6 @@ func (r *gormComponents) ListEnabled(ctx context.Context) ([]coremodel.Component
 	return out, err
 }
 
-type gormComponentBindings struct{ db *gorm.DB }
-
-func (r *gormComponentBindings) Save(ctx context.Context, binding *coremodel.ComponentBinding) error {
-	if binding.ID.IsNull() {
-		existing, err := r.GetBySourceTargetRole(ctx, binding.SourceComponentID, binding.TargetComponentID, binding.Role)
-		if err != nil {
-			return err
-		}
-		if existing != nil {
-			binding.ID = existing.ID
-		}
-	}
-	ensureID(&binding.ID)
-	return r.db.WithContext(ctx).Save(binding).Error
-}
-
-func (r *gormComponentBindings) GetBySourceTargetRole(ctx context.Context, sourceComponentID modeluuid.UUID, targetComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) (*coremodel.ComponentBinding, error) {
-	var binding coremodel.ComponentBinding
-	if err := first(r.db.WithContext(ctx).
-		Where("source_component_id = ? AND target_component_id = ? AND role = ?", sourceComponentID, targetComponentID, role).
-		First(&binding)); err != nil {
-		return nil, err
-	}
-	if binding.ID.IsNull() {
-		return nil, nil
-	}
-	return &binding, nil
-}
-
-func (r *gormComponentBindings) ListEnabledBySourceAndRole(ctx context.Context, sourceComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) ([]coremodel.ComponentBinding, error) {
-	var bindings []coremodel.ComponentBinding
-	err := r.db.WithContext(ctx).
-		Where("source_component_id = ? AND role = ? AND enabled = ?", sourceComponentID, role, true).
-		Order("created_at ASC").
-		Find(&bindings).Error
-	return bindings, err
-}
-
 type gormChatComponents struct{ db *gorm.DB }
 
 func (r *gormChatComponents) Save(ctx context.Context, binding *coremodel.ChatComponent) error {
@@ -354,6 +327,44 @@ func (r *gormChatComponents) FindByComponentRoleAndExternalChannelID(ctx context
 		return nil, nil
 	}
 	return &binding, nil
+}
+
+type gormInboundFilterBindings struct{ db *gorm.DB }
+
+func (r *gormInboundFilterBindings) Save(ctx context.Context, binding *coremodel.InboundFilterBinding) error {
+	if binding.ID.IsNull() {
+		existing, err := r.GetBySourceBindingAndFilter(ctx, binding.SourceBindingID, binding.FilterComponentID)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			binding.ID = existing.ID
+		}
+	}
+	ensureID(&binding.ID)
+	return r.db.WithContext(ctx).Save(binding).Error
+}
+
+func (r *gormInboundFilterBindings) GetBySourceBindingAndFilter(ctx context.Context, sourceBindingID modeluuid.UUID, filterComponentID modeluuid.UUID) (*coremodel.InboundFilterBinding, error) {
+	var binding coremodel.InboundFilterBinding
+	if err := first(r.db.WithContext(ctx).
+		Where("source_binding_id = ? AND filter_component_id = ?", sourceBindingID, filterComponentID).
+		First(&binding)); err != nil {
+		return nil, err
+	}
+	if binding.ID.IsNull() {
+		return nil, nil
+	}
+	return &binding, nil
+}
+
+func (r *gormInboundFilterBindings) ListEnabledBySourceBindingID(ctx context.Context, sourceBindingID modeluuid.UUID) ([]coremodel.InboundFilterBinding, error) {
+	var bindings []coremodel.InboundFilterBinding
+	err := r.db.WithContext(ctx).
+		Where("source_binding_id = ? AND enabled = ?", sourceBindingID, true).
+		Order("created_at ASC").
+		Find(&bindings).Error
+	return bindings, err
 }
 
 type gormInboundDrops struct{ db *gorm.DB }
@@ -408,6 +419,106 @@ func (r *gormInboundDrops) DeleteByComponentAndExternalChannelID(ctx context.Con
 		Where("component_id = ? AND external_channel_id = ?", componentID, clean(externalChannelID)).
 		Delete(&coremodel.InboundDrop{}).
 		Error
+}
+
+type gormDroppedEvents struct{ db *gorm.DB }
+
+func (r *gormDroppedEvents) Save(ctx context.Context, event *coremodel.DroppedEvent) error {
+	event.ProviderChannelID = clean(event.ProviderChannelID)
+	event.ProviderThreadID = clean(event.ProviderThreadID)
+	event.ProviderMessageID = clean(event.ProviderMessageID)
+	event.SenderKey = clean(event.SenderKey)
+	event.SenderLabel = strings.TrimSpace(event.SenderLabel)
+	event.Subject = strings.TrimSpace(event.Subject)
+	event.Preview = strings.TrimSpace(event.Preview)
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now()
+	}
+	if event.ExpiresAt.IsZero() {
+		event.ExpiresAt = event.CreatedAt.Add(30 * 24 * time.Hour)
+	}
+	ensureID(&event.ID)
+	return r.db.WithContext(ctx).Save(event).Error
+}
+
+func (r *gormDroppedEvents) GetByID(ctx context.Context, eventID modeluuid.UUID) (*coremodel.DroppedEvent, error) {
+	var event coremodel.DroppedEvent
+	if err := first(r.db.WithContext(ctx).Where("id = ?", eventID).First(&event)); err != nil {
+		return nil, err
+	}
+	if event.ID.IsNull() {
+		return nil, nil
+	}
+	return &event, nil
+}
+
+func (r *gormDroppedEvents) ListIDs(ctx context.Context) ([]modeluuid.UUID, error) {
+	var events []coremodel.DroppedEvent
+	if err := r.db.WithContext(ctx).Select("id").Find(&events).Error; err != nil {
+		return nil, err
+	}
+	ids := make([]modeluuid.UUID, 0, len(events))
+	for _, event := range events {
+		if event.ID.IsNull() {
+			continue
+		}
+		ids = append(ids, event.ID)
+	}
+	return ids, nil
+}
+
+func (r *gormDroppedEvents) DeleteExpired(ctx context.Context, now time.Time) (int64, error) {
+	result := r.db.WithContext(ctx).
+		Where("expires_at <= ?", now).
+		Delete(&coremodel.DroppedEvent{})
+	return result.RowsAffected, result.Error
+}
+
+type gormAllowlistSenders struct{ db *gorm.DB }
+
+func (r *gormAllowlistSenders) Save(ctx context.Context, sender *coremodel.AllowlistSender) error {
+	sender.SenderKey = clean(sender.SenderKey)
+	sender.SenderLabel = strings.TrimSpace(sender.SenderLabel)
+	if sender.ID.IsNull() {
+		existing, err := r.GetBySourceBindingAndSenderKey(ctx, sender.SourceBindingID, sender.SenderKey)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			sender.ID = existing.ID
+		}
+	}
+	ensureID(&sender.ID)
+	return r.db.WithContext(ctx).Save(sender).Error
+}
+
+func (r *gormAllowlistSenders) GetBySourceBindingAndSenderKey(ctx context.Context, sourceBindingID modeluuid.UUID, senderKey string) (*coremodel.AllowlistSender, error) {
+	var sender coremodel.AllowlistSender
+	if err := first(r.db.WithContext(ctx).
+		Where("source_binding_id = ? AND sender_key = ?", sourceBindingID, clean(senderKey)).
+		First(&sender)); err != nil {
+		return nil, err
+	}
+	if sender.ID.IsNull() {
+		return nil, nil
+	}
+	return &sender, nil
+}
+
+func (r *gormAllowlistSenders) ListBySourceBindingID(ctx context.Context, sourceBindingID modeluuid.UUID) ([]coremodel.AllowlistSender, error) {
+	var senders []coremodel.AllowlistSender
+	err := r.db.WithContext(ctx).
+		Where("source_binding_id = ?", sourceBindingID).
+		Order("sender_key ASC").
+		Find(&senders).Error
+	return senders, err
+}
+
+func (r *gormAllowlistSenders) DeleteBySourceBindingAndSenderKey(ctx context.Context, sourceBindingID modeluuid.UUID, senderKey string) (bool, error) {
+	result := r.db.WithContext(ctx).
+		Where("source_binding_id = ? AND sender_key = ?", sourceBindingID, clean(senderKey)).
+		Delete(&coremodel.AllowlistSender{})
+	return result.RowsAffected > 0, result.Error
 }
 
 type gormThreadComponentMappings struct{ db *gorm.DB }

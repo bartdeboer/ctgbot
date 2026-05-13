@@ -17,9 +17,11 @@ type MemoryStorage struct {
 	chats                   map[modeluuid.UUID]coremodel.Chat
 	threads                 map[modeluuid.UUID]coremodel.Thread
 	components              map[modeluuid.UUID]coremodel.Component
-	componentBindings       map[modeluuid.UUID]coremodel.ComponentBinding
 	chatComponents          map[modeluuid.UUID]coremodel.ChatComponent
+	inboundFilterBindings   map[modeluuid.UUID]coremodel.InboundFilterBinding
 	inboundDrops            map[modeluuid.UUID]coremodel.InboundDrop
+	droppedEvents           map[modeluuid.UUID]coremodel.DroppedEvent
+	allowlistSenders        map[modeluuid.UUID]coremodel.AllowlistSender
 	threadComponentMappings map[modeluuid.UUID]coremodel.ThreadComponentMapping
 	threadComponentStates   map[modeluuid.UUID]coremodel.ThreadComponentState
 	messages                map[modeluuid.UUID]coremodel.ThreadMessage
@@ -31,9 +33,11 @@ func NewMemory() *MemoryStorage {
 		chats:                   map[modeluuid.UUID]coremodel.Chat{},
 		threads:                 map[modeluuid.UUID]coremodel.Thread{},
 		components:              map[modeluuid.UUID]coremodel.Component{},
-		componentBindings:       map[modeluuid.UUID]coremodel.ComponentBinding{},
 		chatComponents:          map[modeluuid.UUID]coremodel.ChatComponent{},
+		inboundFilterBindings:   map[modeluuid.UUID]coremodel.InboundFilterBinding{},
 		inboundDrops:            map[modeluuid.UUID]coremodel.InboundDrop{},
+		droppedEvents:           map[modeluuid.UUID]coremodel.DroppedEvent{},
+		allowlistSenders:        map[modeluuid.UUID]coremodel.AllowlistSender{},
 		threadComponentMappings: map[modeluuid.UUID]coremodel.ThreadComponentMapping{},
 		threadComponentStates:   map[modeluuid.UUID]coremodel.ThreadComponentState{},
 		messages:                map[modeluuid.UUID]coremodel.ThreadMessage{},
@@ -59,14 +63,18 @@ func (s *MemoryStorage) Transaction(ctx context.Context, fn func(Storage) error)
 	return nil
 }
 
-func (s *MemoryStorage) Chats() ChatRepository           { return memoryChats{s} }
-func (s *MemoryStorage) Threads() ThreadRepository       { return memoryThreads{s} }
-func (s *MemoryStorage) Components() ComponentRepository { return memoryComponents{s} }
-func (s *MemoryStorage) ComponentBindings() ComponentBindingRepository {
-	return memoryComponentBindings{s}
-}
+func (s *MemoryStorage) Chats() ChatRepository                   { return memoryChats{s} }
+func (s *MemoryStorage) Threads() ThreadRepository               { return memoryThreads{s} }
+func (s *MemoryStorage) Components() ComponentRepository         { return memoryComponents{s} }
 func (s *MemoryStorage) ChatComponents() ChatComponentRepository { return memoryChatComponents{s} }
-func (s *MemoryStorage) InboundDrops() InboundDropRepository     { return memoryInboundDrops{s} }
+func (s *MemoryStorage) InboundFilterBindings() InboundFilterBindingRepository {
+	return memoryInboundFilterBindings{s}
+}
+func (s *MemoryStorage) InboundDrops() InboundDropRepository   { return memoryInboundDrops{s} }
+func (s *MemoryStorage) DroppedEvents() DroppedEventRepository { return memoryDroppedEvents{s} }
+func (s *MemoryStorage) AllowlistSenders() AllowlistSenderRepository {
+	return memoryAllowlistSenders{s}
+}
 func (s *MemoryStorage) ThreadComponentMappings() ThreadComponentMappingRepository {
 	return memoryThreadMappings{s}
 }
@@ -87,14 +95,20 @@ func (s *MemoryStorage) cloneLocked() *MemoryStorage {
 	for k, v := range s.components {
 		clone.components[k] = v
 	}
-	for k, v := range s.componentBindings {
-		clone.componentBindings[k] = v
-	}
 	for k, v := range s.chatComponents {
 		clone.chatComponents[k] = v
 	}
+	for k, v := range s.inboundFilterBindings {
+		clone.inboundFilterBindings[k] = v
+	}
 	for k, v := range s.inboundDrops {
 		clone.inboundDrops[k] = v
+	}
+	for k, v := range s.droppedEvents {
+		clone.droppedEvents[k] = v
+	}
+	for k, v := range s.allowlistSenders {
+		clone.allowlistSenders[k] = v
 	}
 	for k, v := range s.threadComponentMappings {
 		clone.threadComponentMappings[k] = v
@@ -118,9 +132,11 @@ func (s *MemoryStorage) replaceLocked(next *MemoryStorage) {
 	s.chats = next.chats
 	s.threads = next.threads
 	s.components = next.components
-	s.componentBindings = next.componentBindings
 	s.chatComponents = next.chatComponents
+	s.inboundFilterBindings = next.inboundFilterBindings
 	s.inboundDrops = next.inboundDrops
+	s.droppedEvents = next.droppedEvents
+	s.allowlistSenders = next.allowlistSenders
 	s.threadComponentMappings = next.threadComponentMappings
 	s.threadComponentStates = next.threadComponentStates
 	s.messages = next.messages
@@ -322,64 +338,6 @@ func (r memoryComponents) ListEnabled(ctx context.Context) ([]coremodel.Componen
 	return out, nil
 }
 
-type memoryComponentBindings struct{ s *MemoryStorage }
-
-func (r memoryComponentBindings) Save(ctx context.Context, binding *coremodel.ComponentBinding) error {
-	_ = ctx
-	if binding == nil {
-		return nil
-	}
-	r.s.mu.Lock()
-	defer r.s.mu.Unlock()
-	now := time.Now()
-	if binding.ID.IsNull() {
-		for id, existing := range r.s.componentBindings {
-			if existing.SourceComponentID == binding.SourceComponentID && existing.TargetComponentID == binding.TargetComponentID && existing.Role == binding.Role {
-				binding.ID = id
-				if binding.CreatedAt.IsZero() {
-					binding.CreatedAt = existing.CreatedAt
-				}
-				break
-			}
-		}
-	}
-	if binding.ID.IsNull() {
-		binding.ID = modeluuid.New()
-		binding.CreatedAt = now
-	} else if existing, ok := r.s.componentBindings[binding.ID]; ok && binding.CreatedAt.IsZero() {
-		binding.CreatedAt = existing.CreatedAt
-	}
-	binding.UpdatedAt = now
-	r.s.componentBindings[binding.ID] = *binding
-	return nil
-}
-
-func (r memoryComponentBindings) GetBySourceTargetRole(ctx context.Context, sourceComponentID modeluuid.UUID, targetComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) (*coremodel.ComponentBinding, error) {
-	_ = ctx
-	r.s.mu.Lock()
-	defer r.s.mu.Unlock()
-	for _, binding := range r.s.componentBindings {
-		if binding.SourceComponentID == sourceComponentID && binding.TargetComponentID == targetComponentID && binding.Role == role {
-			copy := binding
-			return &copy, nil
-		}
-	}
-	return nil, nil
-}
-
-func (r memoryComponentBindings) ListEnabledBySourceAndRole(ctx context.Context, sourceComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) ([]coremodel.ComponentBinding, error) {
-	_ = ctx
-	r.s.mu.Lock()
-	defer r.s.mu.Unlock()
-	var out []coremodel.ComponentBinding
-	for _, binding := range r.s.componentBindings {
-		if binding.SourceComponentID == sourceComponentID && binding.Role == role && binding.Enabled {
-			out = append(out, binding)
-		}
-	}
-	return out, nil
-}
-
 type memoryChatComponents struct{ s *MemoryStorage }
 
 func (r memoryChatComponents) Save(ctx context.Context, binding *coremodel.ChatComponent) error {
@@ -439,6 +397,65 @@ func (r memoryChatComponents) FindByComponentRoleAndExternalChannelID(ctx contex
 		}
 	}
 	return nil, nil
+}
+
+type memoryInboundFilterBindings struct{ s *MemoryStorage }
+
+func (r memoryInboundFilterBindings) Save(ctx context.Context, binding *coremodel.InboundFilterBinding) error {
+	_ = ctx
+	if binding == nil {
+		return nil
+	}
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	now := time.Now()
+	if binding.ID.IsNull() {
+		for id, existing := range r.s.inboundFilterBindings {
+			if existing.SourceBindingID == binding.SourceBindingID && existing.FilterComponentID == binding.FilterComponentID {
+				binding.ID = id
+				if binding.CreatedAt.IsZero() {
+					binding.CreatedAt = existing.CreatedAt
+				}
+				break
+			}
+		}
+	}
+	if binding.ID.IsNull() {
+		binding.ID = modeluuid.New()
+		binding.CreatedAt = now
+	} else if existing, ok := r.s.inboundFilterBindings[binding.ID]; ok && binding.CreatedAt.IsZero() {
+		binding.CreatedAt = existing.CreatedAt
+	}
+	binding.UpdatedAt = now
+	r.s.inboundFilterBindings[binding.ID] = *binding
+	return nil
+}
+
+func (r memoryInboundFilterBindings) GetBySourceBindingAndFilter(ctx context.Context, sourceBindingID modeluuid.UUID, filterComponentID modeluuid.UUID) (*coremodel.InboundFilterBinding, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for _, binding := range r.s.inboundFilterBindings {
+		if binding.SourceBindingID == sourceBindingID && binding.FilterComponentID == filterComponentID {
+			copy := binding
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r memoryInboundFilterBindings) ListEnabledBySourceBindingID(ctx context.Context, sourceBindingID modeluuid.UUID) ([]coremodel.InboundFilterBinding, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var out []coremodel.InboundFilterBinding
+	for _, binding := range r.s.inboundFilterBindings {
+		if binding.SourceBindingID == sourceBindingID && binding.Enabled {
+			out = append(out, binding)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
 }
 
 type memoryInboundDrops struct{ s *MemoryStorage }
@@ -525,6 +542,154 @@ func (r memoryInboundDrops) DeleteByComponentAndExternalChannelID(ctx context.Co
 		}
 	}
 	return nil
+}
+
+type memoryDroppedEvents struct{ s *MemoryStorage }
+
+func (r memoryDroppedEvents) Save(ctx context.Context, event *coremodel.DroppedEvent) error {
+	_ = ctx
+	if event == nil {
+		return nil
+	}
+	event.ProviderChannelID = strings.TrimSpace(event.ProviderChannelID)
+	event.ProviderThreadID = strings.TrimSpace(event.ProviderThreadID)
+	event.ProviderMessageID = strings.TrimSpace(event.ProviderMessageID)
+	event.SenderKey = strings.TrimSpace(event.SenderKey)
+	event.SenderLabel = strings.TrimSpace(event.SenderLabel)
+	event.Subject = strings.TrimSpace(event.Subject)
+	event.Preview = strings.TrimSpace(event.Preview)
+	now := time.Now()
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = now
+	}
+	if event.ExpiresAt.IsZero() {
+		event.ExpiresAt = event.CreatedAt.Add(30 * 24 * time.Hour)
+	}
+	if event.ID.IsNull() {
+		event.ID = modeluuid.New()
+	}
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	r.s.droppedEvents[event.ID] = *event
+	return nil
+}
+
+func (r memoryDroppedEvents) GetByID(ctx context.Context, eventID modeluuid.UUID) (*coremodel.DroppedEvent, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	event, ok := r.s.droppedEvents[eventID]
+	if !ok {
+		return nil, nil
+	}
+	return &event, nil
+}
+
+func (r memoryDroppedEvents) ListIDs(ctx context.Context) ([]modeluuid.UUID, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	ids := make([]modeluuid.UUID, 0, len(r.s.droppedEvents))
+	for id := range r.s.droppedEvents {
+		if id.IsNull() {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func (r memoryDroppedEvents) DeleteExpired(ctx context.Context, now time.Time) (int64, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var deleted int64
+	for id, event := range r.s.droppedEvents {
+		if !event.ExpiresAt.IsZero() && !event.ExpiresAt.After(now) {
+			delete(r.s.droppedEvents, id)
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
+type memoryAllowlistSenders struct{ s *MemoryStorage }
+
+func (r memoryAllowlistSenders) Save(ctx context.Context, sender *coremodel.AllowlistSender) error {
+	_ = ctx
+	if sender == nil {
+		return nil
+	}
+	sender.SenderKey = strings.TrimSpace(sender.SenderKey)
+	sender.SenderLabel = strings.TrimSpace(sender.SenderLabel)
+	now := time.Now()
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	if sender.ID.IsNull() {
+		for id, existing := range r.s.allowlistSenders {
+			if existing.SourceBindingID == sender.SourceBindingID && strings.TrimSpace(existing.SenderKey) == sender.SenderKey {
+				sender.ID = id
+				if sender.CreatedAt.IsZero() {
+					sender.CreatedAt = existing.CreatedAt
+				}
+				break
+			}
+		}
+	}
+	if sender.ID.IsNull() {
+		sender.ID = modeluuid.New()
+		sender.CreatedAt = now
+	} else if existing, ok := r.s.allowlistSenders[sender.ID]; ok && sender.CreatedAt.IsZero() {
+		sender.CreatedAt = existing.CreatedAt
+	}
+	sender.UpdatedAt = now
+	r.s.allowlistSenders[sender.ID] = *sender
+	return nil
+}
+
+func (r memoryAllowlistSenders) GetBySourceBindingAndSenderKey(ctx context.Context, sourceBindingID modeluuid.UUID, senderKey string) (*coremodel.AllowlistSender, error) {
+	_ = ctx
+	senderKey = strings.TrimSpace(senderKey)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for _, sender := range r.s.allowlistSenders {
+		if sender.SourceBindingID == sourceBindingID && strings.TrimSpace(sender.SenderKey) == senderKey {
+			copy := sender
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r memoryAllowlistSenders) ListBySourceBindingID(ctx context.Context, sourceBindingID modeluuid.UUID) ([]coremodel.AllowlistSender, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	out := make([]coremodel.AllowlistSender, 0, len(r.s.allowlistSenders))
+	for _, sender := range r.s.allowlistSenders {
+		if sender.SourceBindingID == sourceBindingID {
+			out = append(out, sender)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].SenderKey < out[j].SenderKey
+	})
+	return out, nil
+}
+
+func (r memoryAllowlistSenders) DeleteBySourceBindingAndSenderKey(ctx context.Context, sourceBindingID modeluuid.UUID, senderKey string) (bool, error) {
+	_ = ctx
+	senderKey = strings.TrimSpace(senderKey)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	deleted := false
+	for id, sender := range r.s.allowlistSenders {
+		if sender.SourceBindingID == sourceBindingID && strings.TrimSpace(sender.SenderKey) == senderKey {
+			delete(r.s.allowlistSenders, id)
+			deleted = true
+		}
+	}
+	return deleted, nil
 }
 
 type memoryThreadMappings struct{ s *MemoryStorage }

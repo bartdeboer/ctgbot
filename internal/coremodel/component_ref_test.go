@@ -46,12 +46,3 @@ func TestChatComponentRoleValid(t *testing.T) {
 		t.Fatal("expected unknown role to be invalid")
 	}
 }
-
-func TestComponentBindingRoleValid(t *testing.T) {
-	if !ComponentBindingRoleGuard.Valid() {
-		t.Fatal("expected guard binding role to be valid")
-	}
-	if ComponentBindingRole("weird").Valid() {
-		t.Fatal("expected unknown binding role to be invalid")
-	}
-}

@@ -13,6 +13,7 @@ import (
 	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
+	allowlistfilter "github.com/bartdeboer/ctgbot/internal/component/filter/allowlist"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
@@ -117,6 +118,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	globalSurfaces = append(globalSurfaces,
 		componentadmin.New(storage, resolver),
 		brokercomponent.New(b),
+		allowlistfilter.New(storage),
 		messagingcomponent.New(messaging.New(storage), b),
 	)
 	if provider, ok := resolver.(interface{ AppConfig() *appstate.Config }); ok {

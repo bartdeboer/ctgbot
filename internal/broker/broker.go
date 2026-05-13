@@ -27,17 +27,15 @@ type InstanceResolver interface {
 type App interface {
 	Repository() repository.Storage
 	InstanceResolver
-	InboundEventFilters() []inbound.Filter
 }
 
 type Broker struct {
-	App                 App
-	Storage             repository.Storage
-	Resolver            InstanceResolver
-	Mapper              ThreadComponentMapper
-	Turns               *ThreadTurnGate
-	Logf                func(format string, args ...any)
-	InboundEventFilters []inbound.Filter
+	App      App
+	Storage  repository.Storage
+	Resolver InstanceResolver
+	Mapper   ThreadComponentMapper
+	Turns    *ThreadTurnGate
+	Logf     func(format string, args ...any)
 }
 
 type EventOutcome struct {
@@ -75,19 +73,18 @@ func New(app App, logf func(format string, args ...any)) *Broker {
 	if app == nil {
 		return NewWithDeps(nil, nil, logf)
 	}
-	broker := NewWithDeps(app.Repository(), app, logf, app.InboundEventFilters()...)
+	broker := NewWithDeps(app.Repository(), app, logf)
 	broker.App = app
 	return broker
 }
 
-func NewWithDeps(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any), filters ...inbound.Filter) *Broker {
+func NewWithDeps(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any)) *Broker {
 	return &Broker{
-		Storage:             storage,
-		Resolver:            resolver,
-		Mapper:              NewThreadComponentMapper(storage),
-		Turns:               NewThreadTurnGate(),
-		Logf:                logf,
-		InboundEventFilters: eventFilters(filters...),
+		Storage:  storage,
+		Resolver: resolver,
+		Mapper:   NewThreadComponentMapper(storage),
+		Turns:    NewThreadTurnGate(),
+		Logf:     logf,
 	}
 }
 
@@ -130,13 +127,25 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		return EventOutcome{Dropped: true}, nil
 	}
 
-	routedEvent, rejection, err := b.FilteredEvent(ctx, channel)
+	filterChain, failure, err := b.FilterChainForChannel(ctx, channel)
 	if err != nil {
 		return EventOutcome{}, err
 	}
-	if rejection != nil {
-		b.handleInboundRejection(ctx, rejection)
+	if failure != nil {
+		b.handleInboundRejection(ctx, b.inboundFilterRejection(channel, event, *failure))
 		return EventOutcome{Dropped: true}, nil
+	}
+	filterResult, err := filterChain.Run(ctx, inbound.ChannelEvent{Channel: channel, Event: event})
+	if err != nil {
+		return EventOutcome{}, err
+	}
+	if filterResult.Action == inbound.FilterActionDrop || filterResult.Action == inbound.FilterActionQuarantine {
+		b.handleInboundRejection(ctx, b.inboundFilterRejection(channel, event, filterResult))
+		return EventOutcome{Dropped: true}, nil
+	}
+	routedEvent := filterResult.Event
+	if routedEvent.ComponentID.IsNull() {
+		routedEvent = event
 	}
 
 	thread, err := b.Mapper.EnsureThread(ctx, channel.SourceBinding, strings.TrimSpace(routedEvent.Payload.ProviderThreadID))

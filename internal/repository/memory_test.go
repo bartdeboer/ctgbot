@@ -204,6 +204,89 @@ func TestMemoryInboundDropsSaveListGetDelete(t *testing.T) {
 	}
 }
 
+func TestMemoryDroppedEventsAndAllowlistSenders(t *testing.T) {
+	ctx := context.Background()
+	storage := NewMemory()
+	sourceBindingID := modeluuid.New()
+	filterComponentID := modeluuid.New()
+
+	filterBinding := &coremodel.InboundFilterBinding{SourceBindingID: sourceBindingID, FilterComponentID: filterComponentID, Enabled: true}
+	if err := storage.InboundFilterBindings().Save(ctx, filterBinding); err != nil {
+		t.Fatalf("InboundFilterBindings().Save() error = %v", err)
+	}
+	loadedFilterBinding, err := storage.InboundFilterBindings().GetBySourceBindingAndFilter(ctx, sourceBindingID, filterComponentID)
+	if err != nil {
+		t.Fatalf("InboundFilterBindings().GetBySourceBindingAndFilter() error = %v", err)
+	}
+	if loadedFilterBinding == nil || loadedFilterBinding.ID.IsNull() {
+		t.Fatalf("loaded inbound filter binding = %#v", loadedFilterBinding)
+	}
+	filterBindings, err := storage.InboundFilterBindings().ListEnabledBySourceBindingID(ctx, sourceBindingID)
+	if err != nil {
+		t.Fatalf("InboundFilterBindings().ListEnabledBySourceBindingID() error = %v", err)
+	}
+	if len(filterBindings) != 1 {
+		t.Fatalf("inbound filter binding count = %d, want 1", len(filterBindings))
+	}
+
+	drop := &coremodel.DroppedEvent{
+		Status:            "pending",
+		Action:            "drop",
+		Reason:            "allowlist-unknown-sender",
+		SourceBindingID:   sourceBindingID,
+		ComponentID:       modeluuid.New(),
+		ProviderChannelID: "inbox",
+		SenderKey:         "alice@example.com",
+		ExpiresAt:         time.Now().Add(time.Hour),
+	}
+	if err := storage.DroppedEvents().Save(ctx, drop); err != nil {
+		t.Fatalf("DroppedEvents().Save() error = %v", err)
+	}
+	if drop.ID.IsNull() {
+		t.Fatal("DroppedEvents().Save() did not assign ID")
+	}
+	loadedDrop, err := storage.DroppedEvents().GetByID(ctx, drop.ID)
+	if err != nil {
+		t.Fatalf("DroppedEvents().GetByID() error = %v", err)
+	}
+	if loadedDrop == nil || loadedDrop.SenderKey != "alice@example.com" {
+		t.Fatalf("loaded dropped event = %#v", loadedDrop)
+	}
+	deleted, err := storage.DroppedEvents().DeleteExpired(ctx, time.Now().Add(2*time.Hour))
+	if err != nil {
+		t.Fatalf("DroppedEvents().DeleteExpired() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted dropped events = %d, want 1", deleted)
+	}
+
+	sender := &coremodel.AllowlistSender{SourceBindingID: sourceBindingID, SenderKey: "alice@example.com", SenderLabel: "Alice"}
+	if err := storage.AllowlistSenders().Save(ctx, sender); err != nil {
+		t.Fatalf("AllowlistSenders().Save() error = %v", err)
+	}
+	loadedSender, err := storage.AllowlistSenders().GetBySourceBindingAndSenderKey(ctx, sourceBindingID, "alice@example.com")
+	if err != nil {
+		t.Fatalf("AllowlistSenders().GetBySourceBindingAndSenderKey() error = %v", err)
+	}
+	if loadedSender == nil || loadedSender.SenderLabel != "Alice" {
+		t.Fatalf("loaded sender = %#v", loadedSender)
+	}
+	list, err := storage.AllowlistSenders().ListBySourceBindingID(ctx, sourceBindingID)
+	if err != nil {
+		t.Fatalf("AllowlistSenders().ListBySourceBindingID() error = %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("allowlist sender count = %d, want 1", len(list))
+	}
+	removed, err := storage.AllowlistSenders().DeleteBySourceBindingAndSenderKey(ctx, sourceBindingID, "alice@example.com")
+	if err != nil {
+		t.Fatalf("AllowlistSenders().DeleteBySourceBindingAndSenderKey() error = %v", err)
+	}
+	if !removed {
+		t.Fatal("AllowlistSenders().DeleteBySourceBindingAndSenderKey() removed=false, want true")
+	}
+}
+
 func TestMemoryTransactionRollsBackOnError(t *testing.T) {
 	ctx := context.Background()
 	storage := NewMemory()

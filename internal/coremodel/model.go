@@ -17,12 +17,6 @@ const (
 	ChatComponentRoleCommand ChatComponentRole = "command"
 )
 
-type ComponentBindingRole string
-
-const (
-	ComponentBindingRoleGuard ComponentBindingRole = "guard"
-)
-
 type MessageDirection string
 
 const (
@@ -136,11 +130,10 @@ type ChatComponent struct {
 	UpdatedAt time.Time
 }
 
-type ComponentBinding struct {
-	ID                modeluuid.UUID       `gorm:"primaryKey"`
-	SourceComponentID modeluuid.UUID       `gorm:"index;uniqueIndex:idx_component_binding_role"`
-	TargetComponentID modeluuid.UUID       `gorm:"uniqueIndex:idx_component_binding_role"`
-	Role              ComponentBindingRole `gorm:"uniqueIndex:idx_component_binding_role"`
+type InboundFilterBinding struct {
+	ID                modeluuid.UUID `gorm:"primaryKey"`
+	SourceBindingID   modeluuid.UUID `gorm:"index;uniqueIndex:idx_inbound_filter_binding"`
+	FilterComponentID modeluuid.UUID `gorm:"uniqueIndex:idx_inbound_filter_binding"`
 	Enabled           bool
 
 	CreatedAt time.Time
@@ -159,6 +152,35 @@ type InboundDrop struct {
 	MessageCount      int64
 	FirstSeenAt       time.Time
 	LastSeenAt        time.Time
+}
+
+type DroppedEvent struct {
+	ID                modeluuid.UUID `gorm:"primaryKey"`
+	CreatedAt         time.Time
+	ExpiresAt         time.Time `gorm:"index"`
+	Status            string    `gorm:"index"`
+	Action            string
+	Reason            string
+	ChatID            modeluuid.UUID `gorm:"index"`
+	SourceBindingID   modeluuid.UUID `gorm:"index"`
+	ComponentID       modeluuid.UUID `gorm:"index"`
+	ProviderChannelID string
+	ProviderThreadID  string
+	ProviderMessageID string
+	SenderKey         string `gorm:"index"`
+	SenderLabel       string
+	Subject           string
+	Preview           string
+	EventJSON         string
+}
+
+type AllowlistSender struct {
+	ID              modeluuid.UUID `gorm:"primaryKey"`
+	SourceBindingID modeluuid.UUID `gorm:"index;uniqueIndex:idx_allowlist_sender_scope"`
+	SenderKey       string         `gorm:"uniqueIndex:idx_allowlist_sender_scope"`
+	SenderLabel     string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type ThreadComponentMapping struct {

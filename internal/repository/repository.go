@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -12,9 +13,11 @@ type Storage interface {
 	Chats() ChatRepository
 	Threads() ThreadRepository
 	Components() ComponentRepository
-	ComponentBindings() ComponentBindingRepository
 	ChatComponents() ChatComponentRepository
+	InboundFilterBindings() InboundFilterBindingRepository
 	InboundDrops() InboundDropRepository
+	DroppedEvents() DroppedEventRepository
+	AllowlistSenders() AllowlistSenderRepository
 	ThreadComponentMappings() ThreadComponentMappingRepository
 	ThreadComponentStates() ThreadComponentStateRepository
 	Messages() MessageRepository
@@ -47,12 +50,6 @@ type ComponentRepository interface {
 	ListEnabled(ctx context.Context) ([]coremodel.Component, error)
 }
 
-type ComponentBindingRepository interface {
-	Save(ctx context.Context, binding *coremodel.ComponentBinding) error
-	GetBySourceTargetRole(ctx context.Context, sourceComponentID modeluuid.UUID, targetComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) (*coremodel.ComponentBinding, error)
-	ListEnabledBySourceAndRole(ctx context.Context, sourceComponentID modeluuid.UUID, role coremodel.ComponentBindingRole) ([]coremodel.ComponentBinding, error)
-}
-
 type ChatComponentRepository interface {
 	Save(ctx context.Context, binding *coremodel.ChatComponent) error
 	GetByChatComponentRole(ctx context.Context, chatID modeluuid.UUID, componentID modeluuid.UUID, role coremodel.ChatComponentRole) (*coremodel.ChatComponent, error)
@@ -60,11 +57,31 @@ type ChatComponentRepository interface {
 	FindByComponentRoleAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChannelID string) (*coremodel.ChatComponent, error)
 }
 
+type InboundFilterBindingRepository interface {
+	Save(ctx context.Context, binding *coremodel.InboundFilterBinding) error
+	GetBySourceBindingAndFilter(ctx context.Context, sourceBindingID modeluuid.UUID, filterComponentID modeluuid.UUID) (*coremodel.InboundFilterBinding, error)
+	ListEnabledBySourceBindingID(ctx context.Context, sourceBindingID modeluuid.UUID) ([]coremodel.InboundFilterBinding, error)
+}
+
 type InboundDropRepository interface {
 	Save(ctx context.Context, drop *coremodel.InboundDrop) error
 	GetByComponentAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, externalChannelID string) (*coremodel.InboundDrop, error)
 	List(ctx context.Context) ([]coremodel.InboundDrop, error)
 	DeleteByComponentAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, externalChannelID string) error
+}
+
+type DroppedEventRepository interface {
+	ShortIDSource
+	Save(ctx context.Context, event *coremodel.DroppedEvent) error
+	GetByID(ctx context.Context, eventID modeluuid.UUID) (*coremodel.DroppedEvent, error)
+	DeleteExpired(ctx context.Context, now time.Time) (int64, error)
+}
+
+type AllowlistSenderRepository interface {
+	Save(ctx context.Context, sender *coremodel.AllowlistSender) error
+	GetBySourceBindingAndSenderKey(ctx context.Context, sourceBindingID modeluuid.UUID, senderKey string) (*coremodel.AllowlistSender, error)
+	ListBySourceBindingID(ctx context.Context, sourceBindingID modeluuid.UUID) ([]coremodel.AllowlistSender, error)
+	DeleteBySourceBindingAndSenderKey(ctx context.Context, sourceBindingID modeluuid.UUID, senderKey string) (bool, error)
 }
 
 type ThreadComponentMappingRepository interface {

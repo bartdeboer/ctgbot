@@ -7,9 +7,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	inboundguard "github.com/bartdeboer/ctgbot/internal/guard"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
-	"github.com/bartdeboer/ctgbot/internal/inbound"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -84,13 +82,6 @@ func (s *Service) ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat
 		return nil, fmt.Errorf("missing chat runtime resolver")
 	}
 	return s.ChatRuntimeResolver.ResolveChatHostbridgeAllowedCommands(ctx, chat)
-}
-
-func (s *Service) InboundEventFilters() []inbound.Filter {
-	if s == nil || s.Storage == nil {
-		return nil
-	}
-	return []inbound.Filter{inboundguard.NewInboundFilter(s.Storage, s, s.Logf)}
 }
 
 func (s *Service) componentManager() (ComponentManager, error) {

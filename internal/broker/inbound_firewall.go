@@ -25,12 +25,6 @@ const (
 	InboundRejectionQuarantine InboundRejectionAction = "quarantine"
 )
 
-type AllowedChannel struct {
-	Event         component.InboundEvent
-	Chat          coremodel.Chat
-	SourceBinding coremodel.ChatComponent
-}
-
 type InboundRejection struct {
 	Action        InboundRejectionAction
 	Event         component.InboundEvent
@@ -41,24 +35,14 @@ type InboundRejection struct {
 	Details       []string
 }
 
-func eventFilters(filters ...inbound.Filter) []inbound.Filter {
-	out := make([]inbound.Filter, 0, len(filters))
-	for _, filter := range filters {
-		if filter != nil {
-			out = append(out, filter)
-		}
-	}
-	return out
-}
-
-func (b *Broker) AllowedChannel(ctx context.Context, event component.InboundEvent) (AllowedChannel, *InboundRejection, error) {
+func (b *Broker) AllowedChannel(ctx context.Context, event component.InboundEvent) (inbound.Channel, *InboundRejection, error) {
 	externalChannelID := strings.TrimSpace(event.Payload.ProviderChannelID)
 	if externalChannelID == "" {
-		return AllowedChannel{}, nil, fmt.Errorf("missing inbound provider channel id")
+		return inbound.Channel{}, nil, fmt.Errorf("missing inbound provider channel id")
 	}
 	storage := b.repository()
 	if storage == nil {
-		return AllowedChannel{}, nil, fmt.Errorf("missing inbound channel storage")
+		return inbound.Channel{}, nil, fmt.Errorf("missing inbound channel storage")
 	}
 
 	sourceBinding, err := storage.ChatComponents().FindByComponentRoleAndExternalChannelID(
@@ -68,71 +52,95 @@ func (b *Broker) AllowedChannel(ctx context.Context, event component.InboundEven
 		externalChannelID,
 	)
 	if err != nil {
-		return AllowedChannel{}, nil, err
+		return inbound.Channel{}, nil, err
 	}
 	if sourceBinding == nil {
 		if err := b.recordInboundDrop(ctx, event); err != nil {
-			return AllowedChannel{}, nil, err
+			return inbound.Channel{}, nil, err
 		}
-		return AllowedChannel{}, b.reject(event, nil, nil, InboundRejectionDrop, "no-source-binding"), nil
+		return inbound.Channel{}, b.reject(event, nil, nil, InboundRejectionDrop, "no-source-binding"), nil
 	}
 
 	chat, err := storage.Chats().GetByID(ctx, sourceBinding.ChatID)
 	if err != nil {
-		return AllowedChannel{}, nil, err
+		return inbound.Channel{}, nil, err
 	}
 	if chat == nil {
-		return AllowedChannel{}, b.reject(event, nil, sourceBinding, InboundRejectionDrop, "missing-chat"), nil
+		return inbound.Channel{}, b.reject(event, nil, sourceBinding, InboundRejectionDrop, "missing-chat"), nil
 	}
 	if !chat.Enabled {
-		return AllowedChannel{}, b.reject(event, chat, sourceBinding, InboundRejectionDrop, "chat-disabled"), nil
+		return inbound.Channel{}, b.reject(event, chat, sourceBinding, InboundRejectionDrop, "chat-disabled"), nil
 	}
 	hasRelay, err := b.hasRelayBinding(ctx, chat.ID)
 	if err != nil {
-		return AllowedChannel{}, nil, err
+		return inbound.Channel{}, nil, err
 	}
 	if !hasRelay {
-		return AllowedChannel{}, b.reject(event, chat, sourceBinding, InboundRejectionDrop, "no-relay-binding"), nil
+		return inbound.Channel{}, b.reject(event, chat, sourceBinding, InboundRejectionDrop, "no-relay-binding"), nil
 	}
-	return AllowedChannel{Event: event, Chat: *chat, SourceBinding: *sourceBinding}, nil, nil
+	return inbound.Channel{Chat: *chat, SourceBinding: *sourceBinding}, nil, nil
 }
 
-func (b *Broker) FilteredEvent(ctx context.Context, channel AllowedChannel) (component.InboundEvent, *InboundRejection, error) {
-	current := channel.Event
-	for _, filter := range b.InboundEventFilters {
-		if filter == nil {
-			continue
+func (b *Broker) FilterChainForChannel(ctx context.Context, channel inbound.Channel) (inbound.FilterChain, *inbound.FilterResult, error) {
+	var filters []inbound.Filterer
+
+	if !channel.SourceBinding.ID.IsNull() {
+		storage := b.repository()
+		if storage == nil {
+			failure := inbound.Quarantine(inbound.ChannelEvent{Channel: channel}, "inbound-filter-config-error", "error=missing storage")
+			return inbound.FilterChain{}, &failure, nil
 		}
-		input := inbound.FilterInput{
-			Event:         current,
-			Chat:          channel.Chat,
-			SourceBinding: channel.SourceBinding,
-		}
-		result, err := filter.FilterInbound(ctx, input)
+		bindings, err := storage.InboundFilterBindings().ListEnabledBySourceBindingID(ctx, channel.SourceBinding.ID)
 		if err != nil {
-			return component.InboundEvent{}, nil, err
+			return inbound.FilterChain{}, nil, err
 		}
-		switch result.Action {
-		case "", inbound.FilterActionPass:
-			current = result.Event
-			if current.ComponentID.IsNull() {
-				current = channel.Event
+		for _, binding := range bindings {
+			filter, failure, err := b.resolveInboundFilter(ctx, channel, binding)
+			if err != nil || failure != nil {
+				return inbound.FilterChain{}, failure, err
 			}
-		case inbound.FilterActionDrop, inbound.FilterActionQuarantine:
-			rejectedEvent := result.Event
-			if rejectedEvent.ComponentID.IsNull() {
-				rejectedEvent = current
-			}
-			action := InboundRejectionDrop
-			if result.Action == inbound.FilterActionQuarantine {
-				action = InboundRejectionQuarantine
-			}
-			return rejectedEvent, b.reject(rejectedEvent, &channel.Chat, &channel.SourceBinding, action, result.Reason, result.Details...), nil
-		default:
-			return component.InboundEvent{}, nil, fmt.Errorf("unknown inbound event filter action %q", result.Action)
+			filters = append(filters, filter)
 		}
 	}
-	return current, nil, nil
+
+	return inbound.NewFilterChain(ctx, filters)
+}
+
+func (b *Broker) resolveInboundFilter(ctx context.Context, channel inbound.Channel, binding coremodel.InboundFilterBinding) (inbound.Filterer, *inbound.FilterResult, error) {
+	resolver := b.resolver()
+	if resolver == nil {
+		failure := inbound.Quarantine(inbound.ChannelEvent{Channel: channel}, "inbound-filter-config-error", "component="+binding.FilterComponentID.String(), "error=missing component resolver")
+		return nil, &failure, nil
+	}
+	loaded, err := resolver.ResolveComponent(ctx, binding.FilterComponentID)
+	if err != nil {
+		failure := inbound.Quarantine(inbound.ChannelEvent{Channel: channel}, "inbound-filter-config-error", "component="+binding.FilterComponentID.String(), "error="+err.Error())
+		return nil, &failure, nil
+	}
+	if loaded == nil {
+		failure := inbound.Quarantine(inbound.ChannelEvent{Channel: channel}, "inbound-filter-config-error", "component="+binding.FilterComponentID.String(), "error=target component not found")
+		return nil, &failure, nil
+	}
+	filter, ok := loaded.Component.(inbound.Filterer)
+	if !ok {
+		failure := inbound.Quarantine(inbound.ChannelEvent{Channel: channel}, "inbound-filter-config-error", "component="+loaded.Registration.Ref(), "error=target does not implement inbound.Filterer")
+		return nil, &failure, nil
+	}
+	return filter, nil, nil
+}
+
+func (b *Broker) inboundFilterRejection(channel inbound.Channel, current component.InboundEvent, result inbound.FilterResult) *InboundRejection {
+	rejectedEvent := result.Event
+	if rejectedEvent.ComponentID.IsNull() {
+		rejectedEvent = current
+	}
+	action := InboundRejectionDrop
+	if result.Action == inbound.FilterActionQuarantine {
+		action = InboundRejectionQuarantine
+	}
+	rejection := b.reject(rejectedEvent, &channel.Chat, &channel.SourceBinding, action, result.Reason, result.Details...)
+	rejection.NoticeText = strings.TrimSpace(result.NoticeText)
+	return rejection
 }
 
 func (b *Broker) reject(event component.InboundEvent, chat *coremodel.Chat, sourceBinding *coremodel.ChatComponent, action InboundRejectionAction, reason string, details ...string) *InboundRejection {
@@ -145,10 +153,13 @@ func (b *Broker) reject(event component.InboundEvent, chat *coremodel.Chat, sour
 		Details:       append([]string(nil), details...),
 	}
 }
-
 func (b *Broker) handleInboundRejection(ctx context.Context, rejection *InboundRejection) {
 	if rejection == nil {
 		return
+	}
+	dropped, err := b.DropEvent(ctx, rejection)
+	if err != nil {
+		b.logf("dropped event persistence failed component=%s reason=%s err=%v", rejection.Event.ComponentID, rejection.Reason, err)
 	}
 	dropEvent := rejection.Event
 	actor := dropEvent.Payload.ResolvedActor()
@@ -165,6 +176,9 @@ func (b *Broker) handleInboundRejection(ctx context.Context, rejection *InboundR
 		inboundPreview(dropEvent.Payload.Text.Text),
 		details,
 	)
+	if err := b.sendInboundRejectionNotice(ctx, rejection, dropped); err != nil {
+		b.logf("inbound rejection notice failed component=%s external_channel=%q reason=%s err=%v", dropEvent.ComponentID, strings.TrimSpace(dropEvent.Payload.ProviderChannelID), rejection.Reason, err)
+	}
 	b.maybeHandleInboundInitReply(ctx, rejection)
 }
 
