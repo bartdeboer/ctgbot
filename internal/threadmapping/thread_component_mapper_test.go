@@ -1,19 +1,19 @@
-package broker_test
+package threadmapping_test
 
 import (
 	"context"
 	"testing"
 
-	broker "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
+	"github.com/bartdeboer/ctgbot/internal/threadmapping"
 )
 
 func TestThreadComponentMapperScopesInboundThreadIDsPerChat(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
-	mapper := broker.NewThreadComponentMapper(storage)
+	mapper := threadmapping.New(storage)
 
 	chatA := &coremodel.Chat{Label: "alpha", Enabled: true}
 	chatB := &coremodel.Chat{Label: "beta", Enabled: true}
@@ -101,7 +101,7 @@ func TestThreadComponentMapperScopesInboundThreadIDsPerChat(t *testing.T) {
 func TestThreadComponentMapperRelayTargetFallsBackToExternalChannelID(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
-	mapper := broker.NewThreadComponentMapper(storage)
+	mapper := threadmapping.New(storage)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	thread := &coremodel.Thread{ChatID: modeluuid.New()}
@@ -142,7 +142,7 @@ func TestThreadComponentMapperRelayTargetFallsBackToExternalChannelID(t *testing
 func TestThreadComponentMapperReusesVisibleDefaultThreadForSourceDefaultMapping(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
-	mapper := broker.NewThreadComponentMapper(storage)
+	mapper := threadmapping.New(storage)
 
 	chat := &coremodel.Chat{Label: "source default", Enabled: true}
 	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Enabled: true}
@@ -191,7 +191,7 @@ func TestThreadComponentMapperReusesVisibleDefaultThreadForSourceDefaultMapping(
 func TestThreadComponentMapperDoesNotReuseVisibleDefaultThreadForNonMatchingSourceThread(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
-	mapper := broker.NewThreadComponentMapper(storage)
+	mapper := threadmapping.New(storage)
 
 	chat := &coremodel.Chat{Label: "chat", Enabled: true}
 	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Enabled: true}

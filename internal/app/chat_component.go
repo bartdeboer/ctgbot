@@ -30,7 +30,7 @@ type ChatComponentInfo struct {
 	Runtime      string
 }
 
-func (s *Service) BindInboundChat(ctx context.Context, componentRef string, externalChannelID string, label string, roleFlag string) (ChatBindResult, error) {
+func (s *service) BindInboundChat(ctx context.Context, componentRef string, externalChannelID string, label string, roleFlag string) (ChatBindResult, error) {
 	if s == nil || s.Storage == nil {
 		return ChatBindResult{}, fmt.Errorf("missing app storage")
 	}
@@ -70,7 +70,7 @@ func (s *Service) BindInboundChat(ctx context.Context, componentRef string, exte
 	return ChatBindResult{Chat: *chat, Component: *registration, Bindings: bindings}, nil
 }
 
-func (s *Service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, componentRef string, externalChannelID string) (ChatComponentAddResult, error) {
+func (s *service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, componentRef string, externalChannelID string) (ChatComponentAddResult, error) {
 	if s == nil || s.Storage == nil {
 		return ChatComponentAddResult{}, fmt.Errorf("missing app storage")
 	}
@@ -107,7 +107,7 @@ func (s *Service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, r
 	}, nil
 }
 
-func (s *Service) ListChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]ChatComponentInfo, error) {
+func (s *service) ListChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]ChatComponentInfo, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}
@@ -139,7 +139,7 @@ func (s *Service) ListChatComponents(ctx context.Context, chatID modeluuid.UUID)
 	return out, nil
 }
 
-func (s *Service) defaultSourceExternalChannelID(ctx context.Context, componentID modeluuid.UUID) (string, error) {
+func (s *service) defaultSourceExternalChannelID(ctx context.Context, componentID modeluuid.UUID) (string, error) {
 	loaded, err := s.resolveLoadedComponent(ctx, componentID)
 	if err != nil {
 		return "", err
@@ -190,7 +190,7 @@ func resolveChatBindRoles(loaded *component.Loaded, roleFlag string) ([]coremode
 	}
 }
 
-func (s *Service) createInboundChatBinding(ctx context.Context, registration coremodel.Component, externalChannelID string, label string, roles []coremodel.ChatComponentRole) (*coremodel.Chat, []coremodel.ChatComponent, error) {
+func (s *service) createInboundChatBinding(ctx context.Context, registration coremodel.Component, externalChannelID string, label string, roles []coremodel.ChatComponentRole) (*coremodel.Chat, []coremodel.ChatComponent, error) {
 	if s == nil || s.Storage == nil {
 		return nil, nil, fmt.Errorf("missing app storage")
 	}
@@ -248,7 +248,7 @@ func (s *Service) createInboundChatBinding(ctx context.Context, registration cor
 	return &chat, bindings, nil
 }
 
-func (s *Service) bindChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, registration coremodel.Component, externalChannelID string) (*coremodel.ChatComponent, error) {
+func (s *service) bindChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, registration coremodel.Component, externalChannelID string) (*coremodel.ChatComponent, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}

@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/app"
-	"github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/inbound"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -20,8 +20,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
-
-var _ broker.App = (*app.Service)(nil)
 
 type fakeResolver struct {
 	storage    repository.Storage
@@ -657,4 +655,65 @@ func saveChatComponent(t *testing.T, storage repository.Storage, chatID modeluui
 		t.Fatal(err)
 	}
 	return binding
+}
+
+func TestServiceAdmitInboundReturnsChannelAndFilters(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+
+	chat := saveChat(t, storage, "Team")
+	source := saveComponent(t, storage, "source", "inbox")
+	filter := saveComponent(t, storage, "filters", "allowlist")
+	sourceBinding := saveChatComponent(t, storage, chat.ID, source.ID, coremodel.ChatComponentRoleSource, "inbox")
+	saveChatComponent(t, storage, chat.ID, source.ID, coremodel.ChatComponentRoleRelay, "inbox")
+	if err := storage.InboundFilterBindings().Save(ctx, &coremodel.InboundFilterBinding{SourceBindingID: sourceBinding.ID, FilterComponentID: filter.ID, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	admission, err := svc.AdmitInbound(ctx, component.InboundEvent{
+		ComponentID: source.ID,
+		Payload:     messagePayload("inbox", "hello"),
+	})
+	if err != nil {
+		t.Fatalf("AdmitInbound() error = %v", err)
+	}
+	if admission.Rejected != nil {
+		t.Fatalf("AdmitInbound() rejected = %#v", admission.Rejected)
+	}
+	if admission.Channel.Chat.ID != chat.ID || admission.Channel.SourceBinding.ID != sourceBinding.ID {
+		t.Fatalf("channel = %#v", admission.Channel)
+	}
+	if got, want := len(admission.Filters), 1; got != want {
+		t.Fatalf("filters = %d, want %d", got, want)
+	}
+}
+
+func TestServiceAdmitInboundRejectsWithoutRelay(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+
+	chat := saveChat(t, storage, "Team")
+	source := saveComponent(t, storage, "source", "inbox")
+	saveChatComponent(t, storage, chat.ID, source.ID, coremodel.ChatComponentRoleSource, "inbox")
+
+	admission, err := svc.AdmitInbound(ctx, component.InboundEvent{
+		ComponentID: source.ID,
+		Payload:     messagePayload("inbox", "hello"),
+	})
+	if err != nil {
+		t.Fatalf("AdmitInbound() error = %v", err)
+	}
+	if admission.Rejected == nil || admission.Rejected.Reason != "no-relay-binding" {
+		t.Fatalf("rejection = %#v, want no-relay-binding", admission.Rejected)
+	}
+}
+
+func messagePayload(channelID string, text string) message.InboundPayload {
+	return message.InboundPayload{
+		ProviderType:      "test",
+		ProviderChannelID: channelID,
+		Text:              message.TextMessage{Text: text},
+	}
 }

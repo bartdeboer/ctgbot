@@ -20,7 +20,7 @@ type ComponentInfo struct {
 	HostHomePath string
 }
 
-func (s *Service) RegisterComponent(ctx context.Context, componentRef string, runtimeKind string, homePath string) (RegisterComponentResult, error) {
+func (s *service) RegisterComponent(ctx context.Context, componentRef string, runtimeKind string, homePath string) (RegisterComponentResult, error) {
 	manager, err := s.componentManager()
 	if err != nil {
 		return RegisterComponentResult{}, err
@@ -35,7 +35,7 @@ func (s *Service) RegisterComponent(ctx context.Context, componentRef string, ru
 	return s.componentRegistrationResult(*registration)
 }
 
-func (s *Service) ListComponents(ctx context.Context) ([]ComponentInfo, error) {
+func (s *service) ListComponents(ctx context.Context) ([]ComponentInfo, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}
@@ -63,7 +63,7 @@ func (s *Service) ListComponents(ctx context.Context) ([]ComponentInfo, error) {
 	return out, nil
 }
 
-func (s *Service) componentRegistrationResult(registration coremodel.Component) (RegisterComponentResult, error) {
+func (s *service) componentRegistrationResult(registration coremodel.Component) (RegisterComponentResult, error) {
 	manager, err := s.componentManager()
 	if err != nil {
 		return RegisterComponentResult{}, err

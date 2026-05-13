@@ -6,36 +6,44 @@ import (
 	"log"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/brokercontract"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	component "github.com/bartdeboer/ctgbot/internal/component"
 	componentbroker "github.com/bartdeboer/ctgbot/internal/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/inbound"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
 
-type InstanceResolver interface {
+type App interface {
+	AdmitInbound(ctx context.Context, event component.InboundEvent) (inbound.Admission, error)
+	Chat(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
+	Thread(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
+	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
+	RuntimeSpec(ctx context.Context, chat coremodel.Chat) (brokercontract.RuntimeSpec, error)
+	EnabledInboundSources(ctx context.Context) ([]component.InboundSource, error)
+	CommandSurfaces(ctx context.Context, deps brokercontract.CommandSurfaceDeps) ([]component.CommandSurface, error)
+	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
+	ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error)
+	BindComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) error
+	RelayTarget(ctx context.Context, threadID modeluuid.UUID, binding coremodel.ChatComponent) (*message.ChatTarget, bool, error)
+	StoreInboundMessage(ctx context.Context, inbound component.ResolvedInbound) (*coremodel.ThreadMessage, error)
+	StoreOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []message.Media) error
+	DropEvent(ctx context.Context, rejection *inbound.Rejection) (*coremodel.DroppedEvent, error)
+	DropNoticeID(ctx context.Context, drop *coremodel.DroppedEvent) string
 	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
 	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
 }
 
-type App interface {
-	Repository() repository.Storage
-	InstanceResolver
-}
-
 type Broker struct {
-	App      App
-	Storage  repository.Storage
-	Resolver InstanceResolver
-	Mapper   ThreadComponentMapper
-	Turns    *ThreadTurnGate
-	Logf     func(format string, args ...any)
+	App   App
+	Turns *ThreadTurnGate
+	Logf  func(format string, args ...any)
 }
 
 type EventOutcome struct {
@@ -70,44 +78,12 @@ type RelayBinding struct {
 }
 
 func New(app App, logf func(format string, args ...any)) *Broker {
-	if app == nil {
-		return NewWithDeps(nil, nil, logf)
+	broker := &Broker{
+		App:   app,
+		Turns: NewThreadTurnGate(),
+		Logf:  logf,
 	}
-	broker := NewWithDeps(app.Repository(), app, logf)
-	broker.App = app
 	return broker
-}
-
-func NewWithDeps(storage repository.Storage, resolver InstanceResolver, logf func(format string, args ...any)) *Broker {
-	return &Broker{
-		Storage:  storage,
-		Resolver: resolver,
-		Mapper:   NewThreadComponentMapper(storage),
-		Turns:    NewThreadTurnGate(),
-		Logf:     logf,
-	}
-}
-
-func (b *Broker) repository() repository.Storage {
-	if b == nil {
-		return nil
-	}
-	if b.App != nil {
-		if storage := b.App.Repository(); storage != nil {
-			return storage
-		}
-	}
-	return b.Storage
-}
-
-func (b *Broker) resolver() InstanceResolver {
-	if b == nil {
-		return nil
-	}
-	if b.App != nil {
-		return b.App
-	}
-	return b.Resolver
 }
 
 func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent) (EventOutcome, error) {
@@ -118,29 +94,24 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		return EventOutcome{}, fmt.Errorf("missing inbound component id")
 	}
 
-	channel, rejection, err := b.AllowedChannel(ctx, event)
+	admission, err := b.admitInbound(ctx, event)
 	if err != nil {
 		return EventOutcome{}, err
 	}
-	if rejection != nil {
-		b.handleInboundRejection(ctx, rejection)
+	if admission.Rejected != nil {
+		b.handleInboundRejection(ctx, admission.Rejected)
 		return EventOutcome{Dropped: true}, nil
 	}
 
-	filterChain, failure, err := b.FilterChainForChannel(ctx, channel)
-	if err != nil {
-		return EventOutcome{}, err
-	}
-	if failure != nil {
-		b.handleInboundRejection(ctx, b.inboundFilterRejection(channel, event, *failure))
-		return EventOutcome{Dropped: true}, nil
-	}
-	filterResult, err := filterChain.Run(ctx, inbound.ChannelEvent{Channel: channel, Event: event})
+	filterResult, err := inbound.NewFilterChain(admission.Filters).Run(ctx, inbound.ChannelEvent{
+		Channel: admission.Channel,
+		Event:   event,
+	})
 	if err != nil {
 		return EventOutcome{}, err
 	}
 	if filterResult.Action == inbound.FilterActionDrop || filterResult.Action == inbound.FilterActionQuarantine {
-		b.handleInboundRejection(ctx, b.inboundFilterRejection(channel, event, filterResult))
+		b.handleInboundRejection(ctx, inbound.RejectionFromFilter(admission.Channel, event, filterResult))
 		return EventOutcome{Dropped: true}, nil
 	}
 	routedEvent := filterResult.Event
@@ -148,12 +119,12 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		routedEvent = event
 	}
 
-	thread, err := b.Mapper.EnsureThread(ctx, channel.SourceBinding, strings.TrimSpace(routedEvent.Payload.ProviderThreadID))
+	thread, err := b.App.EnsureThread(ctx, admission.Channel.SourceBinding, strings.TrimSpace(routedEvent.Payload.ProviderThreadID))
 	if err != nil {
 		return EventOutcome{}, err
 	}
 	delivery, err := b.HandleResolvedInbound(ctx, component.ResolvedInbound{
-		Chat:        channel.Chat,
+		Chat:        admission.Channel.Chat,
 		Thread:      *thread,
 		ComponentID: routedEvent.ComponentID,
 		ExternalID:  strings.TrimSpace(routedEvent.ExternalID),
@@ -267,7 +238,7 @@ func (b *Broker) handleResolvedInboundTurn(
 				return failConversation(nil, nil, err)
 			}
 		}
-		workspacePath, resolveErr := b.resolver().ResolveChatWorkspace(ctx, chat)
+		workspacePath, resolveErr := b.App.ResolveChatWorkspace(ctx, chat)
 		if resolveErr != nil {
 			return failConversation(nil, nil, resolveErr)
 		}
@@ -277,7 +248,7 @@ func (b *Broker) handleResolvedInboundTurn(
 		}
 	}
 
-	storedInbound, err := b.storeInboundMessage(ctx, inbound)
+	storedInbound, err := b.App.StoreInboundMessage(ctx, inbound)
 	if err != nil {
 		return failConversation(nil, nil, err)
 	}
@@ -363,14 +334,8 @@ func agentType(binding AgentBinding) string {
 }
 
 func (b *Broker) ensureReady() error {
-	if b == nil || b.repository() == nil {
-		return fmt.Errorf("missing broker storage")
-	}
-	if b.resolver() == nil {
-		return fmt.Errorf("missing component resolver")
-	}
-	if b.Mapper == nil {
-		return fmt.Errorf("missing thread component mapper")
+	if b == nil || b.App == nil {
+		return fmt.Errorf("missing broker app")
 	}
 	if b.Turns == nil {
 		b.Turns = NewThreadTurnGate()
@@ -388,15 +353,13 @@ func (b *Broker) logf(format string, args ...any) {
 
 func (b *Broker) RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
 	allowed := hostbridgeserver.DefaultAllowedCommands()
-	storage := b.repository()
-	resolver := b.resolver()
-	if storage != nil && resolver != nil && !req.Context.ChatID.IsNull() {
-		chat, err := storage.Chats().GetByID(ctx, req.Context.ChatID)
+	if !req.Context.ChatID.IsNull() {
+		chat, err := b.App.Chat(ctx, req.Context.ChatID)
 		if err != nil {
 			return commandengine.Result{}, err
 		}
 		if chat != nil {
-			extra, err := resolver.ResolveChatHostbridgeAllowedCommands(ctx, *chat)
+			extra, err := b.App.ResolveChatHostbridgeAllowedCommands(ctx, *chat)
 			if err != nil {
 				return commandengine.Result{}, err
 			}
@@ -417,7 +380,7 @@ func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string
 	if chatID.IsNull() {
 		return "", fmt.Errorf("missing chat id")
 	}
-	chat, err := b.repository().Chats().GetByID(ctx, chatID)
+	chat, err := b.App.Chat(ctx, chatID)
 	if err != nil {
 		return "", err
 	}

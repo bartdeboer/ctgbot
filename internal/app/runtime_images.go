@@ -10,7 +10,7 @@ import (
 	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 )
 
-func (s *Service) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error) {
+func (s *service) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}
@@ -88,7 +88,7 @@ func runtimeImageTargetSortKey(target runtimeimage.Target) string {
 	return strings.Join([]string{target.Ref, target.Name, target.Image, target.Dockerfile}, "\x00")
 }
 
-func (s *Service) logf(format string, args ...any) {
+func (s *service) logf(format string, args ...any) {
 	if s != nil && s.Logf != nil {
 		s.Logf(format, args...)
 	}

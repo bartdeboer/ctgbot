@@ -23,7 +23,7 @@ type ComponentCommandResult struct {
 	Text string
 }
 
-func (s *Service) RunComponentCommand(ctx context.Context, request ComponentCommandRequest) (ComponentCommandResult, error) {
+func (s *service) RunComponentCommand(ctx context.Context, request ComponentCommandRequest) (ComponentCommandResult, error) {
 	var registration *coremodel.Component
 	var err error
 	if strings.TrimSpace(request.RuntimeKind) != "" || strings.TrimSpace(request.HomePath) != "" {

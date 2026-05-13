@@ -29,7 +29,7 @@ type InboundDropInfo struct {
 	LastTextPreview   string
 }
 
-func (s *Service) CreateChat(ctx context.Context, label string, workspace string) (coremodel.Chat, error) {
+func (s *service) CreateChat(ctx context.Context, label string, workspace string) (coremodel.Chat, error) {
 	if s == nil || s.Storage == nil {
 		return coremodel.Chat{}, fmt.Errorf("missing app storage")
 	}
@@ -54,7 +54,7 @@ func (s *Service) CreateChat(ctx context.Context, label string, workspace string
 	return chat, nil
 }
 
-func (s *Service) ListChats(ctx context.Context) ([]ChatInfo, error) {
+func (s *service) ListChats(ctx context.Context) ([]ChatInfo, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}
@@ -76,7 +76,7 @@ func (s *Service) ListChats(ctx context.Context) ([]ChatInfo, error) {
 	return out, nil
 }
 
-func (s *Service) ResolveChatRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
+func (s *service) ResolveChatRef(ctx context.Context, ref string) (modeluuid.UUID, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return modeluuid.Nil, fmt.Errorf("missing chat id")
@@ -100,7 +100,7 @@ func (s *Service) ResolveChatRef(ctx context.Context, ref string) (modeluuid.UUI
 	return modeluuid.Nil, err
 }
 
-func (s *Service) ListInboundDrops(ctx context.Context) ([]InboundDropInfo, error) {
+func (s *service) ListInboundDrops(ctx context.Context) ([]InboundDropInfo, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}
@@ -132,7 +132,7 @@ func (s *Service) ListInboundDrops(ctx context.Context) ([]InboundDropInfo, erro
 	return out, nil
 }
 
-func (s *Service) SetChatWorkspace(ctx context.Context, chatID modeluuid.UUID, workspace string) (coremodel.Chat, error) {
+func (s *service) SetChatWorkspace(ctx context.Context, chatID modeluuid.UUID, workspace string) (coremodel.Chat, error) {
 	if s == nil || s.Storage == nil {
 		return coremodel.Chat{}, fmt.Errorf("missing app storage")
 	}
@@ -159,14 +159,14 @@ func (s *Service) SetChatWorkspace(ctx context.Context, chatID modeluuid.UUID, w
 	return *chat, nil
 }
 
-func (s *Service) validateWorkspace(workspace string) error {
+func (s *service) validateWorkspace(workspace string) error {
 	if s == nil || s.WorkspaceValidator == nil || strings.TrimSpace(workspace) == "" {
 		return nil
 	}
 	return s.WorkspaceValidator.ValidateWorkspace(workspace)
 }
 
-func (s *Service) chatShortIDResolver(ctx context.Context) (*repository.ShortIDResolver, error) {
+func (s *service) chatShortIDResolver(ctx context.Context) (*repository.ShortIDResolver, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")
 	}
@@ -177,7 +177,7 @@ func (s *Service) chatShortIDResolver(ctx context.Context) (*repository.ShortIDR
 	return repository.NewShortIDResolver(ids), nil
 }
 
-func (s *Service) ambiguousChatRefError(ctx context.Context, ref string, resolver *repository.ShortIDResolver, candidates []modeluuid.UUID) error {
+func (s *service) ambiguousChatRefError(ctx context.Context, ref string, resolver *repository.ShortIDResolver, candidates []modeluuid.UUID) error {
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].String() < candidates[j].String()
 	})

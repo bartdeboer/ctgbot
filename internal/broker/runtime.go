@@ -6,39 +6,27 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/brokercontract"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	component "github.com/bartdeboer/ctgbot/internal/component"
-	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
-	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
-	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
-	allowlistfilter "github.com/bartdeboer/ctgbot/internal/component/filter/allowlist"
-	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/message"
-	"github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*ChatRuntime, error) {
-	storage := b.repository()
-	resolver := b.resolver()
 
-	workspace, err := resolver.ResolveChatWorkspace(ctx, chat)
+	spec, err := b.App.RuntimeSpec(ctx, chat)
 	if err != nil {
 		return nil, err
 	}
+	workspace := spec.Workspace
+	bindings := spec.Bindings
 
-	bindings, err := storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	resolved := map[modeluuid.UUID]*component.Loaded{}
 	homes := map[modeluuid.UUID]runtimepkg.Home{}
 	var (
 		components       []*component.Loaded
@@ -51,13 +39,11 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	commandSurfaceIDs := map[modeluuid.UUID]struct{}{}
 
 	for _, binding := range bindings {
-		instance := resolved[binding.ComponentID]
+		instance := spec.Loaded[binding.ComponentID]
 		if instance == nil {
-			instance, err = resolver.ResolveComponent(ctx, binding.ComponentID)
-			if err != nil {
-				return nil, err
-			}
-			resolved[binding.ComponentID] = instance
+			continue
+		}
+		if _, seen := homes[binding.ComponentID]; !seen {
 			homes[binding.ComponentID] = instance.Home
 			components = append(components, instance)
 		}
@@ -115,20 +101,12 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		runtimeWorkspace = workspace
 	}
 
-	globalSurfaces = append(globalSurfaces,
-		componentadmin.New(storage, resolver),
-		brokercomponent.New(b),
-		allowlistfilter.New(storage),
-		messagingcomponent.New(messaging.New(storage), b),
-	)
-	if provider, ok := resolver.(interface{ AppConfig() *appstate.Config }); ok {
-		configSurface, err := configcomponent.New(provider.AppConfig())
-		if err != nil {
-			return nil, err
-		}
-		if configSurface != nil {
-			globalSurfaces = append(globalSurfaces, configSurface)
-		}
+	globalSurfaces, err = b.App.CommandSurfaces(ctx, brokercontract.CommandSurfaceDeps{
+		Inbound:       b,
+		BrokerActions: b,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	messageCommands, err := commandset.NewBoundEngineForSource(commandengine.SourceMessage, boundSurfaces, globalSurfaces...)
@@ -188,9 +166,9 @@ func (r *agentTurnRuntime) Instructions() component.TurnInstructions {
 			break
 		}
 	}
-	if r.broker != nil && r.broker.Resolver != nil {
+	if r.broker != nil && r.broker.App != nil {
 		allowed := hostbridgeserver.DefaultAllowedCommands()
-		extra, err := r.broker.Resolver.ResolveChatHostbridgeAllowedCommands(r.context(), r.chat)
+		extra, err := r.broker.App.ResolveChatHostbridgeAllowedCommands(r.context(), r.chat)
 		if err == nil {
 			allowed = hostbridgeserver.MergeNamedAllowedCommands(extra)
 		}
@@ -247,7 +225,7 @@ func (r *agentTurnRuntime) StartChatAction(ctx context.Context, action message.C
 	}
 	var stops []func()
 	for _, relayBinding := range r.runtime.Relays {
-		target, ok, err := r.broker.Mapper.RelayTarget(ctx, r.thread.ID, relayBinding.Binding)
+		target, ok, err := r.broker.App.RelayTarget(ctx, r.thread.ID, relayBinding.Binding)
 		if err != nil {
 			for _, s := range stops {
 				s()
@@ -294,14 +272,14 @@ func (r *agentTurnRuntime) ComponentThreadID(componentID modeluuid.UUID) (string
 	if r == nil || r.broker == nil {
 		return "", false, fmt.Errorf("missing turn runtime")
 	}
-	return r.broker.Mapper.ComponentThreadID(r.context(), r.thread.ID, componentID)
+	return r.broker.App.ComponentThreadID(r.context(), r.thread.ID, componentID)
 }
 
 func (r *agentTurnRuntime) BindComponentThreadID(componentID modeluuid.UUID, componentThreadID string) error {
 	if r == nil || r.broker == nil {
 		return fmt.Errorf("missing turn runtime")
 	}
-	return r.broker.Mapper.BindComponentThreadID(r.context(), r.thread.ID, componentID, componentThreadID)
+	return r.broker.App.BindComponentThreadID(r.context(), r.thread.ID, componentID, componentThreadID)
 }
 
 func (r *agentTurnRuntime) context() context.Context {

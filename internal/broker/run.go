@@ -12,23 +12,9 @@ func (b *Broker) Run(ctx context.Context) error {
 	if err := b.ensureReady(); err != nil {
 		return err
 	}
-	storage := b.repository()
-	resolver := b.resolver()
-	components, err := storage.Components().ListEnabled(ctx)
+	sources, err := b.App.EnabledInboundSources(ctx)
 	if err != nil {
 		return err
-	}
-
-	var sources []component.InboundSource
-	for _, registration := range components {
-		instance, err := resolver.ResolveComponent(ctx, registration.ID)
-		if err != nil {
-			return err
-		}
-		source, ok := instance.Component.(component.InboundSource)
-		if ok {
-			sources = append(sources, source)
-		}
 	}
 	if len(sources) == 0 {
 		return fmt.Errorf("missing inbound sources")

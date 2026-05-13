@@ -1,4 +1,4 @@
-package broker
+package threadmapping
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/repository"
 )
 
-type ThreadComponentMapper interface {
+type Mapper interface {
 	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
 	ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) error
@@ -22,7 +22,7 @@ type threadComponentMapper struct {
 	storage repository.Storage
 }
 
-func NewThreadComponentMapper(storage repository.Storage) ThreadComponentMapper {
+func New(storage repository.Storage) Mapper {
 	return &threadComponentMapper{storage: storage}
 }
 

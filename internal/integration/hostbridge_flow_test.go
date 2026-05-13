@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	brokerpkg "github.com/bartdeboer/ctgbot/internal/broker"
+	brokerpkg "github.com/bartdeboer/ctgbot/internal/brokeradapter"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"

@@ -6,43 +6,24 @@ import (
 	"strings"
 
 	component "github.com/bartdeboer/ctgbot/internal/component"
-	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/inbound"
 	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
-type InboundRejectionAction string
+type InboundRejectionAction = inbound.RejectionAction
 
 const (
-	InboundRejectionDrop       InboundRejectionAction = "drop"
-	InboundRejectionQuarantine InboundRejectionAction = "quarantine"
+	InboundRejectionDrop       = inbound.RejectionDrop
+	InboundRejectionQuarantine = inbound.RejectionQuarantine
 )
 
-type InboundRejection struct {
-	Action        InboundRejectionAction
-	Event         component.InboundEvent
-	Chat          *coremodel.Chat
-	SourceBinding *coremodel.ChatComponent
-	Reason        string
-	NoticeText    string
-	Details       []string
-}
-
-func (b *Broker) reject(event component.InboundEvent, chat *coremodel.Chat, sourceBinding *coremodel.ChatComponent, action InboundRejectionAction, reason string, details ...string) *InboundRejection {
-	return &InboundRejection{
-		Action:        action,
-		Event:         event,
-		Chat:          chat,
-		SourceBinding: sourceBinding,
-		Reason:        strings.TrimSpace(reason),
-		Details:       append([]string(nil), details...),
-	}
-}
+type InboundRejection = inbound.Rejection
 
 func (b *Broker) handleInboundRejection(ctx context.Context, rejection *InboundRejection) {
 	if rejection == nil {
 		return
 	}
-	dropped, err := b.DropEvent(ctx, rejection)
+	dropped, err := b.App.DropEvent(ctx, rejection)
 	if err != nil {
 		b.logf("dropped event persistence failed component=%s reason=%s err=%v", rejection.Event.ComponentID, rejection.Reason, err)
 	}
@@ -58,7 +39,7 @@ func (b *Broker) handleInboundRejection(ctx context.Context, rejection *InboundR
 		strings.TrimSpace(actor.ID),
 		strings.TrimSpace(actor.Label),
 		strings.TrimSpace(dropEvent.Payload.ChatLabel),
-		inboundPreview(dropEvent.Payload.Text.Text),
+		inbound.Preview(dropEvent.Payload.Text.Text, 240),
 		details,
 	)
 	if err := b.sendInboundRejectionNotice(ctx, rejection, dropped); err != nil {
@@ -86,7 +67,7 @@ func (b *Broker) maybeHandleInboundInitReply(ctx context.Context, rejection *Inb
 }
 
 func (b *Broker) sendInboundInitReply(ctx context.Context, rejection *InboundRejection) error {
-	resolver := b.resolver()
+	resolver := b.App
 	if resolver == nil || rejection == nil {
 		return nil
 	}
@@ -144,13 +125,4 @@ func (b *Broker) sendInboundInitReply(ctx context.Context, rejection *InboundRej
 func isInitCommand(text string) bool {
 	argv, ok := commandArgv(text)
 	return ok && len(argv) == 1 && strings.EqualFold(argv[0], "init")
-}
-
-func inboundPreview(text string) string {
-	text = strings.TrimSpace(text)
-	const maxPreview = 240
-	if len(text) <= maxPreview {
-		return text
-	}
-	return text[:maxPreview]
 }

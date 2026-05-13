@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	brokerpkg "github.com/bartdeboer/ctgbot/internal/broker"
+	brokerpkg "github.com/bartdeboer/ctgbot/internal/brokeradapter"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"

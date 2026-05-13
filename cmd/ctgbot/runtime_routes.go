@@ -559,11 +559,11 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 	})
 }
 
-func openAppServiceForRoutes(req *clir.Request, store *clistate.Store) (*app.Service, error) {
+func openAppServiceForRoutes(req *clir.Request, store *clistate.Store) (app.Service, error) {
 	return openAppServiceForRoutesWithProcessActions(req, store, nil)
 }
 
-func openAppServiceForRoutesWithProcessActions(req *clir.Request, store *clistate.Store, processActions processcomponent.Actions) (*app.Service, error) {
+func openAppServiceForRoutesWithProcessActions(req *clir.Request, store *clistate.Store, processActions processcomponent.Actions) (app.Service, error) {
 	system, err := openSystemForRoutes(req, store, processActions)
 	if err != nil {
 		return nil, err

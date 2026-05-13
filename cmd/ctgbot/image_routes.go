@@ -83,7 +83,7 @@ func buildRuntimeImages(req *clir.Request, store *clistate.Store, extra []string
 	return nil
 }
 
-func openImageAppService(req *clir.Request, store *clistate.Store) (*app.Service, *runtimeimage.Builder, error) {
+func openImageAppService(req *clir.Request, store *clistate.Store) (app.Service, *runtimeimage.Builder, error) {
 	rtSystem, err := openSystemForRoutes(req, store, nil)
 	if err != nil {
 		return nil, nil, err

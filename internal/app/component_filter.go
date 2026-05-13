@@ -47,7 +47,7 @@ type ComponentFilterListBinding struct {
 	FilterRef string
 }
 
-func (s *Service) AddChatComponentFilter(ctx context.Context, chatRef string, sourceRef string, externalChannelID string, filterRef string) (ComponentFilterAddResult, error) {
+func (s *service) AddChatComponentFilter(ctx context.Context, chatRef string, sourceRef string, externalChannelID string, filterRef string) (ComponentFilterAddResult, error) {
 	if s == nil || s.Storage == nil {
 		return ComponentFilterAddResult{}, fmt.Errorf("missing app storage")
 	}
@@ -83,7 +83,7 @@ func (s *Service) AddChatComponentFilter(ctx context.Context, chatRef string, so
 	return ComponentFilterAddResult{Chat: *chat, Source: *source, SourceBinding: *sourceBinding, Filter: *filter, Binding: binding}, nil
 }
 
-func (s *Service) RemoveChatComponentFilter(ctx context.Context, chatRef string, sourceRef string, externalChannelID string, filterRef string) (ComponentFilterRemoveResult, error) {
+func (s *service) RemoveChatComponentFilter(ctx context.Context, chatRef string, sourceRef string, externalChannelID string, filterRef string) (ComponentFilterRemoveResult, error) {
 	if s == nil || s.Storage == nil {
 		return ComponentFilterRemoveResult{}, fmt.Errorf("missing app storage")
 	}
@@ -115,7 +115,7 @@ func (s *Service) RemoveChatComponentFilter(ctx context.Context, chatRef string,
 	return ComponentFilterRemoveResult{Chat: *chat, Source: *source, SourceBinding: *sourceBinding, Filter: *filter, Disabled: disabled}, nil
 }
 
-func (s *Service) ClearChatComponentFilters(ctx context.Context, chatRef string, sourceRef string, externalChannelID string) (ComponentFilterClearResult, error) {
+func (s *service) ClearChatComponentFilters(ctx context.Context, chatRef string, sourceRef string, externalChannelID string) (ComponentFilterClearResult, error) {
 	if s == nil || s.Storage == nil {
 		return ComponentFilterClearResult{}, fmt.Errorf("missing app storage")
 	}
@@ -145,7 +145,7 @@ func (s *Service) ClearChatComponentFilters(ctx context.Context, chatRef string,
 	return ComponentFilterClearResult{Chat: *chat, Source: *source, SourceBinding: *sourceBinding, Disabled: disabled}, nil
 }
 
-func (s *Service) ListChatComponentFilters(ctx context.Context, chatRef string, sourceRef string, externalChannelID string) (ComponentFilterListResult, error) {
+func (s *service) ListChatComponentFilters(ctx context.Context, chatRef string, sourceRef string, externalChannelID string) (ComponentFilterListResult, error) {
 	if s == nil || s.Storage == nil {
 		return ComponentFilterListResult{}, fmt.Errorf("missing app storage")
 	}
@@ -180,7 +180,7 @@ func (s *Service) ListChatComponentFilters(ctx context.Context, chatRef string, 
 	return result, nil
 }
 
-func (s *Service) resolveChatSourceBinding(ctx context.Context, chatRef string, sourceRef string, externalChannelID string) (*coremodel.Chat, *coremodel.Component, *coremodel.ChatComponent, error) {
+func (s *service) resolveChatSourceBinding(ctx context.Context, chatRef string, sourceRef string, externalChannelID string) (*coremodel.Chat, *coremodel.Component, *coremodel.ChatComponent, error) {
 	chatID, err := s.ResolveChatRef(ctx, chatRef)
 	if err != nil {
 		return nil, nil, nil, err
@@ -203,7 +203,7 @@ func (s *Service) resolveChatSourceBinding(ctx context.Context, chatRef string, 
 	return chat, source, binding, nil
 }
 
-func (s *Service) resolveInboundSourceRegistration(ctx context.Context, ref string) (*coremodel.Component, error) {
+func (s *service) resolveInboundSourceRegistration(ctx context.Context, ref string) (*coremodel.Component, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return nil, fmt.Errorf("missing source component ref")
@@ -222,7 +222,7 @@ func (s *Service) resolveInboundSourceRegistration(ctx context.Context, ref stri
 	return registration, nil
 }
 
-func (s *Service) findEnabledSourceBinding(ctx context.Context, chatID modeluuid.UUID, sourceComponentID modeluuid.UUID, externalChannelID string) (*coremodel.ChatComponent, error) {
+func (s *service) findEnabledSourceBinding(ctx context.Context, chatID modeluuid.UUID, sourceComponentID modeluuid.UUID, externalChannelID string) (*coremodel.ChatComponent, error) {
 	externalChannelID = strings.TrimSpace(externalChannelID)
 	bindings, err := s.Storage.ChatComponents().ListEnabledByChatID(ctx, chatID)
 	if err != nil {
@@ -259,7 +259,7 @@ func ambiguousSourceBindingError(bindings []coremodel.ChatComponent) error {
 	return fmt.Errorf("multiple source bindings match; specify --external-channel-id: %s", strings.Join(channels, ", "))
 }
 
-func (s *Service) resolveInboundEventFilterRegistration(ctx context.Context, ref string) (*coremodel.Component, error) {
+func (s *service) resolveInboundEventFilterRegistration(ctx context.Context, ref string) (*coremodel.Component, error) {
 	registration, err := s.resolveComponentRegistration(ctx, ref)
 	if err != nil {
 		return nil, err

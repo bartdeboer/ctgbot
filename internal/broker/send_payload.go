@@ -20,8 +20,7 @@ func (b *Broker) SendPayload(
 		return fmt.Errorf("missing thread id")
 	}
 
-	storage := b.repository()
-	thread, err := storage.Threads().GetByID(ctx, threadID)
+	thread, err := b.App.Thread(ctx, threadID)
 	if err != nil {
 		return err
 	}
@@ -29,7 +28,7 @@ func (b *Broker) SendPayload(
 		return fmt.Errorf("thread not found: %s", threadID)
 	}
 
-	chat, err := storage.Chats().GetByID(ctx, thread.ChatID)
+	chat, err := b.App.Chat(ctx, thread.ChatID)
 	if err != nil {
 		return err
 	}
