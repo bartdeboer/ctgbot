@@ -1,10 +1,10 @@
-# ctgbot
+# `ctgbot`
 
-ctgbot is an agentic engineering platform with an agent-first architecture and security by design.
+`ctgbot` is an agentic engineering platform with an agent-first architecture and security by design.
 
-ctgbot routes conversations into isolated runtime sandboxes where agents can inspect repositories, run tools, execute builds, communicate across threads, and interact with controlled host services.
+It routes conversations into isolated sandboxes where agents can freely install and run software.
 
-Each conversation thread receives its own container with durable runtime state and explicit component bindings.
+Runtime containers can be refreshed back to a clean state without losing conversation history.
 
 <p align="center">
   <img src="docs/assets/ctgbot-architecture.svg" alt="ctgbot routes messages into isolated agent thread containers" width="900">
@@ -24,7 +24,7 @@ ctgbot is under active development. The architecture is usable today, but comman
 
 A real engineering environment.
 
-Each sandboxed thread runs in its own container. Agents can install packages, run tests, build tools, inspect repositories, create artifacts, run services, exchange files, communicate with other threads, browse conversation history, and use secured `hostbridge` commands.
+Each sandboxed thread runs in its own container. Agents can install packages, run tests, build tools, inspect repositories, create artifacts, run services, exchange files, communicate with other threads, browse conversation history, and use restricted `hostbridge` commands.
 
 Each thread has isolated runtime state. Experiments stay contained and do not dirty the host or other conversations.
 
