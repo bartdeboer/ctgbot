@@ -173,9 +173,9 @@ func BuildExecArgs(request ExecArgs) []string {
 	providerThreadID := strings.TrimSpace(request.ProviderThreadID)
 	prompt := strings.TrimSpace(request.Prompt)
 	if providerThreadID != "" {
-		innerArgs = append(innerArgs, "resume", providerThreadID, prompt)
+		innerArgs = append(innerArgs, "resume", providerThreadID, "--", prompt)
 	} else {
-		innerArgs = append(innerArgs, prompt)
+		innerArgs = append(innerArgs, "--", prompt)
 	}
 	return wrapWithPIDFile(innerArgs)
 }

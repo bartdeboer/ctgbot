@@ -56,10 +56,35 @@ func TestBuildExecArgsIncludesModelEffortAndResume(t *testing.T) {
 		"sh", "-lc", "rm -f " + containerengine.ActivePIDFile + "; echo $$ > " + containerengine.ActivePIDFile + "; exec \"$@\"", "sh",
 		"codex", "-a", "never", "-s", "danger-full-access", "exec", "--json", "--skip-git-repo-check",
 		"--add-dir", "/workspace", "--output-last-message", "/tmp/out.txt", "-C", "/workspace",
-		"-m", "thread-model", "-c", `model_reasoning_effort="high"`, "resume", "thread-1", "hello",
+		"-m", "thread-model", "-c", `model_reasoning_effort="high"`, "resume", "thread-1", "--", "hello",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("BuildExecArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildExecArgsSeparatesPromptFromCodexFlags(t *testing.T) {
+	got := BuildExecArgs(ExecArgs{
+		Workspace:        "/workspace",
+		OutputPath:       "/tmp/out.txt",
+		ProviderThreadID: "thread-1",
+		Prompt:           "- bullet that must remain prompt text",
+	})
+	wantSuffix := []string{"resume", "thread-1", "--", "- bullet that must remain prompt text"}
+	if len(got) < len(wantSuffix) || !reflect.DeepEqual(got[len(got)-len(wantSuffix):], wantSuffix) {
+		t.Fatalf("BuildExecArgs() suffix = %#v, want %#v", got, wantSuffix)
+	}
+}
+
+func TestBuildExecArgsSeparatesNewPromptFromCodexFlags(t *testing.T) {
+	got := BuildExecArgs(ExecArgs{
+		Workspace:  "/workspace",
+		OutputPath: "/tmp/out.txt",
+		Prompt:     "- first prompt line",
+	})
+	wantSuffix := []string{"--", "- first prompt line"}
+	if len(got) < len(wantSuffix) || !reflect.DeepEqual(got[len(got)-len(wantSuffix):], wantSuffix) {
+		t.Fatalf("BuildExecArgs() suffix = %#v, want %#v", got, wantSuffix)
 	}
 }
 
