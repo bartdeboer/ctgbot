@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	gmailapi "google.golang.org/api/gmail/v1"
 )
 
@@ -62,7 +63,7 @@ func buildGmailSendMessage(request component.MessageSendRequest) (*gmailapi.Mess
 	}
 	body := request.Body
 	if strings.TrimSpace(body) == "" {
-		return nil, fmt.Errorf("missing message body on stdin")
+		return nil, fmt.Errorf("missing message body")
 	}
 	inReplyTo, err := safeHeaderValue(request.InReplyTo)
 	if err != nil {
@@ -70,13 +71,15 @@ func buildGmailSendMessage(request component.MessageSendRequest) (*gmailapi.Mess
 	}
 
 	raw, err := buildRFC822Message(rfc822Message{
-		To:         to,
-		Cc:         cc,
-		Bcc:        bcc,
-		Subject:    subject,
-		Body:       body,
-		InReplyTo:  inReplyTo,
-		References: inReplyTo,
+		To:          to,
+		Cc:          cc,
+		Bcc:         bcc,
+		Subject:     subject,
+		Body:        body,
+		ContentType: request.ContentType,
+		InReplyTo:   inReplyTo,
+		References:  inReplyTo,
+		Attachments: request.Attachments,
 	})
 	if err != nil {
 		return nil, err
@@ -89,13 +92,15 @@ func buildGmailSendMessage(request component.MessageSendRequest) (*gmailapi.Mess
 }
 
 type rfc822Message struct {
-	To         []string
-	Cc         []string
-	Bcc        []string
-	Subject    string
-	Body       string
-	InReplyTo  string
-	References string
+	To          []string
+	Cc          []string
+	Bcc         []string
+	Subject     string
+	Body        string
+	ContentType string
+	InReplyTo   string
+	References  string
+	Attachments []message.Media
 }
 
 func buildRFC822Message(message rfc822Message) ([]byte, error) {
@@ -107,15 +112,91 @@ func buildRFC822Message(message rfc822Message) ([]byte, error) {
 	writeHeader(&out, "In-Reply-To", message.InReplyTo)
 	writeHeader(&out, "References", message.References)
 	writeHeader(&out, "MIME-Version", "1.0")
-	writeHeader(&out, "Content-Type", `text/plain; charset="UTF-8"`)
-	writeHeader(&out, "Content-Transfer-Encoding", "8bit")
+	if len(message.Attachments) == 0 {
+		writeBodyPart(&out, message.Body, normalizedBodyContentType(message.ContentType))
+		return out.Bytes(), nil
+	}
+
+	boundary := "ctgbot-gmail-boundary"
+	writeHeader(&out, "Content-Type", `multipart/mixed; boundary="`+boundary+`"`)
 	out.WriteString("\r\n")
-	body := strings.ReplaceAll(message.Body, "\r\n", "\n")
+	writeMultipartBodyPart(&out, boundary, message.Body, normalizedBodyContentType(message.ContentType))
+	for _, attachment := range message.Attachments {
+		if err := writeMultipartAttachment(&out, boundary, attachment); err != nil {
+			return nil, err
+		}
+	}
+	out.WriteString("--")
+	out.WriteString(boundary)
+	out.WriteString("--\r\n")
+	return out.Bytes(), nil
+}
+
+func writeBodyPart(out *bytes.Buffer, body string, contentType string) {
+	writeHeader(out, "Content-Type", contentType+`; charset="UTF-8"`)
+	writeHeader(out, "Content-Transfer-Encoding", "8bit")
+	out.WriteString("\r\n")
+	body = strings.ReplaceAll(body, "\r\n", "\n")
 	body = strings.ReplaceAll(body, "\r", "\n")
 	body = strings.ReplaceAll(body, "\n", "\r\n")
 	out.WriteString(body)
 	out.WriteString("\r\n")
-	return out.Bytes(), nil
+}
+
+func writeMultipartBodyPart(out *bytes.Buffer, boundary string, body string, contentType string) {
+	out.WriteString("--")
+	out.WriteString(boundary)
+	out.WriteString("\r\n")
+	writeBodyPart(out, body, contentType)
+}
+
+func writeMultipartAttachment(out *bytes.Buffer, boundary string, attachment message.Media) error {
+	filename, err := safeHeaderValue(attachment.Filename)
+	if err != nil {
+		return fmt.Errorf("attachment filename: %w", err)
+	}
+	if filename == "" {
+		filename = "attachment"
+	}
+	contentType, err := safeHeaderValue(attachment.ContentType)
+	if err != nil {
+		return fmt.Errorf("attachment content type: %w", err)
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	out.WriteString("--")
+	out.WriteString(boundary)
+	out.WriteString("\r\n")
+	writeHeader(out, "Content-Type", contentType+`; name="`+mime.QEncoding.Encode("utf-8", filename)+`"`)
+	writeHeader(out, "Content-Disposition", `attachment; filename="`+mime.QEncoding.Encode("utf-8", filename)+`"`)
+	writeHeader(out, "Content-Transfer-Encoding", "base64")
+	out.WriteString("\r\n")
+	writeBase64Lines(out, attachment.Content)
+	out.WriteString("\r\n")
+	return nil
+}
+
+func writeBase64Lines(out *bytes.Buffer, content []byte) {
+	encoded := base64.StdEncoding.EncodeToString(content)
+	for len(encoded) > 76 {
+		out.WriteString(encoded[:76])
+		out.WriteString("\r\n")
+		encoded = encoded[76:]
+	}
+	if encoded != "" {
+		out.WriteString(encoded)
+		out.WriteString("\r\n")
+	}
+}
+
+func normalizedBodyContentType(contentType string) string {
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case "text/html":
+		return "text/html"
+	default:
+		return "text/plain"
+	}
 }
 
 func writeHeader(out *bytes.Buffer, name string, value string) {

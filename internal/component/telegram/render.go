@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	markdown "github.com/bartdeboer/ctgbot/internal/markdown"
+	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
 const (
@@ -165,4 +166,50 @@ func splitTelegramText(text string, limit int) []string {
 func cleanTextForTelegram(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	return strings.TrimSpace(text)
+}
+
+func (c *Component) sendTextMessage(ctx context.Context, chatID int64, threadID int, text message.TextMessage) error {
+	body := cleanTextForTelegram(text.Text)
+	contentType := strings.TrimSpace(strings.ToLower(text.ContentType))
+	syntax := strings.TrimSpace(text.Syntax)
+	if syntax != "" {
+		return c.sendRenderedText(ctx, chatID, threadID, fencedText(syntax, body))
+	}
+	switch contentType {
+	case "text/html":
+		if body == "" {
+			body = "(empty response)"
+		}
+		for _, chunk := range splitTelegramText(body, telegramMessageMax) {
+			if err := c.api.SendMessage(ctx, chatID, threadID, chunk, "HTML"); err != nil {
+				return err
+			}
+		}
+		return nil
+	case "text/plain":
+		if body == "" {
+			body = "(empty response)"
+		}
+		for _, chunk := range splitTelegramText(body, telegramMessageMax) {
+			if err := c.api.SendMessage(ctx, chatID, threadID, chunk, ""); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return c.sendRenderedText(ctx, chatID, threadID, body)
+	}
+}
+
+func fencedText(syntax string, body string) string {
+	var b strings.Builder
+	b.WriteString("```")
+	b.WriteString(strings.TrimSpace(syntax))
+	b.WriteString("\n")
+	b.WriteString(body)
+	if !strings.HasSuffix(body, "\n") {
+		b.WriteString("\n")
+	}
+	b.WriteString("```")
+	return b.String()
 }

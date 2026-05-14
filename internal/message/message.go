@@ -9,7 +9,9 @@ import (
 )
 
 type TextMessage struct {
-	Text string
+	Text        string
+	ContentType string
+	Syntax      string
 }
 
 type Media struct {

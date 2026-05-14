@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -58,14 +59,17 @@ type ManagedFilePutCommand struct {
 }
 
 type MessagesSendCommand struct {
-	Component string
-	To        []string
-	Cc        []string
-	Bcc       []string
-	Subject   string
-	Body      string
-	ThreadID  string
-	InReplyTo string
+	Component   string
+	To          []string
+	Cc          []string
+	Bcc         []string
+	Subject     string
+	Body        string
+	ContentType string
+	Syntax      string
+	Attachments []message.Media
+	ThreadID    string
+	InReplyTo   string
 }
 
 func RegisterGobTypes(register func(any)) {
@@ -100,6 +104,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		componentCommand("component <component> managed-file list", "List declared managed files", buildManagedFileList, componentReadSources(), commandengine.InstructionDiscoverable),
 		componentCommand("component <component> managed-file status", "Show managed file presence", buildManagedFileStatus, componentReadSources(), commandengine.InstructionDiscoverable),
 		componentCommand("component <component> managed-file put <file>", "Write a declared managed file from stdin", buildManagedFilePut, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
+		componentCommand("component <component> message <text>", "Send a message through a component", buildComponentMessage, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
 		componentCommand("component <component> messages send", "Send a message through a component from stdin", buildMessagesSend, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
 	}
 }
@@ -259,13 +264,16 @@ func (c *Component) handleMessagesSend(ctx context.Context, req commandengine.Re
 		return commandengine.Result{}, fmt.Errorf("component does not support messages send: %s", loaded.Registration.Ref())
 	}
 	result, err := sender.SendMessage(ctx, component.MessageSendRequest{
-		To:        append([]string(nil), cmd.To...),
-		Cc:        append([]string(nil), cmd.Cc...),
-		Bcc:       append([]string(nil), cmd.Bcc...),
-		Subject:   strings.TrimSpace(cmd.Subject),
-		Body:      cmd.Body,
-		ThreadID:  strings.TrimSpace(cmd.ThreadID),
-		InReplyTo: strings.TrimSpace(cmd.InReplyTo),
+		To:          append([]string(nil), cmd.To...),
+		Cc:          append([]string(nil), cmd.Cc...),
+		Bcc:         append([]string(nil), cmd.Bcc...),
+		Subject:     strings.TrimSpace(cmd.Subject),
+		Body:        cmd.Body,
+		ContentType: strings.TrimSpace(cmd.ContentType),
+		Syntax:      strings.TrimSpace(cmd.Syntax),
+		Attachments: append([]message.Media(nil), cmd.Attachments...),
+		ThreadID:    strings.TrimSpace(cmd.ThreadID),
+		InReplyTo:   strings.TrimSpace(cmd.InReplyTo),
 	})
 	if err != nil {
 		return commandengine.Result{}, err

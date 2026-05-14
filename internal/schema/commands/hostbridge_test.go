@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,6 +88,114 @@ func TestHostbridgeSendFileParsesMediaCommand(t *testing.T) {
 	}
 	if cmd.Filename != "note.txt" || cmd.Caption != "a note" || cmd.ContentType != "text/plain" || cmd.Syntax != "markdown" || string(cmd.Content) != "hello" {
 		t.Fatalf("command = %#v, want parsed send media", cmd)
+	}
+}
+
+func TestHostbridgeMessageParsesPayloadWithAttachments(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "one.txt")
+	second := filepath.Join(dir, "two.bin")
+	if err := os.WriteFile(first, []byte("one"), 0o644); err != nil {
+		t.Fatalf("write first fixture: %v", err)
+	}
+	if err := os.WriteFile(second, []byte("two"), 0o644); err != nil {
+		t.Fatalf("write second fixture: %v", err)
+	}
+	router, err := commandengine.NewRouter(HostbridgeCommands(), commandengine.SourceHostbridge)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	req, err := router.Parse(context.Background(), commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		},
+	}, []string{"message", "hello", "--type", "text/html", "--syntax", "html", "--attach", first + ";type=text/plain;syntax=txt;name=one-renamed.txt", "--attach", second})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	cmd, ok := req.Command.(SendPayload)
+	if !ok {
+		t.Fatalf("command = %T, want SendPayload", req.Command)
+	}
+	if got, want := cmd.Payload.Text.Text, "hello"; got != want {
+		t.Fatalf("text = %q, want %q", got, want)
+	}
+	if got, want := cmd.Payload.Text.ContentType, "text/html"; got != want {
+		t.Fatalf("text content type = %q, want %q", got, want)
+	}
+	if got, want := cmd.Payload.Text.Syntax, "html"; got != want {
+		t.Fatalf("text syntax = %q, want %q", got, want)
+	}
+	if got, want := len(cmd.Payload.Attachments), 2; got != want {
+		t.Fatalf("attachments len = %d, want %d", got, want)
+	}
+	if got, want := cmd.Payload.Attachments[0].Filename, "one-renamed.txt"; got != want {
+		t.Fatalf("first filename = %q, want %q", got, want)
+	}
+	if got, want := cmd.Payload.Attachments[0].ContentType, "text/plain"; got != want {
+		t.Fatalf("first content type = %q, want %q", got, want)
+	}
+	if got, want := cmd.Payload.Attachments[0].Syntax, "txt"; got != want {
+		t.Fatalf("first syntax = %q, want %q", got, want)
+	}
+	if got, want := string(cmd.Payload.Attachments[0].Content), "one"; got != want {
+		t.Fatalf("first content = %q, want %q", got, want)
+	}
+	if got, want := cmd.Payload.Attachments[1].Filename, "two.bin"; got != want {
+		t.Fatalf("second filename = %q, want %q", got, want)
+	}
+}
+
+func TestHostbridgeMessageUsesFullExistingPathBeforeParsingAttachmentParameters(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "one;type=text-plain.txt")
+	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	router, err := commandengine.NewRouter(HostbridgeCommands(), commandengine.SourceHostbridge)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	req, err := router.Parse(context.Background(), commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		},
+	}, []string{"message", "hello", "--attach", path})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	cmd, ok := req.Command.(SendPayload)
+	if !ok {
+		t.Fatalf("command = %T, want SendPayload", req.Command)
+	}
+	if got, want := cmd.Payload.Attachments[0].Filename, "one;type=text-plain.txt"; got != want {
+		t.Fatalf("filename = %q, want %q", got, want)
+	}
+	if got := cmd.Payload.Attachments[0].ContentType; got != "" {
+		t.Fatalf("content type = %q, want empty", got)
+	}
+}
+
+func TestHostbridgeMessageRejectsUnknownAttachmentParameter(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "one.txt")
+	if err := os.WriteFile(path, []byte("one"), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	router, err := commandengine.NewRouter(HostbridgeCommands(), commandengine.SourceHostbridge)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	_, err = router.Parse(context.Background(), commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		},
+	}, []string{"message", "hello", "--attach", path + ";bogus=value"})
+	if err == nil || !strings.Contains(err.Error(), "unknown attachment parameter") {
+		t.Fatalf("Parse() error = %v, want unknown attachment parameter", err)
 	}
 }
 

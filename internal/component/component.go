@@ -159,14 +159,31 @@ type OutboundRelay interface {
 	StartChatAction(ctx context.Context, target message.ChatTarget, action message.ChatAction) (func(), error)
 }
 
+// MessageSendRequest is the component-direct message contract used by commands
+// such as:
+//
+//	hostbridge component gmail/personal message "hello" --to you@example.com
+//	hostbridge component telegram/telegram message "hello"
+//
+// It intentionally stays separate from message.OutboundPayload. OutboundPayload
+// is the broker relay payload for an already-routed ctgbot thread; this request
+// is for sending through a specific component and may need provider envelope
+// fields such as recipients, subject, reply ids, or attachments.
+//
+// Keep common provider fields explicit instead of hiding them in a generic
+// metadata map. Components should use the fields they understand and reject
+// missing required fields for their provider.
 type MessageSendRequest struct {
-	To        []string
-	Cc        []string
-	Bcc       []string
-	Subject   string
-	Body      string
-	ThreadID  string
-	InReplyTo string
+	To          []string
+	Cc          []string
+	Bcc         []string
+	Subject     string
+	Body        string
+	ContentType string
+	Syntax      string
+	Attachments []message.Media
+	ThreadID    string
+	InReplyTo   string
 }
 
 type MessageSendResult struct {

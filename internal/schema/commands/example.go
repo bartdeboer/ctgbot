@@ -36,6 +36,7 @@ func RegisterGobTypes(register func(any)) {
 	register(ConfigSet{})
 	register(ConfigHostbridgeScaffold{})
 	register(RunCommand{})
+	register(SendPayload{})
 	register(SendMedia{})
 }
 

@@ -404,6 +404,49 @@ func TestSendFallsBackFromMarkdownToHTML(t *testing.T) {
 	}
 }
 
+func TestSendTextMessageWithHTMLContentTypeUsesHTMLParseMode(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID: "123",
+		Text: message.TextMessage{
+			Text:        "<b>hello</b>",
+			ContentType: "text/html",
+		},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 1 {
+		t.Fatalf("messages = %#v, want one", messages)
+	}
+	if messages[0].text != "<b>hello</b>" || messages[0].parseMode != "HTML" {
+		t.Fatalf("message = %#v, want raw HTML parse mode", messages[0])
+	}
+}
+
+func TestSendTextMessageWithPlainContentTypeUsesPlainParseMode(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID: "123",
+		Text: message.TextMessage{
+			Text:        "*hello*",
+			ContentType: "text/plain",
+		},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 1 {
+		t.Fatalf("messages = %#v, want one", messages)
+	}
+	if messages[0].text != "*hello*" || messages[0].parseMode != "" {
+		t.Fatalf("message = %#v, want plain parse mode", messages[0])
+	}
+}
 func TestSendMediaImageUsesPhoto(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}

@@ -56,7 +56,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 	}
 	for _, definition := range definitions {
 		switch definition.CanonicalPattern() {
-		case "run <command>", "sendfile <path>", "sendstdin":
+		case "run <command>", "message <text>", "sendfile <path>", "sendstdin":
 			out = append(out, definition)
 		}
 	}
@@ -94,6 +94,17 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	); err != nil {
 		return err
 	}
+	if err := commandengine.Register[schemacommands.SendPayload](
+		registry,
+		func(ctx context.Context, req commandengine.Request, cmd schemacommands.SendPayload) (commandengine.Result, error) {
+			if err := c.sendPayload(ctx, req, cmd.Payload); err != nil {
+				return commandengine.Result{}, err
+			}
+			return commandengine.Result{}, nil
+		},
+	); err != nil {
+		return err
+	}
 	return commandengine.Register[schemacommands.SendMedia](
 		registry,
 		func(ctx context.Context, req commandengine.Request, cmd schemacommands.SendMedia) (commandengine.Result, error) {
@@ -105,10 +116,10 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	)
 }
 
-func (c *Component) sendMedia(
+func (c *Component) sendPayload(
 	ctx context.Context,
 	req commandengine.Request,
-	cmd schemacommands.SendMedia,
+	payload message.OutboundPayload,
 ) error {
 	if c == nil || c.Actions == nil {
 		return fmt.Errorf("missing broker actions")
@@ -120,21 +131,25 @@ func (c *Component) sendMedia(
 	if threadID.IsNull() {
 		return fmt.Errorf("missing thread id")
 	}
-	return c.Actions.SendPayload(
-		ctx,
-		threadID,
-		message.OutboundPayload{
-			Text: message.TextMessage{
-				Text: cmd.Caption,
-			},
-			Attachments: []message.Media{{
-				Filename:    cmd.Filename,
-				ContentType: cmd.ContentType,
-				Syntax:      cmd.Syntax,
-				Content:     append([]byte(nil), cmd.Content...),
-			}},
+	return c.Actions.SendPayload(ctx, threadID, payload)
+}
+
+func (c *Component) sendMedia(
+	ctx context.Context,
+	req commandengine.Request,
+	cmd schemacommands.SendMedia,
+) error {
+	return c.sendPayload(ctx, req, message.OutboundPayload{
+		Text: message.TextMessage{
+			Text: cmd.Caption,
 		},
-	)
+		Attachments: []message.Media{{
+			Filename:    cmd.Filename,
+			ContentType: cmd.ContentType,
+			Syntax:      cmd.Syntax,
+			Content:     append([]byte(nil), cmd.Content...),
+		}},
+	})
 }
 
 func FormatHelp(definitions []commandengine.Definition) string {

@@ -222,6 +222,9 @@ chmod 600 .ctgbot/components/gmail/personal/oauth_client.json
 ctgbot component gmail/personal auth
 ctgbot component gmail/personal auth status
 ctgbot chat <chat> component add source gmail/personal --external-channel-id you@example.com
+
+# From an agent runtime, send directly through Gmail:
+hostbridge component gmail/personal message "Monthly report" --to you@example.com --subject "Monthly report" --attach /workspace/out/report.pdf
 ```
 
 ### Inbound filters
@@ -280,6 +283,8 @@ hostbridge help
 hostbridge component list
 hostbridge component <component> help
 hostbridge thread list
+hostbridge message "hello"
+hostbridge message "Report attached" --attach /workspace/out/report.pdf
 hostbridge sendstdin
 hostbridge sendfile <path>
 ```

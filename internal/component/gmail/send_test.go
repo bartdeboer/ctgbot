@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
 func TestBuildGmailSendMessageBuildsRFC822AndThreadID(t *testing.T) {
@@ -77,5 +78,42 @@ func TestSendMessageUsesGmailClient(t *testing.T) {
 	}
 	if got, want := client.sent[0].ThreadId, "thread-1"; got != want {
 		t.Fatalf("sent ThreadId = %q, want %q", got, want)
+	}
+}
+
+func TestBuildGmailSendMessageBuildsMultipartWithAttachment(t *testing.T) {
+	message, err := buildGmailSendMessage(component.MessageSendRequest{
+		To:          []string{"sender@example.com"},
+		Subject:     "Report",
+		Body:        "<h1>Monthly report</h1>",
+		ContentType: "text/html",
+		Attachments: []message.Media{{
+			Filename:    "report.pdf",
+			ContentType: "application/pdf",
+			Content:     []byte("pdf bytes"),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("buildGmailSendMessage() error = %v", err)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(message.Raw)
+	if err != nil {
+		t.Fatalf("decode raw error = %v", err)
+	}
+	text := string(raw)
+	for _, want := range []string{
+		"Content-Type: multipart/mixed; boundary=\"ctgbot-gmail-boundary\"\r\n",
+		"--ctgbot-gmail-boundary\r\n",
+		"Content-Type: text/html; charset=\"UTF-8\"\r\n",
+		"\r\n<h1>Monthly report</h1>\r\n",
+		"Content-Type: application/pdf; name=\"report.pdf\"\r\n",
+		"Content-Disposition: attachment; filename=\"report.pdf\"\r\n",
+		"Content-Transfer-Encoding: base64\r\n",
+		base64.StdEncoding.EncodeToString([]byte("pdf bytes")),
+		"--ctgbot-gmail-boundary--\r\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("raw message = %q, want contains %q", text, want)
+		}
 	}
 }

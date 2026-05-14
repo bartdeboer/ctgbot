@@ -1,0 +1,59 @@
+package broker
+
+import (
+	"context"
+	"testing"
+
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
+)
+
+type fakeActions struct {
+	threadID modeluuid.UUID
+	payload  message.OutboundPayload
+}
+
+func (f *fakeActions) SendPayload(ctx context.Context, threadID modeluuid.UUID, payload message.OutboundPayload) error {
+	_ = ctx
+	f.threadID = threadID
+	f.payload = payload
+	return nil
+}
+
+func (f *fakeActions) RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
+	_, _, _ = ctx, req, cmd
+	return commandengine.Result{}, nil
+}
+
+func (f *fakeActions) MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string, error) {
+	_, _ = ctx, chatID
+	return "", nil
+}
+
+func TestSendPayloadUsesCurrentThread(t *testing.T) {
+	actions := &fakeActions{}
+	component := New(actions)
+	threadID := modeluuid.New()
+	payload := message.OutboundPayload{
+		Text: message.TextMessage{Text: "hello"},
+		Attachments: []message.Media{{
+			Filename: "note.txt",
+			Content:  []byte("note"),
+		}},
+	}
+
+	err := component.sendPayload(context.Background(), commandengine.Request{
+		Context: commandengine.Context{ThreadID: threadID},
+	}, payload)
+	if err != nil {
+		t.Fatalf("sendPayload() error = %v", err)
+	}
+	if actions.threadID != threadID {
+		t.Fatalf("threadID = %s, want %s", actions.threadID, threadID)
+	}
+	if actions.payload.Text.Text != "hello" || len(actions.payload.Attachments) != 1 || string(actions.payload.Attachments[0].Content) != "note" {
+		t.Fatalf("payload = %#v, want copied payload", actions.payload)
+	}
+}

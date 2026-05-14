@@ -101,7 +101,7 @@ func normalizedArgs(args []string, componentRef string) []string {
 
 func isDirectHostbridgeCommand(arg string, componentRef string) bool {
 	switch arg {
-	case "", "run", "sendfile", "sendstdin", "config", "help", "version":
+	case "", "run", "message", "sendfile", "sendstdin", "config", "help", "version":
 		return true
 	}
 	for _, prefix := range cmdsurface.GlobalDirectPrefixes() {

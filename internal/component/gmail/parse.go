@@ -112,8 +112,9 @@ func gmailReplyMetadata(componentRef string, message *gmailapi.Message, from str
 		lines = append(lines, "RFC message id: "+inReplyTo)
 	}
 	if to != "" && replySubject != "" {
-		command := "printf '<your reply text>' | hostbridge component " + componentRef +
-			" messages send --to " + shellQuote(to) +
+		command := "hostbridge component " + componentRef +
+			" message " + shellQuote("<your reply text>") +
+			" --to " + shellQuote(to) +
 			" --subject " + shellQuote(replySubject)
 		if threadID != "" {
 			command += " --thread-id " + shellQuote(threadID)
