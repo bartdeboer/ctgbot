@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	gmailapi "google.golang.org/api/gmail/v1"
+	"google.golang.org/api/googleapi"
 )
 
 func TestManagedFiles(t *testing.T) {
@@ -438,6 +439,53 @@ func TestPollOnceEmitsNewMessages(t *testing.T) {
 	}
 }
 
+func TestPollOnceSkipsMissingMessagesAndAdvancesHistory(t *testing.T) {
+	component := testComponent(t)
+	client := &fakeGmailClient{
+		profile: &gmailapi.Profile{EmailAddress: "work@example.com", HistoryId: 42},
+		history: []*gmailapi.ListHistoryResponse{{
+			HistoryId: 43,
+			History: []*gmailapi.History{{
+				MessagesAdded: []*gmailapi.HistoryMessageAdded{
+					{Message: &gmailapi.Message{Id: "missing"}},
+					{Message: &gmailapi.Message{Id: "m1"}},
+				},
+			}},
+		}},
+		messages: map[string]*gmailapi.Message{
+			"m1": {Id: "m1", ThreadId: "t1", Snippet: "hello", Payload: &gmailapi.MessagePart{Headers: []*gmailapi.MessagePartHeader{{Name: "From", Value: "sender@example.com"}}}},
+		},
+		messageErrors: map[string]error{
+			"missing": &googleapi.Error{Code: 404, Message: "notFound"},
+		},
+	}
+	state := mailboxState{MailboxEmail: "work@example.com", HistoryID: 42}
+	var events []componentpkg.InboundEvent
+	if err := component.pollOnce(context.Background(), client, &state, func(ctx context.Context, event componentpkg.InboundEvent) error {
+		_ = ctx
+		events = append(events, event)
+		return nil
+	}); err != nil {
+		t.Fatalf("pollOnce() error = %v", err)
+	}
+	if got, want := len(events), 1; got != want {
+		t.Fatalf("events len = %d, want %d", got, want)
+	}
+	if got, want := events[0].ExternalID, "m1"; got != want {
+		t.Fatalf("ExternalID = %q, want %q", got, want)
+	}
+	if got, want := state.HistoryID, uint64(43); got != want {
+		t.Fatalf("HistoryID = %d, want %d", got, want)
+	}
+	loaded, err := component.loadState()
+	if err != nil {
+		t.Fatalf("loadState() error = %v", err)
+	}
+	if got, want := loaded.HistoryID, uint64(43); got != want {
+		t.Fatalf("saved HistoryID = %d, want %d", got, want)
+	}
+}
+
 func TestRunInboundRetriesAfterBaselineError(t *testing.T) {
 	component := testComponent(t)
 	component.componentConfig.PollInterval = time.Millisecond.String()
@@ -514,6 +562,7 @@ type fakeGmailClient struct {
 	profileErrors []error
 	history       []*gmailapi.ListHistoryResponse
 	messages      map[string]*gmailapi.Message
+	messageErrors map[string]error
 	sent          []*gmailapi.Message
 	onListHistory func()
 }
@@ -543,6 +592,9 @@ func (c *fakeGmailClient) ListHistory(ctx context.Context, userID string, startH
 
 func (c *fakeGmailClient) GetMessage(ctx context.Context, userID string, messageID string) (*gmailapi.Message, error) {
 	_, _ = ctx, userID
+	if c.messageErrors != nil && c.messageErrors[messageID] != nil {
+		return nil, c.messageErrors[messageID]
+	}
 	return c.messages[messageID], nil
 }
 

@@ -162,6 +162,10 @@ func (c *Component) pollOnce(ctx context.Context, client gmailClient, state *mai
 				seenMessages[messageID] = struct{}{}
 				message, err := client.GetMessage(ctx, c.userID(), messageID)
 				if err != nil {
+					if isGmailNotFound(err) {
+						c.logf("gmail message no longer available component=%s message=%s", c.registration.Ref(), messageID)
+						continue
+					}
 					return fmt.Errorf("get gmail message %s: %w", messageID, err)
 				}
 				if c.shouldSkipMessage(message) {
@@ -223,6 +227,10 @@ func (c *Component) shouldSkipMessage(message *gmailapi.Message) bool {
 }
 
 func isHistoryExpired(err error) bool {
+	return isGmailNotFound(err)
+}
+
+func isGmailNotFound(err error) bool {
 	var apiErr *googleapi.Error
 	return errors.As(err, &apiErr) && apiErr.Code == 404
 }
