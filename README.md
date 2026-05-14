@@ -24,13 +24,18 @@ ctgbot is under active development. The architecture is usable today, but comman
 
 A real engineering environment.
 
-Each sandboxed thread runs in its own container. Agents can install packages, run tests, build tools, inspect repositories, create artifacts, run services, exchange files, communicate with other threads, browse conversation history, and use restricted `hostbridge` commands.
+Each sandboxed thread runs in its own container. Agents can install packages,
+run tests, build tools, inspect repositories, create artifacts, run services,
+exchange files, communicate with other threads, read message history, and use
+restricted `hostbridge` commands.
 
-Each thread has isolated runtime state. Experiments stay contained and do not dirty the host or other conversations.
+Each thread has isolated runtime state. Experiments stay contained and do not
+dirty the host or other conversations.
 
 ## What humans get
 
-Operators control which channels are trusted, which components are attached, which workspaces are mounted, and which command surfaces are exposed.
+Operators control which channels are trusted, which components are attached,
+which workspaces are mounted, and which command surfaces are exposed.
 
 Unknown channels are dropped until explicitly bound.
 
@@ -38,7 +43,9 @@ ctgbot is designed around explicit trust boundaries instead of ambient authority
 
 ## Design focus
 
-ctgbot focuses on the environment an agent receives after the message arrives: isolated runtime state, durable workspaces, explicit components, controlled host access, and reproducible execution environments.
+ctgbot focuses on the environment an agent receives after the message arrives:
+isolated runtime state, durable workspaces, explicit components, controlled host
+access, and reproducible execution environments.
 
 ## Quick start: Telegram + Codex
 
@@ -72,6 +79,8 @@ cd ~/run/ctgbot-01
 ```
 
 ### 3. Configure basics
+
+A workspace is the host project directory mounted into agent containers.
 
 ```bash
 ctgbot workspace set default --path /absolute/path/to/workspace
@@ -123,7 +132,8 @@ Use a process supervisor for production deployments.
 
 ### 8. Bind your Telegram chat
 
-Send a message to the Telegram bot from the chat you want to use. Unknown channels are recorded as dropped until you bind them.
+Send a message to the Telegram bot from the chat you want to use. Unknown
+channels are recorded as dropped until you bind them.
 
 ```bash
 ctgbot chat dropped
@@ -136,7 +146,53 @@ ctgbot chat <chat> component add command process/process
 ctgbot chat <chat> component list
 ```
 
-Use Telegram topics to create separate agent conversations, each with its own thread and sandbox.
+Use Telegram topics to create separate agent conversations, each with its own
+thread and sandbox.
+
+## Hostbridge
+
+`hostbridge` is the controlled bridge from an agent container back to ctgbot and
+the host. Agents use it to send files, message other threads, read message
+history, inspect available components, and run explicit host command aliases.
+
+### Workspace command aliases
+
+Hostbridge aliases are configured per workspace. Add only commands you are
+comfortable letting agents run.
+
+Example `.ctgbot/config.json`:
+
+```json
+{
+  "workspaces": {
+    "default": {
+      "path": "/absolute/path/to/workspace",
+      "hostbridge": {
+        "allowed_commands": {
+          "git-fetch": {
+            "name": "git",
+            "args": ["fetch", "--all", "--prune"],
+            "dir": "/absolute/path/to/workspace"
+          },
+          "git-push": {
+            "name": "git",
+            "args": ["push"],
+            "dir": "/absolute/path/to/workspace",
+            "delay": "500ms"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Agents can then run:
+
+```bash
+hostbridge git-fetch
+hostbridge git-push
+```
 
 ## Optional components
 
