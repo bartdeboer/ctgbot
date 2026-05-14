@@ -172,6 +172,11 @@ func (c *Component) pollOnce(ctx context.Context, client gmailClient, state *mai
 					continue
 				}
 				event := c.InboundEventFromMessage(message)
+				attachments, err := c.loadMessageAttachments(ctx, client, message)
+				if err != nil {
+					return err
+				}
+				event.Payload.Attachments = attachments
 				if err := emit(ctx, event); err != nil {
 					return err
 				}

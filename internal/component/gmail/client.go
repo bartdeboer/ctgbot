@@ -12,6 +12,7 @@ type gmailClient interface {
 	GetProfile(ctx context.Context, userID string) (*gmailapi.Profile, error)
 	ListHistory(ctx context.Context, userID string, startHistoryID uint64, pageToken string) (*gmailapi.ListHistoryResponse, error)
 	GetMessage(ctx context.Context, userID string, messageID string) (*gmailapi.Message, error)
+	GetAttachment(ctx context.Context, userID string, messageID string, attachmentID string) ([]byte, error)
 	SendMessage(ctx context.Context, userID string, message *gmailapi.Message) (*gmailapi.Message, error)
 }
 
@@ -66,6 +67,25 @@ func (c serviceClient) GetMessage(ctx context.Context, userID string, messageID 
 		return nil, fmt.Errorf("missing gmail message id")
 	}
 	return c.service.Users.Messages.Get(cleanUserID(userID), messageID).Format("full").Context(ctx).Do()
+}
+
+func (c serviceClient) GetAttachment(ctx context.Context, userID string, messageID string, attachmentID string) ([]byte, error) {
+	if c.service == nil {
+		return nil, fmt.Errorf("missing gmail service")
+	}
+	messageID = strings.TrimSpace(messageID)
+	attachmentID = strings.TrimSpace(attachmentID)
+	if messageID == "" {
+		return nil, fmt.Errorf("missing gmail message id")
+	}
+	if attachmentID == "" {
+		return nil, fmt.Errorf("missing gmail attachment id")
+	}
+	body, err := c.service.Users.Messages.Attachments.Get(cleanUserID(userID), messageID, attachmentID).Context(ctx).Do()
+	if err != nil {
+		return nil, err
+	}
+	return decodeGmailBytes(body.Data), nil
 }
 
 func (c serviceClient) SendMessage(ctx context.Context, userID string, message *gmailapi.Message) (*gmailapi.Message, error) {

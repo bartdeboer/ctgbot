@@ -292,18 +292,26 @@ func collectBodyText(part *gmailapi.MessagePart) (plain string, htmlBody string)
 }
 
 func decodeGmailBody(data string) string {
+	decoded := decodeGmailBytes(data)
+	if len(decoded) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(string(decoded))
+}
+
+func decodeGmailBytes(data string) []byte {
 	data = strings.TrimSpace(data)
 	if data == "" {
-		return ""
+		return nil
 	}
 	decoded, err := base64.URLEncoding.DecodeString(data)
 	if err != nil {
 		decoded, err = base64.RawURLEncoding.DecodeString(data)
 	}
 	if err != nil {
-		return ""
+		return nil
 	}
-	return strings.TrimSpace(string(decoded))
+	return decoded
 }
 
 func stripHTML(value string) string {

@@ -486,6 +486,74 @@ func TestPollOnceSkipsMissingMessagesAndAdvancesHistory(t *testing.T) {
 	}
 }
 
+func TestPollOnceLoadsAttachments(t *testing.T) {
+	component := testComponent(t)
+	client := &fakeGmailClient{
+		profile: &gmailapi.Profile{EmailAddress: "work@example.com", HistoryId: 42},
+		history: []*gmailapi.ListHistoryResponse{{
+			HistoryId: 43,
+			History: []*gmailapi.History{{
+				MessagesAdded: []*gmailapi.HistoryMessageAdded{{Message: &gmailapi.Message{Id: "m1"}}},
+			}},
+		}},
+		messages: map[string]*gmailapi.Message{
+			"m1": {
+				Id:       "m1",
+				ThreadId: "t1",
+				Payload: &gmailapi.MessagePart{
+					Headers: []*gmailapi.MessagePartHeader{{Name: "From", Value: "sender@example.com"}},
+					Parts: []*gmailapi.MessagePart{{
+						MimeType: "text/plain",
+						Body:     &gmailapi.MessagePartBody{Data: base64.RawURLEncoding.EncodeToString([]byte("hello"))},
+					}, {
+						Filename: "inline.txt",
+						MimeType: "text/plain",
+						Body:     &gmailapi.MessagePartBody{Data: base64.RawURLEncoding.EncodeToString([]byte("inline attachment"))},
+					}, {
+						Filename: "invoice.pdf",
+						MimeType: "application/pdf",
+						Body:     &gmailapi.MessagePartBody{AttachmentId: "att-1"},
+					}},
+				},
+			},
+		},
+		attachments: map[string][]byte{
+			"att-1": []byte("%PDF attachment"),
+		},
+	}
+	state := mailboxState{MailboxEmail: "work@example.com", HistoryID: 42}
+	var events []componentpkg.InboundEvent
+	if err := component.pollOnce(context.Background(), client, &state, func(ctx context.Context, event componentpkg.InboundEvent) error {
+		_ = ctx
+		events = append(events, event)
+		return nil
+	}); err != nil {
+		t.Fatalf("pollOnce() error = %v", err)
+	}
+	if got, want := len(events), 1; got != want {
+		t.Fatalf("events len = %d, want %d", got, want)
+	}
+	attachments := events[0].Payload.Attachments
+	if got, want := len(attachments), 2; got != want {
+		t.Fatalf("attachments len = %d, want %d: %#v", got, want, attachments)
+	}
+	if got, want := attachments[0].Filename, "inline.txt"; got != want {
+		t.Fatalf("inline filename = %q, want %q", got, want)
+	}
+	if got, want := string(attachments[0].Content), "inline attachment"; got != want {
+		t.Fatalf("inline content = %q, want %q", got, want)
+	}
+	if got, want := attachments[1].Filename, "invoice.pdf"; got != want {
+		t.Fatalf("fetched filename = %q, want %q", got, want)
+	}
+	if got, want := attachments[1].ContentType, "application/pdf"; got != want {
+		t.Fatalf("fetched content type = %q, want %q", got, want)
+	}
+	if got, want := string(attachments[1].Content), "%PDF attachment"; got != want {
+		t.Fatalf("fetched content = %q, want %q", got, want)
+	}
+}
+
 func TestRunInboundRetriesAfterBaselineError(t *testing.T) {
 	component := testComponent(t)
 	component.componentConfig.PollInterval = time.Millisecond.String()
@@ -563,6 +631,8 @@ type fakeGmailClient struct {
 	history       []*gmailapi.ListHistoryResponse
 	messages      map[string]*gmailapi.Message
 	messageErrors map[string]error
+	attachments   map[string][]byte
+	attachErrors  map[string]error
 	sent          []*gmailapi.Message
 	onListHistory func()
 }
@@ -596,6 +666,14 @@ func (c *fakeGmailClient) GetMessage(ctx context.Context, userID string, message
 		return nil, c.messageErrors[messageID]
 	}
 	return c.messages[messageID], nil
+}
+
+func (c *fakeGmailClient) GetAttachment(ctx context.Context, userID string, messageID string, attachmentID string) ([]byte, error) {
+	_, _, _ = ctx, userID, messageID
+	if c.attachErrors != nil && c.attachErrors[attachmentID] != nil {
+		return nil, c.attachErrors[attachmentID]
+	}
+	return append([]byte(nil), c.attachments[attachmentID]...), nil
 }
 
 func (c *fakeGmailClient) SendMessage(ctx context.Context, userID string, message *gmailapi.Message) (*gmailapi.Message, error) {
