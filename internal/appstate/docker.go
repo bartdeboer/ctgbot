@@ -23,9 +23,9 @@ func (d DockerConfig) SetImage(image string) error {
 }
 
 func (d DockerConfig) Dockerfile() string {
-	name := strings.TrimSpace(d.cfg.string("docker.dockerfile", "Dockerfile"))
+	name := strings.TrimSpace(d.cfg.string("docker.dockerfile", "codex.Dockerfile"))
 	if name == "" {
-		return "Dockerfile"
+		return "codex.Dockerfile"
 	}
 	return name
 }
@@ -33,7 +33,7 @@ func (d DockerConfig) Dockerfile() string {
 func (d DockerConfig) SetDockerfile(name string) error {
 	name = strings.TrimSpace(strings.ReplaceAll(name, "\\", "/"))
 	if name == "" {
-		name = "Dockerfile"
+		name = "codex.Dockerfile"
 	}
 	if strings.Contains(name, "/") || name == "." || name == ".." {
 		return fmt.Errorf("dockerfile must be a file name in the build context root: %s", name)

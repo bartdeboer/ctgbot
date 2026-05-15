@@ -70,7 +70,7 @@ func TestImageListShowsRegisteredCodexRuntimeImageTarget(t *testing.T) {
 				t.Fatalf("image list: %v", err)
 			}
 		})
-		for _, want := range []string{"codex/work", "name=codex", "image=ctgbot-codex:latest", "dockerfile=Dockerfile"} {
+		for _, want := range []string{"codex/work", "name=codex", "image=ctgbot-codex:latest", "dockerfile=codex.Dockerfile"} {
 			if !strings.Contains(output, want) {
 				t.Fatalf("image list output = %q, want %q", output, want)
 			}

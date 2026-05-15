@@ -125,7 +125,7 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		dockerfile = strings.TrimSpace(c.config.Docker().Dockerfile())
 	}
 	if dockerfile == "" {
-		dockerfile = "Dockerfile"
+		dockerfile = "codex.Dockerfile"
 	}
 	return []runtimeimage.Target{{
 		Name:       Type,

@@ -18,7 +18,7 @@ func TestBuildContextTarContainsDockerfiles(t *testing.T) {
 	found := tarNames(t, rc)
 
 	for _, name := range []string{
-		"Dockerfile",
+		"codex.Dockerfile",
 		"slim.Dockerfile",
 		"cuda.Dockerfile",
 		"claude.Dockerfile",

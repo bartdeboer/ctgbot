@@ -32,7 +32,7 @@ func newTestConfig(t *testing.T) (*Config, *clistate.Store) {
 func TestDockerfileConfigDefaultsAndValidation(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 
-	if got := cfg.Docker().Dockerfile(); got != "Dockerfile" {
+	if got := cfg.Docker().Dockerfile(); got != "codex.Dockerfile" {
 		t.Fatalf("Dockerfile() = %q, want Dockerfile", got)
 	}
 	if err := cfg.Docker().SetDockerfile("slim.Dockerfile"); err != nil {
