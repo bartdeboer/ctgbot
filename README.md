@@ -204,12 +204,20 @@ hostbridge git-push
 
 ### Claude
 
+Minimal Claude chat setup:
+
 ```bash
 ctgbot component register claude/claude --runtime docker
+ctgbot component register process/process --runtime local
 ctgbot image build --no-cache
 ctgbot component claude/claude auth
 ctgbot component claude/claude auth status
+
+ctgbot chat bind telegram/telegram <external_channel_id> "Claude #1"
+ctgbot chat <chat> workspace set default
 ctgbot chat <chat> component add agent claude/claude
+ctgbot chat <chat> component add command process/process
+ctgbot chat <chat> component list
 ```
 
 Claude auth runs `claude setup-token` in the component runtime. If it returns a
