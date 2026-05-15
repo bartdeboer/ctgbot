@@ -162,8 +162,8 @@ type OutboundRelay interface {
 // MessageSendRequest is the component-direct message contract used by commands
 // such as:
 //
-//	hostbridge component gmail/personal message "hello" --to you@example.com
-//	hostbridge component telegram/telegram message "hello"
+//	hostbridge gmail/personal message "hello" --to you@example.com
+//	hostbridge telegram/telegram message "hello"
 //
 // It intentionally stays separate from message.OutboundPayload. OutboundPayload
 // is the broker relay payload for an already-routed ctgbot thread; this request

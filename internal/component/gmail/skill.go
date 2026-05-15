@@ -47,7 +47,7 @@ Setup commands:
 Replying:
 - Incoming Gmail prompts include Gmail message/thread ids and a ready-to-edit reply command.
 - Send a plain-text email/reply:
-   hostbridge component gmail/work message '<your reply text>' --to you@example.com --subject 'Re: Subject' --thread-id <gmailThreadId> --in-reply-to <rfcMessageId>
+   hostbridge gmail/work message '<your reply text>' --to you@example.com --subject 'Re: Subject' --thread-id <gmailThreadId> --in-reply-to <rfcMessageId>
 
 Safety notes:
 - Never paste OAuth client secrets or token.json into chat.
