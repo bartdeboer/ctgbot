@@ -23,12 +23,14 @@ import (
 
 const (
 	Type                 = "claude"
+	DefaultCallbackPort  = 1455
 	DefaultDockerfile    = "claude.Dockerfile"
 	stopAfterTurnTimeout = 5 * time.Second
 )
 
 var _ component.Agent = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
+var _ component.Authenticator = (*Component)(nil)
 var _ component.AuthStatusReporter = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
 
@@ -106,6 +108,28 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 		{RelativePath: ".claude/settings.json", Required: false, Sensitive: false},
 		{RelativePath: ".claude.json", Required: false, Sensitive: true},
 	}
+}
+
+func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
+	if c == nil || c.runtime == nil {
+		return fmt.Errorf("missing component runtime")
+	}
+	if err := PrepareHome(HomeSpec{HostHome: c.runtime.ComponentHome().Path}); err != nil {
+		return err
+	}
+	closeRelay, err := c.runtime.OpenHTTPRelayPort(
+		ctx,
+		"",
+		modeluuid.UUID{},
+		nil,
+		claudeCallbackPort(callbackPort),
+		claudeCallbackTimeout(callbackTimeout),
+	)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = closeRelay(context.Background()) }()
+	return c.runtime.Exec(ctx, "", modeluuid.UUID{}, nil, writerOrDiscard(stdout), writerOrDiscard(stderr), "claude", "setup-token")
 }
 
 func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.Writer) error {
@@ -250,6 +274,20 @@ func writerOrDiscard(w io.Writer) io.Writer {
 		return io.Discard
 	}
 	return w
+}
+
+func claudeCallbackPort(port int) int {
+	if port <= 0 {
+		return DefaultCallbackPort
+	}
+	return port
+}
+
+func claudeCallbackTimeout(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		return 10 * time.Minute
+	}
+	return timeout
 }
 
 func (c *Component) logf(format string, args ...any) {
