@@ -94,9 +94,8 @@ ctgbot config set git.user_email "you@example.com"
 ```bash
 ctgbot component register telegram/telegram --runtime local
 
-install -d -m 700 .ctgbot/components/telegram/telegram
+mkdir -p .ctgbot/components/telegram/telegram
 printf '%s' "$TELEGRAM_BOT_TOKEN" > .ctgbot/components/telegram/telegram/token.txt
-chmod 600 .ctgbot/components/telegram/telegram/token.txt
 
 cat > .ctgbot/components/telegram/telegram/component.json <<'JSON'
 {
@@ -217,6 +216,7 @@ Claude auth runs `claude setup-token` in the component runtime. If it returns a
 `CLAUDE_CODE_OAUTH_TOKEN`, store it in the component profile:
 
 ```bash
+mkdir -p .ctgbot/components/claude/claude
 cat > .ctgbot/components/claude/claude/runtime.json <<'JSON'
 {
   "env": [
@@ -224,8 +224,6 @@ cat > .ctgbot/components/claude/claude/runtime.json <<'JSON'
   ]
 }
 JSON
-
-chmod 600 .ctgbot/components/claude/claude/runtime.json
 ```
 
 ### Gmail
@@ -233,7 +231,7 @@ chmod 600 .ctgbot/components/claude/claude/runtime.json
 ```bash
 ctgbot component register gmail/personal --runtime local
 
-install -d -m 700 .ctgbot/components/gmail/personal
+mkdir -p .ctgbot/components/gmail/personal
 cat > .ctgbot/components/gmail/personal/component.json <<'JSON'
 {
   "mailbox_email": "you@example.com"
@@ -241,7 +239,6 @@ cat > .ctgbot/components/gmail/personal/component.json <<'JSON'
 JSON
 
 cp oauth_client.json .ctgbot/components/gmail/personal/oauth_client.json
-chmod 600 .ctgbot/components/gmail/personal/oauth_client.json
 
 ctgbot component gmail/personal auth
 ctgbot component gmail/personal auth status
@@ -267,7 +264,7 @@ ctgbot chat <chat> component gmail/personal filter add filters/allowlist
 ctgbot component register llamacpp/qwen3-q5 --runtime backend
 ctgbot component register guard/qwen --runtime local
 
-install -d -m 700 .ctgbot/components/guard/qwen
+mkdir -p .ctgbot/components/guard/qwen
 cat > .ctgbot/components/guard/qwen/component.json <<'JSON'
 {
   "completion": "llamacpp/qwen3-q5"
