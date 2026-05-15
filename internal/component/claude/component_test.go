@@ -3,6 +3,8 @@ package claude
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +21,20 @@ func TestClaudeBootstrapIncludesRuntimeNotices(t *testing.T) {
 	})
 	if !strings.Contains(text, "[Runtime notice] image stale") {
 		t.Fatalf("bootstrap text = %q, want runtime notice", text)
+	}
+}
+
+func TestPrepareHomeWritesNonEmptyDefaultBootstrap(t *testing.T) {
+	home := t.TempDir()
+	if err := PrepareHome(HomeSpec{HostHome: home}); err != nil {
+		t.Fatalf("PrepareHome() error = %v", err)
+	}
+	body, err := os.ReadFile(filepath.Join(home, "ctgbot-bootstrap.md"))
+	if err != nil {
+		t.Fatalf("read bootstrap: %v", err)
+	}
+	if strings.TrimSpace(string(body)) == "" {
+		t.Fatalf("bootstrap is empty")
 	}
 }
 

@@ -54,8 +54,12 @@ func importSharedAuth(cfg *appstate.Config, hostHome string) error {
 }
 
 func writeBootstrap(hostHome string, bootstrapText string) error {
+	bootstrapText = strings.TrimSpace(bootstrapText)
+	if bootstrapText == "" {
+		bootstrapText = "You are Codex running inside ctgbot."
+	}
 	bootstrapPath := filepath.Join(hostHome, "ctgbot-bootstrap.md")
-	return os.WriteFile(bootstrapPath, []byte(strings.TrimSpace(bootstrapText)+"\n"), 0o600)
+	return os.WriteFile(bootstrapPath, []byte(bootstrapText+"\n"), 0o600)
 }
 
 func writeConfig(hostHome string, runtimeHome string, runtimeWorkspace string) error {

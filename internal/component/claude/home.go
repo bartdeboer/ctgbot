@@ -24,6 +24,10 @@ func PrepareHome(spec HomeSpec) error {
 }
 
 func writeBootstrap(hostHome string, bootstrapText string) error {
+	bootstrapText = strings.TrimSpace(bootstrapText)
+	if bootstrapText == "" {
+		bootstrapText = "You are Claude Code running inside ctgbot."
+	}
 	bootstrapPath := filepath.Join(hostHome, "ctgbot-bootstrap.md")
-	return os.WriteFile(bootstrapPath, []byte(strings.TrimSpace(bootstrapText)+"\n"), 0o600)
+	return os.WriteFile(bootstrapPath, []byte(bootstrapText+"\n"), 0o600)
 }
