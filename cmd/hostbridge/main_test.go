@@ -184,9 +184,10 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 	base := testHostbridgeRequest()
 
 	tests := []struct {
-		name     string
-		argv     []string
-		contains []string
+		name        string
+		argv        []string
+		contains    []string
+		notContains []string
 	}{
 		{
 			name: "model group",
@@ -221,6 +222,11 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			contains: []string{
 				"thread <thread> message send",
 			},
+			notContains: []string{
+				"thread list - List recent active threads",
+				"thread status - Show current thread status",
+				"thread current status - Show current thread status",
+			},
 		},
 	}
 
@@ -239,6 +245,11 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			for _, want := range tc.contains {
 				if !strings.Contains(out, want) {
 					t.Fatalf("parseOrRenderHelp(%v) output missing %q in %q", tc.argv, want, out)
+				}
+			}
+			for _, notWant := range tc.notContains {
+				if strings.Contains(out, notWant) {
+					t.Fatalf("parseOrRenderHelp(%v) output unexpectedly contains %q in %q", tc.argv, notWant, out)
 				}
 			}
 			if strings.Contains(out, "codex model:") || strings.Contains(out, "codex reasoning effort:") {

@@ -121,7 +121,7 @@ func importantHelpLines(definitions []commandengine.Definition, scope []string) 
 				continue
 			}
 			pattern := commandengine.NormalizePattern(route.Pattern)
-			if pattern == "" || isHelpRoute(pattern) || !routeMatchesScope(pattern, scope) {
+			if pattern == "" || isHelpRoute(pattern) || !routeMatchesScope(pattern, scope) || !routeHasParameterAfterScope(pattern, scope) {
 				continue
 			}
 			line := pattern
@@ -160,6 +160,16 @@ func routeMatchesScope(pattern string, scope []string) bool {
 		}
 	}
 	return true
+}
+
+func routeHasParameterAfterScope(pattern string, scope []string) bool {
+	parts := strings.Fields(pattern)
+	for _, token := range parts[len(scope):] {
+		if strings.HasPrefix(token, "<") && strings.HasSuffix(token, ">") {
+			return true
+		}
+	}
+	return false
 }
 
 func routeTokenMatchesScope(routeToken string, scopeToken string) bool {
