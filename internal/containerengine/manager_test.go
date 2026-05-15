@@ -103,10 +103,10 @@ func TestExecArgsIncludesTTY(t *testing.T) {
 	t.Parallel()
 
 	container := &Container{ContainerSpec: ContainerSpec{Name: "ctgbot-test"}}
-	args := container.execArgs(ExecOptions{TTY: true}, "claude", "setup-token")
+	args := container.execArgs(ExecOptions{Interactive: true, TTY: true}, "claude", "setup-token")
 
-	if len(args) < 3 || args[0] != "exec" || args[1] != "-t" {
-		t.Fatalf("exec args = %#v, want docker exec -t ...", args)
+	if len(args) < 4 || args[0] != "exec" || args[1] != "-i" || args[2] != "-t" {
+		t.Fatalf("exec args = %#v, want docker exec -i -t ...", args)
 	}
 }
 

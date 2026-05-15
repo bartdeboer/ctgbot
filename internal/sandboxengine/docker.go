@@ -187,6 +187,7 @@ func (m *SandboxManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Write
 
 func (m *SandboxManager) execTTY(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	opts := sbx.execOptions(stdout, stderr)
+	opts.Interactive = true
 	opts.TTY = true
 	return m.execWithOptions(ctx, sbx, opts, name, args...)
 }

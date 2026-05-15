@@ -3,6 +3,7 @@ package containerengine
 import (
 	"context"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 )
@@ -93,6 +94,9 @@ func (c *Container) Remove(ctx context.Context) error {
 func (c *Container) Exec(ctx context.Context, opts ExecOptions, name string, args ...string) error {
 	c.clearInterrupted()
 	cmd := c.CommandContext(ctx, opts, name, args...)
+	if opts.Interactive {
+		cmd.Stdin = os.Stdin
+	}
 	cmd.Stdout = opts.Stdout
 	cmd.Stderr = opts.Stderr
 	return cmd.Run()
