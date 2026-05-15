@@ -91,6 +91,9 @@ ctgbot config set git.user_email "you@example.com"
 
 ### 4. Register Telegram
 
+Set the Telegram bot token in the component profile. `operators` is optional and
+marks Telegram user IDs that should be treated as root operators.
+
 ```bash
 ctgbot component register telegram/telegram --runtime local
 
