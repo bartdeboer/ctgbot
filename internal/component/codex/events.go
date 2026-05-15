@@ -142,6 +142,10 @@ func (w *eventWriter) handleLine(line string) {
 		if ev.Item.Type == "agent_message" {
 			w.agentMessage = strings.TrimSpace(ev.Item.Text)
 			w.log("codex json agent message chars=%d", len(w.agentMessage))
+			if isCodexProtocolMessage(w.agentMessage) {
+				w.log("codex json suppressed protocol agent message")
+				return
+			}
 			if w.agentMessage != "" && w.onAgentMessage != nil {
 				w.onAgentMessage(w.agentMessage)
 			}
@@ -158,6 +162,10 @@ func (w *eventWriter) log(format string, args ...any) {
 	if w != nil && w.logf != nil {
 		w.logf(format, args...)
 	}
+}
+
+func isCodexProtocolMessage(text string) bool {
+	return strings.Contains(text, "<tool_call>") || strings.Contains(text, "<tool_result>")
 }
 
 func parseEvent(line string) (codexEvent, error) {

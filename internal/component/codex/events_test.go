@@ -74,6 +74,34 @@ func TestEventWriterHandlesPartialWritesAndFinalLine(t *testing.T) {
 	}
 }
 
+func TestEventWriterSuppressesCodexProtocolAgentMessages(t *testing.T) {
+	var logs []string
+	var messages []string
+	writer := newEventWriter(nil, func(format string, args ...any) {
+		logs = append(logs, strings.TrimSpace(fmt.Sprintf(format, args...)))
+	}, func(text string) {
+		messages = append(messages, text)
+	})
+
+	input := strings.Join([]string{
+		`{"type":"item.completed","item":{"type":"agent_message","text":"<tool_call>functions.exec_command agext:json {}</tool_call>"}}`,
+		`{"type":"item.completed","item":{"type":"agent_message","text":"hello"}}`,
+		`{"type":"item.completed","item":{"type":"agent_message","text":"<tool_result>{}</tool_result>"}}`,
+	}, "\n") + "\n"
+
+	if _, err := writer.Write([]byte(input)); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	writer.Flush()
+
+	if len(messages) != 1 || messages[0] != "hello" {
+		t.Fatalf("messages = %#v, want [hello]", messages)
+	}
+	if !containsLog(logs, "codex json suppressed protocol agent message") {
+		t.Fatalf("missing suppression log: %#v", logs)
+	}
+}
+
 func TestExtractThreadIDIgnoresInvalidLines(t *testing.T) {
 	jsonl := strings.Join([]string{
 		`not-json`,
