@@ -38,17 +38,6 @@ func (c *fakeProfileComponent) ManagedFiles() []componentpkg.ManagedFile {
 }
 func (c *fakeProfileComponent) Skill() componentpkg.Skill { return c.skill }
 
-type fakeMessageSenderComponent struct {
-	fakeProfileComponent
-	requests []componentpkg.MessageSendRequest
-}
-
-func (c *fakeMessageSenderComponent) SendMessage(ctx context.Context, request componentpkg.MessageSendRequest) (componentpkg.MessageSendResult, error) {
-	_ = ctx
-	c.requests = append(c.requests, request)
-	return componentpkg.MessageSendResult{ID: "sent-1", ThreadID: request.ThreadID}, nil
-}
-
 func TestComponentHelpReturnsSkillText(t *testing.T) {
 	engine, _ := newTestEngine(t, &fakeProfileComponent{
 		typeName: "gmail",
@@ -180,47 +169,6 @@ func TestManagedFileStatusDoesNotExposeSensitiveContents(t *testing.T) {
 	}
 }
 
-func TestComponentMessageCallsComponentSenderWithAttachments(t *testing.T) {
-	sender := &fakeMessageSenderComponent{
-		fakeProfileComponent: fakeProfileComponent{typeName: "gmail"},
-	}
-	engine, _ := newTestEngine(t, sender)
-	dir := t.TempDir()
-	path := filepath.Join(dir, "report.pdf")
-	if err := os.WriteFile(path, []byte("pdf"), 0o644); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
-
-	result, err := engine.Run(context.Background(), testRequest(), []string{
-		"component", "gmail/work", "message", "Monthly report",
-		"--to", "sender@example.com",
-		"--subject", "Report",
-		"--type", "text/html",
-		"--attach", path + ";type=application/pdf;name=monthly.pdf",
-	})
-	if err != nil {
-		t.Fatalf("Run(component message) error = %v", err)
-	}
-	if !strings.Contains(result.Text, "message sent") || !strings.Contains(result.Text, "id: sent-1") {
-		t.Fatalf("result text = %q, want sent id", result.Text)
-	}
-	if got, want := len(sender.requests), 1; got != want {
-		t.Fatalf("requests = %d, want %d", got, want)
-	}
-	request := sender.requests[0]
-	if got, want := request.Body, "Monthly report"; got != want {
-		t.Fatalf("Body = %q, want %q", got, want)
-	}
-	if got, want := request.ContentType, "text/html"; got != want {
-		t.Fatalf("ContentType = %q, want %q", got, want)
-	}
-	if got, want := len(request.Attachments), 1; got != want {
-		t.Fatalf("Attachments = %d, want %d", got, want)
-	}
-	if got := request.Attachments[0]; got.Filename != "monthly.pdf" || got.ContentType != "application/pdf" || string(got.Content) != "pdf" {
-		t.Fatalf("Attachment = %#v, want parsed attachment", got)
-	}
-}
 func newTestEngine(t *testing.T, fake componentpkg.Component) (*commandengine.Engine, string) {
 	t.Helper()
 	ctx := context.Background()

@@ -9,7 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	component "github.com/bartdeboer/ctgbot/internal/component"
-	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
+	"github.com/bartdeboer/ctgbot/internal/component/messagesender"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/message"
@@ -61,13 +61,13 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 			homes[binding.ComponentID] = instance.Home
 			components = append(components, instance)
 		}
-		if _, ok := instance.Component.(component.MessageSender); ok {
+		if sender, ok := instance.Component.(component.MessageSender); ok {
 			if _, seen := commandSurfaceKeys["message:"+binding.ComponentID.String()]; !seen {
 				commandSurfaceKeys["message:"+binding.ComponentID.String()] = struct{}{}
 				boundSurfaces = append(boundSurfaces, commandset.BoundSurface{
-					Surface:       componentadmin.NewMessageSenderSurface(instance.Registration.Ref()),
+					Surface:       messagesender.NewSurface(instance.Registration.Ref(), sender),
 					ComponentRef:  instance.Registration.Ref(),
-					ComponentType: instance.Registration.Ref(),
+					ComponentType: instance.Registration.Type,
 				})
 			}
 		}

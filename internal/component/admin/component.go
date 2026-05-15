@@ -10,7 +10,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -68,27 +67,6 @@ type ManagedFilePutCommand struct {
 	Content     []byte
 }
 
-// ComponentMessageCommand is the standard component-direct send command.
-//
-// It intentionally uses one command shape for active component refs such as
-// "gmail/work message ..." and the explicit administration namespace
-// "component gmail/work message ...". Component implementations may interpret
-// fields that make sense for their transport; the common fields cover email-ish
-// components today while keeping attachments on the shared message.Media model.
-type ComponentMessageCommand struct {
-	Component   string
-	To          []string
-	Cc          []string
-	Bcc         []string
-	Subject     string
-	Body        string
-	ContentType string
-	Syntax      string
-	Attachments []message.Media
-	ThreadID    string
-	InReplyTo   string
-}
-
 func RegisterGobTypes(register func(any)) {
 	register(HelpCommand{})
 	register(ListCommand{})
@@ -97,7 +75,6 @@ func RegisterGobTypes(register func(any)) {
 	register(ManagedFileListCommand{})
 	register(ManagedFileStatusCommand{})
 	register(ManagedFilePutCommand{})
-	register(ComponentMessageCommand{})
 }
 
 func New(storage repository.Storage, resolver Resolver) *Component {
@@ -121,7 +98,6 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		componentCommand("component <component> managed-file list", "List declared managed files", buildManagedFileList, componentReadSources(), commandengine.InstructionDiscoverable),
 		componentCommand("component <component> managed-file status", "Show managed file presence", buildManagedFileStatus, componentReadSources(), commandengine.InstructionDiscoverable),
 		componentCommand("component <component> managed-file put <file>", "Write a declared managed file from stdin", buildManagedFilePut, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
-		hiddenComponentCommand("component <component> message <text>", "Send a message through a component", buildComponentMessage, []commandengine.Source{commandengine.SourceHostbridge}),
 	}
 }
 
@@ -138,12 +114,6 @@ func componentCommand(pattern string, help string, build commandengine.BuildFunc
 		Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 		InstructionVisibility: visibility,
 	}
-}
-
-func hiddenComponentCommand(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source) commandengine.Definition {
-	definition := componentCommand(pattern, help, build, sources, commandengine.InstructionHidden)
-	definition.Hidden = true
-	return definition
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {
@@ -168,10 +138,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.Register[ManagedFileStatusCommand](registry, c.handleManagedFileStatus); err != nil {
 		return err
 	}
-	if err := commandengine.Register[ManagedFilePutCommand](registry, c.handleManagedFilePut); err != nil {
-		return err
-	}
-	return commandengine.Register[ComponentMessageCommand](registry, c.handleComponentMessage)
+	return commandengine.Register[ManagedFilePutCommand](registry, c.handleManagedFilePut)
 }
 
 func (c *Component) handleHelp(ctx context.Context, req commandengine.Request, cmd HelpCommand) (commandengine.Result, error) {
@@ -275,42 +242,6 @@ func (c *Component) handleManagedFilePut(ctx context.Context, req commandengine.
 	return commandengine.Result{Text: "managed file written: " + file.RelativePath}, nil
 }
 
-func (c *Component) handleComponentMessage(ctx context.Context, req commandengine.Request, cmd ComponentMessageCommand) (commandengine.Result, error) {
-	_ = req
-	loaded, err := c.resolveLoaded(ctx, cmd.Component)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	sender, ok := loaded.Component.(component.MessageSender)
-	if !ok {
-		return commandengine.Result{}, fmt.Errorf("component does not support message sending: %s", loaded.Registration.Ref())
-	}
-	result, err := sender.SendMessage(ctx, component.MessageSendRequest{
-		To:          append([]string(nil), cmd.To...),
-		Cc:          append([]string(nil), cmd.Cc...),
-		Bcc:         append([]string(nil), cmd.Bcc...),
-		Subject:     strings.TrimSpace(cmd.Subject),
-		Body:        cmd.Body,
-		ContentType: strings.TrimSpace(cmd.ContentType),
-		Syntax:      strings.TrimSpace(cmd.Syntax),
-		Attachments: append([]message.Media(nil), cmd.Attachments...),
-		ThreadID:    strings.TrimSpace(cmd.ThreadID),
-		InReplyTo:   strings.TrimSpace(cmd.InReplyTo),
-	})
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	var lines []string
-	lines = append(lines, "message sent")
-	if strings.TrimSpace(result.ID) != "" {
-		lines = append(lines, "id: "+strings.TrimSpace(result.ID))
-	}
-	if strings.TrimSpace(result.ThreadID) != "" {
-		lines = append(lines, "thread_id: "+strings.TrimSpace(result.ThreadID))
-	}
-	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
-}
-
 func (c *Component) managedFiles(ctx context.Context, ref string) (*component.Loaded, []component.ManagedFile, error) {
 	loaded, err := c.resolveLoaded(ctx, ref)
 	if err != nil {
@@ -369,50 +300,4 @@ func resolveRegistrationRef(ctx context.Context, storage repository.Storage, ref
 		return nil, fmt.Errorf("component not registered: %s", parsed.Ref())
 	}
 	return registration, nil
-}
-
-// MessageSenderSurface exposes the standard component-direct message command as
-// a local command surface for a concrete component ref. It provides the active
-// ref UX, e.g. "gmail/work message ..."; the global component admin surface
-// keeps the explicit "component gmail/work message ..." fallback.
-type MessageSenderSurface struct {
-	ComponentRef string
-}
-
-var _ component.Component = (*MessageSenderSurface)(nil)
-var _ component.CommandSurface = (*MessageSenderSurface)(nil)
-var _ component.LocalCommandSurface = (*MessageSenderSurface)(nil)
-
-func NewMessageSenderSurface(componentRef string) *MessageSenderSurface {
-	return &MessageSenderSurface{ComponentRef: strings.TrimSpace(componentRef)}
-}
-
-func (s *MessageSenderSurface) Type() string { return "component-message" }
-
-func (s *MessageSenderSurface) UsesLocalCommandRoutes() bool { return true }
-
-func (s *MessageSenderSurface) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{
-		componentCommand("message <text>", "Send a message through this component", s.buildComponentMessage, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
-	}
-}
-
-func (s *MessageSenderSurface) RegisterCommandHandlers(registry *commandengine.Registry) error {
-	// ComponentMessageCommand is handled by the global component admin surface. This
-	// local surface only adds active, prefixed routes such as gmail/work message.
-	_ = registry
-	return nil
-}
-
-func (s *MessageSenderSurface) buildComponentMessage(req *clir.Request) (any, error) {
-	command, err := buildComponentMessageForRef(req, s.ComponentRef)
-	if err != nil {
-		return nil, err
-	}
-	cmd, ok := command.(ComponentMessageCommand)
-	if !ok {
-		return nil, fmt.Errorf("message command type mismatch: %T", command)
-	}
-	cmd.Component = strings.TrimSpace(s.ComponentRef)
-	return cmd, nil
 }

@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
-	"github.com/bartdeboer/ctgbot/internal/message"
-	"github.com/bartdeboer/ctgbot/internal/message/mediafile"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -108,95 +106,4 @@ func buildManagedFilePut(req *clir.Request) (any, error) {
 		ContentType: strings.TrimSpace(*contentType),
 		Content:     append([]byte(nil), content...),
 	}, nil
-}
-
-type repeatStringFlag []string
-
-func (f *repeatStringFlag) String() string {
-	if f == nil {
-		return ""
-	}
-	return strings.Join(*f, ",")
-}
-
-func (f *repeatStringFlag) Set(value string) error {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil
-	}
-	*f = append(*f, value)
-	return nil
-}
-
-func buildComponentMessage(req *clir.Request) (any, error) {
-	return buildComponentMessageForRef(req, strings.TrimSpace(req.Params["component"]))
-}
-
-func buildComponentMessageForRef(req *clir.Request, componentRef string) (any, error) {
-	componentRef = strings.TrimSpace(componentRef)
-	if componentRef == "" {
-		return nil, fmt.Errorf("missing component")
-	}
-	fields, err := parseMessageSendFields("component message", req.Extra)
-	if err != nil {
-		return nil, err
-	}
-	fields.Component = componentRef
-	fields.Body = strings.TrimSpace(req.Params["text"])
-	if fields.Body == "" && len(fields.Attachments) == 0 {
-		return nil, fmt.Errorf("message requires text or --attach")
-	}
-	return fields, nil
-}
-
-func parseMessageSendFields(name string, args []string) (ComponentMessageCommand, error) {
-	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	var to repeatStringFlag
-	var cc repeatStringFlag
-	var bcc repeatStringFlag
-	var attach repeatStringFlag
-	fs.Var(&to, "to", "Recipient email address; repeat for multiple recipients")
-	fs.Var(&cc, "cc", "CC email address; repeat for multiple recipients")
-	fs.Var(&bcc, "bcc", "BCC email address; repeat for multiple recipients")
-	fs.Var(&attach, "attach", "Attachment descriptor; repeat for multiple attachments")
-	subject := fs.String("subject", "", "Message subject")
-	contentType := fs.String("type", "", "Optional message body content type")
-	language := fs.String("language", "", "Optional legacy syntax hint")
-	syntax := fs.String("syntax", "", "Optional syntax hint")
-	threadID := fs.String("thread-id", "", "Gmail thread id for replies")
-	inReplyTo := fs.String("in-reply-to", "", "RFC Message-ID being replied to")
-	if err := fs.Parse(args); err != nil {
-		return ComponentMessageCommand{}, err
-	}
-	if len(fs.Args()) > 0 {
-		return ComponentMessageCommand{}, fmt.Errorf("unexpected message arguments: %s", strings.Join(fs.Args(), " "))
-	}
-	attachments := make([]message.Media, 0, len(attach))
-	for _, raw := range attach {
-		media, err := mediafile.ReadDescriptor(raw)
-		if err != nil {
-			return ComponentMessageCommand{}, err
-		}
-		attachments = append(attachments, media)
-	}
-	return ComponentMessageCommand{
-		To:          append([]string(nil), to...),
-		Cc:          append([]string(nil), cc...),
-		Bcc:         append([]string(nil), bcc...),
-		Subject:     strings.TrimSpace(*subject),
-		ContentType: strings.TrimSpace(*contentType),
-		Syntax:      resolveSyntax(*language, *syntax),
-		Attachments: attachments,
-		ThreadID:    strings.TrimSpace(*threadID),
-		InReplyTo:   strings.TrimSpace(*inReplyTo),
-	}, nil
-}
-
-func resolveSyntax(legacyLanguage string, syntax string) string {
-	syntax = strings.TrimSpace(syntax)
-	if syntax != "" {
-		return syntax
-	}
-	return strings.TrimSpace(legacyLanguage)
 }
