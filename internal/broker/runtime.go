@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/brokercontract"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	component "github.com/bartdeboer/ctgbot/internal/component"
@@ -112,7 +111,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		runtimeWorkspace = workspace
 	}
 
-	globalSurfaces, err = b.App.CommandSurfaces(ctx, chat, brokercontract.CommandSurfaceDeps{
+	globalSurfaces, err = b.App.CommandSurfaces(ctx, chat, CommandSurfaceDeps{
 		Inbound:       b,
 		BrokerActions: b,
 	})

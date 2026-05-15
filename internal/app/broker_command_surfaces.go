@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	"github.com/bartdeboer/ctgbot/internal/brokercontract"
+	broker "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
@@ -14,7 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/messaging"
 )
 
-func (s *service) CommandSurfaces(ctx context.Context, chat coremodel.Chat, deps brokercontract.CommandSurfaceDeps) ([]component.CommandSurface, error) {
+func (s *service) CommandSurfaces(ctx context.Context, chat coremodel.Chat, deps broker.CommandSurfaceDeps) ([]component.CommandSurface, error) {
 	surfaces := []component.CommandSurface{
 		componentadmin.New(s.Repository(), s),
 		messagingcomponent.New(messaging.New(s.Repository()), deps.Inbound),

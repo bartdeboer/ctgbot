@@ -6,7 +6,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/bartdeboer/ctgbot/internal/brokercontract"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	component "github.com/bartdeboer/ctgbot/internal/component"
 	componentbroker "github.com/bartdeboer/ctgbot/internal/component/broker"
@@ -24,9 +23,9 @@ type App interface {
 	Chat(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
 	Thread(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
 	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
-	RuntimeSpec(ctx context.Context, chat coremodel.Chat) (brokercontract.RuntimeSpec, error)
+	RuntimeSpec(ctx context.Context, chat coremodel.Chat) (RuntimeSpec, error)
 	EnabledInboundSources(ctx context.Context) ([]component.InboundSource, error)
-	CommandSurfaces(ctx context.Context, chat coremodel.Chat, deps brokercontract.CommandSurfaceDeps) ([]component.CommandSurface, error)
+	CommandSurfaces(ctx context.Context, chat coremodel.Chat, deps CommandSurfaceDeps) ([]component.CommandSurface, error)
 	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
 	ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) error

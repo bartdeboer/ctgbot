@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bartdeboer/ctgbot/internal/brokercontract"
+	broker "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -31,17 +31,17 @@ func (s *service) ThreadMessages(ctx context.Context, threadID modeluuid.UUID) (
 	return s.Storage.Messages().ListByThreadID(ctx, threadID)
 }
 
-func (s *service) RuntimeSpec(ctx context.Context, chat coremodel.Chat) (brokercontract.RuntimeSpec, error) {
+func (s *service) RuntimeSpec(ctx context.Context, chat coremodel.Chat) (broker.RuntimeSpec, error) {
 	if s == nil || s.Storage == nil {
-		return brokercontract.RuntimeSpec{}, fmt.Errorf("missing app storage")
+		return broker.RuntimeSpec{}, fmt.Errorf("missing app storage")
 	}
 	workspace, err := s.ResolveChatWorkspace(ctx, chat)
 	if err != nil {
-		return brokercontract.RuntimeSpec{}, err
+		return broker.RuntimeSpec{}, err
 	}
 	bindings, err := s.Storage.ChatComponents().ListEnabledByChatID(ctx, chat.ID)
 	if err != nil {
-		return brokercontract.RuntimeSpec{}, err
+		return broker.RuntimeSpec{}, err
 	}
 	loaded := make(map[modeluuid.UUID]*component.Loaded)
 	for _, binding := range bindings {
@@ -50,11 +50,11 @@ func (s *service) RuntimeSpec(ctx context.Context, chat coremodel.Chat) (brokerc
 		}
 		instance, err := s.ResolveComponent(ctx, binding.ComponentID)
 		if err != nil {
-			return brokercontract.RuntimeSpec{}, err
+			return broker.RuntimeSpec{}, err
 		}
 		loaded[binding.ComponentID] = instance
 	}
-	return brokercontract.RuntimeSpec{Chat: chat, Workspace: workspace, Bindings: bindings, Loaded: loaded}, nil
+	return broker.RuntimeSpec{Chat: chat, Workspace: workspace, Bindings: bindings, Loaded: loaded}, nil
 }
 
 func (s *service) EnabledInboundSources(ctx context.Context) ([]component.InboundSource, error) {
