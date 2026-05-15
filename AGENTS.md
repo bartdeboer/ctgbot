@@ -122,6 +122,7 @@ For the current public overview and setup flow, see `README.md`.
 - Keep config/state access in `internal/appstate`.
 - Prefer updating the embedded build-context source files and then regenerating `internal/buildassets/assets/src.tar.gz`.
 - Do not commit local runtime data from `./.ctgbot/`.
+- Do not add `Co-Authored-By` trailers unless the operator explicitly asks for them.
 
 ## Good First Checks
 

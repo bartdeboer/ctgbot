@@ -254,6 +254,7 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 	if instructions.KeepRepliesConcise {
 		lines = append(lines, "Keep replies concise.")
 	}
+	lines = append(lines, "Do not add Co-Authored-By trailers to commits unless the operator explicitly asks for them.")
 	lines = append(lines, "Available hostbridge command aliases: "+allowedCommandsText)
 	if len(instructions.HostbridgeControlCommands) > 0 {
 		lines = append(lines, "Useful hostbridge control commands:")
