@@ -2,8 +2,6 @@ package gmail
 
 import "github.com/bartdeboer/ctgbot/internal/component"
 
-var _ component.SkillProvider = (*Component)(nil)
-
 func (c *Component) Skill() component.Skill {
 	return component.Skill{
 		Name:        Type,

@@ -95,12 +95,18 @@ type Component struct {
 	clientOverride        gmailClient
 }
 
-var _ component.Component = (*Component)(nil)
-var _ component.InboundSource = (*Component)(nil)
-var _ component.ProfileOwner = (*Component)(nil)
-var _ component.Authenticator = (*Component)(nil)
-var _ component.AuthStatusReporter = (*Component)(nil)
-var _ component.SourceBindingDefaults = (*Component)(nil)
+var (
+	_ component.Component             = (*Component)(nil)
+	_ component.InboundSource         = (*Component)(nil)
+	_ component.ProfileOwner          = (*Component)(nil)
+	_ component.Authenticator         = (*Component)(nil)
+	_ component.AuthStatusReporter    = (*Component)(nil)
+	_ component.SourceBindingDefaults = (*Component)(nil)
+	_ component.SkillProvider         = (*Component)(nil)
+	_ component.CommandSurface        = (*Component)(nil)
+	_ component.LocalCommandSurface   = (*Component)(nil)
+	_ component.MessageSender         = (*Component)(nil)
+)
 
 func (c *Component) Type() string {
 	return Type

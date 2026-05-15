@@ -6,13 +6,9 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
-	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
-
-var _ component.CommandSurface = (*Component)(nil)
-var _ component.LocalCommandSurface = (*Component)(nil)
 
 type statusCommand struct{}
 

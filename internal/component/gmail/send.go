@@ -14,8 +14,6 @@ import (
 	gmailapi "google.golang.org/api/gmail/v1"
 )
 
-var _ component.MessageSender = (*Component)(nil)
-
 func (c *Component) SendMessage(ctx context.Context, request component.MessageSendRequest) (component.MessageSendResult, error) {
 	client, err := c.client(ctx)
 	if err != nil {
