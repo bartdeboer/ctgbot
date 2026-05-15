@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/bartdeboer/go-clir"
 )
@@ -140,6 +141,20 @@ func (r *Router) FPrintHelp(ctx context.Context, w io.Writer, argv []string) err
 	return r.clir.FPrintHelp(ctx, w, argv)
 }
 
+func (r *Router) Definitions() []Definition {
+	if r == nil {
+		return nil
+	}
+	out := make([]Definition, 0, len(r.definitionsByPattern))
+	for _, definition := range r.definitionsByPattern {
+		out = append(out, definition)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CanonicalPattern() < out[j].CanonicalPattern()
+	})
+	return out
+}
+
 func (r *Router) Authorize(req Request) error {
 	if r == nil || r.clir == nil {
 		return fmt.Errorf("missing command router")
@@ -163,15 +178,4 @@ func (r *Router) definitionForPattern(pattern string) (Definition, bool) {
 	}
 	definition, ok := r.definitionsByPattern[pattern]
 	return definition, ok
-}
-
-func (r *Router) Definitions() []Definition {
-	if r == nil {
-		return nil
-	}
-	out := make([]Definition, 0, len(r.definitionsByPattern))
-	for _, definition := range r.definitionsByPattern {
-		out = append(out, definition)
-	}
-	return out
 }

@@ -215,6 +215,13 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 				"codex container stop",
 			},
 		},
+		{
+			name: "thread root shows important nested commands",
+			argv: []string{"thread", "help"},
+			contains: []string{
+				"thread <thread> message send",
+			},
+		},
 	}
 
 	for _, tc := range tests {

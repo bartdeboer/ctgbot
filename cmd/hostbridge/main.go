@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -66,13 +67,13 @@ func parseOrRenderHelp(
 	args []string,
 	helpWriter io.Writer,
 ) (commandengine.Request, bool, error) {
-	if _, ok := commandengine.ParseHelpRequest(args); ok {
+	if helpReq, ok := commandengine.ParseHelpRequest(args); ok {
 		match, err := router.Match(ctx, args)
 		if err != nil {
 			return commandengine.Request{}, false, err
 		}
 		if !match.Matched || !match.Executable || !match.Exact {
-			if err := router.FPrintHelp(ctx, helpWriter, args); err != nil {
+			if err := fprintContextualHelp(ctx, router, helpWriter, args, helpReq.Scope); err != nil {
 				return commandengine.Request{}, false, err
 			}
 			return commandengine.Request{}, true, nil
@@ -81,6 +82,95 @@ func parseOrRenderHelp(
 
 	req, err := router.Parse(ctx, base, args)
 	return req, false, err
+}
+
+func fprintContextualHelp(ctx context.Context, router *commandengine.Router, w io.Writer, args []string, scope []string) error {
+	var buf bytes.Buffer
+	if err := router.FPrintHelp(ctx, &buf, args); err != nil {
+		return err
+	}
+	base := buf.String()
+	if _, err := io.WriteString(w, base); err != nil {
+		return err
+	}
+	for _, line := range importantHelpLines(router.Definitions(), scope) {
+		if strings.Contains(base, line) {
+			continue
+		}
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func importantHelpLines(definitions []commandengine.Definition, scope []string) []string {
+	scope = normalizedScope(scope)
+	if len(scope) != 1 {
+		return nil
+	}
+	var lines []string
+	seen := map[string]struct{}{}
+	for _, definition := range definitions {
+		visibility := definition.InstructionVisibilityOrDefault()
+		if visibility != commandengine.InstructionImportant && visibility != commandengine.InstructionEssential {
+			continue
+		}
+		for _, route := range definition.Routes() {
+			if route.Hidden {
+				continue
+			}
+			pattern := commandengine.NormalizePattern(route.Pattern)
+			if pattern == "" || isHelpRoute(pattern) || !routeMatchesScope(pattern, scope) {
+				continue
+			}
+			line := pattern
+			if strings.TrimSpace(definition.Help) != "" {
+				line += " - " + strings.TrimSpace(definition.Help)
+			}
+			if _, ok := seen[line]; ok {
+				continue
+			}
+			seen[line] = struct{}{}
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func normalizedScope(scope []string) []string {
+	var out []string
+	for _, token := range scope {
+		token = strings.TrimSpace(token)
+		if token != "" {
+			out = append(out, token)
+		}
+	}
+	return out
+}
+
+func routeMatchesScope(pattern string, scope []string) bool {
+	parts := strings.Fields(pattern)
+	if len(parts) <= len(scope) {
+		return false
+	}
+	for i, token := range scope {
+		if !routeTokenMatchesScope(parts[i], token) {
+			return false
+		}
+	}
+	return true
+}
+
+func routeTokenMatchesScope(routeToken string, scopeToken string) bool {
+	if routeToken == scopeToken {
+		return true
+	}
+	return strings.HasPrefix(routeToken, "<") && strings.HasSuffix(routeToken, ">")
+}
+
+func isHelpRoute(pattern string) bool {
+	return strings.HasSuffix(pattern, " help") || strings.HasSuffix(pattern, " help all")
 }
 
 func normalizedArgs(args []string, componentRef string) []string {
