@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	brokerpkg "github.com/bartdeboer/ctgbot/internal/brokeradapter"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
@@ -108,7 +107,7 @@ func TestMockComponentsEndToEnd(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -251,7 +250,7 @@ func TestInboundAttachmentsMaterializeIntoWorkspaceInboxAndInjectPrompt(t *testi
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -382,7 +381,7 @@ func TestAttachmentOnlyInboundReturnsUploadSavedMessage(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -499,7 +498,7 @@ func TestConversationErrorIsReportedToChatAndDoesNotStopSource(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}

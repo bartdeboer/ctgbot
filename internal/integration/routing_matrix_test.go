@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	brokerpkg "github.com/bartdeboer/ctgbot/internal/brokeradapter"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
@@ -189,7 +188,7 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		mustBindChatComponent(t, ctx, system, beta.ID, coremodel.ChatComponentRoleRelay, betaRelay.Ref(), "telegram-beta")
 		mustBindChatComponent(t, ctx, system, beta.ID, coremodel.ChatComponentRoleAgent, personalAgent.Ref(), "")
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}

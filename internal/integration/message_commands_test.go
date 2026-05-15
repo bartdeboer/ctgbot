@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	brokerpkg "github.com/bartdeboer/ctgbot/internal/brokeradapter"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
@@ -76,7 +75,7 @@ func TestMessageCommandRunsAndSkipsAgent(t *testing.T) {
 			t.Fatalf("BindChatComponent(command) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -171,7 +170,7 @@ func TestUnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 			t.Fatalf("BindChatComponent(command) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -253,7 +252,7 @@ func TestAgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.T)
 			t.Fatalf("BindChatComponent(agent) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -328,7 +327,7 @@ func TestMultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent personal) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -403,7 +402,7 @@ func TestMultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
 			t.Fatalf("BindChatComponent(agent personal) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -479,7 +478,7 @@ func TestProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 				t.Fatalf("BindChatComponent(command) error = %v", err)
 			}
 
-			b := brokerpkg.NewWithDeps(storage, system, nil)
+			b := newTestBroker(storage, system, nil)
 			if err := b.Run(ctx); err != nil {
 				t.Fatalf("Run(%q) error = %v", text, err)
 			}
@@ -570,7 +569,7 @@ func TestProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 				t.Fatalf("BindChatComponent(command) error = %v", err)
 			}
 
-			b := brokerpkg.NewWithDeps(storage, system, nil)
+			b := newTestBroker(storage, system, nil)
 			if err := b.Run(ctx); err != nil {
 				t.Fatalf("Run(%q) error = %v", text, err)
 			}
@@ -675,7 +674,7 @@ func TestProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 				t.Fatalf("BindChatComponent(command) error = %v", err)
 			}
 
-			b := brokerpkg.NewWithDeps(storage, system, nil)
+			b := newTestBroker(storage, system, nil)
 			if err := b.Run(ctx); err != nil {
 				t.Fatalf("Run(%q) error = %v", tc.text, err)
 			}
@@ -767,7 +766,7 @@ func TestHelpListsActiveMessageCommands(t *testing.T) {
 			t.Fatalf("BindChatComponent(command) error = %v", err)
 		}
 
-		b := brokerpkg.NewWithDeps(storage, system, nil)
+		b := newTestBroker(storage, system, nil)
 		if err := b.Run(ctx); err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
@@ -834,7 +833,7 @@ func TestConfigMessageCommands(t *testing.T) {
 				t.Fatalf("BindChatComponent(agent) error = %v", err)
 			}
 
-			b := brokerpkg.NewWithDeps(storage, system, nil)
+			b := newTestBroker(storage, system, nil)
 			if err := b.Run(ctx); err != nil {
 				t.Fatalf("Run(%q) error = %v", text, err)
 			}

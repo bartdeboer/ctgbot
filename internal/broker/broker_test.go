@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	appsvc "github.com/bartdeboer/ctgbot/internal/app"
 	broker "github.com/bartdeboer/ctgbot/internal/broker"
-	"github.com/bartdeboer/ctgbot/internal/brokeradapter"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	allowlistfilter "github.com/bartdeboer/ctgbot/internal/component/filter/allowlist"
@@ -27,6 +27,10 @@ import (
 	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
 )
+
+func newTestBroker(storage repository.Storage, resolver appsvc.ComponentResolver, logf func(format string, args ...any)) *broker.Broker {
+	return broker.New(appsvc.NewServiceWithLogger(storage, resolver, logf), logf)
+}
 
 type inboundFilterFunc func(context.Context, inboundpkg.ChannelEvent) (inboundpkg.FilterResult, error)
 
@@ -325,7 +329,7 @@ func newAllowlistInboundFixture(t *testing.T, bindAllowlist bool) allowlistInbou
 			return allowlistfilter.New(storage), nil
 		})
 	})
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -393,7 +397,7 @@ func newGuardInboundFixture(t *testing.T, guardOutput string) guardInboundFixtur
 			return guardcomponent.New(ctx, registration, rt, home, storage, system, nil)
 		})
 	})
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -470,7 +474,7 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	messengerRecorder := &fakeMessengerRecorder{}
 	agentRecorder := &fakeAgentRecorder{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -557,7 +561,7 @@ func TestInboundEventFilterCanTransformEventBeforeRouting(t *testing.T) {
 			return fakeInboundFilter{fn: rewriteText}, nil
 		})
 	})
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -631,7 +635,7 @@ func TestInboundAdmissionResolvesChannelAndZeroEventFiltersPass(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	system := newTestSystem(t, root, storage, &fakeMessengerRecorder{}, &fakeAgentRecorder{}, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -903,7 +907,7 @@ func TestHandleInboundSerializesTurnsPerThread(t *testing.T) {
 		release: release,
 	}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -1013,7 +1017,7 @@ func TestHandleInboundInterruptCommandBypassesTurnGate(t *testing.T) {
 		interrupted: make(chan struct{}, 1),
 	}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -1107,7 +1111,7 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 	messengerRecorder := &fakeMessengerRecorder{}
 	agentRecorder := &fakeAgentRecorder{finalText: "ack"}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -1214,7 +1218,7 @@ func TestQueueResolvedInboundQueuesWhileThreadBusy(t *testing.T) {
 		entered:   agentEntered,
 	}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -1316,7 +1320,7 @@ func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T)
 	messengerRecorder := &fakeMessengerRecorder{}
 	agentRecorder := &fakeAgentRecorder{streamText: "done", finalText: "done"}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -1398,7 +1402,7 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 			})
 		},
 	)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -1485,7 +1489,7 @@ func TestHandleInboundDropsSourceOnlyChatWithoutRelay(t *testing.T) {
 	agentRecorder := &fakeAgentRecorder{}
 	system := newTestSystem(t, root, storage, &fakeMessengerRecorder{}, agentRecorder, nil)
 	var logs []string
-	b := brokeradapter.NewWithDeps(storage, system, func(format string, args ...any) {
+	b := newTestBroker(storage, system, func(format string, args ...any) {
 		logs = append(logs, fmt.Sprintf(format, args...))
 	})
 
@@ -1564,7 +1568,7 @@ func TestHandleInboundAllowsChatWithRelayBinding(t *testing.T) {
 	storage := repository.NewMemory()
 	messengerRecorder := &fakeMessengerRecorder{}
 	system := newTestSystem(t, root, storage, messengerRecorder, nil, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "visible", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -1618,7 +1622,7 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 			})
 		},
 	)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -1706,7 +1710,7 @@ func TestHandleInboundDropsUnknownChatAndRecordsDrop(t *testing.T) {
 	logf := func(format string, args ...any) {
 		logs = append(logs, fmt.Sprintf(format, args...))
 	}
-	b := brokeradapter.NewWithDeps(storage, system, logf)
+	b := newTestBroker(storage, system, logf)
 
 	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
 	if err := storage.Components().Save(context.Background(), telegram); err != nil {
@@ -1784,7 +1788,7 @@ func TestHandleInboundInitReplyGuidesUnknownChatActivation(t *testing.T) {
 	messengerRecorder := &fakeMessengerRecorder{}
 	agentRecorder := &fakeAgentRecorder{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
 	if err := storage.Components().Save(context.Background(), telegram); err != nil {
@@ -1836,7 +1840,7 @@ func TestHandleInboundInitReplyGuidesDisabledChatEnable(t *testing.T) {
 	messengerRecorder := &fakeMessengerRecorder{}
 	agentRecorder := &fakeAgentRecorder{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: false}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -1910,7 +1914,7 @@ func TestRunStartsEnabledInboundSources(t *testing.T) {
 			Text: message.TextMessage{Text: "ping"},
 		},
 	}})
-	b := brokeradapter.NewWithDeps(storage, system, nil)
+	b := newTestBroker(storage, system, nil)
 
 	chat := &coremodel.Chat{Label: "team", Enabled: true}
 	if err := storage.Chats().Save(context.Background(), chat); err != nil {
@@ -2006,7 +2010,7 @@ func TestDropEventDeletesExpiredDroppedEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	b := brokeradapter.NewWithDeps(storage, nil, nil)
+	b := newTestBroker(storage, nil, nil)
 	componentID := modeluuid.New()
 	drop, err := b.App.DropEvent(ctx, &broker.InboundRejection{
 		Action: broker.InboundRejectionDrop,
