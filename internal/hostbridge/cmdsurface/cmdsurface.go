@@ -10,7 +10,7 @@ import (
 	claudecomponent "github.com/bartdeboer/ctgbot/internal/component/claude"
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
-	allowlistfilter "github.com/bartdeboer/ctgbot/internal/component/filter/allowlist"
+	gmailcomponent "github.com/bartdeboer/ctgbot/internal/component/gmail"
 	llamacppcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
@@ -47,7 +47,6 @@ func GlobalSurfaces() []componentpkg.CommandSurface {
 	return []componentpkg.CommandSurface{
 		componentadmin.New(nil, nil),
 		brokercomponent.New(nil),
-		allowlistfilter.New(nil),
 		messagingcomponent.New(nil, nil),
 		(*configcomponent.Component)(nil),
 	}
@@ -90,7 +89,6 @@ func RegisterGobTypes(register func(any)) {
 	componentadmin.RegisterGobTypes(register)
 	brokercomponent.RegisterGobTypes(register)
 	sqlcomponent.RegisterGobTypes(register)
-	allowlistfilter.RegisterGobTypes(register)
 	claudecomponent.RegisterGobTypes(register)
 	codexcomponent.RegisterGobTypes(register)
 	llamacppcomponent.RegisterGobTypes(register)
@@ -98,7 +96,7 @@ func RegisterGobTypes(register func(any)) {
 }
 
 func GlobalDirectPrefixes() []string {
-	return []string{"allowlist", "component", "status", "thread", "sql"}
+	return []string{"component", "status", "thread", "sql"}
 }
 
 func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
@@ -145,10 +143,12 @@ func CommandRefBoundSurfaces(ref string) []commandset.BoundSurface {
 			ComponentType: parsed.Type,
 		})
 	}
-	out = append(out, commandset.BoundSurface{
-		Surface:       componentadmin.NewMessageSenderSurface(componentRef),
-		ComponentRef:  componentRef,
-		ComponentType: parsed.Type,
-	})
+	if parsed.Type == gmailcomponent.Type {
+		out = append(out, commandset.BoundSurface{
+			Surface:       componentadmin.NewMessageSenderSurface(componentRef),
+			ComponentRef:  componentRef,
+			ComponentType: parsed.Type,
+		})
+	}
 	return out
 }

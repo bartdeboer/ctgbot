@@ -90,6 +90,7 @@ func TestHostbridgeRouterUsesCodexDefinitions(t *testing.T) {
 }
 
 func TestHostbridgeRouterSupportsLlamacppSurface(t *testing.T) {
+	t.Setenv("CTGBOT_ACTIVE_COMPONENTS", "")
 	t.Setenv("CTGBOT_COMPONENT_REF", "llamacpp/default")
 	router, err := hostbridgeRouter()
 	if err != nil {
@@ -115,6 +116,7 @@ func TestHostbridgeRouterSupportsLlamacppSurface(t *testing.T) {
 }
 
 func TestHostbridgeRouterFallsBackToGlobalsForUnsupportedComponent(t *testing.T) {
+	t.Setenv("CTGBOT_ACTIVE_COMPONENTS", "")
 	t.Setenv("CTGBOT_COMPONENT_REF", "gmail/work")
 	router, err := hostbridgeRouter()
 	if err != nil {
