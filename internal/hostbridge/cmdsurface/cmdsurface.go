@@ -12,7 +12,6 @@ import (
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	gmailcomponent "github.com/bartdeboer/ctgbot/internal/component/gmail"
 	llamacppcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
-	"github.com/bartdeboer/ctgbot/internal/component/messagesender"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -88,9 +87,9 @@ func LegacyCodexShorthandEnabled(ref string) bool {
 
 func RegisterGobTypes(register func(any)) {
 	componentadmin.RegisterGobTypes(register)
-	messagesender.RegisterGobTypes(register)
 	brokercomponent.RegisterGobTypes(register)
 	sqlcomponent.RegisterGobTypes(register)
+	gmailcomponent.RegisterGobTypes(register)
 	claudecomponent.RegisterGobTypes(register)
 	codexcomponent.RegisterGobTypes(register)
 	llamacppcomponent.RegisterGobTypes(register)
@@ -107,6 +106,8 @@ func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 		return (*claudecomponent.Component)(nil), true
 	case codexcomponent.Type:
 		return (*codexcomponent.Component)(nil), true
+	case gmailcomponent.Type:
+		return (*gmailcomponent.Component)(nil), true
 	case llamacppcomponent.Type:
 		return (*llamacppcomponent.Component)(nil), true
 	default:
@@ -141,13 +142,6 @@ func CommandRefBoundSurfaces(ref string) []commandset.BoundSurface {
 	if surface, ok := surfaceForType(parsed.Type); ok {
 		out = append(out, commandset.BoundSurface{
 			Surface:       surface,
-			ComponentRef:  componentRef,
-			ComponentType: parsed.Type,
-		})
-	}
-	if parsed.Type == gmailcomponent.Type {
-		out = append(out, commandset.BoundSurface{
-			Surface:       messagesender.NewSurface(componentRef, nil),
 			ComponentRef:  componentRef,
 			ComponentType: parsed.Type,
 		})

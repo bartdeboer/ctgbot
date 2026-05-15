@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
-	"github.com/bartdeboer/ctgbot/internal/component/messagesender"
+	gmailcomponent "github.com/bartdeboer/ctgbot/internal/component/gmail"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
@@ -359,11 +359,11 @@ func TestHostbridgeRouterSupportsExplicitComponentMessageSurface(t *testing.T) {
 	if got, want := req.CanonicalPattern, "gmail/work message <text>"; got != want {
 		t.Fatalf("CanonicalPattern = %q, want %q", got, want)
 	}
-	cmd, ok := req.Command.(messagesender.SendCommand)
+	cmd, ok := req.Command.(gmailcomponent.MessageCommand)
 	if !ok {
-		t.Fatalf("Command = %T, want messagesender.SendCommand", req.Command)
+		t.Fatalf("Command = %T, want gmail.MessageCommand", req.Command)
 	}
-	if cmd.Component != "gmail/work" || cmd.Body != "hello" || len(cmd.To) != 1 || cmd.To[0] != "bart@example.com" || cmd.Subject != "Hi" {
+	if cmd.Body != "hello" || len(cmd.To) != 1 || cmd.To[0] != "bart@example.com" || cmd.Subject != "Hi" {
 		t.Fatalf("command = %#v", cmd)
 	}
 }

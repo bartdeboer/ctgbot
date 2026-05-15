@@ -33,7 +33,7 @@ func TestBoundSurfacesSupportsKnownTypes(t *testing.T) {
 }
 
 func TestBoundSurfacesIgnoresUnsupportedTypes(t *testing.T) {
-	if bound := BoundSurfaces("gmail/work"); len(bound) != 0 {
+	if bound := BoundSurfaces("unknown/work"); len(bound) != 0 {
 		t.Fatalf("len(BoundSurfaces) = %d, want 0", len(bound))
 	}
 }

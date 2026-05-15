@@ -9,7 +9,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	component "github.com/bartdeboer/ctgbot/internal/component"
-	"github.com/bartdeboer/ctgbot/internal/component/messagesender"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/message"
@@ -61,15 +60,8 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 			homes[binding.ComponentID] = instance.Home
 			components = append(components, instance)
 		}
-		if sender, ok := instance.Component.(component.MessageSender); ok {
-			if _, seen := commandSurfaceKeys["message:"+binding.ComponentID.String()]; !seen {
-				commandSurfaceKeys["message:"+binding.ComponentID.String()] = struct{}{}
-				boundSurfaces = append(boundSurfaces, commandset.BoundSurface{
-					Surface:       messagesender.NewSurface(instance.Registration.Ref(), sender),
-					ComponentRef:  instance.Registration.Ref(),
-					ComponentType: instance.Registration.Type,
-				})
-			}
+		if surface, ok := instance.Component.(component.CommandSurface); ok {
+			addBoundSurface("command:"+binding.ComponentID.String(), surface, instance)
 		}
 		switch binding.Role {
 		case coremodel.ChatComponentRoleAgent:
@@ -90,9 +82,6 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 					runtimeWorkspace = strings.TrimSpace(instance.Runtime.RuntimeWorkspacePath(workspace))
 				}
 			}
-			if surface, ok := instance.Component.(component.CommandSurface); ok {
-				addBoundSurface("command:"+binding.ComponentID.String(), surface, instance)
-			}
 		case coremodel.ChatComponentRoleRelay:
 			if relay, ok := instance.Component.(component.OutboundRelay); ok {
 				relays = append(relays, RelayBinding{
@@ -100,10 +89,6 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 					Binding:     binding,
 					Relay:       relay,
 				})
-			}
-		case coremodel.ChatComponentRoleCommand:
-			if surface, ok := instance.Component.(component.CommandSurface); ok {
-				addBoundSurface("command:"+binding.ComponentID.String(), surface, instance)
 			}
 		}
 	}

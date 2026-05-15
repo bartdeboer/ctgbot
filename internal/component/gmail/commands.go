@@ -16,17 +16,30 @@ var _ component.LocalCommandSurface = (*Component)(nil)
 
 type statusCommand struct{}
 
+func RegisterGobTypes(register func(any)) {
+	register(MessageCommand{})
+}
+
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{{
-		Pattern: "status",
-		Help:    "Show Gmail component status",
-		Build: func(req *clir.Request) (any, error) {
-			_ = req
-			return statusCommand{}, nil
+	return []commandengine.Definition{
+		{
+			Pattern: "status",
+			Help:    "Show Gmail component status",
+			Build: func(req *clir.Request) (any, error) {
+				_ = req
+				return statusCommand{}, nil
+			},
+			Sources: []commandengine.Source{commandengine.SourceCLI},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot),
 		},
-		Sources: []commandengine.Source{commandengine.SourceCLI},
-		Policy:  simplerbac.Any(simplerbac.RoleRoot),
-	}}
+		{
+			Pattern: "message <text>",
+			Help:    "Send a Gmail message",
+			Build:   buildMessageCommand,
+			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+		},
+	}
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
@@ -35,10 +48,13 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
 	}
-	return commandengine.RegisterPattern[statusCommand](registry, "status", func(ctx context.Context, req commandengine.Request, cmd statusCommand) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[statusCommand](registry, "status", func(ctx context.Context, req commandengine.Request, cmd statusCommand) (commandengine.Result, error) {
 		_, _ = req, cmd
 		return c.status(ctx)
-	})
+	}); err != nil {
+		return err
+	}
+	return commandengine.RegisterPattern[MessageCommand](registry, "message <text>", c.handleMessage)
 }
 
 func (c *Component) status(ctx context.Context) (commandengine.Result, error) {
