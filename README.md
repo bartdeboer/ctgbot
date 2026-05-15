@@ -143,7 +143,7 @@ channels are recorded as dropped until you bind them.
 
 ```bash
 ctgbot chat dropped
-ctgbot chat bind telegram/telegram <external_channel_id> "My Chat"
+ctgbot chat bind telegram/telegram <telegram_id> "My Chat"
 ctgbot chat list
 
 ctgbot chat <chat> workspace set default
@@ -213,7 +213,7 @@ ctgbot image build --no-cache
 ctgbot component claude/claude auth
 ctgbot component claude/claude auth status
 
-ctgbot chat bind telegram/telegram <external_channel_id> "Claude #1"
+ctgbot chat bind telegram/telegram <telegram_id> "Claude #1"
 ctgbot chat <chat> workspace set default
 ctgbot chat <chat> component add agent claude/claude
 ctgbot chat <chat> component add command process/process
