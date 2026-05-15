@@ -26,10 +26,6 @@ var selectedPromptMetadataHeaders = []string{
 	"Feedback-ID",
 }
 
-func emailPromptText(message *gmailapi.Message) string {
-	return emailPromptTextForComponent("", message)
-}
-
 func emailPromptTextForComponent(componentRef string, message *gmailapi.Message) string {
 	if message == nil {
 		return ""

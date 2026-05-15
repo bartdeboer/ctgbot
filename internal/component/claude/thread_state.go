@@ -8,7 +8,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	"github.com/bartdeboer/ctgbot/internal/repository"
 )
 
 type threadState struct {
@@ -49,10 +48,6 @@ func (c *Component) stateStore() agentcommon.JSONStateStore[threadState] {
 
 func (c *Component) loadThreadState(ctx context.Context, threadID modeluuid.UUID) (*coremodel.ThreadComponentState, threadState, error) {
 	return c.stateStore().Load(ctx, threadID)
-}
-
-func (c *Component) saveThreadState(ctx context.Context, storage repository.Storage, threadID modeluuid.UUID, row *coremodel.ThreadComponentState, state threadState) error {
-	return c.stateStore().Save(ctx, storage, threadID, row, state)
 }
 
 func (c *Component) resolveThreadSettings(ctx context.Context, thread *coremodel.Thread) (resolvedThreadSettings, error) {

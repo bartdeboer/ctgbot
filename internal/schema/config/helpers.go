@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -128,21 +127,6 @@ func rootString(key string, help string, valueType configengine.ValueType, cfg *
 		}
 	}
 	return item
-}
-
-func rootInt64(key string, help string, cfg *appstate.Config, get func(*appstate.Config) int64, set func(*appstate.Config, int64) error, readPolicy simplerbac.Rule, writePolicy simplerbac.Rule) configengine.Item {
-	return rootString(key, help, configengine.ValueInt, cfg,
-		func(cfg *appstate.Config) string { return strconv.FormatInt(get(cfg), 10) },
-		func(cfg *appstate.Config, value string) error {
-			parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
-			if err != nil {
-				return fmt.Errorf("invalid int %q", value)
-			}
-			return set(cfg, parsed)
-		},
-		readPolicy,
-		writePolicy,
-	)
 }
 
 func rootReadOnlyInt(key string, help string, value int64, readPolicy simplerbac.Rule) configengine.Item {

@@ -139,9 +139,7 @@ func cleanCommandArgs(args []string) []string {
 		return nil
 	}
 	out := make([]string, 0, len(args))
-	for _, arg := range args {
-		out = append(out, arg)
-	}
+	out = append(out, args...)
 	return out
 }
 

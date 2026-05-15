@@ -25,18 +25,6 @@ func withTempCwd(t *testing.T, fn func(root string)) {
 	fn(root)
 }
 
-func assertFileExists(t *testing.T, path string) {
-	t.Helper()
-
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("expected file %s: %v", path, err)
-	}
-	if info.IsDir() {
-		t.Fatalf("expected file %s, got directory", path)
-	}
-}
-
 func assertDirExists(t *testing.T, path string) {
 	t.Helper()
 

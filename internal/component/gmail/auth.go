@@ -120,8 +120,8 @@ func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.
 	if c == nil {
 		return fmt.Errorf("missing gmail component")
 	}
+	_ = stderr
 	stdout = writerOrDiscard(stdout)
-	stderr = writerOrDiscard(stderr)
 	service, err := c.serviceFromStoredToken(ctx)
 	if err != nil {
 		if isMissingAuthMaterial(err) {

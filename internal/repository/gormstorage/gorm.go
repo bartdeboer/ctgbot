@@ -757,10 +757,3 @@ func first(tx *gorm.DB) error {
 	}
 	return tx.Error
 }
-
-func requireDB(db *gorm.DB) error {
-	if db == nil {
-		return fmt.Errorf("missing db")
-	}
-	return nil
-}
