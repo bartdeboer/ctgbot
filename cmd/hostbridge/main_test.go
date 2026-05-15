@@ -188,6 +188,7 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 		argv        []string
 		contains    []string
 		notContains []string
+		occursOnce  []string
 	}{
 		{
 			name: "model group",
@@ -222,10 +223,10 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			contains: []string{
 				"thread <thread> message send",
 			},
-			notContains: []string{
+			occursOnce: []string{
 				"thread list - List recent active threads",
 				"thread status - Show current thread status",
-				"thread current status - Show current thread status",
+				"thread <thread> message send - Send a message into another thread",
 			},
 		},
 	}
@@ -250,6 +251,11 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			for _, notWant := range tc.notContains {
 				if strings.Contains(out, notWant) {
 					t.Fatalf("parseOrRenderHelp(%v) output unexpectedly contains %q in %q", tc.argv, notWant, out)
+				}
+			}
+			for _, wantOnce := range tc.occursOnce {
+				if got := strings.Count(out, wantOnce); got != 1 {
+					t.Fatalf("parseOrRenderHelp(%v) output contains %q %d times, want once in %q", tc.argv, wantOnce, got, out)
 				}
 			}
 			if strings.Contains(out, "codex model:") || strings.Contains(out, "codex reasoning effort:") {

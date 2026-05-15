@@ -89,7 +89,7 @@ func fprintContextualHelp(ctx context.Context, router *commandengine.Router, w i
 	if err := router.FPrintHelp(ctx, &buf, args); err != nil {
 		return err
 	}
-	base := buf.String()
+	base := normalizeHelpText(buf.String())
 	if _, err := io.WriteString(w, base); err != nil {
 		return err
 	}
@@ -124,9 +124,9 @@ func importantHelpLines(definitions []commandengine.Definition, scope []string) 
 			if pattern == "" || isHelpRoute(pattern) || !routeMatchesScope(pattern, scope) || !routeHasParameterAfterScope(pattern, scope) {
 				continue
 			}
-			line := "  " + pattern
+			line := pattern
 			if strings.TrimSpace(definition.Help) != "" {
-				line = fmt.Sprintf("  %-32s %s", pattern, strings.TrimSpace(definition.Help))
+				line += " - " + strings.TrimSpace(definition.Help)
 			}
 			if _, ok := seen[line]; ok {
 				continue
@@ -147,6 +147,37 @@ func normalizedScope(scope []string) []string {
 		}
 	}
 	return out
+}
+
+func normalizeHelpText(text string) string {
+	if strings.TrimSpace(text) == "" {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = normalizeHelpLine(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func normalizeHelpLine(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasSuffix(trimmed, ":") {
+		return trimmed
+	}
+	if idx := firstDoubleSpace(trimmed); idx >= 0 {
+		return strings.TrimSpace(trimmed[:idx]) + " - " + strings.TrimSpace(trimmed[idx:])
+	}
+	return trimmed
+}
+
+func firstDoubleSpace(value string) int {
+	for i := 0; i < len(value)-1; i++ {
+		if value[i] == ' ' && value[i+1] == ' ' {
+			return i
+		}
+	}
+	return -1
 }
 
 func routeMatchesScope(pattern string, scope []string) bool {
