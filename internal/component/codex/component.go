@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	codexbootstrap "github.com/bartdeboer/ctgbot/internal/component/codex/bootstrap"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
@@ -224,7 +225,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	runtimeWorkspacePath := c.runtime.RuntimeWorkspacePath(workspacePath)
 	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
 	instructions := turn.Runtime.Instructions()
-	instructions.RuntimeNotices = append(instructions.RuntimeNotices, c.runtimeNotices(ctx, workspacePath, turn.Thread.ID)...)
+	instructions.RuntimeNotices = append(instructions.RuntimeNotices, agentcommon.RuntimeNotices(ctx, c.runtime, workspacePath, turn.Thread.ID, c.logf)...)
 	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath, instructions)
 	if err != nil {
 		return nil, err
@@ -243,7 +244,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		defer stopTyping()
 	}
 
-	providerThreadID, err := c.providerThreadID(turn.Runtime)
+	providerThreadID, err := agentcommon.ProviderThreadID(c.registration.ID, turn.Runtime)
 	if err != nil {
 		return nil, err
 	}
@@ -264,9 +265,9 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	})
 
 	if !settings.KeepRunning {
-		c.stopAfterTurn(workspacePath, turn.Thread.ID)
+		agentcommon.StopAfterTurn(c.runtime, workspacePath, turn.Thread.ID, stopAfterTurnTimeout, c.logf)
 	}
-	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && runErr == nil {
+	if saveErr := agentcommon.BindProviderThreadID(c.registration.ID, turn.Runtime, result.ProviderThreadID); saveErr != nil && runErr == nil {
 		runErr = saveErr
 	}
 	if runErr != nil {
@@ -289,51 +290,6 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 			Text:        reply,
 		},
 	}, nil
-}
-
-func (c *Component) runtimeNotices(ctx context.Context, workspacePath string, threadID modeluuid.UUID) []string {
-	if c == nil || c.runtime == nil {
-		return nil
-	}
-	status, err := c.runtime.Status(ctx, workspacePath, threadID)
-	if err != nil {
-		c.logf("runtime notice status check failed thread=%s err=%v", threadID, err)
-		return nil
-	}
-	return append([]string(nil), status.RuntimeNotices...)
-}
-
-func (c *Component) providerThreadID(turnRuntime component.TurnRuntime) (string, error) {
-	componentThreadID, ok, err := turnRuntime.ComponentThreadID(c.registration.ID)
-	if err != nil {
-		return "", err
-	}
-	if !ok {
-		return "", nil
-	}
-	return strings.TrimSpace(componentThreadID), nil
-}
-
-func (c *Component) stopAfterTurn(workspacePath string, threadID modeluuid.UUID) {
-	if c == nil || c.runtime == nil {
-		return
-	}
-	stopCtx, cancel := context.WithTimeout(context.Background(), stopAfterTurnTimeout)
-	defer cancel()
-	if err := c.runtime.Stop(stopCtx, workspacePath, threadID); err != nil {
-		c.logf("codex stop-after-turn failed thread=%s err=%v", threadID, err)
-	}
-}
-
-func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, providerThreadID string) error {
-	providerThreadID = strings.TrimSpace(providerThreadID)
-	if providerThreadID == "" {
-		return nil
-	}
-	if turnRuntime == nil {
-		return fmt.Errorf("missing turn runtime")
-	}
-	return turnRuntime.BindComponentThreadID(c.registration.ID, providerThreadID)
 }
 
 func turnOptionsFromSettings(settings resolvedThreadSettings) TurnOptions {

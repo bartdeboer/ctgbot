@@ -8,7 +8,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
-	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
@@ -156,7 +156,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 }
 
 func (c *Component) refresh(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := c.threadWorkspace(ctx, req)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -167,7 +167,7 @@ func (c *Component) refresh(ctx context.Context, req commandengine.Request) (com
 }
 
 func (c *Component) start(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := c.threadWorkspace(ctx, req)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -184,7 +184,7 @@ func (c *Component) start(ctx context.Context, req commandengine.Request) (comma
 }
 
 func (c *Component) stop(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := c.threadWorkspace(ctx, req)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -200,7 +200,7 @@ func (c *Component) stop(ctx context.Context, req commandengine.Request) (comman
 }
 
 func (c *Component) purge(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := c.threadWorkspace(ctx, req)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -219,7 +219,7 @@ func (c *Component) purge(ctx context.Context, req commandengine.Request) (comma
 }
 
 func (c *Component) interrupt(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := c.threadWorkspace(ctx, req)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -234,7 +234,7 @@ func (c *Component) interrupt(ctx context.Context, req commandengine.Request) (c
 }
 
 func (c *Component) status(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := c.threadWorkspace(ctx, req)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -287,7 +287,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 }
 
 func (c *Component) modelStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := c.thread(ctx, req)
+	thread, err := agentcommon.Thread(ctx, c.storage, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -304,7 +304,7 @@ func (c *Component) modelList(ctx context.Context) (commandengine.Result, error)
 }
 
 func (c *Component) modelSet(ctx context.Context, req commandengine.Request, cmd ModelSet) (commandengine.Result, error) {
-	thread, err := c.thread(ctx, req)
+	thread, err := agentcommon.Thread(ctx, c.storage, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -321,7 +321,7 @@ func (c *Component) modelSet(ctx context.Context, req commandengine.Request, cmd
 }
 
 func (c *Component) modelClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := c.thread(ctx, req)
+	thread, err := agentcommon.Thread(ctx, c.storage, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -338,7 +338,7 @@ func (c *Component) modelClear(ctx context.Context, req commandengine.Request) (
 }
 
 func (c *Component) modelEffortStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := c.thread(ctx, req)
+	thread, err := agentcommon.Thread(ctx, c.storage, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -355,7 +355,7 @@ func (c *Component) modelEffortList(ctx context.Context) (commandengine.Result, 
 }
 
 func (c *Component) modelEffortSet(ctx context.Context, req commandengine.Request, cmd ModelEffortSet) (commandengine.Result, error) {
-	thread, err := c.thread(ctx, req)
+	thread, err := agentcommon.Thread(ctx, c.storage, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -372,7 +372,7 @@ func (c *Component) modelEffortSet(ctx context.Context, req commandengine.Reques
 }
 
 func (c *Component) modelEffortClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := c.thread(ctx, req)
+	thread, err := agentcommon.Thread(ctx, c.storage, req, "codex")
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -386,46 +386,6 @@ func (c *Component) modelEffortClear(ctx context.Context, req commandengine.Requ
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: fmt.Sprintf("codex reasoning effort cleared\ncodex reasoning effort: %s\nsource: %s", settings.ReasoningEffort, settings.ReasoningEffortSource)}, nil
-}
-
-func (c *Component) thread(ctx context.Context, req commandengine.Request) (*coremodel.Thread, error) {
-	if c == nil || c.storage == nil {
-		return nil, fmt.Errorf("missing codex storage")
-	}
-	threadID := req.Context.ThreadID
-	if threadID.IsNull() {
-		threadID = req.Context.SandboxID
-	}
-	if threadID.IsNull() {
-		return nil, fmt.Errorf("missing thread id")
-	}
-	thread, err := c.storage.Threads().GetByID(ctx, threadID)
-	if err != nil {
-		return nil, err
-	}
-	if thread == nil {
-		return nil, fmt.Errorf("thread not found: %s", threadID)
-	}
-	return thread, nil
-}
-
-func (c *Component) threadWorkspace(ctx context.Context, req commandengine.Request) (*coremodel.Thread, string, error) {
-	thread, err := c.thread(ctx, req)
-	if err != nil {
-		return nil, "", err
-	}
-	chat, err := c.storage.Chats().GetByID(ctx, thread.ChatID)
-	if err != nil {
-		return nil, "", err
-	}
-	if chat == nil {
-		return nil, "", fmt.Errorf("chat not found: %s", thread.ChatID)
-	}
-	workspacePath, err := c.resolveWorkspace(ctx, *chat)
-	if err != nil {
-		return nil, "", err
-	}
-	return thread, workspacePath, nil
 }
 
 func codexCommand(pattern string, command any, help string, aliases ...commandengine.Route) commandengine.Definition {
