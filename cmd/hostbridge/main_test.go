@@ -53,6 +53,8 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 }
 
 func TestHostbridgeRouterUsesCodexDefinitions(t *testing.T) {
+	t.Setenv("CTGBOT_ACTIVE_COMPONENTS", "")
+	t.Setenv("CTGBOT_COMPONENT_REF", "codex")
 	router, err := hostbridgeRouter()
 	if err != nil {
 		t.Fatalf("hostbridgeRouter() error = %v", err)
@@ -145,6 +147,8 @@ func TestHostbridgeRouterFallsBackToGlobalsForUnsupportedComponent(t *testing.T)
 }
 
 func TestHostbridgeScopedHelpHidesHiddenCodexAliases(t *testing.T) {
+	t.Setenv("CTGBOT_ACTIVE_COMPONENTS", "")
+	t.Setenv("CTGBOT_COMPONENT_REF", "codex")
 	router, err := hostbridgeRouter()
 	if err != nil {
 		t.Fatalf("hostbridgeRouter() error = %v", err)
@@ -177,6 +181,8 @@ func TestHostbridgeScopedHelpHidesHiddenCodexAliases(t *testing.T) {
 }
 
 func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing.T) {
+	t.Setenv("CTGBOT_ACTIVE_COMPONENTS", "")
+	t.Setenv("CTGBOT_COMPONENT_REF", "codex")
 	router, err := hostbridgeRouter()
 	if err != nil {
 		t.Fatalf("hostbridgeRouter() error = %v", err)
@@ -266,6 +272,8 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 }
 
 func TestHelpRequestKeepsExactExecutableRoutes(t *testing.T) {
+	t.Setenv("CTGBOT_ACTIVE_COMPONENTS", "")
+	t.Setenv("CTGBOT_COMPONENT_REF", "codex")
 	router, err := hostbridgeRouter()
 	if err != nil {
 		t.Fatalf("hostbridgeRouter() error = %v", err)

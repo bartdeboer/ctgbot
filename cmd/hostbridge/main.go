@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -22,7 +21,7 @@ import (
 func main() {
 	args := normalizedArgs(os.Args[1:], currentComponentRef())
 	if len(args) == 0 || (len(args) == 1 && args[0] == "help") {
-		printHelp()
+		printHelp(defaultHostbridgeActor())
 		return
 	}
 	if len(args) == 1 && args[0] == "version" {
@@ -46,7 +45,7 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
-		printHelp()
+		printHelp(base.Context.Actor)
 		os.Exit(1)
 	}
 
@@ -73,7 +72,7 @@ func parseOrRenderHelp(
 			return commandengine.Request{}, false, err
 		}
 		if !match.Matched || !match.Executable || !match.Exact {
-			if err := fprintContextualHelp(ctx, router, helpWriter, args, helpReq.Scope); err != nil {
+			if err := fprintContextualHelp(router, base.Context.Actor, helpWriter, helpReq.Scope); err != nil {
 				return commandengine.Request{}, false, err
 			}
 			return commandengine.Request{}, true, nil
@@ -84,134 +83,17 @@ func parseOrRenderHelp(
 	return req, false, err
 }
 
-func fprintContextualHelp(ctx context.Context, router *commandengine.Router, w io.Writer, args []string, scope []string) error {
-	var buf bytes.Buffer
-	if err := router.FPrintHelp(ctx, &buf, args); err != nil {
-		return err
-	}
-	base := normalizeHelpText(buf.String())
-	if _, err := io.WriteString(w, base); err != nil {
-		return err
-	}
-	for _, line := range importantHelpLines(router.Definitions(), scope) {
-		if strings.Contains(base, line) {
-			continue
-		}
+func fprintContextualHelp(router *commandengine.Router, actor commandengine.Actor, w io.Writer, scope []string) error {
+	for _, line := range commandset.HelpLines(router.Definitions(), commandset.HelpOptions{
+		Source: commandengine.SourceHostbridge,
+		Actor:  actor,
+		Scope:  scope,
+	}) {
 		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func importantHelpLines(definitions []commandengine.Definition, scope []string) []string {
-	scope = normalizedScope(scope)
-	if len(scope) != 1 {
-		return nil
-	}
-	var lines []string
-	seen := map[string]struct{}{}
-	for _, definition := range definitions {
-		visibility := definition.InstructionVisibilityOrDefault()
-		if visibility != commandengine.InstructionImportant && visibility != commandengine.InstructionEssential {
-			continue
-		}
-		for _, route := range definition.Routes() {
-			if route.Hidden {
-				continue
-			}
-			pattern := commandengine.NormalizePattern(route.Pattern)
-			if pattern == "" || isHelpRoute(pattern) || !routeMatchesScope(pattern, scope) || !routeHasParameterAfterScope(pattern, scope) {
-				continue
-			}
-			line := pattern
-			if strings.TrimSpace(definition.Help) != "" {
-				line += " - " + strings.TrimSpace(definition.Help)
-			}
-			if _, ok := seen[line]; ok {
-				continue
-			}
-			seen[line] = struct{}{}
-			lines = append(lines, line)
-		}
-	}
-	return lines
-}
-
-func normalizedScope(scope []string) []string {
-	var out []string
-	for _, token := range scope {
-		token = strings.TrimSpace(token)
-		if token != "" {
-			out = append(out, token)
-		}
-	}
-	return out
-}
-
-func normalizeHelpText(text string) string {
-	if strings.TrimSpace(text) == "" {
-		return text
-	}
-	lines := strings.Split(text, "\n")
-	for i, line := range lines {
-		lines[i] = normalizeHelpLine(line)
-	}
-	return strings.Join(lines, "\n")
-}
-
-func normalizeHelpLine(line string) string {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" || strings.HasSuffix(trimmed, ":") {
-		return trimmed
-	}
-	if idx := firstDoubleSpace(trimmed); idx >= 0 {
-		return strings.TrimSpace(trimmed[:idx]) + " - " + strings.TrimSpace(trimmed[idx:])
-	}
-	return trimmed
-}
-
-func firstDoubleSpace(value string) int {
-	for i := 0; i < len(value)-1; i++ {
-		if value[i] == ' ' && value[i+1] == ' ' {
-			return i
-		}
-	}
-	return -1
-}
-
-func routeMatchesScope(pattern string, scope []string) bool {
-	parts := strings.Fields(pattern)
-	if len(parts) <= len(scope) {
-		return false
-	}
-	for i, token := range scope {
-		if !routeTokenMatchesScope(parts[i], token) {
-			return false
-		}
-	}
-	return true
-}
-
-func routeHasParameterAfterScope(pattern string, scope []string) bool {
-	parts := strings.Fields(pattern)
-	for _, token := range parts[len(scope):] {
-		if strings.HasPrefix(token, "<") && strings.HasSuffix(token, ">") {
-			return true
-		}
-	}
-	return false
-}
-
-func routeTokenMatchesScope(routeToken string, scopeToken string) bool {
-	if routeToken == scopeToken {
-		return true
-	}
-	return strings.HasPrefix(routeToken, "<") && strings.HasSuffix(routeToken, ">")
-}
-
-func isHelpRoute(pattern string) bool {
-	return strings.HasSuffix(pattern, " help") || strings.HasSuffix(pattern, " help all")
 }
 
 func normalizedArgs(args []string, componentRef string) []string {
@@ -308,7 +190,7 @@ func isLegacyCodexShorthand(arg string) bool {
 
 func baseRequest() (commandengine.Request, error) {
 	req := commandengine.Request{Context: commandengine.Context{
-		Actor: commandengine.Actor{ID: "hostbridge", Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		Actor: defaultHostbridgeActor(),
 	}}
 	sandboxIDText := strings.TrimSpace(os.Getenv("CTGBOT_SANDBOX_ID"))
 	if sandboxIDText == "" {
@@ -322,6 +204,10 @@ func baseRequest() (commandengine.Request, error) {
 	return req, nil
 }
 
+func defaultHostbridgeActor() commandengine.Actor {
+	return commandengine.Actor{ID: "hostbridge", Roles: []simplerbac.Role{simplerbac.RoleAgent}}
+}
+
 func getenv(key, fallback string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
@@ -329,12 +215,17 @@ func getenv(key, fallback string) string {
 	return fallback
 }
 
-func printHelp() {
+func printHelp(actor commandengine.Actor) {
 	fmt.Fprintln(os.Stdout, "usage: hostbridge <command> [args...]")
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "Commands for ctgbot hostbridge:")
 	fmt.Fprintln(os.Stdout, "version - Show embedded hostbridge version")
-	printDefinitionHelp(hostbridgeDefinitions())
+	for _, line := range commandset.HelpLines(hostbridgeDefinitions(), commandset.HelpOptions{
+		Source: commandengine.SourceHostbridge,
+		Actor:  actor,
+	}) {
+		fmt.Fprintln(os.Stdout, line)
+	}
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "environment:")
 	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_ADDR     TCP address (default host.docker.internal:4568)")
@@ -382,19 +273,4 @@ func currentComponentRef() string {
 		return ref
 	}
 	return cmdsurface.DefaultComponentType
-}
-
-func printDefinitionHelp(definitions []commandengine.Definition) {
-	for _, definition := range definitions {
-		for _, route := range definition.Routes() {
-			if route.Hidden {
-				continue
-			}
-			if definition.Help == "" {
-				fmt.Fprintf(os.Stdout, "%s\n", route.Pattern)
-				continue
-			}
-			fmt.Fprintf(os.Stdout, "%s - %s\n", route.Pattern, definition.Help)
-		}
-	}
 }
