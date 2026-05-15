@@ -168,6 +168,21 @@ func (b *Bridge) prepareRequest(
 		Roles: []simplerbac.Role{simplerbac.RoleAgent},
 	}
 
+	if strings.TrimSpace(clientIdentity) != "" {
+		authenticatedThreadID, err := modeluuid.Parse(clientIdentity)
+		if err != nil {
+			return commandengine.Request{}, fmt.Errorf("invalid hostbridge client identity: %s", clientIdentity)
+		}
+		if err := ensureHostbridgeThreadMatch(authenticatedThreadID, req.Context.ThreadID, "thread id"); err != nil {
+			return commandengine.Request{}, err
+		}
+		if err := ensureHostbridgeThreadMatch(authenticatedThreadID, req.Context.SandboxID, "sandbox id"); err != nil {
+			return commandengine.Request{}, err
+		}
+		req.Context.ThreadID = authenticatedThreadID
+		req.Context.SandboxID = authenticatedThreadID
+	}
+
 	threadID := req.Context.ThreadID
 	if threadID.IsNull() {
 		threadID = req.Context.SandboxID
@@ -193,6 +208,13 @@ func (b *Bridge) prepareRequest(
 	}
 	req.Context.ChatID = thread.ChatID
 	return req, nil
+}
+
+func ensureHostbridgeThreadMatch(authenticated modeluuid.UUID, claimed modeluuid.UUID, label string) error {
+	if claimed.IsNull() || claimed == authenticated {
+		return nil
+	}
+	return fmt.Errorf("hostbridge client identity does not match claimed %s", label)
 }
 
 func (b *Bridge) bindThread(
