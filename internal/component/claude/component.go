@@ -129,7 +129,18 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 		return err
 	}
 	defer func() { _ = closeRelay(context.Background()) }()
-	return c.runtime.Exec(ctx, "", modeluuid.UUID{}, nil, writerOrDiscard(stdout), writerOrDiscard(stderr), "env", "BROWSER=echo", "claude", "setup-token")
+	return c.runtime.Exec(
+		ctx,
+		"",
+		modeluuid.UUID{},
+		nil,
+		writerOrDiscard(stdout),
+		writerOrDiscard(stderr),
+		"script",
+		"-qfec",
+		"env BROWSER=echo claude setup-token",
+		"/dev/null",
+	)
 }
 
 func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.Writer) error {
