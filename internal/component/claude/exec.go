@@ -16,7 +16,6 @@ import (
 )
 
 type ExecRuntime interface {
-	Workspace() string
 	Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error
 }
 
@@ -59,7 +58,6 @@ func (r *Runner) RunTurn(ctx context.Context, runtime ExecRuntime, request TurnR
 	}
 
 	args := BuildExecArgs(ExecArgs{
-		Workspace:        runtime.Workspace(),
 		ProviderThreadID: request.ProviderThreadID,
 		Prompt:           prompt,
 		Options:          request.Options,
@@ -92,7 +90,6 @@ func (r *Runner) RunTurn(ctx context.Context, runtime ExecRuntime, request TurnR
 }
 
 type ExecArgs struct {
-	Workspace        string
 	ProviderThreadID string
 	Prompt           string
 	Options          TurnOptions
@@ -103,7 +100,6 @@ func BuildExecArgs(request ExecArgs) []string {
 		"claude",
 		"-p", strings.TrimSpace(request.Prompt),
 		"--output-format", "json",
-		"--cwd", strings.TrimSpace(request.Workspace),
 	}
 	if model := strings.TrimSpace(request.Options.Model); model != "" {
 		innerArgs = append(innerArgs, "--model", model)

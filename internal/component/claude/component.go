@@ -303,8 +303,6 @@ type commandRuntime struct {
 	commands      commandengine.CommandExecutor
 }
 
-func (r commandRuntime) Workspace() string { return r.runtime.RuntimeWorkspacePath(r.workspacePath) }
-
 func (r commandRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	return r.runtime.Exec(ctx, r.workspacePath, r.threadID, r.commands, stdout, stderr, name, args...)
 }

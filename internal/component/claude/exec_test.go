@@ -9,7 +9,6 @@ import (
 
 func TestBuildExecArgsStartsClaudePrintTurn(t *testing.T) {
 	got := BuildExecArgs(ExecArgs{
-		Workspace:        "/workspace",
 		ProviderThreadID: "session-123",
 		Prompt:           "hello",
 		Options: TurnOptions{
@@ -20,7 +19,7 @@ func TestBuildExecArgsStartsClaudePrintTurn(t *testing.T) {
 	})
 	want := []string{
 		"sh", "-lc", "rm -f " + containerengine.ActivePIDFile + "; echo $$ > " + containerengine.ActivePIDFile + "; exec \"$@\"", "sh",
-		"claude", "-p", "hello", "--output-format", "json", "--cwd", "/workspace",
+		"claude", "-p", "hello", "--output-format", "json",
 		"--model", "opus", "--permission-mode", "bypassPermissions", "--append-system-prompt", "be brief", "--resume", "session-123",
 	}
 	if !reflect.DeepEqual(got, want) {
