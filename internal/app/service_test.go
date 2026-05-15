@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/app"
-	broker "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
@@ -726,7 +725,7 @@ func TestCommandSurfacesExposeAllowlistOnlyWhenConfiguredForChat(t *testing.T) {
 	svc := app.NewService(storage, fakeResolver{storage: storage})
 
 	chat := saveChat(t, storage, "Team")
-	surfaces, err := svc.CommandSurfaces(ctx, *chat, broker.CommandSurfaceDeps{})
+	surfaces, err := svc.CommandSurfaces(ctx, *chat, nil, nil)
 	if err != nil {
 		t.Fatalf("CommandSurfaces() error = %v", err)
 	}
@@ -741,7 +740,7 @@ func TestCommandSurfacesExposeAllowlistOnlyWhenConfiguredForChat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	surfaces, err = svc.CommandSurfaces(ctx, *chat, broker.CommandSurfaceDeps{})
+	surfaces, err = svc.CommandSurfaces(ctx, *chat, nil, nil)
 	if err != nil {
 		t.Fatalf("CommandSurfaces() with allowlist error = %v", err)
 	}

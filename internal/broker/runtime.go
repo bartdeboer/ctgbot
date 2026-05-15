@@ -20,7 +20,7 @@ import (
 
 func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*ChatRuntime, error) {
 
-	spec, err := b.App.RuntimeSpec(ctx, chat)
+	spec, err := b.runtimeSpec(ctx, chat)
 	if err != nil {
 		return nil, err
 	}
@@ -111,10 +111,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		runtimeWorkspace = workspace
 	}
 
-	globalSurfaces, err = b.App.CommandSurfaces(ctx, chat, CommandSurfaceDeps{
-		Inbound:       b,
-		BrokerActions: b,
-	})
+	globalSurfaces, err = b.App.CommandSurfaces(ctx, chat, b, b)
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +137,35 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		AgentCommands:    agentCommands,
 		Homes:            homes,
 	}, nil
+}
+
+type runtimeSpec struct {
+	Workspace string
+	Bindings  []coremodel.ChatComponent
+	Loaded    map[modeluuid.UUID]*component.Loaded
+}
+
+func (b *Broker) runtimeSpec(ctx context.Context, chat coremodel.Chat) (runtimeSpec, error) {
+	workspace, err := b.App.ResolveChatWorkspace(ctx, chat)
+	if err != nil {
+		return runtimeSpec{}, err
+	}
+	bindings, err := b.App.EnabledChatComponents(ctx, chat.ID)
+	if err != nil {
+		return runtimeSpec{}, err
+	}
+	loaded := make(map[modeluuid.UUID]*component.Loaded)
+	for _, binding := range bindings {
+		if _, ok := loaded[binding.ComponentID]; ok {
+			continue
+		}
+		instance, err := b.App.ResolveComponent(ctx, binding.ComponentID)
+		if err != nil {
+			return runtimeSpec{}, err
+		}
+		loaded[binding.ComponentID] = instance
+	}
+	return runtimeSpec{Workspace: workspace, Bindings: bindings, Loaded: loaded}, nil
 }
 
 type agentTurnRuntime struct {

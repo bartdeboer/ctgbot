@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 
-	broker "github.com/bartdeboer/ctgbot/internal/broker"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
@@ -14,13 +13,13 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/messaging"
 )
 
-func (s *service) CommandSurfaces(ctx context.Context, chat coremodel.Chat, deps broker.CommandSurfaceDeps) ([]component.CommandSurface, error) {
+func (s *service) CommandSurfaces(ctx context.Context, chat coremodel.Chat, inbound component.ResolvedInboundQueuer, actions brokercomponent.Actions) ([]component.CommandSurface, error) {
 	surfaces := []component.CommandSurface{
 		componentadmin.New(s.Repository(), s),
-		messagingcomponent.New(messaging.New(s.Repository()), deps.Inbound),
+		messagingcomponent.New(messaging.New(s.Repository()), inbound),
 	}
-	if deps.BrokerActions != nil {
-		surfaces = append(surfaces, brokercomponent.New(deps.BrokerActions))
+	if actions != nil {
+		surfaces = append(surfaces, brokercomponent.New(actions))
 	}
 	if hasAllowlist, err := s.chatHasAllowlistFilter(ctx, chat); err != nil {
 		return nil, err

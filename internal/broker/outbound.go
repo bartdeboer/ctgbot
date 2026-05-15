@@ -43,7 +43,7 @@ func (b *Broker) resolveRelayBindingsForChat(ctx context.Context, chatID modeluu
 	if chat == nil {
 		return nil, fmt.Errorf("chat not found: %s", chatID)
 	}
-	spec, err := b.App.RuntimeSpec(ctx, *chat)
+	spec, err := b.runtimeSpec(ctx, *chat)
 	if err != nil {
 		return nil, err
 	}

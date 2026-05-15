@@ -23,9 +23,9 @@ type App interface {
 	Chat(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
 	Thread(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
 	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
-	RuntimeSpec(ctx context.Context, chat coremodel.Chat) (RuntimeSpec, error)
+	EnabledChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
 	EnabledInboundSources(ctx context.Context) ([]component.InboundSource, error)
-	CommandSurfaces(ctx context.Context, chat coremodel.Chat, deps CommandSurfaceDeps) ([]component.CommandSurface, error)
+	CommandSurfaces(ctx context.Context, chat coremodel.Chat, inbound component.ResolvedInboundQueuer, actions componentbroker.Actions) ([]component.CommandSurface, error)
 	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
 	ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) error
