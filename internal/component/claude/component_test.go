@@ -53,10 +53,10 @@ func TestAuthRunsClaudeSetupTokenWithRelay(t *testing.T) {
 	if !runtime.relayClosed {
 		t.Fatalf("relay was not closed")
 	}
-	if got, want := runtime.execName, "script"; got != want {
+	if got, want := runtime.execName, "env"; got != want {
 		t.Fatalf("exec name = %q, want %q", got, want)
 	}
-	if got, want := strings.Join(runtime.execArgs, " "), "-qfec env BROWSER=echo claude setup-token /dev/null"; got != want {
+	if got, want := strings.Join(runtime.execArgs, " "), "BROWSER=echo claude setup-token"; got != want {
 		t.Fatalf("exec args = %q, want %q", got, want)
 	}
 }
