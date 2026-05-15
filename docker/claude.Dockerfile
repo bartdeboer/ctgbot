@@ -14,12 +14,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates git curl bash make tar zip unzip jq \
+        ca-certificates git curl bash make tar zip unzip jq build-essential \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code \
     && claude --version
 
 COPY --from=hostbridge-build /out/hostbridge /usr/bin/hostbridge
+COPY --from=hostbridge-build /usr/local/go /usr/local/go
+
+ENV PATH="/usr/local/go/bin:${PATH}"
 
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]
