@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	admin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
@@ -321,5 +322,46 @@ func testHostbridgeRequest() commandengine.Request {
 				Roles: []simplerbac.Role{simplerbac.RoleAgent},
 			},
 		},
+	}
+}
+
+func TestHostbridgeRouterSupportsExplicitKnownComponentRef(t *testing.T) {
+	t.Setenv("CTGBOT_ACTIVE_COMPONENTS", "llamacpp/work")
+	argv := []string{"llamacpp/work", "status"}
+	router, err := hostbridgeRouter(argv)
+	if err != nil {
+		t.Fatalf("hostbridgeRouter() error = %v", err)
+	}
+	base := commandengine.Request{Context: commandengine.Context{Actor: commandengine.Actor{ID: "hostbridge", Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}
+	req, err := router.Parse(context.Background(), base, argv)
+	if err != nil {
+		t.Fatalf("Parse(%v) error = %v", argv, err)
+	}
+	if got, want := req.CanonicalPattern, "llamacpp/work status"; got != want {
+		t.Fatalf("CanonicalPattern = %q, want %q", got, want)
+	}
+}
+
+func TestHostbridgeRouterSupportsExplicitComponentMessageSurface(t *testing.T) {
+	t.Setenv("CTGBOT_ACTIVE_COMPONENTS", "gmail/work")
+	argv := []string{"gmail/work", "message", "hello", "--to", "bart@example.com", "--subject", "Hi"}
+	router, err := hostbridgeRouter(argv)
+	if err != nil {
+		t.Fatalf("hostbridgeRouter() error = %v", err)
+	}
+	base := commandengine.Request{Context: commandengine.Context{Actor: commandengine.Actor{ID: "hostbridge", Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}
+	req, err := router.Parse(context.Background(), base, argv)
+	if err != nil {
+		t.Fatalf("Parse(%v) error = %v", argv, err)
+	}
+	if got, want := req.CanonicalPattern, "gmail/work message <text>"; got != want {
+		t.Fatalf("CanonicalPattern = %q, want %q", got, want)
+	}
+	cmd, ok := req.Command.(admin.MessagesSendCommand)
+	if !ok {
+		t.Fatalf("Command = %T, want admin.MessagesSendCommand", req.Command)
+	}
+	if cmd.Component != "gmail/work" || cmd.Body != "hello" || len(cmd.To) != 1 || cmd.To[0] != "bart@example.com" || cmd.Subject != "Hi" {
+		t.Fatalf("command = %#v", cmd)
 	}
 }

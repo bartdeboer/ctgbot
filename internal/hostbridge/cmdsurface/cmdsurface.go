@@ -20,6 +20,7 @@ import (
 type ResolvedSurfaceSet struct {
 	ComponentRef  string
 	ComponentType string
+	Surface       componentpkg.CommandSurface
 	Supported     bool
 }
 
@@ -33,10 +34,11 @@ func Resolve(ref string) ResolvedSurfaceSet {
 			Name: coremodel.DefaultComponentName(DefaultComponentType),
 		}
 	}
-	_, supported := surfaceForType(parsed.Type)
+	surface, supported := surfaceForType(parsed.Type)
 	return ResolvedSurfaceSet{
 		ComponentRef:  parsed.Ref(),
 		ComponentType: parsed.Type,
+		Surface:       surface,
 		Supported:     supported,
 	}
 }
@@ -86,6 +88,7 @@ func LegacyCodexShorthandEnabled(ref string) bool {
 
 func RegisterGobTypes(register func(any)) {
 	componentadmin.RegisterGobTypes(register)
+	brokercomponent.RegisterGobTypes(register)
 	sqlcomponent.RegisterGobTypes(register)
 	allowlistfilter.RegisterGobTypes(register)
 	claudecomponent.RegisterGobTypes(register)
@@ -125,5 +128,27 @@ func dedupeNonEmpty(values ...string) []string {
 		seen[value] = struct{}{}
 		out = append(out, value)
 	}
+	return out
+}
+
+func CommandRefBoundSurfaces(ref string) []commandset.BoundSurface {
+	parsed, err := coremodel.ParseComponentRef(strings.TrimSpace(ref))
+	if err != nil {
+		return nil
+	}
+	componentRef := parsed.Ref()
+	var out []commandset.BoundSurface
+	if surface, ok := surfaceForType(parsed.Type); ok {
+		out = append(out, commandset.BoundSurface{
+			Surface:       surface,
+			ComponentRef:  componentRef,
+			ComponentType: parsed.Type,
+		})
+	}
+	out = append(out, commandset.BoundSurface{
+		Surface:       componentadmin.NewMessageSenderSurface(componentRef),
+		ComponentRef:  componentRef,
+		ComponentType: parsed.Type,
+	})
 	return out
 }

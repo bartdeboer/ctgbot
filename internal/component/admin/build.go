@@ -129,7 +129,11 @@ func (f *repeatStringFlag) Set(value string) error {
 }
 
 func buildComponentMessage(req *clir.Request) (any, error) {
-	componentRef := strings.TrimSpace(req.Params["component"])
+	return buildComponentMessageForRef(req, strings.TrimSpace(req.Params["component"]))
+}
+
+func buildComponentMessageForRef(req *clir.Request, componentRef string) (any, error) {
+	componentRef = strings.TrimSpace(componentRef)
 	if componentRef == "" {
 		return nil, fmt.Errorf("missing component")
 	}
@@ -190,7 +194,11 @@ func parseMessageSendFields(name string, args []string) (MessagesSendCommand, er
 }
 
 func buildMessagesSend(req *clir.Request) (any, error) {
-	componentRef := strings.TrimSpace(req.Params["component"])
+	return buildMessagesSendForRef(req, strings.TrimSpace(req.Params["component"]))
+}
+
+func buildMessagesSendForRef(req *clir.Request, componentRef string) (any, error) {
+	componentRef = strings.TrimSpace(componentRef)
 	if componentRef == "" {
 		return nil, fmt.Errorf("missing component")
 	}

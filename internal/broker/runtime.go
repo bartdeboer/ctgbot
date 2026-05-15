@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	component "github.com/bartdeboer/ctgbot/internal/component"
+	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/message"
@@ -36,7 +37,21 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		globalSurfaces   []component.CommandSurface
 		runtimeWorkspace string
 	)
-	commandSurfaceIDs := map[modeluuid.UUID]struct{}{}
+	commandSurfaceKeys := map[string]struct{}{}
+	addBoundSurface := func(key string, surface component.CommandSurface, loaded *component.Loaded) {
+		if surface == nil || loaded == nil {
+			return
+		}
+		if _, seen := commandSurfaceKeys[key]; seen {
+			return
+		}
+		commandSurfaceKeys[key] = struct{}{}
+		boundSurfaces = append(boundSurfaces, commandset.BoundSurface{
+			Surface:       surface,
+			ComponentRef:  loaded.Registration.Ref(),
+			ComponentType: loaded.Registration.Type,
+		})
+	}
 
 	for _, binding := range bindings {
 		instance := spec.Loaded[binding.ComponentID]
@@ -46,6 +61,16 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		if _, seen := homes[binding.ComponentID]; !seen {
 			homes[binding.ComponentID] = instance.Home
 			components = append(components, instance)
+		}
+		if _, ok := instance.Component.(component.MessageSender); ok {
+			if _, seen := commandSurfaceKeys["message:"+binding.ComponentID.String()]; !seen {
+				commandSurfaceKeys["message:"+binding.ComponentID.String()] = struct{}{}
+				boundSurfaces = append(boundSurfaces, commandset.BoundSurface{
+					Surface:       componentadmin.NewMessageSenderSurface(instance.Registration.Ref()),
+					ComponentRef:  instance.Registration.Ref(),
+					ComponentType: instance.Registration.Ref(),
+				})
+			}
 		}
 		switch binding.Role {
 		case coremodel.ChatComponentRoleAgent:
@@ -67,14 +92,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 				}
 			}
 			if surface, ok := instance.Component.(component.CommandSurface); ok {
-				if _, seen := commandSurfaceIDs[binding.ComponentID]; !seen {
-					commandSurfaceIDs[binding.ComponentID] = struct{}{}
-					boundSurfaces = append(boundSurfaces, commandset.BoundSurface{
-						Surface:       surface,
-						ComponentRef:  instance.Registration.Ref(),
-						ComponentType: instance.Registration.Type,
-					})
-				}
+				addBoundSurface("command:"+binding.ComponentID.String(), surface, instance)
 			}
 		case coremodel.ChatComponentRoleRelay:
 			if relay, ok := instance.Component.(component.OutboundRelay); ok {
@@ -86,14 +104,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 			}
 		case coremodel.ChatComponentRoleCommand:
 			if surface, ok := instance.Component.(component.CommandSurface); ok {
-				if _, seen := commandSurfaceIDs[binding.ComponentID]; !seen {
-					commandSurfaceIDs[binding.ComponentID] = struct{}{}
-					boundSurfaces = append(boundSurfaces, commandset.BoundSurface{
-						Surface:       surface,
-						ComponentRef:  instance.Registration.Ref(),
-						ComponentType: instance.Registration.Type,
-					})
-				}
+				addBoundSurface("command:"+binding.ComponentID.String(), surface, instance)
 			}
 		}
 	}
@@ -101,7 +112,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		runtimeWorkspace = workspace
 	}
 
-	globalSurfaces, err = b.App.CommandSurfaces(ctx, brokercontract.CommandSurfaceDeps{
+	globalSurfaces, err = b.App.CommandSurfaces(ctx, chat, brokercontract.CommandSurfaceDeps{
 		Inbound:       b,
 		BrokerActions: b,
 	})

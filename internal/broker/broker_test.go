@@ -779,6 +779,53 @@ func TestAllowlistEventFilterBlocksUnknownSenderAndSendsNotice(t *testing.T) {
 	}
 }
 
+func TestAllowDroppedReplaysEventBypassingFilters(t *testing.T) {
+	fixture := newAllowlistInboundFixture(t, true)
+	event := testInboundEvent(fixture.source.ID, "chat-1", "thread-1", "Subject: Hello\n\nplease review")
+	event.Payload.ProviderType = "gmail"
+	event.Payload.ProviderMessageID = "gmail-msg-1"
+	event.Payload.Actor = message.Actor{ID: "Alice <alice@example.com>", Label: "Alice <alice@example.com>", Roles: []simplerbac.Role{simplerbac.RoleUser}}
+
+	outcome, err := fixture.b.HandleInbound(context.Background(), event)
+	if err != nil {
+		t.Fatalf("HandleInbound() error = %v", err)
+	}
+	if !outcome.Dropped {
+		t.Fatal("expected unknown sender to be dropped")
+	}
+	droppedIDs, err := fixture.storage.DroppedEvents().ListIDs(context.Background())
+	if err != nil {
+		t.Fatalf("DroppedEvents().ListIDs() error = %v", err)
+	}
+	if len(droppedIDs) != 1 {
+		t.Fatalf("dropped event count = %d, want 1", len(droppedIDs))
+	}
+	dropRef, err := repository.NewShortIDResolver(droppedIDs).ShortIDFor(droppedIDs[0], 6)
+	if err != nil {
+		t.Fatalf("drop short id: %v", err)
+	}
+
+	replay, err := fixture.b.AllowDropped(context.Background(), dropRef)
+	if err != nil {
+		t.Fatalf("AllowDropped() error = %v", err)
+	}
+	if replay.Outcome.Dropped {
+		t.Fatal("AllowDropped() dropped event again; want replay to bypass filters")
+	}
+	if replay.Outcome.Inbound == nil {
+		t.Fatal("AllowDropped() inbound message = nil")
+	}
+	if got := len(fixture.agentRecorder.prompts); got != 1 {
+		t.Fatalf("agent prompts = %d, want 1", got)
+	}
+	dropped, err := fixture.storage.DroppedEvents().GetByID(context.Background(), droppedIDs[0])
+	if err != nil {
+		t.Fatalf("DroppedEvents().GetByID() error = %v", err)
+	}
+	if dropped.Status != "replayed" {
+		t.Fatalf("dropped status = %q, want replayed", dropped.Status)
+	}
+}
 func TestAllowlistEventFilterAllowsWhitelistedSender(t *testing.T) {
 	fixture := newAllowlistInboundFixture(t, true)
 	if err := fixture.storage.AllowlistSenders().Save(context.Background(), &coremodel.AllowlistSender{

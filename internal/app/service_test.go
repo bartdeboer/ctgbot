@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/app"
+	"github.com/bartdeboer/ctgbot/internal/brokercontract"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/inbound"
@@ -716,4 +718,43 @@ func messagePayload(channelID string, text string) message.InboundPayload {
 		ProviderChannelID: channelID,
 		Text:              message.TextMessage{Text: text},
 	}
+}
+
+func TestCommandSurfacesExposeAllowlistOnlyWhenConfiguredForChat(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+
+	chat := saveChat(t, storage, "Team")
+	surfaces, err := svc.CommandSurfaces(ctx, *chat, brokercontract.CommandSurfaceDeps{})
+	if err != nil {
+		t.Fatalf("CommandSurfaces() error = %v", err)
+	}
+	if commandDefinitionsContainPattern(surfaces, commandengine.SourceMessage, "allowlist whitelist <sender>") {
+		t.Fatal("allowlist commands exposed without an allowlist filter binding")
+	}
+
+	source := saveComponent(t, storage, "source", "inbox")
+	filter := saveComponent(t, storage, "filters", "allowlist")
+	sourceBinding := saveChatComponent(t, storage, chat.ID, source.ID, coremodel.ChatComponentRoleSource, "inbox")
+	if err := storage.InboundFilterBindings().Save(ctx, &coremodel.InboundFilterBinding{SourceBindingID: sourceBinding.ID, FilterComponentID: filter.ID, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	surfaces, err = svc.CommandSurfaces(ctx, *chat, brokercontract.CommandSurfaceDeps{})
+	if err != nil {
+		t.Fatalf("CommandSurfaces() with allowlist error = %v", err)
+	}
+	if !commandDefinitionsContainPattern(surfaces, commandengine.SourceMessage, "allowlist whitelist <sender>") {
+		t.Fatal("allowlist commands not exposed for chat with allowlist filter binding")
+	}
+}
+
+func commandDefinitionsContainPattern(surfaces []component.CommandSurface, source commandengine.Source, pattern string) bool {
+	for _, definition := range commandset.DefinitionsForSource(source, surfaces...) {
+		if definition.CanonicalPattern() == commandengine.NormalizePattern(pattern) {
+			return true
+		}
+	}
+	return false
 }

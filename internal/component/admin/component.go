@@ -19,6 +19,16 @@ import (
 
 const Type = "component"
 
+// Component is the global component-administration command surface.
+//
+// Hostbridge also supports active dynamic component-ref dispatch such as:
+//
+//	hostbridge gmail/work message "hello"
+//
+// That dynamic path is the preferred agent-facing shape for commands exposed by
+// bound components. The literal "component" namespace remains for explicit
+// component administration and setup operations.
+
 type Resolver interface {
 	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
 }
@@ -347,4 +357,64 @@ func resolveRegistrationRef(ctx context.Context, storage repository.Storage, ref
 		return nil, fmt.Errorf("component not registered: %s", parsed.Ref())
 	}
 	return registration, nil
+}
+
+// MessageSenderSurface exposes the standard component-direct message command as
+// a local command surface for a concrete component ref. The command DTO is the
+// same MessagesSendCommand handled by the global component admin surface; the
+// active runtime command engine decides whether this concrete ref is available.
+type MessageSenderSurface struct {
+	ComponentRef string
+}
+
+var _ component.Component = (*MessageSenderSurface)(nil)
+var _ component.CommandSurface = (*MessageSenderSurface)(nil)
+var _ component.LocalCommandSurface = (*MessageSenderSurface)(nil)
+
+func NewMessageSenderSurface(componentRef string) *MessageSenderSurface {
+	return &MessageSenderSurface{ComponentRef: strings.TrimSpace(componentRef)}
+}
+
+func (s *MessageSenderSurface) Type() string { return "component-message" }
+
+func (s *MessageSenderSurface) UsesLocalCommandRoutes() bool { return true }
+
+func (s *MessageSenderSurface) CommandDefinitions() []commandengine.Definition {
+	return []commandengine.Definition{
+		componentCommand("message <text>", "Send a message through this component", s.buildComponentMessage, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
+		componentCommand("messages send", "Send a message through this component from stdin", s.buildMessagesSend, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
+	}
+}
+
+func (s *MessageSenderSurface) RegisterCommandHandlers(registry *commandengine.Registry) error {
+	// MessagesSendCommand is handled by the global component admin surface. This
+	// local surface only adds active, prefixed routes such as gmail/work message.
+	_ = registry
+	return nil
+}
+
+func (s *MessageSenderSurface) buildComponentMessage(req *clir.Request) (any, error) {
+	command, err := buildComponentMessageForRef(req, s.ComponentRef)
+	if err != nil {
+		return nil, err
+	}
+	cmd, ok := command.(MessagesSendCommand)
+	if !ok {
+		return nil, fmt.Errorf("message command type mismatch: %T", command)
+	}
+	cmd.Component = strings.TrimSpace(s.ComponentRef)
+	return cmd, nil
+}
+
+func (s *MessageSenderSurface) buildMessagesSend(req *clir.Request) (any, error) {
+	command, err := buildMessagesSendForRef(req, s.ComponentRef)
+	if err != nil {
+		return nil, err
+	}
+	cmd, ok := command.(MessagesSendCommand)
+	if !ok {
+		return nil, fmt.Errorf("messages send command type mismatch: %T", command)
+	}
+	cmd.Component = strings.TrimSpace(s.ComponentRef)
+	return cmd, nil
 }

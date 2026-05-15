@@ -26,7 +26,7 @@ type App interface {
 	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
 	RuntimeSpec(ctx context.Context, chat coremodel.Chat) (brokercontract.RuntimeSpec, error)
 	EnabledInboundSources(ctx context.Context) ([]component.InboundSource, error)
-	CommandSurfaces(ctx context.Context, deps brokercontract.CommandSurfaceDeps) ([]component.CommandSurface, error)
+	CommandSurfaces(ctx context.Context, chat coremodel.Chat, deps brokercontract.CommandSurfaceDeps) ([]component.CommandSurface, error)
 	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
 	ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) error
@@ -35,6 +35,10 @@ type App interface {
 	StoreOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []message.Media) error
 	DropEvent(ctx context.Context, rejection *inbound.Rejection) (*coremodel.DroppedEvent, error)
 	DropNoticeID(ctx context.Context, drop *coremodel.DroppedEvent) string
+	ResolveDroppedEventID(ctx context.Context, ref string) (modeluuid.UUID, error)
+	DroppedEvent(ctx context.Context, id modeluuid.UUID) (*coremodel.DroppedEvent, error)
+	ListDroppedEvents(ctx context.Context, limit int) ([]coremodel.DroppedEvent, error)
+	SaveDroppedEvent(ctx context.Context, drop *coremodel.DroppedEvent) error
 	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
 	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
@@ -86,7 +90,15 @@ func New(app App, logf func(format string, args ...any)) *Broker {
 	return broker
 }
 
+type inboundRouteOptions struct {
+	bypassEventFilters bool
+}
+
 func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent) (EventOutcome, error) {
+	return b.handleInbound(ctx, event, inboundRouteOptions{})
+}
+
+func (b *Broker) handleInbound(ctx context.Context, event component.InboundEvent, opts inboundRouteOptions) (EventOutcome, error) {
 	if err := b.ensureReady(); err != nil {
 		return EventOutcome{}, err
 	}
@@ -103,20 +115,23 @@ func (b *Broker) HandleInbound(ctx context.Context, event component.InboundEvent
 		return EventOutcome{Dropped: true}, nil
 	}
 
-	filterResult, err := inbound.NewFilterChain(admission.Filters).Run(ctx, inbound.ChannelEvent{
-		Channel: admission.Channel,
-		Event:   event,
-	})
-	if err != nil {
-		return EventOutcome{}, err
-	}
-	if filterResult.Action == inbound.FilterActionDrop || filterResult.Action == inbound.FilterActionQuarantine {
-		b.handleInboundRejection(ctx, inbound.RejectionFromFilter(admission.Channel, event, filterResult))
-		return EventOutcome{Dropped: true}, nil
-	}
-	routedEvent := filterResult.Event
-	if routedEvent.ComponentID.IsNull() {
-		routedEvent = event
+	routedEvent := event
+	if !opts.bypassEventFilters {
+		filterResult, err := inbound.NewFilterChain(admission.Filters).Run(ctx, inbound.ChannelEvent{
+			Channel: admission.Channel,
+			Event:   event,
+		})
+		if err != nil {
+			return EventOutcome{}, err
+		}
+		if filterResult.Action == inbound.FilterActionDrop || filterResult.Action == inbound.FilterActionQuarantine {
+			b.handleInboundRejection(ctx, inbound.RejectionFromFilter(admission.Channel, event, filterResult))
+			return EventOutcome{Dropped: true}, nil
+		}
+		routedEvent = filterResult.Event
+		if routedEvent.ComponentID.IsNull() {
+			routedEvent = event
+		}
 	}
 
 	thread, err := b.App.EnsureThread(ctx, admission.Channel.SourceBinding, strings.TrimSpace(routedEvent.Payload.ProviderThreadID))

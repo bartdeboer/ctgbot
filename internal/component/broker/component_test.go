@@ -32,6 +32,21 @@ func (f *fakeActions) MessageHelp(ctx context.Context, chatID modeluuid.UUID) (s
 	return "", nil
 }
 
+func (f *fakeActions) DroppedList(ctx context.Context, limit int) (string, error) {
+	_, _ = ctx, limit
+	return "dropped messages", nil
+}
+
+func (f *fakeActions) DroppedView(ctx context.Context, ref string) (string, error) {
+	_, _ = ctx, ref
+	return "dropped message", nil
+}
+
+func (f *fakeActions) DroppedAllow(ctx context.Context, ref string) (string, error) {
+	_, _ = ctx, ref
+	return "dropped message replayed", nil
+}
+
 func TestSendPayloadUsesCurrentThread(t *testing.T) {
 	actions := &fakeActions{}
 	component := New(actions)

@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -72,6 +74,52 @@ func dropNoticeIDWithStorage(ctx context.Context, storage repository.Storage, dr
 		return drop.ID.String()
 	}
 	return shortID
+}
+
+func resolveDroppedEventIDWithStorage(ctx context.Context, storage repository.Storage, ref string) (modeluuid.UUID, error) {
+	if storage == nil {
+		return modeluuid.Nil, fmt.Errorf("missing dropped event storage")
+	}
+	ids, err := storage.DroppedEvents().ListIDs(ctx)
+	if err != nil {
+		return modeluuid.Nil, err
+	}
+	id, err := repository.NewShortIDResolver(ids).Resolve(ref)
+	if err == nil {
+		return id, nil
+	}
+	var notFound *repository.ShortIDNotFoundError
+	if errors.As(err, &notFound) {
+		return modeluuid.Nil, fmt.Errorf("dropped event not found: %s", strings.TrimSpace(ref))
+	}
+	return modeluuid.Nil, err
+}
+
+func listDroppedEventsWithStorage(ctx context.Context, storage repository.Storage, limit int) ([]coremodel.DroppedEvent, error) {
+	if storage == nil {
+		return nil, fmt.Errorf("missing dropped event storage")
+	}
+	ids, err := storage.DroppedEvents().ListIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	events := make([]coremodel.DroppedEvent, 0, len(ids))
+	for _, id := range ids {
+		drop, err := storage.DroppedEvents().GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if drop != nil {
+			events = append(events, *drop)
+		}
+	}
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].CreatedAt.After(events[j].CreatedAt)
+	})
+	if limit > 0 && len(events) > limit {
+		events = events[:limit]
+	}
+	return events, nil
 }
 
 func droppedEventStatus(rejection *inbound.Rejection) string {

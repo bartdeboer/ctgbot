@@ -77,7 +77,7 @@ type BrokerService interface {
 	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
 	RuntimeSpec(ctx context.Context, chat coremodel.Chat) (brokercontract.RuntimeSpec, error)
 	EnabledInboundSources(ctx context.Context) ([]component.InboundSource, error)
-	CommandSurfaces(ctx context.Context, deps brokercontract.CommandSurfaceDeps) ([]component.CommandSurface, error)
+	CommandSurfaces(ctx context.Context, chat coremodel.Chat, deps brokercontract.CommandSurfaceDeps) ([]component.CommandSurface, error)
 	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
 	ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) error
@@ -86,6 +86,10 @@ type BrokerService interface {
 	StoreOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []message.Media) error
 	DropEvent(ctx context.Context, rejection *inbound.Rejection) (*coremodel.DroppedEvent, error)
 	DropNoticeID(ctx context.Context, drop *coremodel.DroppedEvent) string
+	ResolveDroppedEventID(ctx context.Context, ref string) (modeluuid.UUID, error)
+	DroppedEvent(ctx context.Context, id modeluuid.UUID) (*coremodel.DroppedEvent, error)
+	ListDroppedEvents(ctx context.Context, limit int) ([]coremodel.DroppedEvent, error)
+	SaveDroppedEvent(ctx context.Context, drop *coremodel.DroppedEvent) error
 }
 
 type RuntimeImageService interface {

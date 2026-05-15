@@ -6,12 +6,21 @@ import (
 )
 
 type Engine struct {
-	Router   *Router
-	Registry *Registry
+	Router              *Router
+	Registry            *Registry
+	ActiveComponentRefs []string
 }
 
 func NewEngine(router *Router, registry *Registry) *Engine {
 	return &Engine{Router: router, Registry: registry}
+}
+
+func (e *Engine) WithActiveComponentRefs(refs []string) *Engine {
+	if e == nil {
+		return nil
+	}
+	e.ActiveComponentRefs = append([]string(nil), refs...)
+	return e
 }
 
 func (e *Engine) Run(ctx context.Context, base Request, argv []string) (Result, error) {

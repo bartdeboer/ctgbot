@@ -84,6 +84,9 @@ func (b *Bridge) BindThread(
 		"HOSTBRIDGE_TLS_DIR=" + TLSDir,
 		"CTGBOT_SANDBOX_ID=" + threadID.String(),
 	}
+	if active := activeCommandComponents(commands); active != "" {
+		env = append(env, "CTGBOT_ACTIVE_COMPONENTS="+active)
+	}
 	mount := sandboxengine.Mount{
 		Source:   tlsDir,
 		Target:   TLSDir,
@@ -337,4 +340,13 @@ func (b *Bridge) logf(format string, args ...any) {
 	if b != nil && b.logger != nil {
 		b.logger.Printf(format, args...)
 	}
+}
+
+func activeCommandComponents(commands commandengine.CommandExecutor) string {
+	engine, ok := commands.(*commandengine.Engine)
+	if !ok || len(engine.ActiveComponentRefs) == 0 {
+		return ""
+	}
+	refs := append([]string(nil), engine.ActiveComponentRefs...)
+	return strings.Join(refs, ",")
 }

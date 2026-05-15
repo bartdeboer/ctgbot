@@ -90,6 +90,9 @@ func normalizedArgs(args []string, componentRef string) []string {
 	if len(args) >= 2 && args[0] == "run" && args[1] == "sendstdin" {
 		return append([]string{"sendstdin"}, args[2:]...)
 	}
+	if isActiveComponentPrefix(args[0]) {
+		return args
+	}
 	if isDirectHostbridgeCommand(args[0], componentRef) {
 		return args
 	}
@@ -97,6 +100,52 @@ func normalizedArgs(args []string, componentRef string) []string {
 		return append([]string{"codex"}, args...)
 	}
 	return append([]string{"run"}, args...)
+}
+
+func isActiveComponentPrefix(arg string) bool {
+	for _, prefix := range activeComponentPrefixes() {
+		if arg == prefix {
+			return true
+		}
+	}
+	return false
+}
+
+func activeComponentPrefixes() []string {
+	active := strings.TrimSpace(os.Getenv("CTGBOT_ACTIVE_COMPONENTS"))
+	if active == "" {
+		return nil
+	}
+	refs := strings.Split(active, ",")
+	counts := map[string]int{}
+	for _, ref := range refs {
+		if typ := componentType(ref); typ != "" {
+			counts[typ]++
+		}
+	}
+	var out []string
+	for _, ref := range refs {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		out = append(out, ref)
+		if typ := componentType(ref); typ != "" && counts[typ] == 1 {
+			out = append(out, typ)
+		}
+	}
+	return out
+}
+
+func componentType(ref string) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return ""
+	}
+	if before, _, ok := strings.Cut(ref, "/"); ok {
+		return strings.TrimSpace(before)
+	}
+	return ref
 }
 
 func isDirectHostbridgeCommand(arg string, componentRef string) bool {
@@ -161,14 +210,15 @@ func printHelp() {
 	fmt.Fprintln(os.Stdout, "  HOSTBRIDGE_TLS_DIR  Optional directory containing ca.crt, client.crt, client.key")
 	fmt.Fprintln(os.Stdout, "  CTGBOT_SANDBOX_ID   Sandbox/thread id for outbound/config commands")
 	fmt.Fprintln(os.Stdout, "  CTGBOT_COMPONENT_REF  Current component ref for bound command routing (default codex)")
+	fmt.Fprintln(os.Stdout, "  CTGBOT_ACTIVE_COMPONENTS  Comma-separated active command component refs")
 	resolved := cmdsurface.Resolve(currentComponentRef())
-	if !resolved.Supported {
+	if !resolved.Supported && strings.TrimSpace(os.Getenv("CTGBOT_ACTIVE_COMPONENTS")) == "" {
 		fmt.Fprintln(os.Stdout, "")
 		fmt.Fprintf(os.Stdout, "note: no component-specific hostbridge commands are registered for %s\n", resolved.ComponentRef)
 	}
 }
 
-func hostbridgeRouter() (*commandengine.Router, error) {
+func hostbridgeRouter(_ ...[]string) (*commandengine.Router, error) {
 	return commandset.NewBoundRouterForSource(
 		commandengine.SourceHostbridge,
 		hostbridgeBoundSurfaces(),
@@ -176,7 +226,7 @@ func hostbridgeRouter() (*commandengine.Router, error) {
 	)
 }
 
-func hostbridgeDefinitions() []commandengine.Definition {
+func hostbridgeDefinitions(_ ...[]string) []commandengine.Definition {
 	return commandset.DefinitionsForBoundSource(
 		commandengine.SourceHostbridge,
 		hostbridgeBoundSurfaces(),
@@ -185,7 +235,15 @@ func hostbridgeDefinitions() []commandengine.Definition {
 }
 
 func hostbridgeBoundSurfaces() []commandset.BoundSurface {
-	return cmdsurface.BoundSurfaces(currentComponentRef())
+	active := strings.TrimSpace(os.Getenv("CTGBOT_ACTIVE_COMPONENTS"))
+	if active == "" {
+		return cmdsurface.BoundSurfaces(currentComponentRef())
+	}
+	var out []commandset.BoundSurface
+	for _, ref := range strings.Split(active, ",") {
+		out = append(out, cmdsurface.CommandRefBoundSurfaces(ref)...)
+	}
+	return out
 }
 
 func currentComponentRef() string {

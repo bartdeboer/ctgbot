@@ -5,6 +5,8 @@ import (
 	"log"
 	"strings"
 	"testing"
+
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 )
 
 func skipIfListenerUnavailable(t *testing.T, err error) {
@@ -45,5 +47,12 @@ func TestBridgeStartIsIdempotent(t *testing.T) {
 	}
 	if container2 != container1 || host2 != host1 {
 		t.Fatalf("second Start() = (%q, %q), want (%q, %q)", container2, host2, container1, host1)
+	}
+}
+
+func TestActiveCommandComponentsFromEngine(t *testing.T) {
+	engine := commandengine.NewEngine(nil, nil).WithActiveComponentRefs([]string{"codex/codex", "gmail/work"})
+	if got, want := activeCommandComponents(engine), "codex/codex,gmail/work"; got != want {
+		t.Fatalf("activeCommandComponents() = %q, want %q", got, want)
 	}
 }

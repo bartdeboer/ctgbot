@@ -21,6 +21,9 @@ type Actions interface {
 	SendPayload(ctx context.Context, threadID modeluuid.UUID, payload message.OutboundPayload) error
 	RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error)
 	MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string, error)
+	DroppedList(ctx context.Context, limit int) (string, error)
+	DroppedView(ctx context.Context, ref string) (string, error)
+	DroppedAllow(ctx context.Context, ref string) (string, error)
 }
 
 type Component struct {
@@ -32,8 +35,26 @@ var _ component.CommandSurface = (*Component)(nil)
 
 type helpCommand struct{}
 
+type droppedListCommand struct {
+	Limit int
+}
+
+type droppedViewCommand struct {
+	DropRef string
+}
+
+type droppedAllowCommand struct {
+	DropRef string
+}
+
 func New(actions Actions) *Component {
 	return &Component{Actions: actions}
+}
+
+func RegisterGobTypes(register func(any)) {
+	register(droppedListCommand{})
+	register(droppedViewCommand{})
+	register(droppedAllowCommand{})
 }
 
 func (c *Component) Type() string {
@@ -52,6 +73,43 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 			Sources: []commandengine.Source{commandengine.SourceMessage},
 			Policy:  simplerbac.Public(),
+		},
+		{
+			Pattern: "dropped list",
+			Help:    "List dropped inbound messages",
+			Build: func(req *clir.Request) (any, error) {
+				_ = req
+				return droppedListCommand{Limit: 20}, nil
+			},
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+		},
+		{
+			Pattern: "dropped view <dropID>",
+			Help:    "View a dropped inbound message",
+			Build: func(req *clir.Request) (any, error) {
+				return droppedViewCommand{DropRef: strings.TrimSpace(req.Params["dropID"])}, nil
+			},
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+		},
+		{
+			Pattern: "dropped allow <dropID>",
+			Help:    "Replay a dropped inbound message, bypassing event filters",
+			Build: func(req *clir.Request) (any, error) {
+				return droppedAllowCommand{DropRef: strings.TrimSpace(req.Params["dropID"])}, nil
+			},
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+		},
+		{
+			Pattern: "dropped <dropID> allow",
+			Help:    "Replay a dropped inbound message, bypassing event filters",
+			Build: func(req *clir.Request) (any, error) {
+				return droppedAllowCommand{DropRef: strings.TrimSpace(req.Params["dropID"])}, nil
+			},
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot),
 		},
 	}
 	for _, definition := range definitions {
@@ -90,6 +148,54 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 				return commandengine.Result{}, fmt.Errorf("missing broker actions")
 			}
 			return c.Actions.RunHostbridgeCommand(ctx, req, cmd)
+		},
+	); err != nil {
+		return err
+	}
+	if err := commandengine.Register[droppedListCommand](
+		registry,
+		func(ctx context.Context, req commandengine.Request, cmd droppedListCommand) (commandengine.Result, error) {
+			_, _ = req, cmd
+			if c == nil || c.Actions == nil {
+				return commandengine.Result{}, fmt.Errorf("missing broker actions")
+			}
+			text, err := c.Actions.DroppedList(ctx, cmd.Limit)
+			if err != nil {
+				return commandengine.Result{}, err
+			}
+			return commandengine.Result{Text: text}, nil
+		},
+	); err != nil {
+		return err
+	}
+	if err := commandengine.Register[droppedViewCommand](
+		registry,
+		func(ctx context.Context, req commandengine.Request, cmd droppedViewCommand) (commandengine.Result, error) {
+			_ = req
+			if c == nil || c.Actions == nil {
+				return commandengine.Result{}, fmt.Errorf("missing broker actions")
+			}
+			text, err := c.Actions.DroppedView(ctx, cmd.DropRef)
+			if err != nil {
+				return commandengine.Result{}, err
+			}
+			return commandengine.Result{Text: text}, nil
+		},
+	); err != nil {
+		return err
+	}
+	if err := commandengine.Register[droppedAllowCommand](
+		registry,
+		func(ctx context.Context, req commandengine.Request, cmd droppedAllowCommand) (commandengine.Result, error) {
+			_ = req
+			if c == nil || c.Actions == nil {
+				return commandengine.Result{}, fmt.Errorf("missing broker actions")
+			}
+			text, err := c.Actions.DroppedAllow(ctx, cmd.DropRef)
+			if err != nil {
+				return commandengine.Result{}, err
+			}
+			return commandengine.Result{Text: text}, nil
 		},
 	); err != nil {
 		return err

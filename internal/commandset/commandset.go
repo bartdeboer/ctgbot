@@ -85,7 +85,7 @@ func NewBoundEngineForSource(source commandengine.Source, bound []BoundSurface, 
 			return nil, err
 		}
 	}
-	return commandengine.NewEngine(router, registry), nil
+	return commandengine.NewEngine(router, registry).WithActiveComponentRefs(activeComponentRefs(bound)), nil
 }
 
 type handlerRegistrar func(registry *commandengine.Registry) error
@@ -353,4 +353,21 @@ func instructionRoot(pattern string) string {
 		return ""
 	}
 	return fields[0]
+}
+
+func activeComponentRefs(bound []BoundSurface) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(bound))
+	for _, binding := range bound {
+		ref := strings.TrimSpace(binding.ComponentRef)
+		if ref == "" {
+			continue
+		}
+		if _, ok := seen[ref]; ok {
+			continue
+		}
+		seen[ref] = struct{}{}
+		out = append(out, ref)
+	}
+	return out
 }
