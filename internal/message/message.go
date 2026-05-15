@@ -20,6 +20,8 @@ type Media struct {
 	ContentType string
 	Content     []byte
 	Syntax      string
+	ContentID   string
+	Disposition string
 }
 
 type ChatAction string

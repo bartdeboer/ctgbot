@@ -14,6 +14,8 @@ type Descriptor struct {
 	Name        string
 	ContentType string
 	Syntax      string
+	ContentID   string
+	Disposition string
 }
 
 // ReadDescriptor turns a hostbridge attachment descriptor into message media.
@@ -22,6 +24,7 @@ type Descriptor struct {
 // local files from an agent runtime:
 //
 //	/path/report.pdf;type=application/pdf;name=report.pdf
+//	/path/logo.png;type=image/png;name=logo.png;cid=logo;disposition=inline
 //
 // If the complete descriptor exists as a file path, it wins before parsing
 // semicolon parameters. That keeps unusual filenames usable while preserving a
@@ -44,6 +47,8 @@ func ReadDescriptor(raw string) (message.Media, error) {
 		Filename:    filename,
 		ContentType: descriptor.ContentType,
 		Syntax:      descriptor.Syntax,
+		ContentID:   descriptor.ContentID,
+		Disposition: descriptor.Disposition,
 		Content:     append([]byte(nil), content...),
 	}, nil
 }
@@ -76,6 +81,15 @@ func ParseDescriptor(raw string) (Descriptor, error) {
 			descriptor.Syntax = value
 		case "name":
 			descriptor.Name = value
+		case "cid", "content-id":
+			descriptor.ContentID = value
+		case "disposition":
+			switch strings.ToLower(value) {
+			case "", "attachment", "inline":
+				descriptor.Disposition = strings.ToLower(value)
+			default:
+				return Descriptor{}, fmt.Errorf("invalid attachment disposition %q", value)
+			}
 		default:
 			return Descriptor{}, fmt.Errorf("unknown attachment parameter %q", key)
 		}

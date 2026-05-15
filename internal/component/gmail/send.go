@@ -163,16 +163,52 @@ func writeMultipartAttachment(out *bytes.Buffer, boundary string, attachment mes
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
+	contentID, err := safeHeaderValue(attachment.ContentID)
+	if err != nil {
+		return fmt.Errorf("attachment content id: %w", err)
+	}
+	disposition, err := attachmentDisposition(attachment.Disposition, contentID)
+	if err != nil {
+		return err
+	}
 	out.WriteString("--")
 	out.WriteString(boundary)
 	out.WriteString("\r\n")
 	writeHeader(out, "Content-Type", contentType+`; name="`+mime.QEncoding.Encode("utf-8", filename)+`"`)
-	writeHeader(out, "Content-Disposition", `attachment; filename="`+mime.QEncoding.Encode("utf-8", filename)+`"`)
+	writeHeader(out, "Content-Disposition", disposition+`; filename="`+mime.QEncoding.Encode("utf-8", filename)+`"`)
+	if contentID != "" {
+		writeHeader(out, "Content-ID", bracketedContentID(contentID))
+	}
 	writeHeader(out, "Content-Transfer-Encoding", "base64")
 	out.WriteString("\r\n")
 	writeBase64Lines(out, attachment.Content)
 	out.WriteString("\r\n")
 	return nil
+}
+
+func attachmentDisposition(value string, contentID string) (string, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "":
+		if strings.TrimSpace(contentID) != "" {
+			return "inline", nil
+		}
+		return "attachment", nil
+	case "attachment", "inline":
+		return value, nil
+	default:
+		return "", fmt.Errorf("invalid attachment disposition: %s", value)
+	}
+}
+
+func bracketedContentID(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "<")
+	value = strings.TrimSuffix(value, ">")
+	if value == "" {
+		return ""
+	}
+	return "<" + value + ">"
 }
 
 func writeBase64Lines(out *bytes.Buffer, content []byte) {

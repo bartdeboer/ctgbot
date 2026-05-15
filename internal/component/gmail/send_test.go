@@ -147,6 +147,8 @@ func TestBuildGmailSendMessageBuildsMultipartWithAttachment(t *testing.T) {
 		Attachments: []message.Media{{
 			Filename:    "report.pdf",
 			ContentType: "application/pdf",
+			ContentID:   "report",
+			Disposition: "inline",
 			Content:     []byte("pdf bytes"),
 		}},
 	})
@@ -164,7 +166,8 @@ func TestBuildGmailSendMessageBuildsMultipartWithAttachment(t *testing.T) {
 		"Content-Type: text/html; charset=\"UTF-8\"\r\n",
 		"\r\n<h1>Monthly report</h1>\r\n",
 		"Content-Type: application/pdf; name=\"report.pdf\"\r\n",
-		"Content-Disposition: attachment; filename=\"report.pdf\"\r\n",
+		"Content-Disposition: inline; filename=\"report.pdf\"\r\n",
+		"Content-ID: <report>\r\n",
 		"Content-Transfer-Encoding: base64\r\n",
 		base64.StdEncoding.EncodeToString([]byte("pdf bytes")),
 		"--ctgbot-gmail-boundary--\r\n",
