@@ -129,7 +129,7 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 		return err
 	}
 	defer func() { _ = closeRelay(context.Background()) }()
-	return c.runtime.Exec(ctx, "", modeluuid.UUID{}, nil, writerOrDiscard(stdout), writerOrDiscard(stderr), "env", "BROWSER=echo", "claude", "setup-token")
+	return c.runtime.ExecTTY(ctx, "", modeluuid.UUID{}, nil, writerOrDiscard(stdout), writerOrDiscard(stderr), "env", "BROWSER=echo", "claude", "setup-token")
 }
 
 func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.Writer) error {

@@ -284,6 +284,19 @@ func (r *unsupportedRuntime) Exec(
 	return fmt.Errorf("backend runtime does not support thread sandbox exec")
 }
 
+func (r *unsupportedRuntime) ExecTTY(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+	stdout io.Writer,
+	stderr io.Writer,
+	name string,
+	args ...string,
+) error {
+	return r.Exec(ctx, workspacePath, threadID, commands, stdout, stderr, name, args...)
+}
+
 func (r *unsupportedRuntime) CombinedOutput(
 	ctx context.Context,
 	workspacePath string,

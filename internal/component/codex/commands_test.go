@@ -79,6 +79,9 @@ func (r *testRuntime) Exec(ctx context.Context, workspacePath string, threadID m
 	r.execArgs = append([]string(nil), args...)
 	return nil
 }
+func (r *testRuntime) ExecTTY(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	return r.Exec(ctx, workspacePath, threadID, commands, stdout, stderr, name, args...)
+}
 func (r *testRuntime) CombinedOutput(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
 	_, _, _, _, _, _ = ctx, workspacePath, threadID, commands, name, args
 	return nil, nil

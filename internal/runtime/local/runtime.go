@@ -160,6 +160,19 @@ func (r *Runtime) Exec(
 	return fmt.Errorf("local runtime is not implemented yet")
 }
 
+func (r *Runtime) ExecTTY(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+	stdout io.Writer,
+	stderr io.Writer,
+	name string,
+	args ...string,
+) error {
+	return r.Exec(ctx, workspacePath, threadID, commands, stdout, stderr, name, args...)
+}
+
 func (r *Runtime) CombinedOutput(
 	ctx context.Context,
 	workspacePath string,

@@ -53,6 +53,9 @@ func TestAuthRunsClaudeSetupTokenWithRelay(t *testing.T) {
 	if !runtime.relayClosed {
 		t.Fatalf("relay was not closed")
 	}
+	if !runtime.execTTY {
+		t.Fatalf("auth did not use ExecTTY")
+	}
 	if got, want := runtime.execName, "env"; got != want {
 		t.Fatalf("exec name = %q, want %q", got, want)
 	}
@@ -68,6 +71,7 @@ type authRuntime struct {
 	relayClosed  bool
 	execName     string
 	execArgs     []string
+	execTTY      bool
 }
 
 func (r *authRuntime) Kind() string                                     { return "docker" }
@@ -88,6 +92,12 @@ func (r *authRuntime) Status(context.Context, string, modeluuid.UUID) (runtimepk
 	return runtimepkg.Status{}, nil
 }
 func (r *authRuntime) Exec(_ context.Context, _ string, _ modeluuid.UUID, _ commandengine.CommandExecutor, _ io.Writer, _ io.Writer, name string, args ...string) error {
+	r.execName = name
+	r.execArgs = append([]string(nil), args...)
+	return nil
+}
+func (r *authRuntime) ExecTTY(_ context.Context, _ string, _ modeluuid.UUID, _ commandengine.CommandExecutor, _ io.Writer, _ io.Writer, name string, args ...string) error {
+	r.execTTY = true
 	r.execName = name
 	r.execArgs = append([]string(nil), args...)
 	return nil

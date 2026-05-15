@@ -47,6 +47,7 @@ type ExecOptions struct {
 	Stdout      io.Writer
 	Stderr      io.Writer
 	Interactive bool
+	TTY         bool
 }
 
 type Container struct {
@@ -108,6 +109,12 @@ func (c *Container) CommandContext(ctx context.Context, opts ExecOptions, name s
 
 func (c *Container) execArgs(opts ExecOptions, name string, args ...string) []string {
 	dockerArgs := []string{"exec"}
+	if opts.Interactive {
+		dockerArgs = append(dockerArgs, "-i")
+	}
+	if opts.TTY {
+		dockerArgs = append(dockerArgs, "-t")
+	}
 	for _, env := range opts.Env {
 		if env == "" {
 			continue

@@ -46,6 +46,13 @@ func (r *SandboxRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.W
 	return r.sandbox.Exec(ctx, stdout, stderr, name, args...)
 }
 
+func (r *SandboxRuntime) ExecTTY(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	if r == nil || r.sandbox == nil {
+		return nil
+	}
+	return r.sandbox.ExecTTY(ctx, stdout, stderr, name, args...)
+}
+
 func (r *SandboxRuntime) Stop(ctx context.Context) error {
 	if r == nil || r.sandbox == nil {
 		return nil

@@ -67,6 +67,17 @@ type Runtime interface {
 		args ...string,
 	) error
 
+	ExecTTY(
+		ctx context.Context,
+		workspacePath string,
+		threadID modeluuid.UUID,
+		commands commandengine.CommandExecutor,
+		stdout io.Writer,
+		stderr io.Writer,
+		name string,
+		args ...string,
+	) error
+
 	CombinedOutput(
 		ctx context.Context,
 		workspacePath string,

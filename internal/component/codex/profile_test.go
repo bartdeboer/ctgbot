@@ -59,6 +59,9 @@ func (r *capturedRuntime) Status(context.Context, string, modeluuid.UUID) (runti
 func (r *capturedRuntime) Exec(context.Context, string, modeluuid.UUID, commandengine.CommandExecutor, io.Writer, io.Writer, string, ...string) error {
 	return nil
 }
+func (r *capturedRuntime) ExecTTY(context.Context, string, modeluuid.UUID, commandengine.CommandExecutor, io.Writer, io.Writer, string, ...string) error {
+	return nil
+}
 func (r *capturedRuntime) CombinedOutput(context.Context, string, modeluuid.UUID, commandengine.CommandExecutor, string, ...string) ([]byte, error) {
 	return nil, nil
 }

@@ -215,6 +215,28 @@ func (r *Runtime) Exec(
 	return err
 }
 
+func (r *Runtime) ExecTTY(
+	ctx context.Context,
+	workspacePath string,
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+	stdout io.Writer,
+	stderr io.Writer,
+	name string,
+	args ...string,
+) error {
+	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands, true)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	err = sbx.ExecTTY(ctx, stdout, stderr, name, args...)
+	if err != nil && sbx.Interrupted() {
+		return context.Canceled
+	}
+	return err
+}
+
 func (r *Runtime) CombinedOutput(
 	ctx context.Context,
 	workspacePath string,

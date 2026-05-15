@@ -55,6 +55,9 @@ func (r fakeRuntime) Exec(ctx context.Context, workspacePath string, threadID mo
 	_, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.kind
 	return fmt.Errorf("not implemented")
 }
+func (r fakeRuntime) ExecTTY(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	return r.Exec(ctx, workspacePath, threadID, commands, stdout, stderr, name, args...)
+}
 func (r fakeRuntime) CombinedOutput(ctx context.Context, workspacePath string, threadID modeluuid.UUID, commands commandengine.CommandExecutor, name string, args ...string) ([]byte, error) {
 	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, name, args, r.kind
 	return nil, fmt.Errorf("not implemented")

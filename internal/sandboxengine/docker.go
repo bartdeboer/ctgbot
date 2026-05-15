@@ -182,6 +182,16 @@ func (m *SandboxManager) remove(ctx context.Context, sbx *Sandbox) error {
 }
 
 func (m *SandboxManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	return m.execWithOptions(ctx, sbx, sbx.execOptions(stdout, stderr), name, args...)
+}
+
+func (m *SandboxManager) execTTY(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	opts := sbx.execOptions(stdout, stderr)
+	opts.TTY = true
+	return m.execWithOptions(ctx, sbx, opts, name, args...)
+}
+
+func (m *SandboxManager) execWithOptions(ctx context.Context, sbx *Sandbox, opts containerengine.ExecOptions, name string, args ...string) error {
 	if sbx == nil || strings.TrimSpace(sbx.Name) == "" {
 		return fmt.Errorf("missing sandbox name")
 	}
@@ -198,7 +208,6 @@ func (m *SandboxManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Write
 		}
 		token := sbx.beginCommand(name, args...)
 		defer sbx.endCommand(token)
-		opts := sbx.execOptions(stdout, stderr)
 		return container.Exec(ctx, opts, name, args...)
 	})
 }
