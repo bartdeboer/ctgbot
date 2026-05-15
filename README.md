@@ -109,20 +109,27 @@ JSON
 
 ```bash
 ctgbot component register codex/codex --runtime docker
-ctgbot component codex/codex auth
-ctgbot component codex/codex auth status
-
 ctgbot component register process/process --runtime local
 ```
 
 ### 6. Build runtime images
+
+Docker-based agent components need their runtime image before auth or turns can
+start containers.
 
 ```bash
 ctgbot image list
 ctgbot image build --no-cache
 ```
 
-### 7. Run ctgbot
+### 7. Authenticate Codex
+
+```bash
+ctgbot component codex/codex auth
+ctgbot component codex/codex auth status
+```
+
+### 8. Run ctgbot
 
 ```bash
 ctgbot run
@@ -130,7 +137,7 @@ ctgbot run
 
 Use a process supervisor for production deployments.
 
-### 8. Bind your Telegram chat
+### 9. Bind your Telegram chat
 
 Send a message to the Telegram bot from the chat you want to use. Unknown
 channels are recorded as dropped until you bind them.
@@ -200,8 +207,25 @@ hostbridge git-push
 
 ```bash
 ctgbot component register claude/claude --runtime docker
+ctgbot image build --no-cache
+ctgbot component claude/claude auth
 ctgbot component claude/claude auth status
 ctgbot chat <chat> component add agent claude/claude
+```
+
+Claude auth runs `claude setup-token` in the component runtime. If it returns a
+`CLAUDE_CODE_OAUTH_TOKEN`, store it in the component profile:
+
+```bash
+cat > .ctgbot/components/claude/claude/runtime.json <<'JSON'
+{
+  "env": [
+    "CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat..."
+  ]
+}
+JSON
+
+chmod 600 .ctgbot/components/claude/claude/runtime.json
 ```
 
 ### Gmail
@@ -224,7 +248,10 @@ ctgbot component gmail/personal auth status
 ctgbot chat <chat> component add source gmail/personal --external-channel-id you@example.com
 
 # From an agent runtime, send directly through Gmail:
-hostbridge component gmail/personal message "Monthly report" --to you@example.com --subject "Monthly report" --attach /workspace/out/report.pdf
+hostbridge gmail/personal message "Monthly report" \
+  --to you@example.com \
+  --subject "Monthly report" \
+  --attach "/workspace/out/report.pdf;type=application/pdf"
 ```
 
 ### Inbound filters
