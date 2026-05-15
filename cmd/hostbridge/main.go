@@ -124,9 +124,9 @@ func importantHelpLines(definitions []commandengine.Definition, scope []string) 
 			if pattern == "" || isHelpRoute(pattern) || !routeMatchesScope(pattern, scope) || !routeHasParameterAfterScope(pattern, scope) {
 				continue
 			}
-			line := pattern
+			line := "  " + pattern
 			if strings.TrimSpace(definition.Help) != "" {
-				line += " - " + strings.TrimSpace(definition.Help)
+				line = fmt.Sprintf("  %-32s %s", pattern, strings.TrimSpace(definition.Help))
 			}
 			if _, ok := seen[line]; ok {
 				continue
