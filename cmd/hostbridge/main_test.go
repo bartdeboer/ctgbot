@@ -359,9 +359,9 @@ func TestHostbridgeRouterSupportsExplicitComponentMessageSurface(t *testing.T) {
 	if got, want := req.CanonicalPattern, "gmail/work message <text>"; got != want {
 		t.Fatalf("CanonicalPattern = %q, want %q", got, want)
 	}
-	cmd, ok := req.Command.(admin.MessagesSendCommand)
+	cmd, ok := req.Command.(admin.ComponentMessageCommand)
 	if !ok {
-		t.Fatalf("Command = %T, want admin.MessagesSendCommand", req.Command)
+		t.Fatalf("Command = %T, want admin.ComponentMessageCommand", req.Command)
 	}
 	if cmd.Component != "gmail/work" || cmd.Body != "hello" || len(cmd.To) != 1 || cmd.To[0] != "bart@example.com" || cmd.Subject != "Hi" {
 		t.Fatalf("command = %#v", cmd)

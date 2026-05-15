@@ -149,7 +149,7 @@ func buildComponentMessageForRef(req *clir.Request, componentRef string) (any, e
 	return fields, nil
 }
 
-func parseMessageSendFields(name string, args []string) (MessagesSendCommand, error) {
+func parseMessageSendFields(name string, args []string) (ComponentMessageCommand, error) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var to repeatStringFlag
@@ -167,20 +167,20 @@ func parseMessageSendFields(name string, args []string) (MessagesSendCommand, er
 	threadID := fs.String("thread-id", "", "Gmail thread id for replies")
 	inReplyTo := fs.String("in-reply-to", "", "RFC Message-ID being replied to")
 	if err := fs.Parse(args); err != nil {
-		return MessagesSendCommand{}, err
+		return ComponentMessageCommand{}, err
 	}
 	if len(fs.Args()) > 0 {
-		return MessagesSendCommand{}, fmt.Errorf("unexpected message arguments: %s", strings.Join(fs.Args(), " "))
+		return ComponentMessageCommand{}, fmt.Errorf("unexpected message arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	attachments := make([]message.Media, 0, len(attach))
 	for _, raw := range attach {
 		media, err := mediafile.ReadDescriptor(raw)
 		if err != nil {
-			return MessagesSendCommand{}, err
+			return ComponentMessageCommand{}, err
 		}
 		attachments = append(attachments, media)
 	}
-	return MessagesSendCommand{
+	return ComponentMessageCommand{
 		To:          append([]string(nil), to...),
 		Cc:          append([]string(nil), cc...),
 		Bcc:         append([]string(nil), bcc...),
@@ -190,48 +190,6 @@ func parseMessageSendFields(name string, args []string) (MessagesSendCommand, er
 		Attachments: attachments,
 		ThreadID:    strings.TrimSpace(*threadID),
 		InReplyTo:   strings.TrimSpace(*inReplyTo),
-	}, nil
-}
-
-func buildMessagesSend(req *clir.Request) (any, error) {
-	return buildMessagesSendForRef(req, strings.TrimSpace(req.Params["component"]))
-}
-
-func buildMessagesSendForRef(req *clir.Request, componentRef string) (any, error) {
-	componentRef = strings.TrimSpace(componentRef)
-	if componentRef == "" {
-		return nil, fmt.Errorf("missing component")
-	}
-	fs := flag.NewFlagSet("component messages send", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	var to repeatStringFlag
-	var cc repeatStringFlag
-	var bcc repeatStringFlag
-	fs.Var(&to, "to", "Recipient email address; repeat for multiple recipients")
-	fs.Var(&cc, "cc", "CC email address; repeat for multiple recipients")
-	fs.Var(&bcc, "bcc", "BCC email address; repeat for multiple recipients")
-	subject := fs.String("subject", "", "Message subject")
-	threadID := fs.String("thread-id", "", "Gmail thread id for replies")
-	inReplyTo := fs.String("in-reply-to", "", "RFC Message-ID being replied to")
-	if err := fs.Parse(req.Extra); err != nil {
-		return nil, err
-	}
-	if len(fs.Args()) > 0 {
-		return nil, fmt.Errorf("unexpected messages send arguments: %s", strings.Join(fs.Args(), " "))
-	}
-	content, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		return nil, fmt.Errorf("read stdin: %w", err)
-	}
-	return MessagesSendCommand{
-		Component: componentRef,
-		To:        append([]string(nil), to...),
-		Cc:        append([]string(nil), cc...),
-		Bcc:       append([]string(nil), bcc...),
-		Subject:   strings.TrimSpace(*subject),
-		Body:      string(content),
-		ThreadID:  strings.TrimSpace(*threadID),
-		InReplyTo: strings.TrimSpace(*inReplyTo),
 	}, nil
 }
 
