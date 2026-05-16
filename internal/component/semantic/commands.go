@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
@@ -78,19 +79,21 @@ func (c *Component) handleSearch(ctx context.Context, req commandengine.Request,
 	if limit <= 0 {
 		limit = c.config.Limit
 	}
+	started := time.Now()
 	response, err := c.Search(ctx, component.SearchRequest{Query: cmd.Query, ChatID: req.Context.ChatID, ThreadID: threadID, Limit: limit, BatchSize: cmd.BatchSize, MaxMessages: cmd.MaxMessages, MinScore: cmd.MinScore})
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: c.renderSearchResponse(cmd.Query, response)}, nil
+	return commandengine.Result{Text: c.renderSearchResponse(cmd.Query, time.Since(started), response)}, nil
 }
 
-func (c *Component) renderSearchResponse(query string, response component.SearchResponse) string {
+func (c *Component) renderSearchResponse(query string, elapsed time.Duration, response component.SearchResponse) string {
+	header := fmt.Sprintf("semantic search: %s\nelapsed: %s", query, elapsed.Round(100*time.Millisecond))
 	if len(response.Results) == 0 {
-		return "semantic search: " + query + "\n(no results)"
+		return header + "\n(no results)"
 	}
 	var lines []string
-	lines = append(lines, "semantic search: "+query)
+	lines = append(lines, header)
 	for i, result := range response.Results {
 		lines = append(lines, "")
 		lines = append(lines, fmt.Sprintf("%d. message_id=%s thread_id=%s score=%.2f", i+1, result.MessageID, result.ThreadID, result.Score))
