@@ -59,6 +59,9 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		if receiver, ok := instance.Component.(component.ChatPayloadSenderReceiver); ok {
 			receiver.SetChatPayloadSender(b)
 		}
+		if receiver, ok := instance.Component.(component.SearchMessageSourceReceiver); ok {
+			receiver.SetSearchMessageSource(b.App)
+		}
 		if _, seen := homes[binding.ComponentID]; !seen {
 			homes[binding.ComponentID] = instance.Home
 			components = append(components, instance)

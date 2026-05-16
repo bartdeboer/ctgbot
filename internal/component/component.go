@@ -31,6 +31,44 @@ type ChatPayloadSenderReceiver interface {
 	SetChatPayloadSender(sender ChatPayloadSender)
 }
 
+type SearchRequest struct {
+	Query                 string
+	ChatID                modeluuid.UUID
+	ThreadID              modeluuid.UUID
+	Limit                 int
+	BatchSize             int
+	MaxMessages           int
+	MinScore              float64
+	CompletionIdleTimeout time.Duration
+}
+
+type SearchResponse struct {
+	Results []SearchResult
+}
+
+type SearchResult struct {
+	MessageID modeluuid.UUID
+	ChatID    modeluuid.UUID
+	ThreadID  modeluuid.UUID
+	Excerpt   string
+	Text      string
+	Score     float64
+	Reason    string
+}
+
+type Searcher interface {
+	Component
+	Search(ctx context.Context, req SearchRequest) (SearchResponse, error)
+}
+
+type SearchMessageSource interface {
+	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
+}
+
+type SearchMessageSourceReceiver interface {
+	SetSearchMessageSource(source SearchMessageSource)
+}
+
 type Constructor func(
 	ctx context.Context,
 	registration coremodel.Component,
@@ -220,6 +258,22 @@ type Agent interface {
 type CompletionProvider interface {
 	Component
 	HandleCompletion(ctx context.Context, request CompletionRequest) (*CompletionResult, error)
+}
+
+// CompletionSession lets callers bracket several completion requests as one
+// logical use of a provider. Providers with expensive warm state, such as a
+// GPU-backed model server, can keep that state alive until the session closes.
+type CompletionSession interface {
+	Close() error
+}
+
+type CompletionSessionOptions struct {
+	IdleTimeout time.Duration
+}
+
+type CompletionSessionProvider interface {
+	Component
+	BeginCompletionSession(ctx context.Context, options CompletionSessionOptions) (CompletionSession, error)
 }
 
 type CommandSurface interface {
