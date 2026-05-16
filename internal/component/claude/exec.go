@@ -100,6 +100,7 @@ func BuildExecArgs(request ExecArgs) []string {
 		"claude",
 		"-p", strings.TrimSpace(request.Prompt),
 		"--output-format", "json",
+		"--exclude-dynamic-system-prompt-sections",
 	}
 	if model := strings.TrimSpace(request.Options.Model); model != "" {
 		innerArgs = append(innerArgs, "--model", model)
