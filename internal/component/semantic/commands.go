@@ -17,6 +17,7 @@ import (
 
 type searchCommand struct {
 	Query       string
+	Model       string
 	Limit       int
 	BatchSize   int
 	MaxMessages int
@@ -50,6 +51,7 @@ func buildSearchCommand(req *clir.Request) (any, error) {
 	maxMessages := fs.Int("max-messages", 0, "Maximum recent messages to scan")
 	minScore := fs.Float64("min-score", 0, "Minimum score to include")
 	keepWarmFor := fs.String("keep-warm-for", "", "Keep completion backend warm after search, for example 10s or 2m")
+	model := fs.String("model", "", "Completion model override")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -60,7 +62,7 @@ func buildSearchCommand(req *clir.Request) (any, error) {
 	if query == "" {
 		return nil, fmt.Errorf("missing search query")
 	}
-	return searchCommand{Query: query, Limit: *limit, BatchSize: *batchSize, MaxMessages: *maxMessages, MinScore: *minScore, KeepWarmFor: *keepWarmFor}, nil
+	return searchCommand{Query: query, Model: strings.TrimSpace(*model), Limit: *limit, BatchSize: *batchSize, MaxMessages: *maxMessages, MinScore: *minScore, KeepWarmFor: *keepWarmFor}, nil
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {
@@ -89,6 +91,7 @@ func (c *Component) handleSearch(ctx context.Context, req commandengine.Request,
 	started := time.Now()
 	response, err := c.Search(ctx, component.SearchRequest{
 		Query:                 cmd.Query,
+		Model:                 c.searchModel(cmd),
 		ChatID:                req.Context.ChatID,
 		ThreadID:              threadID,
 		Limit:                 limit,
@@ -101,6 +104,16 @@ func (c *Component) handleSearch(ctx context.Context, req commandengine.Request,
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: c.renderSearchResponse(cmd.Query, time.Since(started), response)}, nil
+}
+
+func (c *Component) searchModel(cmd searchCommand) string {
+	if strings.TrimSpace(cmd.Model) != "" {
+		return strings.TrimSpace(cmd.Model)
+	}
+	if c == nil {
+		return ""
+	}
+	return strings.TrimSpace(c.config.Model)
 }
 
 func (c *Component) searchKeepWarmFor(cmd searchCommand) (time.Duration, error) {

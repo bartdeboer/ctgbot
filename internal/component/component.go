@@ -33,6 +33,7 @@ type ChatPayloadSenderReceiver interface {
 
 type SearchRequest struct {
 	Query                 string
+	Model                 string
 	ChatID                modeluuid.UUID
 	ThreadID              modeluuid.UUID
 	Limit                 int
@@ -268,6 +269,7 @@ type CompletionSession interface {
 }
 
 type CompletionSessionOptions struct {
+	Model       string
 	IdleTimeout time.Duration
 }
 
@@ -342,6 +344,7 @@ const (
 type CompletionRequest struct {
 	Chat            coremodel.Chat
 	Thread          coremodel.Thread
+	Model           string
 	Prompt          CompletionPrompt
 	Runtime         TurnRuntime
 	MaxOutputTokens int

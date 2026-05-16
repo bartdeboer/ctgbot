@@ -17,6 +17,7 @@ const (
 )
 
 type ComponentConfig struct {
+	DefaultModel   string  `json:"default_model,omitempty"`
 	ModelPath      string  `json:"model_path"`
 	MMProjPath     string  `json:"mmproj_path,omitempty"`
 	HostPort       int     `json:"host_port"`
@@ -39,7 +40,8 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 }
 
 func loadComponentConfig(homePath string, name string) (ComponentConfig, error) {
-	config := defaultComponentConfig(name)
+	_ = name
+	var config ComponentConfig
 	path := filepath.Join(strings.TrimSpace(homePath), ComponentConfigFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -54,29 +56,17 @@ func loadComponentConfig(homePath string, name string) (ComponentConfig, error) 
 	return config.withDefaults(), nil
 }
 
-func defaultComponentConfig(name string) ComponentConfig {
-	switch strings.TrimSpace(name) {
-	case "qwen3-q5":
-		return ComponentConfig{
-			ModelPath: "/workspace/src/llm/models/qwen3-8b/Qwen3-8B-Q5_K_M.gguf",
-			HostPort:  19081,
-		}
-	case "gemma4-e4b":
-		return ComponentConfig{
-			ModelPath:   "/workspace/src/llm/models/gemma4-e4b-gguf/gemma-4-E4B-it-Q4_K_M.gguf",
-			MMProjPath:  "/workspace/src/llm/models/gemma4-e4b-gguf/mmproj-gemma-4-E4B-it-Q8_0.gguf",
-			HostPort:    19082,
-			ContextSize: 4096,
-		}
-	default:
-		return ComponentConfig{
-			ModelPath: "/workspace/src/llm/models/qwen3-8b/Qwen3-8B-Q4_K_M.gguf",
-			HostPort:  19080,
-		}
+func saveComponentConfig(homePath string, config ComponentConfig) error {
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
 	}
+	data = append(data, '\n')
+	return atomicWriteFile(filepath.Join(strings.TrimSpace(homePath), ComponentConfigFilename), data, 0o644)
 }
 
 func (c ComponentConfig) withDefaults() ComponentConfig {
+	c.DefaultModel = strings.TrimSpace(c.DefaultModel)
 	c.ModelPath = strings.TrimSpace(c.ModelPath)
 	c.MMProjPath = strings.TrimSpace(c.MMProjPath)
 	if c.HostPort == 0 {

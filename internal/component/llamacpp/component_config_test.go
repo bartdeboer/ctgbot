@@ -56,13 +56,13 @@ func TestLoadComponentConfigDefaultsWhenMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadComponentConfig() error = %v", err)
 	}
-	if config.ModelPath == "" {
-		t.Fatalf("ModelPath = empty, want default model path")
+	if config.ModelPath != "" {
+		t.Fatalf("ModelPath = %q, want empty without profile config", config.ModelPath)
 	}
-	if config.MMProjPath == "" {
-		t.Fatalf("MMProjPath = empty, want default mmproj path")
+	if config.MMProjPath != "" {
+		t.Fatalf("MMProjPath = %q, want empty without profile config", config.MMProjPath)
 	}
-	if got, want := config.HostPort, 19082; got != want {
+	if got, want := config.HostPort, 19080; got != want {
 		t.Fatalf("HostPort = %d, want %d", got, want)
 	}
 }

@@ -19,6 +19,7 @@ const (
 
 type ComponentConfig struct {
 	Completion      string  `json:"completion"`
+	Model           string  `json:"model,omitempty"`
 	BatchSize       int     `json:"batch_size,omitempty"`
 	Limit           int     `json:"limit,omitempty"`
 	MaxMessages     int     `json:"max_messages,omitempty"`
@@ -47,6 +48,7 @@ func loadComponentConfig(home string) (ComponentConfig, error) {
 
 func (c ComponentConfig) withDefaults() ComponentConfig {
 	c.Completion = strings.TrimSpace(c.Completion)
+	c.Model = strings.TrimSpace(c.Model)
 	if c.BatchSize <= 0 {
 		c.BatchSize = DefaultBatchSize
 	}
