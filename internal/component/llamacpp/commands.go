@@ -334,6 +334,7 @@ func llamacppCommand(pattern string, command any, help string, build func(req *c
 		Help:    help,
 		Build:   build,
 		Sources: []commandengine.Source{
+			commandengine.SourceCLI,
 			commandengine.SourceMessage,
 			commandengine.SourceHostbridge,
 		},
