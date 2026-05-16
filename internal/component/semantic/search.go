@@ -33,10 +33,6 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	if c == nil || c.messages == nil {
 		return component.SearchResponse{}, fmt.Errorf("missing semantic message source")
 	}
-	provider, providerRef, err := c.resolveCompletionProvider(ctx)
-	if err != nil {
-		return component.SearchResponse{}, err
-	}
 	messages, err := c.messages.ThreadMessages(ctx, req.ThreadID)
 	if err != nil {
 		return component.SearchResponse{}, err
@@ -52,6 +48,15 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	if len(items) == 0 {
 		return component.SearchResponse{}, nil
 	}
+	provider, providerRef, err := c.resolveCompletionProvider(ctx)
+	if err != nil {
+		return component.SearchResponse{}, err
+	}
+	closeSession, err := c.beginCompletionSession(ctx, provider, providerRef)
+	if err != nil {
+		return component.SearchResponse{}, err
+	}
+	defer closeSession()
 	limit := req.Limit
 	if limit <= 0 {
 		limit = c.config.Limit
@@ -115,6 +120,22 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 		results = results[:limit]
 	}
 	return component.SearchResponse{Results: results}, nil
+}
+
+func (c *Component) beginCompletionSession(ctx context.Context, provider component.CompletionProvider, providerRef string) (func(), error) {
+	sessionProvider, ok := provider.(component.CompletionSessionProvider)
+	if !ok {
+		return func() {}, nil
+	}
+	session, err := sessionProvider.BeginCompletionSession(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin completion session via %s: %w", providerRef, err)
+	}
+	return func() {
+		if err := session.Close(); err != nil {
+			c.log("semantic completion session close failed provider=%s err=%v", providerRef, err)
+		}
+	}, nil
 }
 
 func searchableMessages(messages []coremodel.ThreadMessage) []coremodel.ThreadMessage {

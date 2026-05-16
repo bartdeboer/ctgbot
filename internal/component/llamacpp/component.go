@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
@@ -31,6 +32,7 @@ type Component struct {
 
 var _ component.Component = (*Component)(nil)
 var _ component.CompletionProvider = (*Component)(nil)
+var _ component.CompletionSessionProvider = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 
 func New(
@@ -85,24 +87,41 @@ func (c *Component) HandleCompletion(ctx context.Context, request component.Comp
 }
 
 func (c *Component) completeWithManagedBackend(ctx context.Context, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
-	if c == nil {
-		return "", fmt.Errorf("missing llamacpp component")
-	}
-	if c.runtime == nil {
-		return "", fmt.Errorf("missing llamacpp backend runtime")
-	}
-	wasRunning, err := c.isRunning(ctx)
+	session, err := c.BeginCompletionSession(ctx)
 	if err != nil {
 		return "", err
 	}
+	defer func() {
+		if err := session.Close(); err != nil {
+			c.logf("llamacpp completion session close failed component=%s err=%v", c.registration.Ref(), err)
+		}
+	}()
+	return c.completeWithOptions(ctx, messages, maxOutputTokens, responseFormat)
+}
+
+func (c *Component) BeginCompletionSession(ctx context.Context) (component.CompletionSession, error) {
+	if c == nil {
+		return nil, fmt.Errorf("missing llamacpp component")
+	}
+	if c.runtime == nil {
+		return nil, fmt.Errorf("missing llamacpp backend runtime")
+	}
+	wasRunning, err := c.isRunning(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := c.runtime.Start(ctx); err != nil {
-		return "", err
+		return nil, err
 	}
 	autoStarted := !wasRunning
-	if autoStarted && !c.componentConfig.KeepRunning {
-		defer c.stopAfterCompletion()
-	}
-	return c.completeWithOptions(ctx, messages, maxOutputTokens, responseFormat)
+	return &completionSession{
+		close: func() error {
+			if autoStarted && !c.componentConfig.KeepRunning {
+				return c.stopAfterCompletion()
+			}
+			return nil
+		},
+	}, nil
 }
 
 func (c *Component) isRunning(ctx context.Context) (bool, error) {
@@ -149,15 +168,35 @@ func serviceSpec(config ComponentConfig) backendruntime.ServiceSpec {
 	}
 }
 
-func (c *Component) stopAfterCompletion() {
+func (c *Component) stopAfterCompletion() error {
 	if c == nil || c.runtime == nil {
-		return
+		return nil
 	}
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := c.runtime.Stop(stopCtx); err != nil {
 		c.logf("llamacpp stop-after-completion failed component=%s err=%v", c.registration.Ref(), err)
+		return err
 	}
+	return nil
+}
+
+type completionSession struct {
+	once  sync.Once
+	close func() error
+	err   error
+}
+
+func (s *completionSession) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.once.Do(func() {
+		if s.close != nil {
+			s.err = s.close()
+		}
+	})
+	return s.err
 }
 
 func (c *Component) completeWithOptions(ctx context.Context, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {

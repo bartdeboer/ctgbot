@@ -259,6 +259,18 @@ type CompletionProvider interface {
 	HandleCompletion(ctx context.Context, request CompletionRequest) (*CompletionResult, error)
 }
 
+// CompletionSession lets callers bracket several completion requests as one
+// logical use of a provider. Providers with expensive warm state, such as a
+// GPU-backed model server, can keep that state alive until the session closes.
+type CompletionSession interface {
+	Close() error
+}
+
+type CompletionSessionProvider interface {
+	Component
+	BeginCompletionSession(ctx context.Context) (CompletionSession, error)
+}
+
 type CommandSurface interface {
 	Component
 	CommandDefinitions() []commandengine.Definition
