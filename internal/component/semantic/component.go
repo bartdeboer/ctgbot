@@ -66,6 +66,7 @@ Examples:
   hostbridge semantic/qwen3-q5 search "database abstraction layer"
   hostbridge semantic/qwen3-q5 search "prompt injection email safety" --limit 5
   hostbridge semantic/qwen3-q5 search "prompt injection email safety" --max-messages 80
+  hostbridge semantic/qwen3-q5 search "prompt injection email safety" --keep-warm-for 10s
   hostbridge semantic/qwen3-q5 search "broadly related memory" --min-score 0.2
 
 Results include exact ctgbot message IDs, scores, excerpts, and optional reasons.`),

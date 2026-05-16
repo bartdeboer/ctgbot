@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
@@ -52,7 +53,7 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	if err != nil {
 		return component.SearchResponse{}, err
 	}
-	closeSession, err := c.beginCompletionSession(ctx, provider, providerRef)
+	closeSession, err := c.beginCompletionSession(ctx, provider, providerRef, req.CompletionIdleTimeout)
 	if err != nil {
 		return component.SearchResponse{}, err
 	}
@@ -122,12 +123,12 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	return component.SearchResponse{Results: results}, nil
 }
 
-func (c *Component) beginCompletionSession(ctx context.Context, provider component.CompletionProvider, providerRef string) (func(), error) {
+func (c *Component) beginCompletionSession(ctx context.Context, provider component.CompletionProvider, providerRef string, idleTimeout time.Duration) (func(), error) {
 	sessionProvider, ok := provider.(component.CompletionSessionProvider)
 	if !ok {
 		return func() {}, nil
 	}
-	session, err := sessionProvider.BeginCompletionSession(ctx)
+	session, err := sessionProvider.BeginCompletionSession(ctx, component.CompletionSessionOptions{IdleTimeout: idleTimeout})
 	if err != nil {
 		return nil, fmt.Errorf("begin completion session via %s: %w", providerRef, err)
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/durationparse"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
@@ -20,6 +21,7 @@ type searchCommand struct {
 	BatchSize   int
 	MaxMessages int
 	MinScore    float64
+	KeepWarmFor string
 }
 
 func RegisterGobTypes(register func(any)) {
@@ -47,6 +49,7 @@ func buildSearchCommand(req *clir.Request) (any, error) {
 	batchSize := fs.Int("batch-size", 0, "Messages per scoring batch")
 	maxMessages := fs.Int("max-messages", 0, "Maximum recent messages to scan")
 	minScore := fs.Float64("min-score", 0, "Minimum score to include")
+	keepWarmFor := fs.String("keep-warm-for", "", "Keep completion backend warm after search, for example 10s or 2m")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -57,7 +60,7 @@ func buildSearchCommand(req *clir.Request) (any, error) {
 	if query == "" {
 		return nil, fmt.Errorf("missing search query")
 	}
-	return searchCommand{Query: query, Limit: *limit, BatchSize: *batchSize, MaxMessages: *maxMessages, MinScore: *minScore}, nil
+	return searchCommand{Query: query, Limit: *limit, BatchSize: *batchSize, MaxMessages: *maxMessages, MinScore: *minScore, KeepWarmFor: *keepWarmFor}, nil
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {
@@ -79,12 +82,40 @@ func (c *Component) handleSearch(ctx context.Context, req commandengine.Request,
 	if limit <= 0 {
 		limit = c.config.Limit
 	}
+	keepWarmFor, err := c.searchKeepWarmFor(cmd)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
 	started := time.Now()
-	response, err := c.Search(ctx, component.SearchRequest{Query: cmd.Query, ChatID: req.Context.ChatID, ThreadID: threadID, Limit: limit, BatchSize: cmd.BatchSize, MaxMessages: cmd.MaxMessages, MinScore: cmd.MinScore})
+	response, err := c.Search(ctx, component.SearchRequest{
+		Query:                 cmd.Query,
+		ChatID:                req.Context.ChatID,
+		ThreadID:              threadID,
+		Limit:                 limit,
+		BatchSize:             cmd.BatchSize,
+		MaxMessages:           cmd.MaxMessages,
+		MinScore:              cmd.MinScore,
+		CompletionIdleTimeout: keepWarmFor,
+	})
 	if err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: c.renderSearchResponse(cmd.Query, time.Since(started), response)}, nil
+}
+
+func (c *Component) searchKeepWarmFor(cmd searchCommand) (time.Duration, error) {
+	raw := strings.TrimSpace(cmd.KeepWarmFor)
+	if raw == "" && c != nil {
+		raw = strings.TrimSpace(c.config.KeepWarmFor)
+	}
+	if raw == "" {
+		return 0, nil
+	}
+	parsed, err := durationparse.Parse(raw, time.Second)
+	if err != nil {
+		return 0, fmt.Errorf("parse --keep-warm-for: %w", err)
+	}
+	return parsed, nil
 }
 
 func (c *Component) renderSearchResponse(query string, elapsed time.Duration, response component.SearchResponse) string {

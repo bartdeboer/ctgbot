@@ -24,6 +24,7 @@ type ComponentConfig struct {
 	MaxMessages     int     `json:"max_messages,omitempty"`
 	MaxOutputTokens int     `json:"max_output_tokens,omitempty"`
 	MinScore        float64 `json:"min_score,omitempty"`
+	KeepWarmFor     string  `json:"keep_warm_for,omitempty"`
 }
 
 func loadComponentConfig(home string) (ComponentConfig, error) {

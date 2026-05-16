@@ -28,6 +28,10 @@ type Component struct {
 	runtime         *backendruntime.Runtime
 	client          *http.Client
 	logger          *log.Logger
+	runtimeMu       sync.Mutex
+	idleStop        *time.Timer
+	autoManaged     bool
+	activeSessions  int
 }
 
 var _ component.Component = (*Component)(nil)
@@ -87,7 +91,7 @@ func (c *Component) HandleCompletion(ctx context.Context, request component.Comp
 }
 
 func (c *Component) completeWithManagedBackend(ctx context.Context, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
-	session, err := c.BeginCompletionSession(ctx)
+	session, err := c.BeginCompletionSession(ctx, component.CompletionSessionOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -99,13 +103,16 @@ func (c *Component) completeWithManagedBackend(ctx context.Context, messages []c
 	return c.completeWithOptions(ctx, messages, maxOutputTokens, responseFormat)
 }
 
-func (c *Component) BeginCompletionSession(ctx context.Context) (component.CompletionSession, error) {
+func (c *Component) BeginCompletionSession(ctx context.Context, options component.CompletionSessionOptions) (component.CompletionSession, error) {
 	if c == nil {
 		return nil, fmt.Errorf("missing llamacpp component")
 	}
 	if c.runtime == nil {
 		return nil, fmt.Errorf("missing llamacpp backend runtime")
 	}
+	c.runtimeMu.Lock()
+	defer c.runtimeMu.Unlock()
+	c.cancelIdleStopLocked()
 	wasRunning, err := c.isRunning(ctx)
 	if err != nil {
 		return nil, err
@@ -113,13 +120,13 @@ func (c *Component) BeginCompletionSession(ctx context.Context) (component.Compl
 	if _, err := c.runtime.Start(ctx); err != nil {
 		return nil, err
 	}
-	autoStarted := !wasRunning
+	if !wasRunning {
+		c.autoManaged = true
+	}
+	c.activeSessions++
 	return &completionSession{
 		close: func() error {
-			if autoStarted && !c.componentConfig.KeepRunning {
-				return c.stopAfterCompletion()
-			}
-			return nil
+			return c.releaseCompletionSession(options.IdleTimeout)
 		},
 	}, nil
 }
@@ -179,6 +186,55 @@ func (c *Component) stopAfterCompletion() error {
 		return err
 	}
 	return nil
+}
+
+func (c *Component) releaseCompletionSession(idleTimeout time.Duration) error {
+	if c == nil {
+		return nil
+	}
+	c.runtimeMu.Lock()
+	if c.activeSessions > 0 {
+		c.activeSessions--
+	}
+	if c.activeSessions > 0 {
+		c.runtimeMu.Unlock()
+		return nil
+	}
+	if !c.autoManaged || c.componentConfig.KeepRunning {
+		c.runtimeMu.Unlock()
+		return nil
+	}
+	if idleTimeout <= 0 {
+		c.autoManaged = false
+		c.runtimeMu.Unlock()
+		return c.stopAfterCompletion()
+	}
+	c.cancelIdleStopLocked()
+	var timer *time.Timer
+	timer = time.AfterFunc(idleTimeout, func() {
+		c.runtimeMu.Lock()
+		if c.idleStop != timer {
+			c.runtimeMu.Unlock()
+			return
+		}
+		c.idleStop = nil
+		c.autoManaged = false
+		c.runtimeMu.Unlock()
+		if err := c.stopAfterCompletion(); err != nil {
+			c.logf("llamacpp idle stop failed component=%s err=%v", c.registration.Ref(), err)
+		}
+	})
+	c.idleStop = timer
+	c.runtimeMu.Unlock()
+	return nil
+}
+
+func (c *Component) cancelIdleStopLocked() {
+	if c == nil || c.idleStop == nil {
+		return
+	}
+	c.idleStop.Stop()
+	c.idleStop = nil
 }
 
 type completionSession struct {

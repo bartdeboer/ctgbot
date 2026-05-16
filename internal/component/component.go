@@ -32,13 +32,14 @@ type ChatPayloadSenderReceiver interface {
 }
 
 type SearchRequest struct {
-	Query       string
-	ChatID      modeluuid.UUID
-	ThreadID    modeluuid.UUID
-	Limit       int
-	BatchSize   int
-	MaxMessages int
-	MinScore    float64
+	Query                 string
+	ChatID                modeluuid.UUID
+	ThreadID              modeluuid.UUID
+	Limit                 int
+	BatchSize             int
+	MaxMessages           int
+	MinScore              float64
+	CompletionIdleTimeout time.Duration
 }
 
 type SearchResponse struct {
@@ -266,9 +267,13 @@ type CompletionSession interface {
 	Close() error
 }
 
+type CompletionSessionOptions struct {
+	IdleTimeout time.Duration
+}
+
 type CompletionSessionProvider interface {
 	Component
-	BeginCompletionSession(ctx context.Context) (CompletionSession, error)
+	BeginCompletionSession(ctx context.Context, options CompletionSessionOptions) (CompletionSession, error)
 }
 
 type CommandSurface interface {

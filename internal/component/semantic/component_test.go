@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -67,6 +68,25 @@ func TestSearchKeepsCompletionSessionOpenAcrossBatches(t *testing.T) {
 	}
 }
 
+func TestSearchPassesCompletionIdleTimeoutToSession(t *testing.T) {
+	threadID := modeluuid.New()
+	messageID := modeluuid.New()
+	provider := &fakeSessionCompletionProvider{
+		reply: `{"scores":[{"id":"` + messageID.String() + `","score":0.7}]}`,
+	}
+	c := &Component{
+		config:   ComponentConfig{Completion: "llm/qwen", BatchSize: 10, Limit: 5, MinScore: 0.4, MaxOutputTokens: 256},
+		resolver: fakeResolver{provider: provider},
+	}
+	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Text: "message"}}})
+	if _, err := c.Search(context.Background(), component.SearchRequest{Query: "anything", ThreadID: threadID, CompletionIdleTimeout: 10 * time.Second}); err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if provider.idleTimeout.String() != "10s" {
+		t.Fatalf("idleTimeout=%s, want 10s", provider.idleTimeout)
+	}
+}
+
 type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
 
 func (f fakeMessageSource) ThreadMessages(context.Context, modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
@@ -86,6 +106,7 @@ type fakeSessionCompletionProvider struct {
 	begins      int
 	closes      int
 	completions int
+	idleTimeout time.Duration
 }
 
 func (f *fakeSessionCompletionProvider) Type() string { return "llm" }
@@ -95,8 +116,9 @@ func (f *fakeSessionCompletionProvider) HandleCompletion(context.Context, compon
 	return &component.CompletionResult{Final: &coremodel.ThreadMessage{Text: f.reply}}, nil
 }
 
-func (f *fakeSessionCompletionProvider) BeginCompletionSession(context.Context) (component.CompletionSession, error) {
+func (f *fakeSessionCompletionProvider) BeginCompletionSession(_ context.Context, options component.CompletionSessionOptions) (component.CompletionSession, error) {
 	f.begins++
+	f.idleTimeout = options.IdleTimeout
 	return fakeCompletionSession{close: func() error {
 		f.closes++
 		return nil
