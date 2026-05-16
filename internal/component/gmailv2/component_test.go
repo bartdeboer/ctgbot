@@ -249,6 +249,13 @@ func TestMessageViewOnlyShowsMaterializedKinds(t *testing.T) {
 	if !strings.Contains(result.Text, ".txt") || !strings.Contains(result.Text, ".html") {
 		t.Fatalf("message view missing materialized files: %s", result.Text)
 	}
+	result, err = c.handleMessageView(context.Background(), commandengine.Request{}, messageViewCommand{MessageID: "gmail-1"})
+	if err != nil {
+		t.Fatalf("handleMessageView(gmail id) error = %v", err)
+	}
+	if !strings.Contains(result.Text, "Gmail message msg-1") {
+		t.Fatalf("message view did not resolve gmail id to stored message:\n%s", result.Text)
+	}
 }
 
 func TestQueryRejectsMutatingSQL(t *testing.T) {
@@ -279,11 +286,11 @@ func TestQueryUsesStableMessagesView(t *testing.T) {
 	if err := c.store.saveMessage(context.Background(), message); err != nil {
 		t.Fatalf("saveMessage() error = %v", err)
 	}
-	text, err := c.store.query(context.Background(), "select id, from_email, subject, trusted from messages")
+	text, err := c.store.query(context.Background(), "select id, from_email, subject, headers_json, trusted from messages")
 	if err != nil {
 		t.Fatalf("query() error = %v", err)
 	}
-	if !strings.Contains(text, "msg-1") || !strings.Contains(text, "hello@example.com") {
+	if !strings.Contains(text, "msg-1") || !strings.Contains(text, "hello@example.com") || !strings.Contains(text, "headers_json") {
 		t.Fatalf("query did not read messages view:\n%s", text)
 	}
 }

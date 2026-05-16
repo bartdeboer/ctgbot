@@ -108,6 +108,7 @@ SELECT
   m.subject,
   m.date,
   m.snippet,
+  m.headers_json,
   m.has_text,
   m.has_raw,
   m.has_html,
@@ -169,6 +170,18 @@ func (s *store) messageByID(ctx context.Context, id string) (*storedMessage, err
 		return nil, nil
 	}
 	return nil, err
+}
+
+func (s *store) messageByRef(ctx context.Context, ref string) (*storedMessage, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, nil
+	}
+	message, err := s.messageByID(ctx, ref)
+	if err != nil || message != nil {
+		return message, err
+	}
+	return s.messageByGmailID(ctx, ref)
 }
 
 func (s *store) saveAttachment(ctx context.Context, attachment *storedAttachment) error {

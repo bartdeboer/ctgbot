@@ -302,12 +302,12 @@ func (c *Component) handleDBQuery(ctx context.Context, req commandengine.Request
 
 func (c *Component) handleMessageView(ctx context.Context, req commandengine.Request, cmd messageViewCommand) (commandengine.Result, error) {
 	_ = req
-	message, err := c.store.messageByID(ctx, cmd.MessageID)
+	message, err := c.store.messageByRef(ctx, cmd.MessageID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
 	if message == nil {
-		return commandengine.Result{}, fmt.Errorf("message not found: %s", cmd.MessageID)
+		return commandengine.Result{}, fmt.Errorf("message not found by stored id or gmail message id: %s", cmd.MessageID)
 	}
 	attachments, err := c.store.attachmentsByMessage(ctx, message.ID)
 	if err != nil {
@@ -327,12 +327,12 @@ func (c *Component) handleMessageDisplay(ctx context.Context, req commandengine.
 	if threadID.IsNull() {
 		return commandengine.Result{}, fmt.Errorf("missing thread id")
 	}
-	record, err := c.store.messageByID(ctx, cmd.MessageID)
+	record, err := c.store.messageByRef(ctx, cmd.MessageID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
 	if record == nil {
-		return commandengine.Result{}, fmt.Errorf("message not found: %s", cmd.MessageID)
+		return commandengine.Result{}, fmt.Errorf("message not found by stored id or gmail message id: %s", cmd.MessageID)
 	}
 	attachments, err := c.store.attachmentsByMessage(ctx, record.ID)
 	if err != nil {
