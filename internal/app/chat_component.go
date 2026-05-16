@@ -24,6 +24,12 @@ type ChatComponentAddResult struct {
 	HomePath     string
 }
 
+type ChatComponentRemoveResult struct {
+	Binding      coremodel.ChatComponent
+	ComponentRef string
+	Removed      bool
+}
+
 type ChatComponentInfo struct {
 	Binding      coremodel.ChatComponent
 	ComponentRef string
@@ -105,6 +111,31 @@ func (s *service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, r
 		Runtime:      registration.Runtime,
 		HomePath:     registration.HomePath,
 	}, nil
+}
+
+func (s *service) RemoveChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, componentRef string) (ChatComponentRemoveResult, error) {
+	if s == nil || s.Storage == nil {
+		return ChatComponentRemoveResult{}, fmt.Errorf("missing app storage")
+	}
+	if chatID.IsNull() {
+		return ChatComponentRemoveResult{}, fmt.Errorf("missing chat id")
+	}
+	registration, err := s.resolveComponentRegistration(ctx, componentRef)
+	if err != nil {
+		return ChatComponentRemoveResult{}, err
+	}
+	binding, err := s.Storage.ChatComponents().GetByChatComponentRole(ctx, chatID, registration.ID, role)
+	if err != nil {
+		return ChatComponentRemoveResult{}, err
+	}
+	if binding == nil || !binding.Enabled {
+		return ChatComponentRemoveResult{ComponentRef: registration.Ref()}, nil
+	}
+	binding.Enabled = false
+	if err := s.Storage.ChatComponents().Save(ctx, binding); err != nil {
+		return ChatComponentRemoveResult{}, err
+	}
+	return ChatComponentRemoveResult{Binding: *binding, ComponentRef: registration.Ref(), Removed: true}, nil
 }
 
 func (s *service) ListChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]ChatComponentInfo, error) {

@@ -609,6 +609,21 @@ func TestServiceAddAndListChatComponents(t *testing.T) {
 		info.Binding.ExternalChannelID != "source-default" {
 		t.Fatalf("component info = %#v", info)
 	}
+
+	remove, err := svc.RemoveChatComponent(ctx, chat.ID, coremodel.ChatComponentRoleSource, "source/inbox")
+	if err != nil {
+		t.Fatalf("RemoveChatComponent() error = %v", err)
+	}
+	if !remove.Removed || remove.ComponentRef != "source/inbox" {
+		t.Fatalf("remove result = %#v, want removed source/inbox", remove)
+	}
+	infos, err = svc.ListChatComponents(ctx, chat.ID)
+	if err != nil {
+		t.Fatalf("ListChatComponents() after remove error = %v", err)
+	}
+	if got := len(infos); got != 0 {
+		t.Fatalf("component infos after remove = %d, want 0", got)
+	}
 }
 
 func TestServiceRuntimeImageTargetsDiscoversProviders(t *testing.T) {

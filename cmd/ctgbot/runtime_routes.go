@@ -425,6 +425,44 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			return nil
 		})
 
+		b.Handle("chat <chatID> component remove <role> <component>", "Remove a component binding from a chat by role", func(req *clir.Request) error {
+			fs := flag.NewFlagSet("chat component remove", flag.ContinueOnError)
+			fs.SetOutput(os.Stdout)
+			if err := fs.Parse(req.Extra); err != nil {
+				return err
+			}
+
+			appService, err := openAppServiceForRoutes(req, store)
+			if err != nil {
+				return err
+			}
+			chatID, err := appService.ResolveChatRef(req.Context(), strings.TrimSpace(req.Params["chatID"]))
+			if err != nil {
+				return fmt.Errorf("resolve chat id: %w", err)
+			}
+			role := coremodel.ChatComponentRole(strings.TrimSpace(req.Params["role"]))
+			componentRef := strings.TrimSpace(req.Params["component"])
+			result, err := appService.RemoveChatComponent(req.Context(), chatID, role, componentRef)
+			if err != nil {
+				return err
+			}
+			if !result.Removed {
+				fmt.Println("chat component binding not found")
+				fmt.Printf("chat_id: %s\n", chatID)
+				fmt.Printf("component: %s\n", result.ComponentRef)
+				fmt.Printf("role: %s\n", role)
+				return nil
+			}
+			fmt.Println("chat component binding removed")
+			fmt.Printf("chat_id: %s\n", result.Binding.ChatID)
+			fmt.Printf("component: %s\n", result.ComponentRef)
+			fmt.Printf("role: %s\n", result.Binding.Role)
+			if result.Binding.ExternalChannelID != "" {
+				fmt.Printf("external_channel_id: %s\n", result.Binding.ExternalChannelID)
+			}
+			return nil
+		})
+
 		b.Handle("chat <chatID> component list", "List component bindings for a chat", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("chat component list", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)

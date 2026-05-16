@@ -51,6 +51,7 @@ type ChatAdminService interface {
 	SetChatWorkspace(ctx context.Context, chatID modeluuid.UUID, workspace string) (coremodel.Chat, error)
 	BindInboundChat(ctx context.Context, componentRef string, externalChannelID string, label string, roleFlag string) (ChatBindResult, error)
 	AddChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, componentRef string, externalChannelID string) (ChatComponentAddResult, error)
+	RemoveChatComponent(ctx context.Context, chatID modeluuid.UUID, role coremodel.ChatComponentRole, componentRef string) (ChatComponentRemoveResult, error)
 	ListChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]ChatComponentInfo, error)
 	AddChatComponentFilter(ctx context.Context, chatRef string, sourceRef string, externalChannelID string, filterRef string) (ComponentFilterAddResult, error)
 	RemoveChatComponentFilter(ctx context.Context, chatRef string, sourceRef string, externalChannelID string, filterRef string) (ComponentFilterRemoveResult, error)
