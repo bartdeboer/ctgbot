@@ -32,12 +32,13 @@ type ChatPayloadSenderReceiver interface {
 }
 
 type SearchRequest struct {
-	Query     string
-	ChatID    modeluuid.UUID
-	ThreadID  modeluuid.UUID
-	Limit     int
-	BatchSize int
-	MinScore  float64
+	Query       string
+	ChatID      modeluuid.UUID
+	ThreadID    modeluuid.UUID
+	Limit       int
+	BatchSize   int
+	MaxMessages int
+	MinScore    float64
 }
 
 type SearchResponse struct {

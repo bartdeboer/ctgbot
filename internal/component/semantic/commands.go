@@ -14,10 +14,11 @@ import (
 )
 
 type searchCommand struct {
-	Query     string
-	Limit     int
-	BatchSize int
-	MinScore  float64
+	Query       string
+	Limit       int
+	BatchSize   int
+	MaxMessages int
+	MinScore    float64
 }
 
 func RegisterGobTypes(register func(any)) {
@@ -43,6 +44,7 @@ func buildSearchCommand(req *clir.Request) (any, error) {
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 0, "Maximum results")
 	batchSize := fs.Int("batch-size", 0, "Messages per scoring batch")
+	maxMessages := fs.Int("max-messages", 0, "Maximum recent messages to scan")
 	minScore := fs.Float64("min-score", 0, "Minimum score to include")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
@@ -54,7 +56,7 @@ func buildSearchCommand(req *clir.Request) (any, error) {
 	if query == "" {
 		return nil, fmt.Errorf("missing search query")
 	}
-	return searchCommand{Query: query, Limit: *limit, BatchSize: *batchSize, MinScore: *minScore}, nil
+	return searchCommand{Query: query, Limit: *limit, BatchSize: *batchSize, MaxMessages: *maxMessages, MinScore: *minScore}, nil
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {
@@ -76,7 +78,7 @@ func (c *Component) handleSearch(ctx context.Context, req commandengine.Request,
 	if limit <= 0 {
 		limit = c.config.Limit
 	}
-	response, err := c.Search(ctx, component.SearchRequest{Query: cmd.Query, ChatID: req.Context.ChatID, ThreadID: threadID, Limit: limit, BatchSize: cmd.BatchSize, MinScore: cmd.MinScore})
+	response, err := c.Search(ctx, component.SearchRequest{Query: cmd.Query, ChatID: req.Context.ChatID, ThreadID: threadID, Limit: limit, BatchSize: cmd.BatchSize, MaxMessages: cmd.MaxMessages, MinScore: cmd.MinScore})
 	if err != nil {
 		return commandengine.Result{}, err
 	}

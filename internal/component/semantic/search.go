@@ -42,6 +42,13 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 		return component.SearchResponse{}, err
 	}
 	items := searchableMessages(messages)
+	maxMessages := req.MaxMessages
+	if maxMessages <= 0 {
+		maxMessages = c.config.MaxMessages
+	}
+	if maxMessages > 0 && len(items) > maxMessages {
+		items = items[len(items)-maxMessages:]
+	}
 	if len(items) == 0 {
 		return component.SearchResponse{}, nil
 	}

@@ -12,6 +12,7 @@ const ComponentConfigFilename = "component.json"
 const (
 	DefaultBatchSize       = 40
 	DefaultLimit           = 10
+	DefaultMaxMessages     = 200
 	DefaultMaxOutputTokens = 2048
 	DefaultMinScore        = 0.4
 )
@@ -20,6 +21,7 @@ type ComponentConfig struct {
 	Completion      string  `json:"completion"`
 	BatchSize       int     `json:"batch_size,omitempty"`
 	Limit           int     `json:"limit,omitempty"`
+	MaxMessages     int     `json:"max_messages,omitempty"`
 	MaxOutputTokens int     `json:"max_output_tokens,omitempty"`
 	MinScore        float64 `json:"min_score,omitempty"`
 }
@@ -49,6 +51,12 @@ func (c ComponentConfig) withDefaults() ComponentConfig {
 	}
 	if c.Limit <= 0 {
 		c.Limit = DefaultLimit
+	}
+	if c.MaxMessages < 0 {
+		c.MaxMessages = 0
+	}
+	if c.MaxMessages == 0 {
+		c.MaxMessages = DefaultMaxMessages
 	}
 	if c.MaxOutputTokens <= 0 {
 		c.MaxOutputTokens = DefaultMaxOutputTokens
