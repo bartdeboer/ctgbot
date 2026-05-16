@@ -156,6 +156,7 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 		HostHome:         home.Path,
 		RuntimeHome:      runtimeHomePath,
 		RuntimeWorkspace: runtimeHomePath,
+		SandboxMode:      c.componentConfig.SandboxMode,
 	}); err != nil {
 		return err
 	}
@@ -193,6 +194,7 @@ func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.
 		HostHome:         home.Path,
 		RuntimeHome:      runtimeHomePath,
 		RuntimeWorkspace: runtimeHomePath,
+		SandboxMode:      c.componentConfig.SandboxMode,
 	}); err != nil {
 		return err
 	}
@@ -224,6 +226,10 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	workspacePath := turn.Runtime.WorkspacePath()
 	runtimeWorkspacePath := c.runtime.RuntimeWorkspacePath(workspacePath)
 	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
+	settings, err := c.resolveThreadSettings(ctx, &turn.Thread)
+	if err != nil {
+		return nil, err
+	}
 	instructions := turn.Runtime.Instructions()
 	instructions.RuntimeNotices = append(instructions.RuntimeNotices, agentcommon.RuntimeNotices(ctx, c.runtime, workspacePath, turn.Thread.ID, c.logf)...)
 	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath, instructions)
@@ -235,6 +241,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		RuntimeHome:      runtimeHomePath,
 		RuntimeWorkspace: runtimeWorkspacePath,
 		BootstrapText:    bootstrapText,
+		SandboxMode:      settings.SandboxMode,
 	}); err != nil {
 		return nil, err
 	}
@@ -248,11 +255,6 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if err != nil {
 		return nil, err
 	}
-	settings, err := c.resolveThreadSettings(ctx, &turn.Thread)
-	if err != nil {
-		return nil, err
-	}
-
 	result, runErr := c.runner.RunTurn(ctx, commandRuntime{
 		runtime:       c.runtime,
 		threadID:      turn.Thread.ID,

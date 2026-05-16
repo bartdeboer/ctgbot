@@ -95,6 +95,37 @@ func TestPrepareHomeWritesPosixModelInstructionsPath(t *testing.T) {
 	})
 }
 
+func TestPrepareHomeWritesConfiguredSandboxMode(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		store, err := clistate.NewCwd("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+		if err != nil {
+			t.Fatalf("new config: %v", err)
+		}
+
+		homeDir := filepath.Join(root, "components", "codex")
+		if err := PrepareHome(cfg, HomeSpec{
+			HostHome:         homeDir,
+			RuntimeHome:      "/profile/components/codex/restricted",
+			RuntimeWorkspace: "/workspace",
+			SandboxMode:      "workspace-write",
+		}); err != nil {
+			t.Fatalf("PrepareHome: %v", err)
+		}
+
+		body, err := os.ReadFile(filepath.Join(homeDir, "config.toml"))
+		if err != nil {
+			t.Fatalf("read config.toml: %v", err)
+		}
+		if !strings.Contains(string(body), `sandbox_mode = "workspace-write"`) {
+			t.Fatalf("config.toml missing configured sandbox mode:\n%s", string(body))
+		}
+	})
+}
+
 func TestPrepareHomeWritesNonEmptyDefaultBootstrap(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		store, err := clistate.NewCwd("ctgbot", "config")

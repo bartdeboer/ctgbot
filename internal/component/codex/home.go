@@ -16,6 +16,7 @@ type HomeSpec struct {
 	RuntimeHome      string
 	RuntimeWorkspace string
 	BootstrapText    string
+	SandboxMode      string
 }
 
 func PrepareHome(cfg *appstate.Config, spec HomeSpec) error {
@@ -39,7 +40,7 @@ func PrepareHome(cfg *appstate.Config, spec HomeSpec) error {
 	if err := writeBootstrap(hostHome, spec.BootstrapText); err != nil {
 		return err
 	}
-	return writeConfig(hostHome, spec.RuntimeHome, spec.RuntimeWorkspace)
+	return writeConfig(hostHome, spec.RuntimeHome, spec.RuntimeWorkspace, spec.SandboxMode)
 }
 
 func importSharedAuth(cfg *appstate.Config, hostHome string) error {
@@ -62,9 +63,13 @@ func writeBootstrap(hostHome string, bootstrapText string) error {
 	return os.WriteFile(bootstrapPath, []byte(bootstrapText+"\n"), 0o600)
 }
 
-func writeConfig(hostHome string, runtimeHome string, runtimeWorkspace string) error {
+func writeConfig(hostHome string, runtimeHome string, runtimeWorkspace string, sandboxMode string) error {
 	runtimeHome = cleanRuntimePath(runtimeHome, "/profile")
 	runtimeWorkspace = cleanRuntimePath(runtimeWorkspace, "/workspace")
+	sandboxMode = strings.TrimSpace(sandboxMode)
+	if sandboxMode == "" {
+		sandboxMode = DefaultSandboxMode
+	}
 	configPath := filepath.Join(hostHome, "config.toml")
 	configBody := strings.TrimSpace(fmt.Sprintf(`
 sandbox_mode = %q
@@ -80,7 +85,7 @@ exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 writable_roots = [%q, %q, %q]
 network_access = true
-`, DefaultSandboxMode, path.Join(runtimeHome, "ctgbot-bootstrap.md"), runtimeWorkspace, runtimeHome, "/tmp")) + "\n"
+`, sandboxMode, path.Join(runtimeHome, "ctgbot-bootstrap.md"), runtimeWorkspace, runtimeHome, "/tmp")) + "\n"
 	return os.WriteFile(configPath, []byte(configBody), 0o600)
 }
 
