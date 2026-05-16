@@ -22,7 +22,8 @@ RUN apt-get update \
 COPY --from=hostbridge-build /out/hostbridge /usr/bin/hostbridge
 COPY --from=hostbridge-build /usr/local/go /usr/local/go
 
-ENV PATH="/usr/local/go/bin:${PATH}"
+RUN ln -s /usr/local/go/bin/go /usr/local/bin/go \
+    && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]
