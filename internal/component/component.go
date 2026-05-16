@@ -20,6 +20,17 @@ type Component interface {
 	Type() string
 }
 
+// ChatPayloadSender is the narrow broker capability a command component needs
+// when it wants to send a normal outbound chat payload, like hostbridge message,
+// sendfile, or sendstdin do.
+type ChatPayloadSender interface {
+	SendPayload(ctx context.Context, threadID modeluuid.UUID, payload message.OutboundPayload) error
+}
+
+type ChatPayloadSenderReceiver interface {
+	SetChatPayloadSender(sender ChatPayloadSender)
+}
+
 type Constructor func(
 	ctx context.Context,
 	registration coremodel.Component,

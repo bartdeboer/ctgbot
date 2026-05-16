@@ -1,0 +1,149 @@
+package gmailv2
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	gmailapi "google.golang.org/api/gmail/v1"
+)
+
+type gmailClient interface {
+	GetProfile(ctx context.Context, userID string) (*gmailapi.Profile, error)
+	ListHistory(ctx context.Context, userID string, startHistoryID uint64, pageToken string) (*gmailapi.ListHistoryResponse, error)
+	SearchMessages(ctx context.Context, userID string, query string, limit int64) ([]*gmailapi.Message, error)
+	GetMessage(ctx context.Context, userID string, messageID string) (*gmailapi.Message, error)
+	GetRawMessage(ctx context.Context, userID string, messageID string) ([]byte, error)
+	GetAttachment(ctx context.Context, userID string, messageID string, attachmentID string) ([]byte, error)
+	SendMessage(ctx context.Context, userID string, message *gmailapi.Message) (*gmailapi.Message, error)
+}
+
+type serviceClient struct {
+	service *gmailapi.Service
+}
+
+func (c *Component) client(ctx context.Context) (gmailClient, error) {
+	if c == nil {
+		return nil, fmt.Errorf("%w: missing gmailv2 component", errMissingAuthMaterial)
+	}
+	if c.clientOverride != nil {
+		return c.clientOverride, nil
+	}
+	if c.Service == nil {
+		service, err := c.serviceFromStoredToken(ctx)
+		if err != nil {
+			return nil, err
+		}
+		c.Service = service
+	}
+	if c.Service == nil {
+		return nil, fmt.Errorf("%w: gmailv2 is not authenticated; run ctgbot component %s auth", errMissingAuthMaterial, c.registration.Ref())
+	}
+	return serviceClient{service: c.Service}, nil
+}
+
+func (c serviceClient) GetProfile(ctx context.Context, userID string) (*gmailapi.Profile, error) {
+	if c.service == nil {
+		return nil, fmt.Errorf("missing gmail service")
+	}
+	return c.service.Users.GetProfile(cleanUserID(userID)).Context(ctx).Do()
+}
+
+func (c serviceClient) ListHistory(ctx context.Context, userID string, startHistoryID uint64, pageToken string) (*gmailapi.ListHistoryResponse, error) {
+	if c.service == nil {
+		return nil, fmt.Errorf("missing gmail service")
+	}
+	call := c.service.Users.History.List(cleanUserID(userID)).StartHistoryId(startHistoryID).HistoryTypes("messageAdded")
+	if pageToken = strings.TrimSpace(pageToken); pageToken != "" {
+		call.PageToken(pageToken)
+	}
+	return call.Context(ctx).Do()
+}
+
+func (c serviceClient) SearchMessages(ctx context.Context, userID string, query string, limit int64) ([]*gmailapi.Message, error) {
+	if c.service == nil {
+		return nil, fmt.Errorf("missing gmail service")
+	}
+	if limit <= 0 {
+		limit = defaultSearchLimit
+	}
+	response, err := c.service.Users.Messages.List(cleanUserID(userID)).Q(strings.TrimSpace(query)).MaxResults(limit).Context(ctx).Do()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*gmailapi.Message, 0, len(response.Messages))
+	for _, item := range response.Messages {
+		if item == nil || strings.TrimSpace(item.Id) == "" {
+			continue
+		}
+		message, err := c.GetMessage(ctx, userID, item.Id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, message)
+	}
+	return out, nil
+}
+
+func (c serviceClient) GetMessage(ctx context.Context, userID string, messageID string) (*gmailapi.Message, error) {
+	if c.service == nil {
+		return nil, fmt.Errorf("missing gmail service")
+	}
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil, fmt.Errorf("missing gmail message id")
+	}
+	return c.service.Users.Messages.Get(cleanUserID(userID), messageID).Format("full").Context(ctx).Do()
+}
+
+func (c serviceClient) GetRawMessage(ctx context.Context, userID string, messageID string) ([]byte, error) {
+	if c.service == nil {
+		return nil, fmt.Errorf("missing gmail service")
+	}
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil, fmt.Errorf("missing gmail message id")
+	}
+	message, err := c.service.Users.Messages.Get(cleanUserID(userID), messageID).Format("raw").Context(ctx).Do()
+	if err != nil {
+		return nil, err
+	}
+	return decodeGmailBytes(message.Raw), nil
+}
+
+func (c serviceClient) GetAttachment(ctx context.Context, userID string, messageID string, attachmentID string) ([]byte, error) {
+	if c.service == nil {
+		return nil, fmt.Errorf("missing gmail service")
+	}
+	messageID = strings.TrimSpace(messageID)
+	attachmentID = strings.TrimSpace(attachmentID)
+	if messageID == "" {
+		return nil, fmt.Errorf("missing gmail message id")
+	}
+	if attachmentID == "" {
+		return nil, fmt.Errorf("missing gmail attachment id")
+	}
+	body, err := c.service.Users.Messages.Attachments.Get(cleanUserID(userID), messageID, attachmentID).Context(ctx).Do()
+	if err != nil {
+		return nil, err
+	}
+	return decodeGmailBytes(body.Data), nil
+}
+
+func (c serviceClient) SendMessage(ctx context.Context, userID string, message *gmailapi.Message) (*gmailapi.Message, error) {
+	if c.service == nil {
+		return nil, fmt.Errorf("missing gmail service")
+	}
+	if message == nil {
+		return nil, fmt.Errorf("missing gmail message")
+	}
+	return c.service.Users.Messages.Send(cleanUserID(userID), message).Context(ctx).Do()
+}
+
+func cleanUserID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return DefaultUserID
+	}
+	return value
+}

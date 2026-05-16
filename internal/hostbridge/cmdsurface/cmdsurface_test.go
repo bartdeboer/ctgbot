@@ -3,6 +3,7 @@ package cmdsurface
 import (
 	"testing"
 
+	gmailv2component "github.com/bartdeboer/ctgbot/internal/component/gmailv2"
 	llamacppcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 )
 
@@ -16,6 +17,19 @@ func TestResolveFallsBackToCodexForInvalidRef(t *testing.T) {
 	}
 	if !resolved.Supported {
 		t.Fatal("Supported = false, want true")
+	}
+}
+
+func TestCommandRefBoundSurfacesSupportsGmailV2(t *testing.T) {
+	bound := CommandRefBoundSurfaces("gmailv2/work")
+	if len(bound) != 1 {
+		t.Fatalf("len(CommandRefBoundSurfaces) = %d, want 1", len(bound))
+	}
+	if got, want := bound[0].ComponentType, gmailv2component.Type; got != want {
+		t.Fatalf("ComponentType = %q, want %q", got, want)
+	}
+	if got, want := bound[0].ComponentRef, "gmailv2/work"; got != want {
+		t.Fatalf("ComponentRef = %q, want %q", got, want)
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	allowlistfilter "github.com/bartdeboer/ctgbot/internal/component/filter/allowlist"
 	guardcomponent "github.com/bartdeboer/ctgbot/internal/component/filter/guard"
 	"github.com/bartdeboer/ctgbot/internal/component/gmail"
+	"github.com/bartdeboer/ctgbot/internal/component/gmailv2"
 	"github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
@@ -617,6 +618,15 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(gmail.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return gmail.NewWithOptions(ctx, registration, runtime, home, storage, gmail.Options{OAuthClientConfigPath: filepath.Join(rtSystem.StateRoot, "google", "oauth_client.json"), Logger: rtSystem.Logger})
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(gmailv2.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return gmailv2.NewWithOptions(ctx, registration, runtime, home, storage, gmailv2.Options{
+			OAuthClientConfigPath: filepath.Join(rtSystem.StateRoot, "google", "oauth_client.json"),
+			Logger:                rtSystem.Logger,
+			ResolveChatWorkspace:  rtSystem.ResolveChatWorkspace,
+		})
 	}); err != nil {
 		return nil, err
 	}

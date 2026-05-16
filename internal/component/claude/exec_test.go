@@ -20,6 +20,7 @@ func TestBuildExecArgsStartsClaudePrintTurn(t *testing.T) {
 	want := []string{
 		"sh", "-lc", "rm -f " + containerengine.ActivePIDFile + "; echo $$ > " + containerengine.ActivePIDFile + "; exec \"$@\"", "sh",
 		"claude", "-p", "hello", "--output-format", "json",
+		"--exclude-dynamic-system-prompt-sections",
 		"--model", "opus", "--permission-mode", "bypassPermissions", "--append-system-prompt", "be brief", "--resume", "session-123",
 	}
 	if !reflect.DeepEqual(got, want) {

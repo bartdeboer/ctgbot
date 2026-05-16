@@ -11,6 +11,7 @@ import (
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	gmailcomponent "github.com/bartdeboer/ctgbot/internal/component/gmail"
+	gmailv2component "github.com/bartdeboer/ctgbot/internal/component/gmailv2"
 	llamacppcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
@@ -90,6 +91,7 @@ func RegisterGobTypes(register func(any)) {
 	brokercomponent.RegisterGobTypes(register)
 	sqlcomponent.RegisterGobTypes(register)
 	gmailcomponent.RegisterGobTypes(register)
+	gmailv2component.RegisterGobTypes(register)
 	claudecomponent.RegisterGobTypes(register)
 	codexcomponent.RegisterGobTypes(register)
 	llamacppcomponent.RegisterGobTypes(register)
@@ -108,6 +110,8 @@ func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 		return (*codexcomponent.Component)(nil), true
 	case gmailcomponent.Type:
 		return (*gmailcomponent.Component)(nil), true
+	case gmailv2component.Type:
+		return (*gmailv2component.Component)(nil), true
 	case llamacppcomponent.Type:
 		return (*llamacppcomponent.Component)(nil), true
 	default:
