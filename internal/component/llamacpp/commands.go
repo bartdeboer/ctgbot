@@ -27,15 +27,24 @@ type completionCommand struct {
 	Model  string
 }
 
+type embedCommand struct {
+	Text  string
+	Model string
+}
+
 type modelInstallCommand struct {
 	Name        string
 	URL         string
 	Path        string
+	Mode        string
 	Filename    string
 	SHA256      string
 	HostPort    int
 	ContextSize int
+	UBatchSize  int
 	GPULayers   int
+	Pooling     string
+	Normalize   *bool
 	Default     bool
 }
 
@@ -45,6 +54,7 @@ func RegisterGobTypes(register func(any)) {
 	register(statusCommand{})
 	register(modelListCommand{})
 	register(completionCommand{})
+	register(embedCommand{})
 	register(modelInstallCommand{})
 }
 
@@ -54,10 +64,12 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		llamacppCommand("stop", stopCommand{}, "Stop the default llama.cpp model service", nil),
 		llamacppCommand("status", statusCommand{}, "Show default llama.cpp model service status", nil),
 		llamacppCommand("completion <prompt>", nil, "Run a completion with the default llama.cpp model", buildCompletionCommand),
+		llamacppCommand("embed <text>", nil, "Embed text with the default llama.cpp embedding model", buildEmbedCommand),
 		llamacppCommand("model list", modelListCommand{}, "List installed llama.cpp models", nil),
 		llamacppCommand("model install <name> <url>", nil, "Download and register a llama.cpp model", buildModelInstallCommand),
 		llamacppCommand("model register <name> <path>", nil, "Register an existing local llama.cpp model", buildModelRegisterCommand),
 		llamacppCommand("model <model> completion <prompt>", nil, "Run a completion with a specific llama.cpp model", buildModelCompletionCommand),
+		llamacppCommand("model <model> embed <text>", nil, "Embed text with a specific llama.cpp embedding model", buildModelEmbedCommand),
 	}
 }
 
@@ -88,6 +100,9 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.RegisterPattern[completionCommand](registry, "completion <prompt>", c.handleCompletionCommand); err != nil {
 		return err
 	}
+	if err := commandengine.RegisterPattern[embedCommand](registry, "embed <text>", c.handleEmbedCommand); err != nil {
+		return err
+	}
 	if err := commandengine.RegisterPattern[modelListCommand](registry, "model list", func(ctx context.Context, req commandengine.Request, cmd modelListCommand) (commandengine.Result, error) {
 		_, _, _ = ctx, req, cmd
 		return c.modelList(), nil
@@ -106,7 +121,10 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	return commandengine.RegisterPattern[completionCommand](registry, "model <model> completion <prompt>", c.handleCompletionCommand)
+	if err := commandengine.RegisterPattern[completionCommand](registry, "model <model> completion <prompt>", c.handleCompletionCommand); err != nil {
+		return err
+	}
+	return commandengine.RegisterPattern[embedCommand](registry, "model <model> embed <text>", c.handleEmbedCommand)
 }
 
 func (c *Component) start(ctx context.Context) (commandengine.Result, error) {
@@ -186,6 +204,27 @@ func buildModelCompletionCommand(req *clir.Request) (any, error) {
 	return typed, nil
 }
 
+func buildEmbedCommand(req *clir.Request) (any, error) {
+	text := strings.TrimSpace(req.Params["text"])
+	if text == "" {
+		return nil, fmt.Errorf("missing text")
+	}
+	return embedCommand{Text: text}, nil
+}
+
+func buildModelEmbedCommand(req *clir.Request) (any, error) {
+	cmd, err := buildEmbedCommand(req)
+	if err != nil {
+		return nil, err
+	}
+	typed := cmd.(embedCommand)
+	typed.Model = cleanModelName(req.Params["model"])
+	if typed.Model == "" {
+		return nil, fmt.Errorf("missing model")
+	}
+	return typed, nil
+}
+
 func buildModelInstallCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("llamacpp model install", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -194,6 +233,10 @@ func buildModelInstallCommand(req *clir.Request) (any, error) {
 	hostPort := fs.Int("host-port", 0, "Host port for this model service")
 	ctxSize := fs.Int("ctx-size", 0, "llama.cpp context size")
 	gpuLayers := fs.Int("gpu-layers", 0, "llama.cpp GPU layers")
+	embedding := fs.Bool("embedding", false, "Register this model for embedding mode")
+	pooling := fs.String("pooling", "", "llama.cpp embedding pooling mode")
+	ubatch := fs.Int("ubatch-size", 0, "llama.cpp physical batch size")
+	normalize := fs.Bool("normalize", true, "L2-normalize embedding vectors client-side")
 	makeDefault := fs.Bool("default", false, "Use this model as the component default")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
@@ -206,7 +249,7 @@ func buildModelInstallCommand(req *clir.Request) (any, error) {
 	if name == "" || url == "" {
 		return nil, fmt.Errorf("missing model name or url")
 	}
-	return modelInstallCommand{Name: name, URL: url, Filename: *filename, SHA256: *sha, HostPort: *hostPort, ContextSize: *ctxSize, GPULayers: *gpuLayers, Default: *makeDefault}, nil
+	return modelInstallCommand{Name: name, URL: url, Mode: modelModeFromFlag(*embedding), Filename: *filename, SHA256: *sha, HostPort: *hostPort, ContextSize: *ctxSize, UBatchSize: *ubatch, GPULayers: *gpuLayers, Pooling: *pooling, Normalize: normalizeOption(*embedding, *normalize), Default: *makeDefault}, nil
 }
 
 func buildModelRegisterCommand(req *clir.Request) (any, error) {
@@ -215,6 +258,10 @@ func buildModelRegisterCommand(req *clir.Request) (any, error) {
 	hostPort := fs.Int("host-port", 0, "Host port for this model service")
 	ctxSize := fs.Int("ctx-size", 0, "llama.cpp context size")
 	gpuLayers := fs.Int("gpu-layers", 0, "llama.cpp GPU layers")
+	embedding := fs.Bool("embedding", false, "Register this model for embedding mode")
+	pooling := fs.String("pooling", "", "llama.cpp embedding pooling mode")
+	ubatch := fs.Int("ubatch-size", 0, "llama.cpp physical batch size")
+	normalize := fs.Bool("normalize", true, "L2-normalize embedding vectors client-side")
 	makeDefault := fs.Bool("default", false, "Use this model as the component default")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
@@ -227,7 +274,21 @@ func buildModelRegisterCommand(req *clir.Request) (any, error) {
 	if name == "" || path == "" {
 		return nil, fmt.Errorf("missing model name or path")
 	}
-	return modelInstallCommand{Name: name, Path: path, HostPort: *hostPort, ContextSize: *ctxSize, GPULayers: *gpuLayers, Default: *makeDefault}, nil
+	return modelInstallCommand{Name: name, Path: path, Mode: modelModeFromFlag(*embedding), HostPort: *hostPort, ContextSize: *ctxSize, UBatchSize: *ubatch, GPULayers: *gpuLayers, Pooling: *pooling, Normalize: normalizeOption(*embedding, *normalize), Default: *makeDefault}, nil
+}
+
+func modelModeFromFlag(embedding bool) string {
+	if embedding {
+		return "embedding"
+	}
+	return "completion"
+}
+
+func normalizeOption(embedding bool, normalize bool) *bool {
+	if !embedding {
+		return nil
+	}
+	return &normalize
 }
 
 func (c *Component) handleCompletionCommand(ctx context.Context, req commandengine.Request, cmd completionCommand) (commandengine.Result, error) {
@@ -243,6 +304,26 @@ func (c *Component) handleCompletionCommand(ctx context.Context, req commandengi
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: completionResultText(result)}, nil
+}
+
+func (c *Component) handleEmbedCommand(ctx context.Context, req commandengine.Request, cmd embedCommand) (commandengine.Result, error) {
+	_, _ = req, c
+	result, err := c.Embed(ctx, component.EmbedRequest{
+		Model: cmd.Model,
+		Inputs: []component.EmbeddingInput{{
+			ID:   "input",
+			Text: cmd.Text,
+			Kind: component.EmbeddingKindQuery,
+		}},
+	})
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if len(result.Embeddings) == 0 {
+		return commandengine.Result{Text: "no embedding returned"}, nil
+	}
+	embedding := result.Embeddings[0]
+	return commandengine.Result{Text: fmt.Sprintf("embedding model=%s dim=%d normalized=%t", embedding.Model, embedding.Dim, embedding.Normalized)}, nil
 }
 
 func completionResultText(result *component.CompletionResult) string {
@@ -272,7 +353,7 @@ func (c *Component) modelList() commandengine.Result {
 		if name == c.componentConfig.DefaultModel {
 			suffix = " default=true"
 		}
-		lines = append(lines, fmt.Sprintf("- %s%s path=%s port=%d", name, suffix, c.modelPath(name, model), firstPositive(model.HostPort, c.componentConfig.HostPort)))
+		lines = append(lines, fmt.Sprintf("- %s%s mode=%s path=%s port=%d", name, suffix, cleanModelMode(model.Mode), c.modelPath(name, model), firstPositive(model.HostPort, c.componentConfig.HostPort)))
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}
 }
@@ -280,11 +361,15 @@ func (c *Component) modelList() commandengine.Result {
 func (c *Component) modelInstall(cmd modelInstallCommand) (commandengine.Result, error) {
 	model, err := c.installModel(cmd.Name, ModelConfig{
 		URL:         cmd.URL,
+		Mode:        cmd.Mode,
 		Filename:    cmd.Filename,
 		SHA256:      cmd.SHA256,
 		HostPort:    cmd.HostPort,
 		ContextSize: cmd.ContextSize,
+		UBatchSize:  cmd.UBatchSize,
 		GPULayers:   cmd.GPULayers,
+		Pooling:     cmd.Pooling,
+		Normalize:   cmd.Normalize,
 	})
 	if err != nil {
 		return commandengine.Result{}, err
@@ -301,9 +386,13 @@ func (c *Component) modelInstall(cmd modelInstallCommand) (commandengine.Result,
 func (c *Component) modelRegister(cmd modelInstallCommand) (commandengine.Result, error) {
 	model := ModelConfig{
 		Path:        cmd.Path,
+		Mode:        cmd.Mode,
 		HostPort:    cmd.HostPort,
 		ContextSize: cmd.ContextSize,
+		UBatchSize:  cmd.UBatchSize,
 		GPULayers:   cmd.GPULayers,
+		Pooling:     cmd.Pooling,
+		Normalize:   cmd.Normalize,
 	}
 	if c.models.Models == nil {
 		c.models.Models = map[string]ModelConfig{}

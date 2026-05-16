@@ -179,7 +179,17 @@ func serviceSpec(config resolvedModel) backendruntime.ServiceSpec {
 		"--port", "8080",
 		"--ctx-size", strconv.Itoa(config.ContextSize),
 		"--gpu-layers", strconv.Itoa(config.GPULayers),
-		"--jinja",
+	}
+	if cleanModelMode(config.Mode) == "embedding" {
+		cmd = append(cmd, "--embedding")
+		if strings.TrimSpace(config.Pooling) != "" {
+			cmd = append(cmd, "--pooling", strings.TrimSpace(config.Pooling))
+		}
+		if config.UBatchSize > 0 {
+			cmd = append(cmd, "-ub", strconv.Itoa(config.UBatchSize))
+		}
+	} else {
+		cmd = append(cmd, "--jinja")
 	}
 	mounts := []containerengine.Mount{{Source: modelDir, Target: "/models", ReadOnly: true}}
 	if mmprojPath := strings.TrimSpace(config.MMProjPath); mmprojPath != "" {
@@ -310,6 +320,9 @@ func (c *Component) completeWithOptions(ctx context.Context, modelName string, m
 	runtime, model, err := c.runtimeForModel(modelName)
 	if err != nil {
 		return "", err
+	}
+	if cleanModelMode(model.Mode) != "completion" {
+		return "", fmt.Errorf("llama.cpp model %s is not configured for chat completions", model.Name)
 	}
 	maxTokens := model.MaxTokens
 	if maxOutputTokens > 0 {

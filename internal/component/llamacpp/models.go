@@ -23,24 +23,32 @@ type ModelConfig struct {
 	URL         string  `json:"url,omitempty"`
 	Filename    string  `json:"filename,omitempty"`
 	Path        string  `json:"path,omitempty"`
+	Mode        string  `json:"mode,omitempty"`
 	SHA256      string  `json:"sha256,omitempty"`
 	MMProjPath  string  `json:"mmproj_path,omitempty"`
 	HostPort    int     `json:"host_port,omitempty"`
 	ContextSize int     `json:"ctx_size,omitempty"`
+	UBatchSize  int     `json:"ubatch_size,omitempty"`
 	GPULayers   int     `json:"gpu_layers,omitempty"`
 	MaxTokens   int     `json:"max_tokens,omitempty"`
 	Temperature float64 `json:"temperature,omitempty"`
+	Pooling     string  `json:"pooling,omitempty"`
+	Normalize   *bool   `json:"normalize,omitempty"`
 }
 
 type resolvedModel struct {
 	Name        string
 	ModelPath   string
 	MMProjPath  string
+	Mode        string
 	HostPort    int
 	ContextSize int
+	UBatchSize  int
 	GPULayers   int
 	MaxTokens   int
 	Temperature float64
+	Pooling     string
+	Normalize   bool
 }
 
 func loadModelRegistry(homePath string) (ModelRegistry, error) {
@@ -83,8 +91,10 @@ func cleanModelRegistry(models map[string]ModelConfig) map[string]ModelConfig {
 		model.URL = strings.TrimSpace(model.URL)
 		model.Filename = strings.TrimSpace(model.Filename)
 		model.Path = strings.TrimSpace(model.Path)
+		model.Mode = cleanModelMode(model.Mode)
 		model.SHA256 = strings.TrimSpace(model.SHA256)
 		model.MMProjPath = strings.TrimSpace(model.MMProjPath)
+		model.Pooling = strings.TrimSpace(model.Pooling)
 		out[name] = model
 	}
 	return out
@@ -112,6 +122,16 @@ func cleanModelName(name string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-_.")
+}
+
+func cleanModelMode(mode string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case "embedding", "embed":
+		return "embedding"
+	default:
+		return "completion"
+	}
 }
 
 func (c *Component) resolveModel(name string) (resolvedModel, error) {
@@ -142,11 +162,15 @@ func (c *Component) resolveModel(name string) (resolvedModel, error) {
 		Name:        name,
 		ModelPath:   c.modelPath(name, model),
 		MMProjPath:  firstNonEmpty(model.MMProjPath, c.componentConfig.MMProjPath),
+		Mode:        cleanModelMode(model.Mode),
 		HostPort:    firstPositive(model.HostPort, c.componentConfig.HostPort),
 		ContextSize: firstPositive(model.ContextSize, c.componentConfig.ContextSize),
+		UBatchSize:  model.UBatchSize,
 		GPULayers:   firstPositive(model.GPULayers, c.componentConfig.GPULayers),
 		MaxTokens:   firstPositive(model.MaxTokens, c.componentConfig.MaxTokens),
 		Temperature: firstPositiveFloat(model.Temperature, c.componentConfig.Temperature),
+		Pooling:     strings.TrimSpace(model.Pooling),
+		Normalize:   modelNormalize(model),
 	}
 	if strings.TrimSpace(resolved.ModelPath) == "" {
 		return resolvedModel{}, fmt.Errorf("llama.cpp model %s has no model file", name)
@@ -159,12 +183,20 @@ func (c *Component) resolveLegacyModel() resolvedModel {
 		Name:        "default",
 		ModelPath:   c.componentConfig.ModelPath,
 		MMProjPath:  c.componentConfig.MMProjPath,
+		Mode:        "completion",
 		HostPort:    c.componentConfig.HostPort,
 		ContextSize: c.componentConfig.ContextSize,
 		GPULayers:   c.componentConfig.GPULayers,
 		MaxTokens:   c.componentConfig.MaxTokens,
 		Temperature: c.componentConfig.Temperature,
 	}
+}
+
+func modelNormalize(model ModelConfig) bool {
+	if model.Normalize != nil {
+		return *model.Normalize
+	}
+	return cleanModelMode(model.Mode) == "embedding"
 }
 
 func (c *Component) modelPath(name string, model ModelConfig) string {

@@ -70,6 +70,41 @@ type SearchMessageSourceReceiver interface {
 	SetSearchMessageSource(source SearchMessageSource)
 }
 
+type EmbeddingKind string
+
+const (
+	EmbeddingKindDocument EmbeddingKind = "document"
+	EmbeddingKindQuery    EmbeddingKind = "query"
+)
+
+type EmbeddingInput struct {
+	ID   string
+	Text string
+	Kind EmbeddingKind
+}
+
+type Embedding struct {
+	ID         string
+	Vector     []float32
+	Dim        int
+	Model      string
+	Normalized bool
+}
+
+type EmbedRequest struct {
+	Model  string
+	Inputs []EmbeddingInput
+}
+
+type EmbedResponse struct {
+	Embeddings []Embedding
+}
+
+type Embedder interface {
+	Component
+	Embed(ctx context.Context, req EmbedRequest) (EmbedResponse, error)
+}
+
 type Constructor func(
 	ctx context.Context,
 	registration coremodel.Component,
