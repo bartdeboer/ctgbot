@@ -31,6 +31,42 @@ type ChatPayloadSenderReceiver interface {
 	SetChatPayloadSender(sender ChatPayloadSender)
 }
 
+type SearchRequest struct {
+	Query     string
+	ChatID    modeluuid.UUID
+	ThreadID  modeluuid.UUID
+	Limit     int
+	BatchSize int
+	MinScore  float64
+}
+
+type SearchResponse struct {
+	Results []SearchResult
+}
+
+type SearchResult struct {
+	MessageID modeluuid.UUID
+	ChatID    modeluuid.UUID
+	ThreadID  modeluuid.UUID
+	Excerpt   string
+	Text      string
+	Score     float64
+	Reason    string
+}
+
+type Searcher interface {
+	Component
+	Search(ctx context.Context, req SearchRequest) (SearchResponse, error)
+}
+
+type SearchMessageSource interface {
+	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
+}
+
+type SearchMessageSourceReceiver interface {
+	SetSearchMessageSource(source SearchMessageSource)
+}
+
 type Constructor func(
 	ctx context.Context,
 	registration coremodel.Component,
