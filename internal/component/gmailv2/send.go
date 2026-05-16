@@ -115,19 +115,67 @@ func buildRFC822Message(message rfc822Message) ([]byte, error) {
 		return out.Bytes(), nil
 	}
 
-	boundary := "ctgbot-gmail-boundary"
+	inlineAttachments, regularAttachments, err := splitAttachments(message.Attachments)
+	if err != nil {
+		return nil, err
+	}
+	if len(inlineAttachments) > 0 && len(regularAttachments) == 0 {
+		boundary := "ctgbot-gmail-related-boundary"
+		writeHeader(&out, "Content-Type", `multipart/related; boundary="`+boundary+`"`)
+		out.WriteString("\r\n")
+		writeMultipartBodyPart(&out, boundary, message.Body, normalizedBodyContentType(message.ContentType))
+		for _, attachment := range inlineAttachments {
+			if err := writeMultipartAttachment(&out, boundary, attachment); err != nil {
+				return nil, err
+			}
+		}
+		closeBoundary(&out, boundary)
+		return out.Bytes(), nil
+	}
+
+	boundary := "ctgbot-gmail-mixed-boundary"
 	writeHeader(&out, "Content-Type", `multipart/mixed; boundary="`+boundary+`"`)
 	out.WriteString("\r\n")
-	writeMultipartBodyPart(&out, boundary, message.Body, normalizedBodyContentType(message.ContentType))
-	for _, attachment := range message.Attachments {
+	if len(inlineAttachments) > 0 {
+		relatedBoundary := "ctgbot-gmail-related-boundary"
+		out.WriteString("--")
+		out.WriteString(boundary)
+		out.WriteString("\r\n")
+		writeHeader(&out, "Content-Type", `multipart/related; boundary="`+relatedBoundary+`"`)
+		out.WriteString("\r\n")
+		writeMultipartBodyPart(&out, relatedBoundary, message.Body, normalizedBodyContentType(message.ContentType))
+		for _, attachment := range inlineAttachments {
+			if err := writeMultipartAttachment(&out, relatedBoundary, attachment); err != nil {
+				return nil, err
+			}
+		}
+		closeBoundary(&out, relatedBoundary)
+	} else {
+		writeMultipartBodyPart(&out, boundary, message.Body, normalizedBodyContentType(message.ContentType))
+	}
+	for _, attachment := range regularAttachments {
 		if err := writeMultipartAttachment(&out, boundary, attachment); err != nil {
 			return nil, err
 		}
 	}
-	out.WriteString("--")
-	out.WriteString(boundary)
-	out.WriteString("--\r\n")
+	closeBoundary(&out, boundary)
 	return out.Bytes(), nil
+}
+
+func splitAttachments(attachments []message.Media) (inline []message.Media, regular []message.Media, err error) {
+	for _, attachment := range attachments {
+		disposition, err := attachmentDisposition(attachment.Disposition, attachment.ContentID)
+		if err != nil {
+			return nil, nil, err
+		}
+		attachment.Disposition = disposition
+		if disposition == "inline" {
+			inline = append(inline, attachment)
+		} else {
+			regular = append(regular, attachment)
+		}
+	}
+	return inline, regular, nil
 }
 
 func writeBodyPart(out *bytes.Buffer, body string, contentType string) {
@@ -184,6 +232,12 @@ func writeMultipartAttachment(out *bytes.Buffer, boundary string, attachment mes
 	writeBase64Lines(out, attachment.Content)
 	out.WriteString("\r\n")
 	return nil
+}
+
+func closeBoundary(out *bytes.Buffer, boundary string) {
+	out.WriteString("--")
+	out.WriteString(boundary)
+	out.WriteString("--\r\n")
 }
 
 func attachmentDisposition(value string, contentID string) (string, error) {
