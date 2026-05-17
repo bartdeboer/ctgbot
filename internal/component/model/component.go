@@ -3,6 +3,7 @@ package model
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,6 +19,7 @@ const Type = "model"
 type Component struct {
 	registration coremodel.Component
 	home         runtimepkg.Home
+	config       ComponentConfig
 	registry     Registry
 }
 
@@ -29,17 +31,24 @@ var _ component.ModelStore = (*Component)(nil)
 
 func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 	_, _, _ = ctx, runtime, storage
+	config, err := loadComponentConfig(home.Path)
+	if err != nil {
+		return nil, err
+	}
 	registry, err := loadRegistry(home.Path)
 	if err != nil {
 		return nil, err
 	}
-	return &Component{registration: registration, home: home, registry: registry}, nil
+	return &Component{registration: registration, home: home, config: config, registry: registry}, nil
 }
 
 func (c *Component) Type() string { return Type }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {
-	return []component.ManagedFile{{RelativePath: RegistryFilename, Required: false, Sensitive: false}}
+	return []component.ManagedFile{
+		{RelativePath: ComponentConfigFilename, Required: false, Sensitive: false},
+		{RelativePath: RegistryFilename, Required: false, Sensitive: false},
+	}
 }
 
 func (c *Component) ListModels(ctx context.Context) ([]component.Model, error) {
@@ -105,11 +114,11 @@ func (c *Component) InstallModel(ctx context.Context, req component.ModelInstall
 	if record.Filename == "" {
 		return component.Model{}, fmt.Errorf("missing model filename")
 	}
-	target := filepath.Join(c.home.Path, "models", name, record.Filename)
+	target := filepath.Join(c.config.ModelPath, name, record.Filename)
 	if err := downloadFile(record.URL, target, record.SHA256); err != nil {
 		return component.Model{}, err
 	}
-	record.Path = filepath.ToSlash(filepath.Join("models", name, record.Filename))
+	record.Path = filepath.ToSlash(filepath.Join(name, record.Filename))
 	return c.saveModel(name, record, req.Default)
 }
 
@@ -146,12 +155,12 @@ func (c *Component) saveModel(name string, record ModelRecord, makeDefault bool)
 func (c *Component) resolve(name string, record ModelRecord) component.Model {
 	path := strings.TrimSpace(record.Path)
 	if path != "" && !filepath.IsAbs(path) {
-		path = filepath.Join(c.home.Path, path)
+		path = c.resolveRelativeModelPath(path)
 	}
 	if path == "" {
 		filename := firstNonEmpty(record.Filename, filenameFromURL(record.URL))
 		if filename != "" {
-			path = filepath.Join(c.home.Path, "models", name, filename)
+			path = filepath.Join(c.config.ModelPath, name, filename)
 		}
 	}
 	return component.Model{
@@ -171,6 +180,20 @@ func (c *Component) resolve(name string, record ModelRecord) component.Model {
 		Pooling:     strings.TrimSpace(record.Pooling),
 		Normalize:   modelNormalize(record),
 	}
+}
+
+func (c *Component) resolveRelativeModelPath(path string) string {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "." || path == "" {
+		return ""
+	}
+	if strings.HasPrefix(filepath.ToSlash(path), "models/") {
+		legacy := filepath.Join(c.home.Path, path)
+		if _, err := os.Stat(legacy); err == nil {
+			return legacy
+		}
+	}
+	return filepath.Join(c.config.ModelPath, path)
 }
 
 func sortedModelNames(models map[string]ModelRecord) []string {
