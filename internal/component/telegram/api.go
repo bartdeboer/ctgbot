@@ -22,7 +22,7 @@ type TelegramAPI interface {
 	SendMessage(ctx context.Context, chatID int64, threadID int, text string, parseMode string) error
 	SendDocument(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
 	SendPhoto(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
-	SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
+	SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte, video *message.VideoMetadata) error
 	SendAudio(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
 	SendChatAction(ctx context.Context, chatID int64, threadID int, action message.ChatAction) error
 	DownloadFile(ctx context.Context, fileID string) ([]byte, error)
@@ -167,7 +167,7 @@ func (a *TelegramAPIV2) SendPhoto(ctx context.Context, chatID int64, threadID in
 	return err
 }
 
-func (a *TelegramAPIV2) SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+func (a *TelegramAPIV2) SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte, video *message.VideoMetadata) error {
 	b, err := a.ensureBot()
 	if err != nil {
 		return err
@@ -177,6 +177,18 @@ func (a *TelegramAPIV2) SendVideo(ctx context.Context, chatID int64, threadID in
 		MessageThreadID: threadID,
 		Video:           &models.InputFileUpload{Filename: strings.TrimSpace(filename), Data: bytes.NewReader(content)},
 		Caption:         strings.TrimSpace(caption),
+	}
+	if video != nil {
+		p.Width = video.Width
+		p.Height = video.Height
+		p.Duration = video.DurationSeconds
+		p.SupportsStreaming = video.SupportsStreaming
+		if video.Thumbnail != nil && len(video.Thumbnail.Content) > 0 {
+			p.Thumbnail = &models.InputFileUpload{
+				Filename: strings.TrimSpace(video.Thumbnail.Filename),
+				Data:     bytes.NewReader(video.Thumbnail.Content),
+			}
+		}
 	}
 	_, err = b.SendVideo(ctx, p)
 	return err

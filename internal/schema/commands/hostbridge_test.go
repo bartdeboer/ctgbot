@@ -91,6 +91,41 @@ func TestHostbridgeSendFileParsesMediaCommand(t *testing.T) {
 	}
 }
 
+func TestHostbridgeSendFileParsesVideoMetadata(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "video.mp4")
+	thumb := filepath.Join(dir, "thumb.jpg")
+	if err := os.WriteFile(path, []byte("mp4"), 0o644); err != nil {
+		t.Fatalf("write video fixture: %v", err)
+	}
+	if err := os.WriteFile(thumb, []byte("jpg"), 0o644); err != nil {
+		t.Fatalf("write thumbnail fixture: %v", err)
+	}
+	router, err := commandengine.NewRouter(HostbridgeCommands(), commandengine.SourceHostbridge)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	req, err := router.Parse(context.Background(), commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		},
+	}, []string{"sendfile", path, "--type", "video/mp4", "--width", "1280", "--height", "720", "--duration", "82", "--supports-streaming", "--thumbnail", thumb})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	cmd, ok := req.Command.(SendMedia)
+	if !ok {
+		t.Fatalf("command = %T, want SendMedia", req.Command)
+	}
+	if cmd.Video == nil || cmd.Video.Width != 1280 || cmd.Video.Height != 720 || cmd.Video.DurationSeconds != 82 || !cmd.Video.SupportsStreaming {
+		t.Fatalf("video metadata = %#v, want parsed metadata", cmd.Video)
+	}
+	if cmd.Video.Thumbnail == nil || cmd.Video.Thumbnail.Filename != "thumb.jpg" || string(cmd.Video.Thumbnail.Content) != "jpg" {
+		t.Fatalf("thumbnail = %#v, want parsed thumbnail", cmd.Video.Thumbnail)
+	}
+}
+
 func TestHostbridgeMessageParsesPayloadWithAttachments(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "one.txt")
@@ -144,6 +179,45 @@ func TestHostbridgeMessageParsesPayloadWithAttachments(t *testing.T) {
 	}
 	if got, want := cmd.Payload.Attachments[1].Filename, "two.bin"; got != want {
 		t.Fatalf("second filename = %q, want %q", got, want)
+	}
+}
+
+func TestHostbridgeMessageParsesAttachmentVideoMetadata(t *testing.T) {
+	dir := t.TempDir()
+	video := filepath.Join(dir, "video.mp4")
+	thumb := filepath.Join(dir, "thumb.jpg")
+	if err := os.WriteFile(video, []byte("mp4"), 0o644); err != nil {
+		t.Fatalf("write video fixture: %v", err)
+	}
+	if err := os.WriteFile(thumb, []byte("jpg"), 0o644); err != nil {
+		t.Fatalf("write thumbnail fixture: %v", err)
+	}
+	router, err := commandengine.NewRouter(HostbridgeCommands(), commandengine.SourceHostbridge)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	req, err := router.Parse(context.Background(), commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		},
+	}, []string{"message", "hello", "--attach", video + ";type=video/mp4;width=1280;height=720;duration=82;streaming=true;thumbnail=" + thumb})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	cmd, ok := req.Command.(SendPayload)
+	if !ok {
+		t.Fatalf("command = %T, want SendPayload", req.Command)
+	}
+	if len(cmd.Payload.Attachments) != 1 {
+		t.Fatalf("attachments len = %d, want 1", len(cmd.Payload.Attachments))
+	}
+	got := cmd.Payload.Attachments[0].Video
+	if got == nil || got.Width != 1280 || got.Height != 720 || got.DurationSeconds != 82 || !got.SupportsStreaming {
+		t.Fatalf("video metadata = %#v, want parsed metadata", got)
+	}
+	if got.Thumbnail == nil || got.Thumbnail.Filename != "thumb.jpg" || string(got.Thumbnail.Content) != "jpg" {
+		t.Fatalf("thumbnail = %#v, want parsed thumbnail", got.Thumbnail)
 	}
 }
 

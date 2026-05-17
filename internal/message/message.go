@@ -22,6 +22,21 @@ type Media struct {
 	Syntax      string
 	ContentID   string
 	Disposition string
+	Video       *VideoMetadata
+}
+
+type VideoMetadata struct {
+	Width             int
+	Height            int
+	DurationSeconds   int
+	SupportsStreaming bool
+	Thumbnail         *MediaThumbnail
+}
+
+type MediaThumbnail struct {
+	Filename    string
+	ContentType string
+	Content     []byte
 }
 
 type ChatAction string

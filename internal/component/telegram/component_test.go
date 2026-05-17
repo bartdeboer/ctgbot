@@ -43,6 +43,15 @@ type sentPhoto struct {
 	content  string
 }
 
+type sentVideo struct {
+	chatID   int64
+	threadID int
+	filename string
+	caption  string
+	content  string
+	video    *message.VideoMetadata
+}
+
 type sentChatAction struct {
 	chatID   int64
 	threadID int
@@ -59,7 +68,7 @@ type fakeTelegramAPI struct {
 	messages        []sentMessage
 	documents       []sentDocument
 	photos          []sentPhoto
-	videos          []sentPhoto
+	videos          []sentVideo
 	audios          []sentPhoto
 	actions         []sentChatAction
 	sendMessageErrs []error
@@ -104,10 +113,10 @@ func (f *fakeTelegramAPI) SendPhoto(ctx context.Context, chatID int64, threadID 
 	return nil
 }
 
-func (f *fakeTelegramAPI) SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error {
+func (f *fakeTelegramAPI) SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte, video *message.VideoMetadata) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.videos = append(f.videos, sentPhoto{chatID: chatID, threadID: threadID, filename: filename, caption: caption, content: string(content)})
+	f.videos = append(f.videos, sentVideo{chatID: chatID, threadID: threadID, filename: filename, caption: caption, content: string(content), video: video})
 	return nil
 }
 
@@ -467,6 +476,48 @@ func TestSendMediaImageUsesPhoto(t *testing.T) {
 	}
 	if got := api.photos[0]; got.chatID != 123 || got.threadID != 4 || got.filename != "image.png" || got.caption != "caption" || got.content != "png" {
 		t.Fatalf("photo = %#v", got)
+	}
+}
+
+func TestSendMediaVideoUsesVideoMetadata(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api}
+	video := &message.VideoMetadata{
+		Width:             1280,
+		Height:            720,
+		DurationSeconds:   82,
+		SupportsStreaming: true,
+		Thumbnail: &message.MediaThumbnail{
+			Filename:    "thumb.jpg",
+			ContentType: "image/jpeg",
+			Content:     []byte("jpg"),
+		},
+	}
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID: "123",
+		ProviderThreadID:  "4",
+		Text:              message.TextMessage{Text: "caption"},
+		Attachments: []message.Media{{
+			Filename:    "video.mp4",
+			ContentType: "video/mp4",
+			Content:     []byte("mp4"),
+			Video:       video,
+		}},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	if len(api.videos) != 1 {
+		t.Fatalf("videos = %#v, want one", api.videos)
+	}
+	got := api.videos[0]
+	if got.chatID != 123 || got.threadID != 4 || got.filename != "video.mp4" || got.caption != "caption" || got.content != "mp4" {
+		t.Fatalf("video = %#v", got)
+	}
+	if got.video == nil || got.video.Width != 1280 || got.video.Height != 720 || got.video.DurationSeconds != 82 || !got.video.SupportsStreaming {
+		t.Fatalf("video metadata = %#v, want dimensions/duration/streaming", got.video)
+	}
+	if got.video.Thumbnail == nil || got.video.Thumbnail.Filename != "thumb.jpg" || string(got.video.Thumbnail.Content) != "jpg" {
+		t.Fatalf("thumbnail = %#v, want propagated thumbnail", got.video.Thumbnail)
 	}
 }
 

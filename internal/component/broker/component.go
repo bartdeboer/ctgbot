@@ -254,6 +254,7 @@ func (c *Component) sendMedia(
 			ContentType: cmd.ContentType,
 			Syntax:      cmd.Syntax,
 			Content:     append([]byte(nil), cmd.Content...),
+			Video:       cmd.Video,
 		}},
 	})
 }
