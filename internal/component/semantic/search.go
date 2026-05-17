@@ -34,8 +34,11 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	if c == nil || c.messages == nil {
 		return component.SearchResponse{}, fmt.Errorf("missing semantic message source")
 	}
-	messages, err := c.messages.ThreadMessages(ctx, req.ThreadID)
-	if err != nil {
+	var messages []coremodel.ThreadMessage
+	if err := c.messages.ForEachMessage(ctx, component.MessageScope{ThreadID: req.ThreadID}, func(message coremodel.ThreadMessage) error {
+		messages = append(messages, message)
+		return nil
+	}); err != nil {
 		return component.SearchResponse{}, err
 	}
 	items := searchableMessages(messages)
@@ -53,7 +56,11 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	if err != nil {
 		return component.SearchResponse{}, err
 	}
-	closeSession, err := c.beginCompletionSession(ctx, provider, providerRef, req.CompletionIdleTimeout)
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = strings.TrimSpace(c.config.Model)
+	}
+	closeSession, err := c.beginCompletionSession(ctx, provider, providerRef, model, req.CompletionIdleTimeout)
 	if err != nil {
 		return component.SearchResponse{}, err
 	}
@@ -76,7 +83,6 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	if minScore <= 0 {
 		minScore = DefaultMinScore
 	}
-
 	byID := map[string]coremodel.ThreadMessage{}
 	for _, message := range items {
 		byID[message.ID.String()] = message
@@ -88,7 +94,7 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 			end = len(items)
 		}
 		batch := items[start:end]
-		scores, err := c.scoreBatch(ctx, provider, query, batch)
+		scores, err := c.scoreBatch(ctx, provider, model, query, batch)
 		if err != nil {
 			return component.SearchResponse{}, fmt.Errorf("semantic batch %d-%d via %s: %w", start, end, providerRef, err)
 		}
@@ -123,12 +129,12 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	return component.SearchResponse{Results: results}, nil
 }
 
-func (c *Component) beginCompletionSession(ctx context.Context, provider component.CompletionProvider, providerRef string, idleTimeout time.Duration) (func(), error) {
+func (c *Component) beginCompletionSession(ctx context.Context, provider component.CompletionProvider, providerRef string, model string, idleTimeout time.Duration) (func(), error) {
 	sessionProvider, ok := provider.(component.CompletionSessionProvider)
 	if !ok {
 		return func() {}, nil
 	}
-	session, err := sessionProvider.BeginCompletionSession(ctx, component.CompletionSessionOptions{IdleTimeout: idleTimeout})
+	session, err := sessionProvider.BeginCompletionSession(ctx, component.CompletionSessionOptions{Model: strings.TrimSpace(model), IdleTimeout: idleTimeout})
 	if err != nil {
 		return nil, fmt.Errorf("begin completion session via %s: %w", providerRef, err)
 	}
@@ -150,8 +156,9 @@ func searchableMessages(messages []coremodel.ThreadMessage) []coremodel.ThreadMe
 	return out
 }
 
-func (c *Component) scoreBatch(ctx context.Context, provider component.CompletionProvider, query string, messages []coremodel.ThreadMessage) ([]scoredMessage, error) {
+func (c *Component) scoreBatch(ctx context.Context, provider component.CompletionProvider, model string, query string, messages []coremodel.ThreadMessage) ([]scoredMessage, error) {
 	result, err := provider.HandleCompletion(ctx, component.CompletionRequest{
+		Model: strings.TrimSpace(model),
 		Prompt: component.CompletionPrompt{Messages: []component.CompletionMessage{{
 			Role:    component.CompletionRoleUser,
 			Content: semanticScoringPrompt(query, messages),

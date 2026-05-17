@@ -17,6 +17,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	backendruntime "github.com/bartdeboer/ctgbot/internal/runtime/backend"
@@ -25,13 +26,25 @@ import (
 type Component struct {
 	registration    coremodel.Component
 	componentConfig ComponentConfig
-	runtime         *backendruntime.Runtime
+	runtimeConfig   runtimepkg.BindConfig
+	backendFactory  backendruntime.Binder
+	home            runtimepkg.Home
+	resolver        ComponentResolver
 	client          *http.Client
 	logger          *log.Logger
 	runtimeMu       sync.Mutex
-	idleStop        *time.Timer
-	autoManaged     bool
-	activeSessions  int
+	modelStates     map[string]*modelRuntimeState
+}
+
+type ComponentResolver interface {
+	ResolveComponentRef(ctx context.Context, ref string) (*coremodel.Component, error)
+	ResolveComponent(ctx context.Context, id modeluuid.UUID) (*component.Loaded, error)
+}
+
+type modelRuntimeState struct {
+	idleStop       *time.Timer
+	autoManaged    bool
+	activeSessions int
 }
 
 var _ component.Component = (*Component)(nil)
@@ -45,6 +58,7 @@ func New(
 	runtimeFactory runtimepkg.Factory,
 	home runtimepkg.Home,
 	storage repository.Storage,
+	resolver ComponentResolver,
 	logger *log.Logger,
 ) (component.Component, error) {
 	_, _ = ctx, storage
@@ -63,7 +77,10 @@ func New(
 	return &Component{
 		registration:    registration,
 		componentConfig: componentConfig,
-		runtime:         backendFactory.BindBackend(registration, home, runtimeConfig, serviceSpec(componentConfig)),
+		runtimeConfig:   runtimeConfig,
+		backendFactory:  backendFactory,
+		home:            home,
+		resolver:        resolver,
 		client:          &http.Client{Timeout: 2 * time.Minute},
 		logger:          logger,
 	}, nil
@@ -79,7 +96,7 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 }
 
 func (c *Component) HandleCompletion(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
-	text, err := c.completeWithManagedBackend(ctx, completionPromptToChat(request.Prompt), request.MaxOutputTokens, request.ResponseFormat)
+	text, err := c.completeWithManagedBackend(ctx, request.Model, completionPromptToChat(request.Prompt), request.MaxOutputTokens, request.ResponseFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +107,8 @@ func (c *Component) HandleCompletion(ctx context.Context, request component.Comp
 	return &component.CompletionResult{Final: &coremodel.ThreadMessage{Text: text}}, nil
 }
 
-func (c *Component) completeWithManagedBackend(ctx context.Context, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
-	session, err := c.BeginCompletionSession(ctx, component.CompletionSessionOptions{})
+func (c *Component) completeWithManagedBackend(ctx context.Context, modelName string, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
+	session, err := c.BeginCompletionSession(ctx, component.CompletionSessionOptions{Model: modelName})
 	if err != nil {
 		return "", err
 	}
@@ -100,49 +117,63 @@ func (c *Component) completeWithManagedBackend(ctx context.Context, messages []c
 			c.logf("llamacpp completion session close failed component=%s err=%v", c.registration.Ref(), err)
 		}
 	}()
-	return c.completeWithOptions(ctx, messages, maxOutputTokens, responseFormat)
+	return c.completeWithOptions(ctx, modelName, messages, maxOutputTokens, responseFormat)
 }
 
 func (c *Component) BeginCompletionSession(ctx context.Context, options component.CompletionSessionOptions) (component.CompletionSession, error) {
 	if c == nil {
 		return nil, fmt.Errorf("missing llamacpp component")
 	}
-	if c.runtime == nil {
+	runtime, model, err := c.runtimeForModel(options.Model)
+	if err != nil {
+		return nil, err
+	}
+	if runtime == nil {
 		return nil, fmt.Errorf("missing llamacpp backend runtime")
 	}
 	c.runtimeMu.Lock()
 	defer c.runtimeMu.Unlock()
-	c.cancelIdleStopLocked()
-	wasRunning, err := c.isRunning(ctx)
+	state := c.modelStateLocked(model.Name)
+	c.cancelIdleStopLocked(state)
+	wasRunning, err := isRunning(ctx, runtime)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := c.runtime.Start(ctx); err != nil {
+	if _, err := runtime.Start(ctx); err != nil {
 		return nil, err
 	}
 	if !wasRunning {
-		c.autoManaged = true
+		state.autoManaged = true
 	}
-	c.activeSessions++
+	state.activeSessions++
+	modelName := model.Name
 	return &completionSession{
 		close: func() error {
-			return c.releaseCompletionSession(options.IdleTimeout)
+			return c.releaseCompletionSession(modelName, options.IdleTimeout)
 		},
 	}, nil
 }
 
 func (c *Component) isRunning(ctx context.Context) (bool, error) {
-	if c == nil || c.runtime == nil {
+	runtime, _, err := c.runtimeForModel("")
+	if err != nil {
+		return false, err
+	}
+	return isRunning(ctx, runtime)
+}
+
+func isRunning(ctx context.Context, runtime *backendruntime.Runtime) (bool, error) {
+	if runtime == nil {
 		return false, nil
 	}
-	status, err := c.runtime.Status(ctx)
+	status, err := runtime.Status(ctx)
 	if err != nil {
 		return false, err
 	}
 	return strings.TrimSpace(status.State) == "running", nil
 }
 
-func serviceSpec(config ComponentConfig) backendruntime.ServiceSpec {
+func serviceSpec(config resolvedModel) backendruntime.ServiceSpec {
 	modelDir := filepath.Dir(config.ModelPath)
 	cmd := []string{
 		"-m", "/models/" + filepath.Base(config.ModelPath),
@@ -150,7 +181,17 @@ func serviceSpec(config ComponentConfig) backendruntime.ServiceSpec {
 		"--port", "8080",
 		"--ctx-size", strconv.Itoa(config.ContextSize),
 		"--gpu-layers", strconv.Itoa(config.GPULayers),
-		"--jinja",
+	}
+	if cleanModelMode(config.Mode) == "embedding" {
+		cmd = append(cmd, "--embedding")
+		if strings.TrimSpace(config.Pooling) != "" {
+			cmd = append(cmd, "--pooling", strings.TrimSpace(config.Pooling))
+		}
+		if config.UBatchSize > 0 {
+			cmd = append(cmd, "-ub", strconv.Itoa(config.UBatchSize))
+		}
+	} else {
+		cmd = append(cmd, "--jinja")
 	}
 	mounts := []containerengine.Mount{{Source: modelDir, Target: "/models", ReadOnly: true}}
 	if mmprojPath := strings.TrimSpace(config.MMProjPath); mmprojPath != "" {
@@ -175,66 +216,88 @@ func serviceSpec(config ComponentConfig) backendruntime.ServiceSpec {
 	}
 }
 
-func (c *Component) stopAfterCompletion() error {
-	if c == nil || c.runtime == nil {
+func (c *Component) stopAfterCompletion(modelName string) error {
+	runtime, _, err := c.runtimeForModel(modelName)
+	if err != nil {
+		return err
+	}
+	if runtime == nil {
 		return nil
 	}
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := c.runtime.Stop(stopCtx); err != nil {
+	if err := runtime.Stop(stopCtx); err != nil {
 		c.logf("llamacpp stop-after-completion failed component=%s err=%v", c.registration.Ref(), err)
 		return err
 	}
 	return nil
 }
 
-func (c *Component) releaseCompletionSession(idleTimeout time.Duration) error {
+func (c *Component) releaseCompletionSession(modelName string, idleTimeout time.Duration) error {
 	if c == nil {
 		return nil
 	}
 	c.runtimeMu.Lock()
-	if c.activeSessions > 0 {
-		c.activeSessions--
+	state := c.modelStateLocked(modelName)
+	if state.activeSessions > 0 {
+		state.activeSessions--
 	}
-	if c.activeSessions > 0 {
+	if state.activeSessions > 0 {
 		c.runtimeMu.Unlock()
 		return nil
 	}
-	if !c.autoManaged || c.componentConfig.KeepRunning {
+	if !state.autoManaged || c.componentConfig.KeepRunning {
 		c.runtimeMu.Unlock()
 		return nil
 	}
 	if idleTimeout <= 0 {
-		c.autoManaged = false
+		state.autoManaged = false
 		c.runtimeMu.Unlock()
-		return c.stopAfterCompletion()
+		return c.stopAfterCompletion(modelName)
 	}
-	c.cancelIdleStopLocked()
+	c.cancelIdleStopLocked(state)
 	var timer *time.Timer
 	timer = time.AfterFunc(idleTimeout, func() {
 		c.runtimeMu.Lock()
-		if c.idleStop != timer {
+		state := c.modelStateLocked(modelName)
+		if state.idleStop != timer {
 			c.runtimeMu.Unlock()
 			return
 		}
-		c.idleStop = nil
-		c.autoManaged = false
+		state.idleStop = nil
+		state.autoManaged = false
 		c.runtimeMu.Unlock()
-		if err := c.stopAfterCompletion(); err != nil {
+		if err := c.stopAfterCompletion(modelName); err != nil {
 			c.logf("llamacpp idle stop failed component=%s err=%v", c.registration.Ref(), err)
 		}
 	})
-	c.idleStop = timer
+	state.idleStop = timer
 	c.runtimeMu.Unlock()
 	return nil
 }
 
-func (c *Component) cancelIdleStopLocked() {
-	if c == nil || c.idleStop == nil {
+func (c *Component) modelStateLocked(modelName string) *modelRuntimeState {
+	if c.modelStates == nil {
+		c.modelStates = map[string]*modelRuntimeState{}
+	}
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		modelName = "default"
+	}
+	state := c.modelStates[modelName]
+	if state == nil {
+		state = &modelRuntimeState{}
+		c.modelStates[modelName] = state
+	}
+	return state
+}
+
+func (c *Component) cancelIdleStopLocked(state *modelRuntimeState) {
+	if state == nil || state.idleStop == nil {
 		return
 	}
-	c.idleStop.Stop()
-	c.idleStop = nil
+	state.idleStop.Stop()
+	state.idleStop = nil
 }
 
 type completionSession struct {
@@ -255,16 +318,23 @@ func (s *completionSession) Close() error {
 	return s.err
 }
 
-func (c *Component) completeWithOptions(ctx context.Context, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
-	maxTokens := c.componentConfig.MaxTokens
+func (c *Component) completeWithOptions(ctx context.Context, modelName string, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
+	runtime, model, err := c.runtimeForModel(modelName)
+	if err != nil {
+		return "", err
+	}
+	if cleanModelMode(model.Mode) != "completion" {
+		return "", fmt.Errorf("llama.cpp model %s is not configured for chat completions", model.Name)
+	}
+	maxTokens := model.MaxTokens
 	if maxOutputTokens > 0 {
 		maxTokens = maxOutputTokens
 	}
 	body := completionRequest{
-		Model:       c.registration.Name,
+		Model:       model.Name,
 		Messages:    messages,
 		MaxTokens:   maxTokens,
-		Temperature: c.componentConfig.Temperature,
+		Temperature: model.Temperature,
 	}
 	if strings.EqualFold(strings.TrimSpace(responseFormat), "json") {
 		body.ResponseFormat = &completionResponseFormat{Type: "json_object"}
@@ -273,7 +343,7 @@ func (c *Component) completeWithOptions(ctx context.Context, messages []chatMess
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL()+"/v1/chat/completions", bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, runtime.BaseURL()+"/v1/chat/completions", bytes.NewReader(data))
 	if err != nil {
 		return "", err
 	}
@@ -300,17 +370,25 @@ func (c *Component) completeWithOptions(ctx context.Context, messages []chatMess
 	return decoded.Choices[0].Message.Content, nil
 }
 
-func (c *Component) baseURL() string {
-	if c == nil || c.runtime == nil {
-		return ""
-	}
-	return c.runtime.BaseURL()
-}
-
 func (c *Component) logf(format string, args ...any) {
 	if c != nil && c.logger != nil {
 		c.logger.Printf(format, args...)
 	}
+}
+
+func (c *Component) runtimeForModel(name string) (*backendruntime.Runtime, resolvedModel, error) {
+	model, err := c.resolveModel(name)
+	if err != nil {
+		return nil, resolvedModel{}, err
+	}
+	if c.backendFactory == nil {
+		return nil, resolvedModel{}, fmt.Errorf("missing llama.cpp backend factory")
+	}
+	registration := c.registration
+	if model.Name != "" && model.Name != "default" {
+		registration.Name = c.registration.Name + "-" + model.Name
+	}
+	return c.backendFactory.BindBackend(registration, c.home, c.runtimeConfig, serviceSpec(model)), model, nil
 }
 
 type completionRequest struct {

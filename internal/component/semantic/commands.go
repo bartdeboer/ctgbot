@@ -10,112 +10,312 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
-	"github.com/bartdeboer/ctgbot/internal/durationparse"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
-type searchCommand struct {
-	Query       string
-	Limit       int
-	BatchSize   int
-	MaxMessages int
-	MinScore    float64
-	KeepWarmFor string
+type strategyListCommand struct{}
+
+type strategyAddEmbeddingCommand struct {
+	Name       string
+	Embedder   string
+	Model      string
+	Prompt     string
+	BatchSize  int
+	SourceKind string
 }
 
+type indexCommand struct {
+	Strategy    string
+	MaxMessages int
+	BatchSize   int
+	Scope       scopeFlags
+}
+
+type indexDropCommand struct {
+	Strategy string
+	Scope    scopeFlags
+}
+
+type strategySearchCommand struct {
+	Strategy string
+	Query    string
+	Limit    int
+	Scope    scopeFlags
+}
+
+type statsCommand struct{}
+
 func RegisterGobTypes(register func(any)) {
-	register(searchCommand{})
+	register(strategyListCommand{})
+	register(strategyAddEmbeddingCommand{})
+	register(indexCommand{})
+	register(indexDropCommand{})
+	register(strategySearchCommand{})
+	register(statsCommand{})
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
+	policy := simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent)
 	return []commandengine.Definition{
 		{
-			Pattern: "search <query>",
-			Help:    "Search current thread history semantically",
+			Pattern: "strategy list",
+			Help:    "List semantic search strategies",
 			Sources: []commandengine.Source{commandengine.SourceHostbridge},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
-			Build:   buildSearchCommand,
+			Policy:  policy,
+			Build:   func(*clir.Request) (any, error) { return strategyListCommand{}, nil },
+		},
+		{
+			Pattern: "strategy add embedding <name>",
+			Help:    "Create an embedding search strategy",
+			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:  policy,
+			Build:   buildStrategyAddEmbeddingCommand,
+		},
+		{
+			Pattern: "index create <strategy>",
+			Help:    "Index current thread messages for a strategy",
+			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:  policy,
+			Build:   buildIndexCommand,
+		},
+		{
+			Pattern: "index drop <strategy>",
+			Help:    "Drop indexed vectors for a strategy",
+			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:  policy,
+			Build:   buildIndexDropCommand,
+		},
+		{
+			Pattern: "search <strategy> <query>",
+			Help:    "Search current thread history using a semantic strategy",
+			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:  policy,
+			Build:   buildStrategySearchCommand,
+		},
+		{
+			Pattern: "stats",
+			Help:    "Show semantic search index stats",
+			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:  policy,
+			Build:   func(*clir.Request) (any, error) { return statsCommand{}, nil },
 		},
 	}
 }
 
-func buildSearchCommand(req *clir.Request) (any, error) {
+func buildStrategyAddEmbeddingCommand(req *clir.Request) (any, error) {
+	fs := flag.NewFlagSet("semantic strategy add embedding", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	embedder := fs.String("embedder", "", "Embedding component ref, for example llamacpp/local")
+	model := fs.String("model", "", "Embedding model name")
+	prompt := fs.String("prompt", defaultQueryInstruction, "Query instruction for embedding models that support it")
+	batchSize := fs.Int("batch-size", 0, "Embedding batch size")
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, err
+	}
+	if len(fs.Args()) > 0 {
+		return nil, fmt.Errorf("unexpected strategy arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	cmd := strategyAddEmbeddingCommand{
+		Name:       strings.TrimSpace(req.Params["name"]),
+		Embedder:   strings.TrimSpace(*embedder),
+		Model:      strings.TrimSpace(*model),
+		Prompt:     strings.TrimSpace(*prompt),
+		BatchSize:  *batchSize,
+		SourceKind: strategySourceMessages,
+	}
+	if cmd.Name == "" {
+		return nil, fmt.Errorf("missing strategy name")
+	}
+	if cmd.Embedder == "" {
+		return nil, fmt.Errorf("missing --embedder")
+	}
+	if cmd.Model == "" {
+		return nil, fmt.Errorf("missing --model")
+	}
+	return cmd, nil
+}
+
+func buildIndexCommand(req *clir.Request) (any, error) {
+	fs := flag.NewFlagSet("semantic index", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	maxMessages := fs.Int("max-messages", 0, "Maximum recent messages to index")
+	batchSize := fs.Int("batch-size", 0, "Embedding batch size")
+	var scope scopeFlags
+	bindScopeFlags(fs, &scope)
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, err
+	}
+	if len(fs.Args()) > 0 {
+		return nil, fmt.Errorf("unexpected index arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	strategy := strings.TrimSpace(req.Params["strategy"])
+	if strategy == "" {
+		return nil, fmt.Errorf("missing strategy")
+	}
+	return indexCommand{Strategy: strategy, MaxMessages: *maxMessages, BatchSize: *batchSize, Scope: scope}, nil
+}
+
+func buildIndexDropCommand(req *clir.Request) (any, error) {
+	fs := flag.NewFlagSet("semantic index drop", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var scope scopeFlags
+	bindScopeFlags(fs, &scope)
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, err
+	}
+	if len(fs.Args()) > 0 {
+		return nil, fmt.Errorf("unexpected index drop arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	strategy := strings.TrimSpace(req.Params["strategy"])
+	if strategy == "" {
+		return nil, fmt.Errorf("missing strategy")
+	}
+	return indexDropCommand{Strategy: strategy, Scope: scope}, nil
+}
+
+func buildStrategySearchCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("semantic search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 0, "Maximum results")
-	batchSize := fs.Int("batch-size", 0, "Messages per scoring batch")
-	maxMessages := fs.Int("max-messages", 0, "Maximum recent messages to scan")
-	minScore := fs.Float64("min-score", 0, "Minimum score to include")
-	keepWarmFor := fs.String("keep-warm-for", "", "Keep completion backend warm after search, for example 10s or 2m")
+	var scope scopeFlags
+	bindScopeFlags(fs, &scope)
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
 	if len(fs.Args()) > 0 {
 		return nil, fmt.Errorf("unexpected search arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	query := strings.TrimSpace(req.Params["query"])
-	if query == "" {
+	cmd := strategySearchCommand{Strategy: strings.TrimSpace(req.Params["strategy"]), Query: strings.TrimSpace(req.Params["query"]), Limit: *limit, Scope: scope}
+	if cmd.Strategy == "" {
+		return nil, fmt.Errorf("missing strategy")
+	}
+	if cmd.Query == "" {
 		return nil, fmt.Errorf("missing search query")
 	}
-	return searchCommand{Query: query, Limit: *limit, BatchSize: *batchSize, MaxMessages: *maxMessages, MinScore: *minScore, KeepWarmFor: *keepWarmFor}, nil
+	return cmd, nil
+}
+
+func bindScopeFlags(fs *flag.FlagSet, scope *scopeFlags) {
+	fs.StringVar(&scope.Chat, "chat", "", "Scope to a chat id")
+	fs.StringVar(&scope.Thread, "thread", "", "Scope to a thread id")
+	fs.BoolVar(&scope.All, "all", false, "Use all indexed messages")
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
 	}
-	return commandengine.RegisterPattern[searchCommand](registry, "search <query>", c.handleSearch)
+	handlers := []error{
+		commandengine.RegisterPattern[strategyListCommand](registry, "strategy list", c.handleStrategyList),
+		commandengine.RegisterPattern[strategyAddEmbeddingCommand](registry, "strategy add embedding <name>", c.handleStrategyAddEmbedding),
+		commandengine.RegisterPattern[indexCommand](registry, "index create <strategy>", c.handleIndex),
+		commandengine.RegisterPattern[indexDropCommand](registry, "index drop <strategy>", c.handleIndexDrop),
+		commandengine.RegisterPattern[strategySearchCommand](registry, "search <strategy> <query>", c.handleStrategySearch),
+		commandengine.RegisterPattern[statsCommand](registry, "stats", c.handleStats),
+	}
+	for _, err := range handlers {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (c *Component) handleSearch(ctx context.Context, req commandengine.Request, cmd searchCommand) (commandengine.Result, error) {
-	threadID := req.Context.ThreadID
-	if threadID.IsNull() {
-		threadID = req.Context.SandboxID
+func (c *Component) handleStrategyList(ctx context.Context, req commandengine.Request, cmd strategyListCommand) (commandengine.Result, error) {
+	strategies, err := c.store.listStrategies(ctx)
+	if err != nil {
+		return commandengine.Result{}, err
 	}
-	if threadID.IsNull() {
-		return commandengine.Result{}, fmt.Errorf("missing thread id")
+	if len(strategies) == 0 {
+		return commandengine.Result{Text: "no semantic strategies"}, nil
+	}
+	var lines []string
+	for _, strategy := range strategies {
+		line := fmt.Sprintf("%s type=%s source=%s", strategy.Name, strategy.Type, strategy.SourceKind)
+		if strategy.EmbedderRef != "" {
+			line += " embedder=" + strategy.EmbedderRef
+		}
+		if strategy.Model != "" {
+			line += " model=" + strategy.Model
+		}
+		lines = append(lines, line)
+	}
+	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
+}
+
+func (c *Component) handleStrategyAddEmbedding(ctx context.Context, req commandengine.Request, cmd strategyAddEmbeddingCommand) (commandengine.Result, error) {
+	record := strategy{
+		Name:        cmd.Name,
+		Type:        strategyTypeEmbedding,
+		SourceKind:  firstNonEmpty(cmd.SourceKind, strategySourceMessages),
+		EmbedderRef: cmd.Embedder,
+		Model:       cmd.Model,
+		Prompt:      cmd.Prompt,
+		BatchSize:   cmd.BatchSize,
+	}
+	if record.BatchSize <= 0 {
+		record.BatchSize = c.config.EmbeddingBatchSize
+	}
+	if record.BatchSize <= 0 {
+		record.BatchSize = DefaultEmbeddingBatchSize
+	}
+	if err := c.store.saveStrategy(ctx, &record); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("semantic strategy saved: %s", record.Name)}, nil
+}
+
+func (c *Component) handleIndex(ctx context.Context, req commandengine.Request, cmd indexCommand) (commandengine.Result, error) {
+	scope, err := resolveIndexScope(req.Context, cmd.Scope)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	started := time.Now()
+	result, err := c.Index(ctx, IndexRequest{Strategy: cmd.Strategy, Scope: scope, MaxMessages: cmd.MaxMessages, BatchSize: cmd.BatchSize})
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("semantic index %s\nscope: %s\nmessages: %d\nembedded: %d\nskipped: %d\nelapsed: %s", cmd.Strategy, scopeText(scope), result.Messages, result.Embedded, result.Skipped, time.Since(started).Round(100*time.Millisecond))}, nil
+}
+
+func (c *Component) handleIndexDrop(ctx context.Context, req commandengine.Request, cmd indexDropCommand) (commandengine.Result, error) {
+	scope, err := resolveScope(req.Context, cmd.Scope)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	deleted, err := c.store.deleteEmbeddings(ctx, cmd.Strategy, scope)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("semantic index dropped: %s\nscope: %s\nembeddings: %d", cmd.Strategy, scopeText(scope), deleted)}, nil
+}
+
+func (c *Component) handleStrategySearch(ctx context.Context, req commandengine.Request, cmd strategySearchCommand) (commandengine.Result, error) {
+	scope, err := resolveScope(req.Context, cmd.Scope)
+	if err != nil {
+		return commandengine.Result{}, err
 	}
 	limit := cmd.Limit
 	if limit <= 0 {
 		limit = c.config.Limit
 	}
-	keepWarmFor, err := c.searchKeepWarmFor(cmd)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
 	started := time.Now()
-	response, err := c.Search(ctx, component.SearchRequest{
-		Query:                 cmd.Query,
-		ChatID:                req.Context.ChatID,
-		ThreadID:              threadID,
-		Limit:                 limit,
-		BatchSize:             cmd.BatchSize,
-		MaxMessages:           cmd.MaxMessages,
-		MinScore:              cmd.MinScore,
-		CompletionIdleTimeout: keepWarmFor,
-	})
+	response, err := c.SearchStrategy(ctx, StrategySearchRequest{Strategy: cmd.Strategy, Query: cmd.Query, Scope: scope, Limit: limit})
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: c.renderSearchResponse(cmd.Query, time.Since(started), response)}, nil
+	return commandengine.Result{Text: c.renderSearchResponse(cmd.Strategy+": "+cmd.Query, time.Since(started), response)}, nil
 }
 
-func (c *Component) searchKeepWarmFor(cmd searchCommand) (time.Duration, error) {
-	raw := strings.TrimSpace(cmd.KeepWarmFor)
-	if raw == "" && c != nil {
-		raw = strings.TrimSpace(c.config.KeepWarmFor)
-	}
-	if raw == "" {
-		return 0, nil
-	}
-	parsed, err := durationparse.Parse(raw, time.Second)
+func (c *Component) handleStats(ctx context.Context, req commandengine.Request, cmd statsCommand) (commandengine.Result, error) {
+	stats, err := c.store.stats(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("parse --keep-warm-for: %w", err)
+		return commandengine.Result{}, err
 	}
-	return parsed, nil
+	return commandengine.Result{Text: fmt.Sprintf("semantic stats\nstrategies: %d\nmessages: %d\nderivations: %d\nembeddings: %d", stats.Strategies, stats.Messages, stats.Derivations, stats.Embeddings)}, nil
 }
 
 func (c *Component) renderSearchResponse(query string, elapsed time.Duration, response component.SearchResponse) string {
@@ -127,7 +327,7 @@ func (c *Component) renderSearchResponse(query string, elapsed time.Duration, re
 	lines = append(lines, header)
 	for i, result := range response.Results {
 		lines = append(lines, "")
-		lines = append(lines, fmt.Sprintf("%d. message_id=%s thread_id=%s score=%.2f", i+1, result.MessageID, result.ThreadID, result.Score))
+		lines = append(lines, fmt.Sprintf("%d. message_id=%s thread_id=%s score=%.3f", i+1, result.MessageID, result.ThreadID, result.Score))
 		if strings.TrimSpace(result.Excerpt) != "" {
 			lines = append(lines, "excerpt: "+result.Excerpt)
 		}

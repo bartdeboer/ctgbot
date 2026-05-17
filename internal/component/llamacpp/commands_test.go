@@ -10,9 +10,13 @@ func TestCommandDefinitions(t *testing.T) {
 	component := &Component{}
 	definitions := component.CommandDefinitions()
 	want := map[string]string{
-		"start":  "start",
-		"stop":   "stop",
-		"status": "status",
+		"start":                             "start",
+		"stop":                              "stop",
+		"status":                            "status",
+		"completion <prompt>":               "completion <prompt>",
+		"embed <text>":                      "embed <text>",
+		"model <model> completion <prompt>": "model <model> completion <prompt>",
+		"model <model> embed <text>":        "model <model> embed <text>",
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("len(CommandDefinitions) = %d, want %d", len(definitions), len(want))

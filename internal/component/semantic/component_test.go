@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/go-clir"
 )
 
 func TestParseScoreResponseAcceptsJSONFence(t *testing.T) {
@@ -87,10 +89,181 @@ func TestSearchPassesCompletionIdleTimeoutToSession(t *testing.T) {
 	}
 }
 
+func TestStrategyEmbeddingIndexAndSearch(t *testing.T) {
+	threadID := modeluuid.New()
+	horseID := modeluuid.New()
+	databaseID := modeluuid.New()
+	store, err := openStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("openStore() error = %v", err)
+	}
+	embedder := fakeEmbedder{}
+	c := &Component{
+		config:   ComponentConfig{Limit: 5, EmbeddingBatchSize: 10},
+		store:    store,
+		resolver: fakeResolver{component: embedder},
+	}
+	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{
+		{ID: horseID, ThreadID: threadID, Text: "The black horse runs through the field."},
+		{ID: databaseID, ThreadID: threadID, Text: "We discussed SQLite embeddings and semantic search strategies."},
+	}})
+	if err := store.saveStrategy(context.Background(), &strategy{
+		Name:        "qwen-embed",
+		Type:        strategyTypeEmbedding,
+		SourceKind:  strategySourceMessages,
+		EmbedderRef: "llamacpp/local",
+		Model:       "qwen3-embed",
+		Prompt:      defaultQueryInstruction,
+	}); err != nil {
+		t.Fatalf("saveStrategy() error = %v", err)
+	}
+	indexed, err := c.IndexThread(context.Background(), IndexRequest{Strategy: "qwen-embed", ThreadID: threadID})
+	if err != nil {
+		t.Fatalf("IndexThread() error = %v", err)
+	}
+	if indexed.Messages != 2 || indexed.Embedded != 2 || indexed.Skipped != 0 {
+		t.Fatalf("indexed = %#v, want 2/2/0", indexed)
+	}
+	indexedAgain, err := c.IndexThread(context.Background(), IndexRequest{Strategy: "qwen-embed", ThreadID: threadID})
+	if err != nil {
+		t.Fatalf("IndexThread() second error = %v", err)
+	}
+	if indexedAgain.Embedded != 0 || indexedAgain.Skipped != 2 {
+		t.Fatalf("indexedAgain = %#v, want skipped existing embeddings", indexedAgain)
+	}
+	results, err := c.SearchStrategy(context.Background(), StrategySearchRequest{Strategy: "qwen-embed", ThreadID: threadID, Query: "database search", Limit: 1})
+	if err != nil {
+		t.Fatalf("SearchStrategy() error = %v", err)
+	}
+	if len(results.Results) != 1 {
+		t.Fatalf("results = %#v, want one", results.Results)
+	}
+	if results.Results[0].MessageID != databaseID {
+		t.Fatalf("top result = %s, want database message %s", results.Results[0].MessageID, databaseID)
+	}
+}
+
+func TestStrategySearchAllAndScopedDrop(t *testing.T) {
+	chatID := modeluuid.New()
+	firstThreadID := modeluuid.New()
+	secondThreadID := modeluuid.New()
+	firstMessageID := modeluuid.New()
+	secondMessageID := modeluuid.New()
+	store, err := openStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("openStore() error = %v", err)
+	}
+	c := &Component{
+		config:   ComponentConfig{Limit: 5, EmbeddingBatchSize: 10},
+		store:    store,
+		resolver: fakeResolver{component: fakeEmbedder{}},
+	}
+	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{
+		{ID: firstMessageID, ChatID: chatID, ThreadID: firstThreadID, Text: "We discussed Gmail attachments."},
+		{ID: secondMessageID, ChatID: chatID, ThreadID: secondThreadID, Text: "We discussed SQLite vector search."},
+	}})
+	if err := store.saveStrategy(context.Background(), &strategy{
+		Name:        "qwen-embed",
+		Type:        strategyTypeEmbedding,
+		SourceKind:  strategySourceMessages,
+		EmbedderRef: "llamacpp/local",
+		Model:       "qwen3-embed",
+	}); err != nil {
+		t.Fatalf("saveStrategy() error = %v", err)
+	}
+	indexed, err := c.Index(context.Background(), IndexRequest{Strategy: "qwen-embed", Scope: scope{All: true}})
+	if err != nil {
+		t.Fatalf("Index(all) error = %v", err)
+	}
+	if indexed.Embedded != 2 {
+		t.Fatalf("indexed = %#v, want 2 embedded", indexed)
+	}
+	results, err := c.SearchStrategy(context.Background(), StrategySearchRequest{Strategy: "qwen-embed", Scope: scope{All: true}, Query: "vector database", Limit: 1})
+	if err != nil {
+		t.Fatalf("SearchStrategy(all) error = %v", err)
+	}
+	if len(results.Results) != 1 || results.Results[0].MessageID != secondMessageID {
+		t.Fatalf("all results = %#v, want second thread message", results.Results)
+	}
+	deleted, err := store.deleteEmbeddings(context.Background(), "qwen-embed", scope{ThreadID: secondThreadID})
+	if err != nil {
+		t.Fatalf("deleteEmbeddings() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted=%d, want 1", deleted)
+	}
+	results, err = c.SearchStrategy(context.Background(), StrategySearchRequest{Strategy: "qwen-embed", Scope: scope{All: true}, Query: "vector database", Limit: 5})
+	if err != nil {
+		t.Fatalf("SearchStrategy(all after delete) error = %v", err)
+	}
+	for _, result := range results.Results {
+		if result.MessageID == secondMessageID {
+			t.Fatalf("deleted message still returned: %#v", results.Results)
+		}
+	}
+}
+
+func TestBuildScopedCommandsParseScopeFlags(t *testing.T) {
+	built, err := buildIndexCommand(&clir.Request{
+		Params: map[string]string{"strategy": "qwen-embed"},
+		Extra:  []string{"--all", "--max-messages", "30"},
+	})
+	if err != nil {
+		t.Fatalf("buildIndexCommand() error = %v", err)
+	}
+	index := built.(indexCommand)
+	if !index.Scope.All || index.MaxMessages != 30 {
+		t.Fatalf("index command = %#v, want all + max messages", index)
+	}
+
+	threadID := modeluuid.New()
+	built, err = buildStrategySearchCommand(&clir.Request{
+		Params: map[string]string{"strategy": "qwen-embed", "query": "hello"},
+		Extra:  []string{"--thread", threadID.String(), "--limit", "3"},
+	})
+	if err != nil {
+		t.Fatalf("buildStrategySearchCommand() error = %v", err)
+	}
+	search := built.(strategySearchCommand)
+	if search.Scope.Thread != threadID.String() || search.Limit != 3 {
+		t.Fatalf("search command = %#v, want thread + limit", search)
+	}
+}
+
 type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
 
-func (f fakeMessageSource) ThreadMessages(context.Context, modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
-	return f.messages, nil
+func (f fakeMessageSource) ForEachMessage(_ context.Context, scope component.MessageScope, visit component.MessageVisitor) error {
+	var messages []coremodel.ThreadMessage
+	for _, message := range f.messages {
+		switch {
+		case scope.All:
+		case !scope.ThreadID.IsNull() && message.ThreadID != scope.ThreadID:
+			continue
+		case !scope.ChatID.IsNull() && message.ChatID != scope.ChatID:
+			continue
+		case scope.ThreadID.IsNull() && scope.ChatID.IsNull() && !scope.All:
+			continue
+		}
+		messages = append(messages, message)
+	}
+	sort.SliceStable(messages, func(i, j int) bool {
+		if messages[i].CreatedAt.Equal(messages[j].CreatedAt) {
+			return messages[i].ID.String() < messages[j].ID.String()
+		}
+		if scope.Order == component.MessageOrderNewestFirst {
+			return messages[i].CreatedAt.After(messages[j].CreatedAt)
+		}
+		return messages[i].CreatedAt.Before(messages[j].CreatedAt)
+	})
+	if scope.Limit > 0 && len(messages) > scope.Limit {
+		messages = messages[:scope.Limit]
+	}
+	for _, message := range messages {
+		if err := visit(message); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type fakeCompletionProvider struct{ reply string }
@@ -136,12 +309,51 @@ func (f fakeCompletionSession) Close() error {
 	return f.close()
 }
 
-type fakeResolver struct{ provider component.CompletionProvider }
+type fakeEmbedder struct{}
+
+func (fakeEmbedder) Type() string { return "embedder" }
+
+func (fakeEmbedder) Embed(_ context.Context, req component.EmbedRequest) (component.EmbedResponse, error) {
+	out := make([]component.Embedding, 0, len(req.Inputs))
+	for _, input := range req.Inputs {
+		out = append(out, component.Embedding{
+			ID:         input.ID,
+			Vector:     fakeVector(input.Text),
+			Dim:        3,
+			Model:      req.Model,
+			Normalized: true,
+		})
+	}
+	return component.EmbedResponse{Embeddings: out}, nil
+}
+
+func fakeVector(text string) []float32 {
+	text = strings.ToLower(text)
+	var out [3]float32
+	if strings.Contains(text, "horse") {
+		out[0] = 1
+	}
+	if strings.Contains(text, "database") || strings.Contains(text, "sqlite") || strings.Contains(text, "search") {
+		out[1] = 1
+	}
+	if strings.Contains(text, "email") || strings.Contains(text, "gmail") {
+		out[2] = 1
+	}
+	return out[:]
+}
+
+type fakeResolver struct {
+	provider  component.CompletionProvider
+	component component.Component
+}
 
 func (f fakeResolver) ResolveComponentRef(context.Context, string) (*coremodel.Component, error) {
 	return &coremodel.Component{ID: modeluuid.New(), Type: "llm", Name: "qwen", Enabled: true}, nil
 }
 
 func (f fakeResolver) ResolveComponent(context.Context, modeluuid.UUID) (*component.Loaded, error) {
+	if f.component != nil {
+		return &component.Loaded{Registration: coremodel.Component{Type: f.component.Type(), Name: "local"}, Component: f.component}, nil
+	}
 	return &component.Loaded{Registration: coremodel.Component{Type: "llm", Name: "qwen"}, Component: f.provider}, nil
 }

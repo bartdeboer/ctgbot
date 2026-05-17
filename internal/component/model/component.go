@@ -1,0 +1,206 @@
+package model
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/repository"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+)
+
+const Type = "model"
+
+type Component struct {
+	registration coremodel.Component
+	home         runtimepkg.Home
+	config       ComponentConfig
+	registry     Registry
+}
+
+var _ component.Component = (*Component)(nil)
+var _ component.ProfileOwner = (*Component)(nil)
+var _ component.CommandSurface = (*Component)(nil)
+var _ component.LocalCommandSurface = (*Component)(nil)
+var _ component.ModelStore = (*Component)(nil)
+
+func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+	_, _, _ = ctx, runtime, storage
+	config, err := loadComponentConfig(home.Path)
+	if err != nil {
+		return nil, err
+	}
+	registry, err := loadRegistry(home.Path)
+	if err != nil {
+		return nil, err
+	}
+	return &Component{registration: registration, home: home, config: config, registry: registry}, nil
+}
+
+func (c *Component) Type() string { return Type }
+
+func (c *Component) ManagedFiles() []component.ManagedFile {
+	return []component.ManagedFile{
+		{RelativePath: ComponentConfigFilename, Required: false, Sensitive: false},
+		{RelativePath: RegistryFilename, Required: false, Sensitive: false},
+	}
+}
+
+func (c *Component) ListModels(ctx context.Context) ([]component.Model, error) {
+	_ = ctx
+	if c == nil {
+		return nil, fmt.Errorf("missing model component")
+	}
+	names := sortedModelNames(c.registry.Models)
+	out := make([]component.Model, 0, len(names))
+	for _, name := range names {
+		out = append(out, c.resolve(name, c.registry.Models[name]))
+	}
+	return out, nil
+}
+
+func (c *Component) GetModel(ctx context.Context, name string) (component.Model, error) {
+	_ = ctx
+	if c == nil {
+		return component.Model{}, fmt.Errorf("missing model component")
+	}
+	name = cleanModelName(name)
+	if name == "" {
+		name = strings.TrimSpace(c.registry.DefaultModel)
+	}
+	if name == "" && len(c.registry.Models) == 1 {
+		for only := range c.registry.Models {
+			name = only
+		}
+	}
+	if name == "" {
+		return component.Model{}, fmt.Errorf("missing model name")
+	}
+	model, ok := c.registry.Models[name]
+	if !ok {
+		return component.Model{}, fmt.Errorf("model not found: %s", name)
+	}
+	return c.resolve(name, model), nil
+}
+
+func (c *Component) DefaultModel(ctx context.Context) (string, error) {
+	_ = ctx
+	if c == nil {
+		return "", fmt.Errorf("missing model component")
+	}
+	return strings.TrimSpace(c.registry.DefaultModel), nil
+}
+
+func (c *Component) InstallModel(ctx context.Context, req component.ModelInstallRequest) (component.Model, error) {
+	_ = ctx
+	if c == nil {
+		return component.Model{}, fmt.Errorf("missing model component")
+	}
+	name := cleanModelName(req.Name)
+	if name == "" {
+		return component.Model{}, fmt.Errorf("missing model name")
+	}
+	record := modelRecordFromComponent(req.Model)
+	record.URL = strings.TrimSpace(record.URL)
+	if record.URL == "" {
+		return component.Model{}, fmt.Errorf("missing model url")
+	}
+	record.Filename = firstNonEmpty(record.Filename, filenameFromURL(record.URL))
+	if record.Filename == "" {
+		return component.Model{}, fmt.Errorf("missing model filename")
+	}
+	target := filepath.Join(c.config.ModelPath, name, record.Filename)
+	if err := downloadFile(record.URL, target, record.SHA256); err != nil {
+		return component.Model{}, err
+	}
+	record.Path = filepath.ToSlash(filepath.Join(name, record.Filename))
+	return c.saveModel(name, record, req.Default)
+}
+
+func (c *Component) RegisterModel(ctx context.Context, req component.ModelInstallRequest) (component.Model, error) {
+	_ = ctx
+	if c == nil {
+		return component.Model{}, fmt.Errorf("missing model component")
+	}
+	name := cleanModelName(req.Name)
+	if name == "" {
+		return component.Model{}, fmt.Errorf("missing model name")
+	}
+	record := modelRecordFromComponent(req.Model)
+	if strings.TrimSpace(record.Path) == "" {
+		return component.Model{}, fmt.Errorf("missing model path")
+	}
+	return c.saveModel(name, record, req.Default)
+}
+
+func (c *Component) saveModel(name string, record ModelRecord, makeDefault bool) (component.Model, error) {
+	if c.registry.Models == nil {
+		c.registry.Models = map[string]ModelRecord{}
+	}
+	c.registry.Models[name] = cleanModelRecord(record)
+	if makeDefault {
+		c.registry.DefaultModel = name
+	}
+	if err := saveRegistry(c.home.Path, c.registry); err != nil {
+		return component.Model{}, err
+	}
+	return c.resolve(name, c.registry.Models[name]), nil
+}
+
+func (c *Component) resolve(name string, record ModelRecord) component.Model {
+	path := strings.TrimSpace(record.Path)
+	if path != "" && !filepath.IsAbs(path) {
+		path = c.resolveRelativeModelPath(path)
+	}
+	if path == "" {
+		filename := firstNonEmpty(record.Filename, filenameFromURL(record.URL))
+		if filename != "" {
+			path = filepath.Join(c.config.ModelPath, name, filename)
+		}
+	}
+	return component.Model{
+		Name:        cleanModelName(name),
+		URL:         strings.TrimSpace(record.URL),
+		Filename:    strings.TrimSpace(record.Filename),
+		Path:        path,
+		Mode:        component.ModelMode(cleanModelMode(record.Mode)),
+		SHA256:      strings.TrimSpace(record.SHA256),
+		MMProjPath:  strings.TrimSpace(record.MMProjPath),
+		HostPort:    record.HostPort,
+		ContextSize: record.ContextSize,
+		UBatchSize:  record.UBatchSize,
+		GPULayers:   record.GPULayers,
+		MaxTokens:   record.MaxTokens,
+		Temperature: record.Temperature,
+		Pooling:     strings.TrimSpace(record.Pooling),
+		Normalize:   modelNormalize(record),
+	}
+}
+
+func (c *Component) resolveRelativeModelPath(path string) string {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "." || path == "" {
+		return ""
+	}
+	if strings.HasPrefix(filepath.ToSlash(path), "models/") {
+		legacy := filepath.Join(c.home.Path, path)
+		if _, err := os.Stat(legacy); err == nil {
+			return legacy
+		}
+	}
+	return filepath.Join(c.config.ModelPath, path)
+}
+
+func sortedModelNames(models map[string]ModelRecord) []string {
+	names := make([]string, 0, len(models))
+	for name := range models {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}

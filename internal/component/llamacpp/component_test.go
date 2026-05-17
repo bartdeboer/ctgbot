@@ -26,7 +26,8 @@ func TestComponentManagedFiles(t *testing.T) {
 func TestServiceSpecUsesComponentConfig(t *testing.T) {
 	t.Parallel()
 
-	spec := serviceSpec(ComponentConfig{
+	spec := serviceSpec(resolvedModel{
+		Name:        "qwen",
 		ModelPath:   "/srv/models/qwen/model.gguf",
 		MMProjPath:  "/srv/mmproj/mmproj.gguf",
 		HostPort:    18080,

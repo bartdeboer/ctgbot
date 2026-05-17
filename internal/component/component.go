@@ -33,6 +33,7 @@ type ChatPayloadSenderReceiver interface {
 
 type SearchRequest struct {
 	Query                 string
+	Model                 string
 	ChatID                modeluuid.UUID
 	ThreadID              modeluuid.UUID
 	Limit                 int
@@ -62,11 +63,102 @@ type Searcher interface {
 }
 
 type SearchMessageSource interface {
-	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
+	ForEachMessage(ctx context.Context, scope MessageScope, visit MessageVisitor) error
 }
 
 type SearchMessageSourceReceiver interface {
 	SetSearchMessageSource(source SearchMessageSource)
+}
+
+type MessageScope struct {
+	ChatID   modeluuid.UUID
+	ThreadID modeluuid.UUID
+	All      bool
+	Limit    int
+	Order    MessageOrder
+}
+
+type MessageVisitor func(coremodel.ThreadMessage) error
+
+type MessageOrder string
+
+const (
+	MessageOrderOldestFirst MessageOrder = "oldest_first"
+	MessageOrderNewestFirst MessageOrder = "newest_first"
+)
+
+type EmbeddingKind string
+
+const (
+	EmbeddingKindDocument EmbeddingKind = "document"
+	EmbeddingKindQuery    EmbeddingKind = "query"
+)
+
+type EmbeddingInput struct {
+	ID   string
+	Text string
+	Kind EmbeddingKind
+}
+
+type Embedding struct {
+	ID         string
+	Vector     []float32
+	Dim        int
+	Model      string
+	Normalized bool
+}
+
+type EmbedRequest struct {
+	Model  string
+	Inputs []EmbeddingInput
+}
+
+type EmbedResponse struct {
+	Embeddings []Embedding
+}
+
+type Embedder interface {
+	Component
+	Embed(ctx context.Context, req EmbedRequest) (EmbedResponse, error)
+}
+
+type ModelMode string
+
+const (
+	ModelModeCompletion ModelMode = "completion"
+	ModelModeEmbedding  ModelMode = "embedding"
+)
+
+type Model struct {
+	Name        string
+	URL         string
+	Filename    string
+	Path        string
+	Mode        ModelMode
+	SHA256      string
+	MMProjPath  string
+	HostPort    int
+	ContextSize int
+	UBatchSize  int
+	GPULayers   int
+	MaxTokens   int
+	Temperature float64
+	Pooling     string
+	Normalize   bool
+}
+
+type ModelInstallRequest struct {
+	Model
+	Default bool
+}
+
+type ModelStore interface {
+	Component
+	ListModels(ctx context.Context) ([]Model, error)
+	GetModel(ctx context.Context, name string) (Model, error)
+	InstallModel(ctx context.Context, req ModelInstallRequest) (Model, error)
+	RegisterModel(ctx context.Context, req ModelInstallRequest) (Model, error)
+	DefaultModel(ctx context.Context) (string, error)
 }
 
 type Constructor func(
@@ -268,6 +360,7 @@ type CompletionSession interface {
 }
 
 type CompletionSessionOptions struct {
+	Model       string
 	IdleTimeout time.Duration
 }
 
@@ -342,6 +435,7 @@ const (
 type CompletionRequest struct {
 	Chat            coremodel.Chat
 	Thread          coremodel.Thread
+	Model           string
 	Prompt          CompletionPrompt
 	Runtime         TurnRuntime
 	MaxOutputTokens int
