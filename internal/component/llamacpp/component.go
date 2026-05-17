@@ -17,6 +17,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	backendruntime "github.com/bartdeboer/ctgbot/internal/runtime/backend"
@@ -28,11 +29,16 @@ type Component struct {
 	runtimeConfig   runtimepkg.BindConfig
 	backendFactory  backendruntime.Binder
 	home            runtimepkg.Home
-	models          ModelRegistry
+	resolver        ComponentResolver
 	client          *http.Client
 	logger          *log.Logger
 	runtimeMu       sync.Mutex
 	modelStates     map[string]*modelRuntimeState
+}
+
+type ComponentResolver interface {
+	ResolveComponentRef(ctx context.Context, ref string) (*coremodel.Component, error)
+	ResolveComponent(ctx context.Context, id modeluuid.UUID) (*component.Loaded, error)
 }
 
 type modelRuntimeState struct {
@@ -52,6 +58,7 @@ func New(
 	runtimeFactory runtimepkg.Factory,
 	home runtimepkg.Home,
 	storage repository.Storage,
+	resolver ComponentResolver,
 	logger *log.Logger,
 ) (component.Component, error) {
 	_, _ = ctx, storage
@@ -67,17 +74,13 @@ func New(
 	if err != nil {
 		return nil, err
 	}
-	models, err := loadModelRegistry(home.Path)
-	if err != nil {
-		return nil, err
-	}
 	return &Component{
 		registration:    registration,
 		componentConfig: componentConfig,
 		runtimeConfig:   runtimeConfig,
 		backendFactory:  backendFactory,
 		home:            home,
-		models:          models,
+		resolver:        resolver,
 		client:          &http.Client{Timeout: 2 * time.Minute},
 		logger:          logger,
 	}, nil
@@ -89,7 +92,6 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 	return []component.ManagedFile{
 		{RelativePath: runtimepkg.ConfigFilename, Required: false, Sensitive: false},
 		{RelativePath: ComponentConfigFilename, Required: false, Sensitive: false},
-		{RelativePath: ModelsFilename, Required: false, Sensitive: false},
 	}
 }
 

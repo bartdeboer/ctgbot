@@ -122,6 +122,45 @@ type Embedder interface {
 	Embed(ctx context.Context, req EmbedRequest) (EmbedResponse, error)
 }
 
+type ModelMode string
+
+const (
+	ModelModeCompletion ModelMode = "completion"
+	ModelModeEmbedding  ModelMode = "embedding"
+)
+
+type Model struct {
+	Name        string
+	URL         string
+	Filename    string
+	Path        string
+	Mode        ModelMode
+	SHA256      string
+	MMProjPath  string
+	HostPort    int
+	ContextSize int
+	UBatchSize  int
+	GPULayers   int
+	MaxTokens   int
+	Temperature float64
+	Pooling     string
+	Normalize   bool
+}
+
+type ModelInstallRequest struct {
+	Model
+	Default bool
+}
+
+type ModelStore interface {
+	Component
+	ListModels(ctx context.Context) ([]Model, error)
+	GetModel(ctx context.Context, name string) (Model, error)
+	InstallModel(ctx context.Context, req ModelInstallRequest) (Model, error)
+	RegisterModel(ctx context.Context, req ModelInstallRequest) (Model, error)
+	DefaultModel(ctx context.Context) (string, error)
+}
+
 type Constructor func(
 	ctx context.Context,
 	registration coremodel.Component,

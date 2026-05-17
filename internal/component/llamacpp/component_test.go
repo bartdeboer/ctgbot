@@ -12,17 +12,14 @@ func TestComponentManagedFiles(t *testing.T) {
 
 	component := &Component{}
 	got := component.ManagedFiles()
-	if len(got) != 3 {
-		t.Fatalf("len(ManagedFiles) = %d, want 3", len(got))
+	if len(got) != 2 {
+		t.Fatalf("len(ManagedFiles) = %d, want 2", len(got))
 	}
 	if got[0].RelativePath != runtimepkg.ConfigFilename {
 		t.Fatalf("ManagedFiles[0] = %q, want %q", got[0].RelativePath, runtimepkg.ConfigFilename)
 	}
 	if got[1].RelativePath != ComponentConfigFilename {
 		t.Fatalf("ManagedFiles[1] = %q, want %q", got[1].RelativePath, ComponentConfigFilename)
-	}
-	if got[2].RelativePath != ModelsFilename {
-		t.Fatalf("ManagedFiles[2] = %q, want %q", got[2].RelativePath, ModelsFilename)
 	}
 }
 

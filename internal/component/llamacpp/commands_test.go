@@ -15,9 +15,6 @@ func TestCommandDefinitions(t *testing.T) {
 		"status":                            "status",
 		"completion <prompt>":               "completion <prompt>",
 		"embed <text>":                      "embed <text>",
-		"model list":                        "model list",
-		"model install <name> <url>":        "model install <name> <url>",
-		"model register <name> <path>":      "model register <name> <path>",
 		"model <model> completion <prompt>": "model <model> completion <prompt>",
 		"model <model> embed <text>":        "model <model> embed <text>",
 	}

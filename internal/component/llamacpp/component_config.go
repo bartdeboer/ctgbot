@@ -17,6 +17,7 @@ const (
 )
 
 type ComponentConfig struct {
+	ModelStore     string  `json:"model_store,omitempty"`
 	DefaultModel   string  `json:"default_model,omitempty"`
 	ModelPath      string  `json:"model_path"`
 	MMProjPath     string  `json:"mmproj_path,omitempty"`
@@ -56,16 +57,11 @@ func loadComponentConfig(homePath string, name string) (ComponentConfig, error) 
 	return config.withDefaults(), nil
 }
 
-func saveComponentConfig(homePath string, config ComponentConfig) error {
-	data, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	return atomicWriteFile(filepath.Join(strings.TrimSpace(homePath), ComponentConfigFilename), data, 0o644)
-}
-
 func (c ComponentConfig) withDefaults() ComponentConfig {
+	c.ModelStore = strings.TrimSpace(c.ModelStore)
+	if c.ModelStore == "" {
+		c.ModelStore = "model"
+	}
 	c.DefaultModel = strings.TrimSpace(c.DefaultModel)
 	c.ModelPath = strings.TrimSpace(c.ModelPath)
 	c.MMProjPath = strings.TrimSpace(c.MMProjPath)

@@ -2,9 +2,7 @@ package llamacpp
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -20,7 +18,6 @@ var _ component.LocalCommandSurface = (*Component)(nil)
 type startCommand struct{}
 type stopCommand struct{}
 type statusCommand struct{}
-type modelListCommand struct{}
 
 type completionCommand struct {
 	Prompt string
@@ -32,30 +29,12 @@ type embedCommand struct {
 	Model string
 }
 
-type modelInstallCommand struct {
-	Name        string
-	URL         string
-	Path        string
-	Mode        string
-	Filename    string
-	SHA256      string
-	HostPort    int
-	ContextSize int
-	UBatchSize  int
-	GPULayers   int
-	Pooling     string
-	Normalize   *bool
-	Default     bool
-}
-
 func RegisterGobTypes(register func(any)) {
 	register(startCommand{})
 	register(stopCommand{})
 	register(statusCommand{})
-	register(modelListCommand{})
 	register(completionCommand{})
 	register(embedCommand{})
-	register(modelInstallCommand{})
 }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
@@ -65,9 +44,6 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		llamacppCommand("status", statusCommand{}, "Show default llama.cpp model service status", nil),
 		llamacppCommand("completion <prompt>", nil, "Run a completion with the default llama.cpp model", buildCompletionCommand),
 		llamacppCommand("embed <text>", nil, "Embed text with the default llama.cpp embedding model", buildEmbedCommand),
-		llamacppCommand("model list", modelListCommand{}, "List installed llama.cpp models", nil),
-		llamacppCommand("model install <name> <url>", nil, "Download and register a llama.cpp model", buildModelInstallCommand),
-		llamacppCommand("model register <name> <path>", nil, "Register an existing local llama.cpp model", buildModelRegisterCommand),
 		llamacppCommand("model <model> completion <prompt>", nil, "Run a completion with a specific llama.cpp model", buildModelCompletionCommand),
 		llamacppCommand("model <model> embed <text>", nil, "Embed text with a specific llama.cpp embedding model", buildModelEmbedCommand),
 	}
@@ -101,24 +77,6 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.RegisterPattern[embedCommand](registry, "embed <text>", c.handleEmbedCommand); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[modelListCommand](registry, "model list", func(ctx context.Context, req commandengine.Request, cmd modelListCommand) (commandengine.Result, error) {
-		_, _, _ = ctx, req, cmd
-		return c.modelList(), nil
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[modelInstallCommand](registry, "model install <name> <url>", func(ctx context.Context, req commandengine.Request, cmd modelInstallCommand) (commandengine.Result, error) {
-		_, _ = ctx, req
-		return c.modelInstall(cmd)
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[modelInstallCommand](registry, "model register <name> <path>", func(ctx context.Context, req commandengine.Request, cmd modelInstallCommand) (commandengine.Result, error) {
-		_, _ = ctx, req
-		return c.modelRegister(cmd)
-	}); err != nil {
 		return err
 	}
 	if err := commandengine.RegisterPattern[completionCommand](registry, "model <model> completion <prompt>", c.handleCompletionCommand); err != nil {
@@ -225,72 +183,6 @@ func buildModelEmbedCommand(req *clir.Request) (any, error) {
 	return typed, nil
 }
 
-func buildModelInstallCommand(req *clir.Request) (any, error) {
-	fs := flag.NewFlagSet("llamacpp model install", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	filename := fs.String("filename", "", "Downloaded model filename")
-	sha := fs.String("sha256", "", "Expected model sha256")
-	hostPort := fs.Int("host-port", 0, "Host port for this model service")
-	ctxSize := fs.Int("ctx-size", 0, "llama.cpp context size")
-	gpuLayers := fs.Int("gpu-layers", 0, "llama.cpp GPU layers")
-	embedding := fs.Bool("embedding", false, "Register this model for embedding mode")
-	pooling := fs.String("pooling", "", "llama.cpp embedding pooling mode")
-	ubatch := fs.Int("ubatch-size", 0, "llama.cpp physical batch size")
-	normalize := fs.Bool("normalize", true, "L2-normalize embedding vectors client-side")
-	makeDefault := fs.Bool("default", false, "Use this model as the component default")
-	if err := fs.Parse(req.Extra); err != nil {
-		return nil, err
-	}
-	if len(fs.Args()) > 0 {
-		return nil, fmt.Errorf("unexpected install arguments: %s", strings.Join(fs.Args(), " "))
-	}
-	name := cleanModelName(req.Params["name"])
-	url := strings.TrimSpace(req.Params["url"])
-	if name == "" || url == "" {
-		return nil, fmt.Errorf("missing model name or url")
-	}
-	return modelInstallCommand{Name: name, URL: url, Mode: modelModeFromFlag(*embedding), Filename: *filename, SHA256: *sha, HostPort: *hostPort, ContextSize: *ctxSize, UBatchSize: *ubatch, GPULayers: *gpuLayers, Pooling: *pooling, Normalize: normalizeOption(*embedding, *normalize), Default: *makeDefault}, nil
-}
-
-func buildModelRegisterCommand(req *clir.Request) (any, error) {
-	fs := flag.NewFlagSet("llamacpp model register", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	hostPort := fs.Int("host-port", 0, "Host port for this model service")
-	ctxSize := fs.Int("ctx-size", 0, "llama.cpp context size")
-	gpuLayers := fs.Int("gpu-layers", 0, "llama.cpp GPU layers")
-	embedding := fs.Bool("embedding", false, "Register this model for embedding mode")
-	pooling := fs.String("pooling", "", "llama.cpp embedding pooling mode")
-	ubatch := fs.Int("ubatch-size", 0, "llama.cpp physical batch size")
-	normalize := fs.Bool("normalize", true, "L2-normalize embedding vectors client-side")
-	makeDefault := fs.Bool("default", false, "Use this model as the component default")
-	if err := fs.Parse(req.Extra); err != nil {
-		return nil, err
-	}
-	if len(fs.Args()) > 0 {
-		return nil, fmt.Errorf("unexpected register arguments: %s", strings.Join(fs.Args(), " "))
-	}
-	name := cleanModelName(req.Params["name"])
-	path := strings.TrimSpace(req.Params["path"])
-	if name == "" || path == "" {
-		return nil, fmt.Errorf("missing model name or path")
-	}
-	return modelInstallCommand{Name: name, Path: path, Mode: modelModeFromFlag(*embedding), HostPort: *hostPort, ContextSize: *ctxSize, UBatchSize: *ubatch, GPULayers: *gpuLayers, Pooling: *pooling, Normalize: normalizeOption(*embedding, *normalize), Default: *makeDefault}, nil
-}
-
-func modelModeFromFlag(embedding bool) string {
-	if embedding {
-		return "embedding"
-	}
-	return "completion"
-}
-
-func normalizeOption(embedding bool, normalize bool) *bool {
-	if !embedding {
-		return nil
-	}
-	return &normalize
-}
-
 func (c *Component) handleCompletionCommand(ctx context.Context, req commandengine.Request, cmd completionCommand) (commandengine.Result, error) {
 	_, _ = req, c
 	result, err := c.HandleCompletion(ctx, component.CompletionRequest{
@@ -333,83 +225,6 @@ func completionResultText(result *component.CompletionResult) string {
 	return strings.TrimSpace(result.Final.Text)
 }
 
-func (c *Component) modelList() commandengine.Result {
-	var lines []string
-	lines = append(lines, "llama.cpp models")
-	if strings.TrimSpace(c.componentConfig.DefaultModel) != "" {
-		lines = append(lines, "default_model: "+c.componentConfig.DefaultModel)
-	}
-	if len(c.models.Models) == 0 {
-		if strings.TrimSpace(c.componentConfig.ModelPath) != "" {
-			lines = append(lines, "default legacy path: "+c.componentConfig.ModelPath)
-		} else {
-			lines = append(lines, "(no models installed)")
-		}
-		return commandengine.Result{Text: strings.Join(lines, "\n")}
-	}
-	for _, name := range sortedModelNames(c.models.Models) {
-		model := c.models.Models[name]
-		suffix := ""
-		if name == c.componentConfig.DefaultModel {
-			suffix = " default=true"
-		}
-		lines = append(lines, fmt.Sprintf("- %s%s mode=%s path=%s port=%d", name, suffix, cleanModelMode(model.Mode), c.modelPath(name, model), firstPositive(model.HostPort, c.componentConfig.HostPort)))
-	}
-	return commandengine.Result{Text: strings.Join(lines, "\n")}
-}
-
-func (c *Component) modelInstall(cmd modelInstallCommand) (commandengine.Result, error) {
-	model, err := c.installModel(cmd.Name, ModelConfig{
-		URL:         cmd.URL,
-		Mode:        cmd.Mode,
-		Filename:    cmd.Filename,
-		SHA256:      cmd.SHA256,
-		HostPort:    cmd.HostPort,
-		ContextSize: cmd.ContextSize,
-		UBatchSize:  cmd.UBatchSize,
-		GPULayers:   cmd.GPULayers,
-		Pooling:     cmd.Pooling,
-		Normalize:   cmd.Normalize,
-	})
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	if cmd.Default {
-		c.componentConfig.DefaultModel = cmd.Name
-		if err := saveComponentConfig(c.home.Path, c.componentConfig); err != nil {
-			return commandengine.Result{}, err
-		}
-	}
-	return commandengine.Result{Text: fmt.Sprintf("model installed: %s\npath: %s", cmd.Name, c.modelPath(cmd.Name, model))}, nil
-}
-
-func (c *Component) modelRegister(cmd modelInstallCommand) (commandengine.Result, error) {
-	model := ModelConfig{
-		Path:        cmd.Path,
-		Mode:        cmd.Mode,
-		HostPort:    cmd.HostPort,
-		ContextSize: cmd.ContextSize,
-		UBatchSize:  cmd.UBatchSize,
-		GPULayers:   cmd.GPULayers,
-		Pooling:     cmd.Pooling,
-		Normalize:   cmd.Normalize,
-	}
-	if c.models.Models == nil {
-		c.models.Models = map[string]ModelConfig{}
-	}
-	c.models.Models[cmd.Name] = model
-	if err := saveModelRegistry(c.home.Path, c.models); err != nil {
-		return commandengine.Result{}, err
-	}
-	if cmd.Default {
-		c.componentConfig.DefaultModel = cmd.Name
-		if err := saveComponentConfig(c.home.Path, c.componentConfig); err != nil {
-			return commandengine.Result{}, err
-		}
-	}
-	return commandengine.Result{Text: fmt.Sprintf("model registered: %s\npath: %s", cmd.Name, c.modelPath(cmd.Name, model))}, nil
-}
-
 func llamacppCommand(pattern string, command any, help string, build func(req *clir.Request) (any, error), aliases ...commandengine.Route) commandengine.Definition {
 	commandAliases := make([]commandengine.Route, 0, len(aliases))
 	for _, alias := range aliases {
@@ -435,9 +250,7 @@ func llamacppCommand(pattern string, command any, help string, build func(req *c
 
 func llamacppCommandPolicy(pattern string) simplerbac.Rule {
 	normalized := commandengine.NormalizePattern(pattern)
-	if strings.HasPrefix(normalized, "model install") || strings.HasPrefix(normalized, "model register") {
-		return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent)
-	}
+	_ = normalized
 	return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser)
 }
 
