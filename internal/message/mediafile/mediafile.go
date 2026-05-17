@@ -17,10 +17,10 @@ type Descriptor struct {
 	Syntax      string
 	ContentID   string
 	Disposition string
-	Video       VideoDescriptor
+	Attributes  AttributeDescriptor
 }
 
-type VideoDescriptor struct {
+type AttributeDescriptor struct {
 	Width             int
 	Height            int
 	DurationSeconds   int
@@ -52,19 +52,23 @@ func ReadDescriptor(raw string) (message.Media, error) {
 	if filename == "" {
 		filename = filepath.Base(descriptor.Path)
 	}
-	video, err := videoMetadataFromDescriptor(descriptor)
+	thumbnail, err := thumbnailFromDescriptor(descriptor)
 	if err != nil {
 		return message.Media{}, err
 	}
 	return message.Media{
-		Kind:        "attachment",
-		Filename:    filename,
-		ContentType: descriptor.ContentType,
-		Syntax:      descriptor.Syntax,
-		ContentID:   descriptor.ContentID,
-		Disposition: descriptor.Disposition,
-		Content:     append([]byte(nil), content...),
-		Video:       video,
+		Kind:              "attachment",
+		Filename:          filename,
+		ContentType:       descriptor.ContentType,
+		Syntax:            descriptor.Syntax,
+		ContentID:         descriptor.ContentID,
+		Disposition:       descriptor.Disposition,
+		Content:           append([]byte(nil), content...),
+		Width:             descriptor.Attributes.Width,
+		Height:            descriptor.Attributes.Height,
+		DurationSeconds:   descriptor.Attributes.DurationSeconds,
+		SupportsStreaming: descriptor.Attributes.SupportsStreaming,
+		Thumbnail:         thumbnail,
 	}, nil
 }
 
@@ -110,27 +114,27 @@ func ParseDescriptor(raw string) (Descriptor, error) {
 			if err != nil {
 				return Descriptor{}, err
 			}
-			descriptor.Video.Width = n
+			descriptor.Attributes.Width = n
 		case "height":
 			n, err := parsePositiveInt(key, value)
 			if err != nil {
 				return Descriptor{}, err
 			}
-			descriptor.Video.Height = n
+			descriptor.Attributes.Height = n
 		case "duration":
 			n, err := parsePositiveInt(key, value)
 			if err != nil {
 				return Descriptor{}, err
 			}
-			descriptor.Video.DurationSeconds = n
+			descriptor.Attributes.DurationSeconds = n
 		case "streaming", "supports-streaming":
 			b, err := strconv.ParseBool(value)
 			if err != nil {
 				return Descriptor{}, fmt.Errorf("invalid %s %q", key, value)
 			}
-			descriptor.Video.SupportsStreaming = b
+			descriptor.Attributes.SupportsStreaming = b
 		case "thumbnail":
-			descriptor.Video.ThumbnailPath = value
+			descriptor.Attributes.ThumbnailPath = value
 		default:
 			return Descriptor{}, fmt.Errorf("unknown attachment parameter %q", key)
 		}
@@ -146,28 +150,18 @@ func parsePositiveInt(name string, value string) (int, error) {
 	return n, nil
 }
 
-func videoMetadataFromDescriptor(descriptor Descriptor) (*message.VideoMetadata, error) {
-	video := descriptor.Video
-	if video.Width == 0 && video.Height == 0 && video.DurationSeconds == 0 && !video.SupportsStreaming && strings.TrimSpace(video.ThumbnailPath) == "" {
+func thumbnailFromDescriptor(descriptor Descriptor) (*message.MediaThumbnail, error) {
+	thumbnailPath := strings.TrimSpace(descriptor.Attributes.ThumbnailPath)
+	if thumbnailPath == "" {
 		return nil, nil
 	}
-	out := &message.VideoMetadata{
-		Width:             video.Width,
-		Height:            video.Height,
-		DurationSeconds:   video.DurationSeconds,
-		SupportsStreaming: video.SupportsStreaming,
+	content, err := os.ReadFile(thumbnailPath)
+	if err != nil {
+		return nil, fmt.Errorf("read thumbnail: %w", err)
 	}
-	thumbnailPath := strings.TrimSpace(video.ThumbnailPath)
-	if thumbnailPath != "" {
-		content, err := os.ReadFile(thumbnailPath)
-		if err != nil {
-			return nil, fmt.Errorf("read thumbnail: %w", err)
-		}
-		out.Thumbnail = &message.MediaThumbnail{
-			Filename:    filepath.Base(thumbnailPath),
-			ContentType: "image/jpeg",
-			Content:     append([]byte(nil), content...),
-		}
-	}
-	return out, nil
+	return &message.MediaThumbnail{
+		Filename:    filepath.Base(thumbnailPath),
+		ContentType: "image/jpeg",
+		Content:     append([]byte(nil), content...),
+	}, nil
 }

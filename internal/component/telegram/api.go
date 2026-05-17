@@ -22,7 +22,7 @@ type TelegramAPI interface {
 	SendMessage(ctx context.Context, chatID int64, threadID int, text string, parseMode string) error
 	SendDocument(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
 	SendPhoto(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
-	SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte, video *message.VideoMetadata) error
+	SendVideo(ctx context.Context, chatID int64, threadID int, caption string, media message.Media) error
 	SendAudio(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
 	SendChatAction(ctx context.Context, chatID int64, threadID int, action message.ChatAction) error
 	DownloadFile(ctx context.Context, fileID string) ([]byte, error)
@@ -167,27 +167,25 @@ func (a *TelegramAPIV2) SendPhoto(ctx context.Context, chatID int64, threadID in
 	return err
 }
 
-func (a *TelegramAPIV2) SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte, video *message.VideoMetadata) error {
+func (a *TelegramAPIV2) SendVideo(ctx context.Context, chatID int64, threadID int, caption string, media message.Media) error {
 	b, err := a.ensureBot()
 	if err != nil {
 		return err
 	}
 	p := &bot.SendVideoParams{
-		ChatID:          chatID,
-		MessageThreadID: threadID,
-		Video:           &models.InputFileUpload{Filename: strings.TrimSpace(filename), Data: bytes.NewReader(content)},
-		Caption:         strings.TrimSpace(caption),
+		ChatID:            chatID,
+		MessageThreadID:   threadID,
+		Video:             &models.InputFileUpload{Filename: strings.TrimSpace(media.Filename), Data: bytes.NewReader(media.Content)},
+		Caption:           strings.TrimSpace(caption),
+		Width:             media.Width,
+		Height:            media.Height,
+		Duration:          media.DurationSeconds,
+		SupportsStreaming: media.SupportsStreaming,
 	}
-	if video != nil {
-		p.Width = video.Width
-		p.Height = video.Height
-		p.Duration = video.DurationSeconds
-		p.SupportsStreaming = video.SupportsStreaming
-		if video.Thumbnail != nil && len(video.Thumbnail.Content) > 0 {
-			p.Thumbnail = &models.InputFileUpload{
-				Filename: strings.TrimSpace(video.Thumbnail.Filename),
-				Data:     bytes.NewReader(video.Thumbnail.Content),
-			}
+	if media.Thumbnail != nil && len(media.Thumbnail.Content) > 0 {
+		p.Thumbnail = &models.InputFileUpload{
+			Filename: strings.TrimSpace(media.Thumbnail.Filename),
+			Data:     bytes.NewReader(media.Thumbnail.Content),
 		}
 	}
 	_, err = b.SendVideo(ctx, p)

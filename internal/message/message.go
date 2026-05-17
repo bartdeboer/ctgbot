@@ -15,17 +15,13 @@ type TextMessage struct {
 }
 
 type Media struct {
-	Kind        string
-	Filename    string
-	ContentType string
-	Content     []byte
-	Syntax      string
-	ContentID   string
-	Disposition string
-	Video       *VideoMetadata
-}
-
-type VideoMetadata struct {
+	Kind              string
+	Filename          string
+	ContentType       string
+	Syntax            string
+	ContentID         string
+	Disposition       string
+	Content           []byte
 	Width             int
 	Height            int
 	DurationSeconds   int

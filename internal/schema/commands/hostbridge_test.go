@@ -91,7 +91,7 @@ func TestHostbridgeSendFileParsesMediaCommand(t *testing.T) {
 	}
 }
 
-func TestHostbridgeSendFileParsesVideoMetadata(t *testing.T) {
+func TestHostbridgeSendFileParsesMediaAttributes(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "video.mp4")
 	thumb := filepath.Join(dir, "thumb.jpg")
@@ -118,11 +118,11 @@ func TestHostbridgeSendFileParsesVideoMetadata(t *testing.T) {
 	if !ok {
 		t.Fatalf("command = %T, want SendMedia", req.Command)
 	}
-	if cmd.Video == nil || cmd.Video.Width != 1280 || cmd.Video.Height != 720 || cmd.Video.DurationSeconds != 82 || !cmd.Video.SupportsStreaming {
-		t.Fatalf("video metadata = %#v, want parsed metadata", cmd.Video)
+	if cmd.Width != 1280 || cmd.Height != 720 || cmd.DurationSeconds != 82 || !cmd.SupportsStreaming {
+		t.Fatalf("media attributes = %#v, want parsed dimensions/duration/streaming", cmd)
 	}
-	if cmd.Video.Thumbnail == nil || cmd.Video.Thumbnail.Filename != "thumb.jpg" || string(cmd.Video.Thumbnail.Content) != "jpg" {
-		t.Fatalf("thumbnail = %#v, want parsed thumbnail", cmd.Video.Thumbnail)
+	if cmd.Thumbnail == nil || cmd.Thumbnail.Filename != "thumb.jpg" || string(cmd.Thumbnail.Content) != "jpg" {
+		t.Fatalf("thumbnail = %#v, want parsed thumbnail", cmd.Thumbnail)
 	}
 }
 
@@ -182,7 +182,7 @@ func TestHostbridgeMessageParsesPayloadWithAttachments(t *testing.T) {
 	}
 }
 
-func TestHostbridgeMessageParsesAttachmentVideoMetadata(t *testing.T) {
+func TestHostbridgeMessageParsesAttachmentMediaAttributes(t *testing.T) {
 	dir := t.TempDir()
 	video := filepath.Join(dir, "video.mp4")
 	thumb := filepath.Join(dir, "thumb.jpg")
@@ -212,9 +212,9 @@ func TestHostbridgeMessageParsesAttachmentVideoMetadata(t *testing.T) {
 	if len(cmd.Payload.Attachments) != 1 {
 		t.Fatalf("attachments len = %d, want 1", len(cmd.Payload.Attachments))
 	}
-	got := cmd.Payload.Attachments[0].Video
-	if got == nil || got.Width != 1280 || got.Height != 720 || got.DurationSeconds != 82 || !got.SupportsStreaming {
-		t.Fatalf("video metadata = %#v, want parsed metadata", got)
+	got := cmd.Payload.Attachments[0]
+	if got.Width != 1280 || got.Height != 720 || got.DurationSeconds != 82 || !got.SupportsStreaming {
+		t.Fatalf("media attributes = %#v, want parsed metadata", got)
 	}
 	if got.Thumbnail == nil || got.Thumbnail.Filename != "thumb.jpg" || string(got.Thumbnail.Content) != "jpg" {
 		t.Fatalf("thumbnail = %#v, want parsed thumbnail", got.Thumbnail)

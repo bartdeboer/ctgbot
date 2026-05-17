@@ -49,7 +49,7 @@ type sentVideo struct {
 	filename string
 	caption  string
 	content  string
-	video    *message.VideoMetadata
+	media    message.Media
 }
 
 type sentChatAction struct {
@@ -113,10 +113,10 @@ func (f *fakeTelegramAPI) SendPhoto(ctx context.Context, chatID int64, threadID 
 	return nil
 }
 
-func (f *fakeTelegramAPI) SendVideo(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte, video *message.VideoMetadata) error {
+func (f *fakeTelegramAPI) SendVideo(ctx context.Context, chatID int64, threadID int, caption string, media message.Media) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.videos = append(f.videos, sentVideo{chatID: chatID, threadID: threadID, filename: filename, caption: caption, content: string(content), video: video})
+	f.videos = append(f.videos, sentVideo{chatID: chatID, threadID: threadID, filename: media.Filename, caption: caption, content: string(media.Content), media: media})
 	return nil
 }
 
@@ -479,10 +479,13 @@ func TestSendMediaImageUsesPhoto(t *testing.T) {
 	}
 }
 
-func TestSendMediaVideoUsesVideoMetadata(t *testing.T) {
+func TestSendMediaVideoUsesMediaAttributes(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}
-	video := &message.VideoMetadata{
+	media := message.Media{
+		Filename:          "video.mp4",
+		ContentType:       "video/mp4",
+		Content:           []byte("mp4"),
 		Width:             1280,
 		Height:            720,
 		DurationSeconds:   82,
@@ -497,12 +500,7 @@ func TestSendMediaVideoUsesVideoMetadata(t *testing.T) {
 		ProviderChannelID: "123",
 		ProviderThreadID:  "4",
 		Text:              message.TextMessage{Text: "caption"},
-		Attachments: []message.Media{{
-			Filename:    "video.mp4",
-			ContentType: "video/mp4",
-			Content:     []byte("mp4"),
-			Video:       video,
-		}},
+		Attachments:       []message.Media{media},
 	}); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
@@ -513,11 +511,11 @@ func TestSendMediaVideoUsesVideoMetadata(t *testing.T) {
 	if got.chatID != 123 || got.threadID != 4 || got.filename != "video.mp4" || got.caption != "caption" || got.content != "mp4" {
 		t.Fatalf("video = %#v", got)
 	}
-	if got.video == nil || got.video.Width != 1280 || got.video.Height != 720 || got.video.DurationSeconds != 82 || !got.video.SupportsStreaming {
-		t.Fatalf("video metadata = %#v, want dimensions/duration/streaming", got.video)
+	if got.media.Width != 1280 || got.media.Height != 720 || got.media.DurationSeconds != 82 || !got.media.SupportsStreaming {
+		t.Fatalf("media attributes = %#v, want dimensions/duration/streaming", got.media)
 	}
-	if got.video.Thumbnail == nil || got.video.Thumbnail.Filename != "thumb.jpg" || string(got.video.Thumbnail.Content) != "jpg" {
-		t.Fatalf("thumbnail = %#v, want propagated thumbnail", got.video.Thumbnail)
+	if got.media.Thumbnail == nil || got.media.Thumbnail.Filename != "thumb.jpg" || string(got.media.Thumbnail.Content) != "jpg" {
+		t.Fatalf("thumbnail = %#v, want propagated thumbnail", got.media.Thumbnail)
 	}
 }
 
