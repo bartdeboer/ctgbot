@@ -143,7 +143,8 @@ func buildIndexCommand(req *clir.Request) (any, error) {
 	fs.SetOutput(io.Discard)
 	maxMessages := fs.Int("max-messages", 0, "Maximum recent messages to index")
 	batchSize := fs.Int("batch-size", 0, "Embedding batch size")
-	scope := bindScopeFlags(fs)
+	var scope scopeFlags
+	bindScopeFlags(fs, &scope)
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -160,7 +161,8 @@ func buildIndexCommand(req *clir.Request) (any, error) {
 func buildIndexDropCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("semantic index drop", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	scope := bindScopeFlags(fs)
+	var scope scopeFlags
+	bindScopeFlags(fs, &scope)
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -178,7 +180,8 @@ func buildStrategySearchCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("semantic search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 0, "Maximum results")
-	scope := bindScopeFlags(fs)
+	var scope scopeFlags
+	bindScopeFlags(fs, &scope)
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -195,12 +198,10 @@ func buildStrategySearchCommand(req *clir.Request) (any, error) {
 	return cmd, nil
 }
 
-func bindScopeFlags(fs *flag.FlagSet) scopeFlags {
-	var scope scopeFlags
+func bindScopeFlags(fs *flag.FlagSet, scope *scopeFlags) {
 	fs.StringVar(&scope.Chat, "chat", "", "Scope to a chat id")
 	fs.StringVar(&scope.Thread, "thread", "", "Scope to a thread id")
 	fs.BoolVar(&scope.All, "all", false, "Use all indexed messages")
-	return scope
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {

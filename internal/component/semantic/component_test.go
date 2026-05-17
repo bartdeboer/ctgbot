@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/go-clir"
 )
 
 func TestParseScoreResponseAcceptsJSONFence(t *testing.T) {
@@ -199,6 +200,33 @@ func TestStrategySearchAllAndScopedDrop(t *testing.T) {
 		if result.MessageID == secondMessageID {
 			t.Fatalf("deleted message still returned: %#v", results.Results)
 		}
+	}
+}
+
+func TestBuildScopedCommandsParseScopeFlags(t *testing.T) {
+	built, err := buildIndexCommand(&clir.Request{
+		Params: map[string]string{"strategy": "qwen-embed"},
+		Extra:  []string{"--all", "--max-messages", "30"},
+	})
+	if err != nil {
+		t.Fatalf("buildIndexCommand() error = %v", err)
+	}
+	index := built.(indexCommand)
+	if !index.Scope.All || index.MaxMessages != 30 {
+		t.Fatalf("index command = %#v, want all + max messages", index)
+	}
+
+	threadID := modeluuid.New()
+	built, err = buildStrategySearchCommand(&clir.Request{
+		Params: map[string]string{"strategy": "qwen-embed", "query": "hello"},
+		Extra:  []string{"--thread", threadID.String(), "--limit", "3"},
+	})
+	if err != nil {
+		t.Fatalf("buildStrategySearchCommand() error = %v", err)
+	}
+	search := built.(strategySearchCommand)
+	if search.Scope.Thread != threadID.String() || search.Limit != 3 {
+		t.Fatalf("search command = %#v, want thread + limit", search)
 	}
 }
 
