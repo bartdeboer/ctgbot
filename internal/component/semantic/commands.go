@@ -38,10 +38,12 @@ type indexDropCommand struct {
 }
 
 type strategySearchCommand struct {
-	Strategy string
-	Query    string
-	Limit    int
-	Scope    scopeFlags
+	Strategy    string
+	Query       string
+	Limit       int
+	ExcerptSize int
+	Full        bool
+	Scope       scopeFlags
 }
 
 type statsCommand struct{}
@@ -180,6 +182,8 @@ func buildStrategySearchCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("semantic search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 0, "Maximum results")
+	excerptSize := fs.Int("excerpt-size", 0, "Maximum excerpt characters")
+	full := fs.Bool("full", false, "Render full matched message text")
 	var scope scopeFlags
 	bindScopeFlags(fs, &scope)
 	if err := fs.Parse(req.Extra); err != nil {
@@ -188,7 +192,7 @@ func buildStrategySearchCommand(req *clir.Request) (any, error) {
 	if len(fs.Args()) > 0 {
 		return nil, fmt.Errorf("unexpected search arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	cmd := strategySearchCommand{Strategy: strings.TrimSpace(req.Params["strategy"]), Query: strings.TrimSpace(req.Params["query"]), Limit: *limit, Scope: scope}
+	cmd := strategySearchCommand{Strategy: strings.TrimSpace(req.Params["strategy"]), Query: strings.TrimSpace(req.Params["query"]), Limit: *limit, ExcerptSize: *excerptSize, Full: *full, Scope: scope}
 	if cmd.Strategy == "" {
 		return nil, fmt.Errorf("missing strategy")
 	}
@@ -298,16 +302,16 @@ func (c *Component) handleStrategySearch(ctx context.Context, req commandengine.
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	limit := cmd.Limit
-	if limit <= 0 {
-		limit = c.config.Limit
-	}
-	started := time.Now()
-	response, err := c.SearchStrategy(ctx, StrategySearchRequest{Strategy: cmd.Strategy, Query: cmd.Query, Scope: scope, Limit: limit})
+	options, err := searchOutputOptions(c.config, cmd)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: c.renderSearchResponse(cmd.Strategy+": "+cmd.Query, time.Since(started), response)}, nil
+	started := time.Now()
+	response, err := c.SearchStrategy(ctx, StrategySearchRequest{Strategy: cmd.Strategy, Query: cmd.Query, Scope: scope, Limit: options.Limit})
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: renderSearchResponse(cmd.Strategy+": "+cmd.Query, time.Since(started), response, options)}, nil
 }
 
 func (c *Component) handleStats(ctx context.Context, req commandengine.Request, cmd statsCommand) (commandengine.Result, error) {
@@ -318,7 +322,49 @@ func (c *Component) handleStats(ctx context.Context, req commandengine.Request, 
 	return commandengine.Result{Text: fmt.Sprintf("semantic stats\nstrategies: %d\nmessages: %d\nderivations: %d\nembeddings: %d", stats.Strategies, stats.Messages, stats.Derivations, stats.Embeddings)}, nil
 }
 
-func (c *Component) renderSearchResponse(query string, elapsed time.Duration, response component.SearchResponse) string {
+type searchOutput struct {
+	Limit       int
+	ExcerptSize int
+	Full        bool
+}
+
+func searchOutputOptions(config ComponentConfig, cmd strategySearchCommand) (searchOutput, error) {
+	excerptSize := cmd.ExcerptSize
+	if excerptSize < 0 {
+		return searchOutput{}, fmt.Errorf("--excerpt-size must not be negative")
+	}
+	if excerptSize == 0 {
+		excerptSize = DefaultExcerptSize
+	}
+	if excerptSize > MaxExcerptSize {
+		return searchOutput{}, fmt.Errorf("--excerpt-size must be <= %d", MaxExcerptSize)
+	}
+	limit := cmd.Limit
+	if limit < 0 {
+		return searchOutput{}, fmt.Errorf("--limit must not be negative")
+	}
+	if cmd.Full {
+		if limit <= 0 {
+			limit = DefaultFullSearchResults
+		}
+		if limit > MaxFullSearchResults {
+			return searchOutput{}, fmt.Errorf("--full supports at most %d results", MaxFullSearchResults)
+		}
+		return searchOutput{Limit: limit, ExcerptSize: excerptSize, Full: true}, nil
+	}
+	if limit <= 0 {
+		limit = config.Limit
+	}
+	if limit <= 0 {
+		limit = DefaultLimit
+	}
+	if limit > MaxSearchResults {
+		return searchOutput{}, fmt.Errorf("--limit must be <= %d", MaxSearchResults)
+	}
+	return searchOutput{Limit: limit, ExcerptSize: excerptSize}, nil
+}
+
+func renderSearchResponse(query string, elapsed time.Duration, response component.SearchResponse, options searchOutput) string {
 	header := fmt.Sprintf("semantic search: %s\nelapsed: %s", query, elapsed.Round(100*time.Millisecond))
 	if len(response.Results) == 0 {
 		return header + "\n(no results)"
@@ -328,12 +374,30 @@ func (c *Component) renderSearchResponse(query string, elapsed time.Duration, re
 	for i, result := range response.Results {
 		lines = append(lines, "")
 		lines = append(lines, fmt.Sprintf("%d. message_id=%s thread_id=%s score=%.3f", i+1, result.MessageID, result.ThreadID, result.Score))
-		if strings.TrimSpace(result.Excerpt) != "" {
-			lines = append(lines, "excerpt: "+result.Excerpt)
+		if options.Full {
+			text := firstNonEmpty(result.Text, result.Excerpt)
+			if strings.TrimSpace(text) != "" {
+				lines = append(lines, "text:")
+				lines = append(lines, fencedText(text))
+			}
+		} else {
+			text := firstNonEmpty(result.Text, result.Excerpt)
+			if strings.TrimSpace(text) != "" {
+				lines = append(lines, "excerpt: "+excerpt(text, options.ExcerptSize))
+			}
 		}
 		if strings.TrimSpace(result.Reason) != "" {
 			lines = append(lines, "reason: "+result.Reason)
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func fencedText(text string) string {
+	text = strings.TrimRight(strings.TrimSpace(text), "\n")
+	fence := "```"
+	for strings.Contains(text, fence) {
+		fence += "`"
+	}
+	return fence + "text\n" + text + "\n" + fence
 }
