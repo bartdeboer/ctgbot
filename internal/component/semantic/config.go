@@ -12,10 +12,15 @@ const ComponentConfigFilename = "component.json"
 const (
 	DefaultBatchSize          = 40
 	DefaultLimit              = 10
+	DefaultExcerptSize        = 240
+	MaxExcerptSize            = 1000
+	MaxSearchResults          = 50
+	DefaultFullSearchResults  = 3
+	MaxFullSearchResults      = 5
 	DefaultMaxMessages        = 200
 	DefaultMaxOutputTokens    = 2048
 	DefaultMinScore           = 0.4
-	DefaultEmbeddingBatchSize = 32
+	DefaultEmbeddingBatchSize = 128
 )
 
 type ComponentConfig struct {
