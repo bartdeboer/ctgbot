@@ -436,7 +436,7 @@ func llamacppCommand(pattern string, command any, help string, build func(req *c
 func llamacppCommandPolicy(pattern string) simplerbac.Rule {
 	normalized := commandengine.NormalizePattern(pattern)
 	if strings.HasPrefix(normalized, "model install") || strings.HasPrefix(normalized, "model register") {
-		return simplerbac.Any(simplerbac.RoleRoot)
+		return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent)
 	}
 	return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser)
 }
