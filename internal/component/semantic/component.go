@@ -69,8 +69,9 @@ func (c *Component) Skill() component.Skill {
 
 Examples:
   hostbridge semantic/local strategy add embedding qwen-embed --embedder llamacpp/local --model qwen3-embed-0.6b
-  hostbridge semantic/local index qwen-embed
+  hostbridge semantic/local index create qwen-embed
   hostbridge semantic/local search qwen-embed "database abstraction layer"
+  hostbridge semantic/local search qwen-embed "database abstraction layer" --all
   hostbridge semantic/local search qwen-embed "prompt injection email safety" --limit 5
   hostbridge semantic/local stats
 

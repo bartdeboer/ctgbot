@@ -187,12 +187,34 @@ func (s *store) saveEmbedding(ctx context.Context, embedding indexedEmbedding) e
 	return s.db.WithContext(ctx).Save(&embedding).Error
 }
 
-func (s *store) embeddingsForThread(ctx context.Context, strategyName string, threadID string) ([]indexedEmbedding, error) {
+func (s *store) embeddingsForScope(ctx context.Context, strategyName string, scope scope) ([]indexedEmbedding, error) {
+	query := s.db.WithContext(ctx).Where("strategy_name = ?", normalizeStrategyName(strategyName))
+	switch {
+	case scope.All:
+	case !scope.ThreadID.IsNull():
+		query = query.Where("thread_id = ?", scope.ThreadID.String())
+	case !scope.ChatID.IsNull():
+		query = query.Where("chat_id = ?", scope.ChatID.String())
+	default:
+		return nil, fmt.Errorf("missing search scope")
+	}
 	var out []indexedEmbedding
-	return out, s.db.WithContext(ctx).
-		Where("strategy_name = ? AND thread_id = ?", normalizeStrategyName(strategyName), strings.TrimSpace(threadID)).
-		Order("created_at asc, id asc").
-		Find(&out).Error
+	return out, query.Order("created_at asc, id asc").Find(&out).Error
+}
+
+func (s *store) deleteEmbeddings(ctx context.Context, strategyName string, scope scope) (int64, error) {
+	query := s.db.WithContext(ctx).Where("strategy_name = ?", normalizeStrategyName(strategyName))
+	switch {
+	case scope.All:
+	case !scope.ThreadID.IsNull():
+		query = query.Where("thread_id = ?", scope.ThreadID.String())
+	case !scope.ChatID.IsNull():
+		query = query.Where("chat_id = ?", scope.ChatID.String())
+	default:
+		return 0, fmt.Errorf("missing index drop scope")
+	}
+	result := query.Delete(&indexedEmbedding{})
+	return result.RowsAffected, result.Error
 }
 
 func (s *store) messagesByIDs(ctx context.Context, ids []string) (map[string]indexedMessage, error) {

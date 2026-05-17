@@ -141,10 +141,85 @@ func TestStrategyEmbeddingIndexAndSearch(t *testing.T) {
 	}
 }
 
+func TestStrategySearchAllAndScopedDrop(t *testing.T) {
+	chatID := modeluuid.New()
+	firstThreadID := modeluuid.New()
+	secondThreadID := modeluuid.New()
+	firstMessageID := modeluuid.New()
+	secondMessageID := modeluuid.New()
+	store, err := openStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("openStore() error = %v", err)
+	}
+	c := &Component{
+		config:   ComponentConfig{Limit: 5, EmbeddingBatchSize: 10},
+		store:    store,
+		resolver: fakeResolver{component: fakeEmbedder{}},
+	}
+	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{
+		{ID: firstMessageID, ChatID: chatID, ThreadID: firstThreadID, Text: "We discussed Gmail attachments."},
+		{ID: secondMessageID, ChatID: chatID, ThreadID: secondThreadID, Text: "We discussed SQLite vector search."},
+	}})
+	if err := store.saveStrategy(context.Background(), &strategy{
+		Name:        "qwen-embed",
+		Type:        strategyTypeEmbedding,
+		SourceKind:  strategySourceMessages,
+		EmbedderRef: "llamacpp/local",
+		Model:       "qwen3-embed",
+	}); err != nil {
+		t.Fatalf("saveStrategy() error = %v", err)
+	}
+	if _, err := c.Index(context.Background(), IndexRequest{Strategy: "qwen-embed", Scope: scope{ThreadID: firstThreadID}}); err != nil {
+		t.Fatalf("Index(first thread) error = %v", err)
+	}
+	if _, err := c.Index(context.Background(), IndexRequest{Strategy: "qwen-embed", Scope: scope{ThreadID: secondThreadID}}); err != nil {
+		t.Fatalf("Index(second thread) error = %v", err)
+	}
+	results, err := c.SearchStrategy(context.Background(), StrategySearchRequest{Strategy: "qwen-embed", Scope: scope{All: true}, Query: "vector database", Limit: 1})
+	if err != nil {
+		t.Fatalf("SearchStrategy(all) error = %v", err)
+	}
+	if len(results.Results) != 1 || results.Results[0].MessageID != secondMessageID {
+		t.Fatalf("all results = %#v, want second thread message", results.Results)
+	}
+	deleted, err := store.deleteEmbeddings(context.Background(), "qwen-embed", scope{ThreadID: secondThreadID})
+	if err != nil {
+		t.Fatalf("deleteEmbeddings() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted=%d, want 1", deleted)
+	}
+	results, err = c.SearchStrategy(context.Background(), StrategySearchRequest{Strategy: "qwen-embed", Scope: scope{All: true}, Query: "vector database", Limit: 5})
+	if err != nil {
+		t.Fatalf("SearchStrategy(all after delete) error = %v", err)
+	}
+	for _, result := range results.Results {
+		if result.MessageID == secondMessageID {
+			t.Fatalf("deleted message still returned: %#v", results.Results)
+		}
+	}
+}
+
 type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
 
-func (f fakeMessageSource) ThreadMessages(context.Context, modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
-	return f.messages, nil
+func (f fakeMessageSource) ThreadMessages(_ context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
+	var out []coremodel.ThreadMessage
+	for _, message := range f.messages {
+		if message.ThreadID == threadID {
+			out = append(out, message)
+		}
+	}
+	return out, nil
+}
+
+func (f fakeMessageSource) ChatMessages(_ context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
+	var out []coremodel.ThreadMessage
+	for _, message := range f.messages {
+		if message.ChatID == chatID {
+			out = append(out, message)
+		}
+	}
+	return out, nil
 }
 
 type fakeCompletionProvider struct{ reply string }

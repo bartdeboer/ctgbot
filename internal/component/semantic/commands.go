@@ -29,12 +29,19 @@ type indexCommand struct {
 	Strategy    string
 	MaxMessages int
 	BatchSize   int
+	Scope       scopeFlags
+}
+
+type indexDropCommand struct {
+	Strategy string
+	Scope    scopeFlags
 }
 
 type strategySearchCommand struct {
 	Strategy string
 	Query    string
 	Limit    int
+	Scope    scopeFlags
 }
 
 type statsCommand struct{}
@@ -43,6 +50,7 @@ func RegisterGobTypes(register func(any)) {
 	register(strategyListCommand{})
 	register(strategyAddEmbeddingCommand{})
 	register(indexCommand{})
+	register(indexDropCommand{})
 	register(strategySearchCommand{})
 	register(statsCommand{})
 }
@@ -67,11 +75,18 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Build:   buildStrategyAddEmbeddingCommand,
 		},
 		{
-			Pattern: "index <strategy>",
+			Pattern: "index create <strategy>",
 			Help:    "Index current thread messages for a strategy",
 			Sources: []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:  policy,
 			Build:   buildIndexCommand,
+		},
+		{
+			Pattern: "index drop <strategy>",
+			Help:    "Drop indexed vectors for a strategy",
+			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:  policy,
+			Build:   buildIndexDropCommand,
 		},
 		{
 			Pattern: "search <strategy> <query>",
@@ -128,6 +143,7 @@ func buildIndexCommand(req *clir.Request) (any, error) {
 	fs.SetOutput(io.Discard)
 	maxMessages := fs.Int("max-messages", 0, "Maximum recent messages to index")
 	batchSize := fs.Int("batch-size", 0, "Embedding batch size")
+	scope := bindScopeFlags(fs)
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -138,20 +154,38 @@ func buildIndexCommand(req *clir.Request) (any, error) {
 	if strategy == "" {
 		return nil, fmt.Errorf("missing strategy")
 	}
-	return indexCommand{Strategy: strategy, MaxMessages: *maxMessages, BatchSize: *batchSize}, nil
+	return indexCommand{Strategy: strategy, MaxMessages: *maxMessages, BatchSize: *batchSize, Scope: scope}, nil
+}
+
+func buildIndexDropCommand(req *clir.Request) (any, error) {
+	fs := flag.NewFlagSet("semantic index drop", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	scope := bindScopeFlags(fs)
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, err
+	}
+	if len(fs.Args()) > 0 {
+		return nil, fmt.Errorf("unexpected index drop arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	strategy := strings.TrimSpace(req.Params["strategy"])
+	if strategy == "" {
+		return nil, fmt.Errorf("missing strategy")
+	}
+	return indexDropCommand{Strategy: strategy, Scope: scope}, nil
 }
 
 func buildStrategySearchCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("semantic search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 0, "Maximum results")
+	scope := bindScopeFlags(fs)
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
 	if len(fs.Args()) > 0 {
 		return nil, fmt.Errorf("unexpected search arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	cmd := strategySearchCommand{Strategy: strings.TrimSpace(req.Params["strategy"]), Query: strings.TrimSpace(req.Params["query"]), Limit: *limit}
+	cmd := strategySearchCommand{Strategy: strings.TrimSpace(req.Params["strategy"]), Query: strings.TrimSpace(req.Params["query"]), Limit: *limit, Scope: scope}
 	if cmd.Strategy == "" {
 		return nil, fmt.Errorf("missing strategy")
 	}
@@ -161,6 +195,14 @@ func buildStrategySearchCommand(req *clir.Request) (any, error) {
 	return cmd, nil
 }
 
+func bindScopeFlags(fs *flag.FlagSet) scopeFlags {
+	var scope scopeFlags
+	fs.StringVar(&scope.Chat, "chat", "", "Scope to a chat id")
+	fs.StringVar(&scope.Thread, "thread", "", "Scope to a thread id")
+	fs.BoolVar(&scope.All, "all", false, "Use all indexed messages")
+	return scope
+}
+
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
@@ -168,7 +210,8 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	handlers := []error{
 		commandengine.RegisterPattern[strategyListCommand](registry, "strategy list", c.handleStrategyList),
 		commandengine.RegisterPattern[strategyAddEmbeddingCommand](registry, "strategy add embedding <name>", c.handleStrategyAddEmbedding),
-		commandengine.RegisterPattern[indexCommand](registry, "index <strategy>", c.handleIndex),
+		commandengine.RegisterPattern[indexCommand](registry, "index create <strategy>", c.handleIndex),
+		commandengine.RegisterPattern[indexDropCommand](registry, "index drop <strategy>", c.handleIndexDrop),
 		commandengine.RegisterPattern[strategySearchCommand](registry, "search <strategy> <query>", c.handleStrategySearch),
 		commandengine.RegisterPattern[statsCommand](registry, "stats", c.handleStats),
 	}
@@ -225,35 +268,41 @@ func (c *Component) handleStrategyAddEmbedding(ctx context.Context, req commande
 }
 
 func (c *Component) handleIndex(ctx context.Context, req commandengine.Request, cmd indexCommand) (commandengine.Result, error) {
-	threadID := req.Context.ThreadID
-	if threadID.IsNull() {
-		threadID = req.Context.SandboxID
-	}
-	if threadID.IsNull() {
-		return commandengine.Result{}, fmt.Errorf("missing thread id")
-	}
-	started := time.Now()
-	result, err := c.IndexThread(ctx, IndexRequest{Strategy: cmd.Strategy, ThreadID: threadID, MaxMessages: cmd.MaxMessages, BatchSize: cmd.BatchSize})
+	scope, err := resolveIndexScope(req.Context, cmd.Scope)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: fmt.Sprintf("semantic index %s\nmessages: %d\nembedded: %d\nskipped: %d\nelapsed: %s", cmd.Strategy, result.Messages, result.Embedded, result.Skipped, time.Since(started).Round(100*time.Millisecond))}, nil
+	started := time.Now()
+	result, err := c.Index(ctx, IndexRequest{Strategy: cmd.Strategy, Scope: scope, MaxMessages: cmd.MaxMessages, BatchSize: cmd.BatchSize})
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("semantic index %s\nscope: %s\nmessages: %d\nembedded: %d\nskipped: %d\nelapsed: %s", cmd.Strategy, scopeText(scope), result.Messages, result.Embedded, result.Skipped, time.Since(started).Round(100*time.Millisecond))}, nil
+}
+
+func (c *Component) handleIndexDrop(ctx context.Context, req commandengine.Request, cmd indexDropCommand) (commandengine.Result, error) {
+	scope, err := resolveScope(req.Context, cmd.Scope)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	deleted, err := c.store.deleteEmbeddings(ctx, cmd.Strategy, scope)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("semantic index dropped: %s\nscope: %s\nembeddings: %d", cmd.Strategy, scopeText(scope), deleted)}, nil
 }
 
 func (c *Component) handleStrategySearch(ctx context.Context, req commandengine.Request, cmd strategySearchCommand) (commandengine.Result, error) {
-	threadID := req.Context.ThreadID
-	if threadID.IsNull() {
-		threadID = req.Context.SandboxID
-	}
-	if threadID.IsNull() {
-		return commandengine.Result{}, fmt.Errorf("missing thread id")
+	scope, err := resolveScope(req.Context, cmd.Scope)
+	if err != nil {
+		return commandengine.Result{}, err
 	}
 	limit := cmd.Limit
 	if limit <= 0 {
 		limit = c.config.Limit
 	}
 	started := time.Now()
-	response, err := c.SearchStrategy(ctx, StrategySearchRequest{Strategy: cmd.Strategy, Query: cmd.Query, ThreadID: threadID, Limit: limit})
+	response, err := c.SearchStrategy(ctx, StrategySearchRequest{Strategy: cmd.Strategy, Query: cmd.Query, Scope: scope, Limit: limit})
 	if err != nil {
 		return commandengine.Result{}, err
 	}

@@ -19,6 +19,7 @@ const defaultQueryInstruction = "Given a chat search query, retrieve relevant ch
 
 type IndexRequest struct {
 	Strategy    string
+	Scope       scope
 	ThreadID    modeluuid.UUID
 	MaxMessages int
 	BatchSize   int
@@ -33,19 +34,20 @@ type IndexResult struct {
 type StrategySearchRequest struct {
 	Strategy string
 	Query    string
+	Scope    scope
 	ThreadID modeluuid.UUID
 	Limit    int
 }
 
-func (c *Component) IndexThread(ctx context.Context, req IndexRequest) (IndexResult, error) {
+func (c *Component) Index(ctx context.Context, req IndexRequest) (IndexResult, error) {
 	if c == nil || c.store == nil {
 		return IndexResult{}, fmt.Errorf("missing semantic store")
 	}
 	if c.messages == nil {
 		return IndexResult{}, fmt.Errorf("missing semantic message source")
 	}
-	if req.ThreadID.IsNull() {
-		return IndexResult{}, fmt.Errorf("missing thread id")
+	if req.Scope == (scope{}) && !req.ThreadID.IsNull() {
+		req.Scope = scope{ThreadID: req.ThreadID}
 	}
 	strategy, err := c.embeddingStrategy(ctx, req.Strategy)
 	if err != nil {
@@ -55,7 +57,7 @@ func (c *Component) IndexThread(ctx context.Context, req IndexRequest) (IndexRes
 	if err != nil {
 		return IndexResult{}, err
 	}
-	messages, err := c.messages.ThreadMessages(ctx, req.ThreadID)
+	messages, err := c.messagesForScope(ctx, req.Scope)
 	if err != nil {
 		return IndexResult{}, err
 	}
@@ -160,6 +162,26 @@ func (c *Component) IndexThread(ctx context.Context, req IndexRequest) (IndexRes
 	return result, nil
 }
 
+func (c *Component) IndexThread(ctx context.Context, req IndexRequest) (IndexResult, error) {
+	if req.Scope == (scope{}) && !req.ThreadID.IsNull() {
+		req.Scope = scope{ThreadID: req.ThreadID}
+	}
+	return c.Index(ctx, req)
+}
+
+func (c *Component) messagesForScope(ctx context.Context, scope scope) ([]coremodel.ThreadMessage, error) {
+	switch {
+	case scope.All:
+		return nil, fmt.Errorf("index create --all is not supported yet; choose --chat or --thread")
+	case !scope.ThreadID.IsNull():
+		return c.messages.ThreadMessages(ctx, scope.ThreadID)
+	case !scope.ChatID.IsNull():
+		return c.messages.ChatMessages(ctx, scope.ChatID)
+	default:
+		return nil, fmt.Errorf("missing index scope")
+	}
+}
+
 func (c *Component) SearchStrategy(ctx context.Context, req StrategySearchRequest) (component.SearchResponse, error) {
 	if c == nil || c.store == nil {
 		return component.SearchResponse{}, fmt.Errorf("missing semantic store")
@@ -168,8 +190,8 @@ func (c *Component) SearchStrategy(ctx context.Context, req StrategySearchReques
 	if query == "" {
 		return component.SearchResponse{}, fmt.Errorf("missing search query")
 	}
-	if req.ThreadID.IsNull() {
-		return component.SearchResponse{}, fmt.Errorf("missing thread id")
+	if req.Scope == (scope{}) && !req.ThreadID.IsNull() {
+		req.Scope = scope{ThreadID: req.ThreadID}
 	}
 	strategy, err := c.embeddingStrategy(ctx, req.Strategy)
 	if err != nil {
@@ -191,7 +213,7 @@ func (c *Component) SearchStrategy(ctx context.Context, req StrategySearchReques
 	if len(queryVector) == 0 {
 		return component.SearchResponse{}, fmt.Errorf("embed query returned empty vector")
 	}
-	embeddings, err := c.store.embeddingsForThread(ctx, strategy.Name, req.ThreadID.String())
+	embeddings, err := c.store.embeddingsForScope(ctx, strategy.Name, req.Scope)
 	if err != nil {
 		return component.SearchResponse{}, err
 	}

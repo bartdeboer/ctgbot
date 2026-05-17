@@ -64,6 +64,7 @@ type Searcher interface {
 
 type SearchMessageSource interface {
 	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
+	ChatMessages(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
 }
 
 type SearchMessageSourceReceiver interface {
