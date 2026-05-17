@@ -1,10 +1,43 @@
 package telegram
 
 import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
+
+type captureHTTPClient struct {
+	t      *testing.T
+	fields map[string]string
+}
+
+func (c *captureHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	if !strings.HasSuffix(req.URL.Path, "/sendVideo") {
+		return nil, fmt.Errorf("unexpected path %s", req.URL.Path)
+	}
+	if err := req.ParseMultipartForm(32 << 20); err != nil {
+		return nil, err
+	}
+	for key, want := range c.fields {
+		if got := req.FormValue(key); got != want {
+			c.t.Fatalf("form field %s = %q, want %q", key, got, want)
+		}
+	}
+	body := `{"ok":true,"result":{"message_id":1,"date":1,"chat":{"id":123,"type":"private"}}}`
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewBufferString(body)),
+	}, nil
+}
 
 func TestTelegramMessageTextUsesCaptionFallback(t *testing.T) {
 	if got := telegramMessageText(&models.Message{Text: " hello ", Caption: "caption"}); got != " hello " {
@@ -51,5 +84,41 @@ func TestTelegramMessageAttachmentsCollectsCommonMedia(t *testing.T) {
 		if got.Kind != check.kind || got.FileID != check.fileID || got.Filename != check.filename {
 			t.Fatalf("attachments[%d] = %#v, want kind=%q fileID=%q filename=%q", check.index, got, check.kind, check.fileID, check.filename)
 		}
+	}
+}
+
+func TestAPISendVideoSetsTelegramMetadataParams(t *testing.T) {
+	client := &captureHTTPClient{
+		t: t,
+		fields: map[string]string{
+			"chat_id":            "123",
+			"message_thread_id":  "4",
+			"caption":            "caption",
+			"width":              "1280",
+			"height":             "720",
+			"duration":           "82",
+			"supports_streaming": "true",
+		},
+	}
+	b, err := bot.New("token", bot.WithSkipGetMe(), bot.WithHTTPClient(time.Second, client))
+	if err != nil {
+		t.Fatalf("bot.New() error = %v", err)
+	}
+	api := &TelegramAPIV2{token: "token"}
+	api.setBot(b)
+
+	err = api.SendVideo(context.Background(), 123, 4, "video.mp4", "caption", []byte("mp4"), &message.VideoMetadata{
+		Width:             1280,
+		Height:            720,
+		DurationSeconds:   82,
+		SupportsStreaming: true,
+		Thumbnail: &message.MediaThumbnail{
+			Filename:    "thumb.jpg",
+			ContentType: "image/jpeg",
+			Content:     []byte("jpg"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SendVideo() error = %v", err)
 	}
 }

@@ -28,6 +28,7 @@ type SendMedia struct {
 	ContentType string
 	Syntax      string
 	Content     []byte
+	Video       *message.VideoMetadata
 }
 
 type SendPayload struct {
@@ -144,7 +145,7 @@ func buildMessagePayload(req *clir.Request) (any, error) {
 }
 
 func buildSendFile(req *clir.Request) (any, error) {
-	caption, contentType, syntax, err := parseSendMediaFlags("hostbridge sendfile", req.Extra)
+	opts, err := parseSendMediaOptions("hostbridge sendfile", req.Extra, true)
 	if err != nil {
 		return nil, err
 	}
@@ -156,20 +157,21 @@ func buildSendFile(req *clir.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(contentType) == "" && strings.TrimSpace(syntax) != "" {
-		contentType = "text/plain"
+	if strings.TrimSpace(opts.ContentType) == "" && strings.TrimSpace(opts.Syntax) != "" {
+		opts.ContentType = "text/plain"
 	}
 	return SendMedia{
 		Filename:    filepath.Base(path),
-		Caption:     caption,
-		ContentType: strings.TrimSpace(contentType),
-		Syntax:      strings.TrimSpace(syntax),
+		Caption:     opts.Caption,
+		ContentType: strings.TrimSpace(opts.ContentType),
+		Syntax:      strings.TrimSpace(opts.Syntax),
 		Content:     append([]byte(nil), content...),
+		Video:       opts.Video,
 	}, nil
 }
 
 func buildSendStdin(req *clir.Request) (any, error) {
-	caption, contentType, syntax, err := parseSendMediaFlags("hostbridge sendstdin", req.Extra)
+	opts, err := parseSendMediaOptions("hostbridge sendstdin", req.Extra, false)
 	if err != nil {
 		return nil, err
 	}
@@ -177,29 +179,81 @@ func buildSendStdin(req *clir.Request) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read stdin: %w", err)
 	}
-	if strings.TrimSpace(contentType) == "" {
-		contentType = "text/plain"
+	if strings.TrimSpace(opts.ContentType) == "" {
+		opts.ContentType = "text/plain"
 	}
 	return SendMedia{
 		Filename:    "stdin.txt",
-		Caption:     caption,
-		ContentType: strings.TrimSpace(contentType),
-		Syntax:      strings.TrimSpace(syntax),
+		Caption:     opts.Caption,
+		ContentType: strings.TrimSpace(opts.ContentType),
+		Syntax:      strings.TrimSpace(opts.Syntax),
 		Content:     append([]byte(nil), stdin...),
 	}, nil
 }
 
-func parseSendMediaFlags(name string, args []string) (caption string, contentType string, syntax string, err error) {
+type sendMediaOptions struct {
+	Caption     string
+	ContentType string
+	Syntax      string
+	Video       *message.VideoMetadata
+}
+
+func parseSendMediaOptions(name string, args []string, allowVideo bool) (sendMediaOptions, error) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	captionFlag := fs.String("caption", "", "Optional caption")
 	contentTypeFlag := fs.String("type", "", "Optional content type")
 	languageFlag := fs.String("language", "", "Optional legacy syntax hint")
 	syntaxFlag := fs.String("syntax", "", "Optional syntax hint")
+	widthFlag := fs.Int("width", 0, "Optional video width")
+	heightFlag := fs.Int("height", 0, "Optional video height")
+	durationFlag := fs.Int("duration", 0, "Optional video duration in seconds")
+	streamingFlag := fs.Bool("supports-streaming", false, "Mark video as supporting streaming")
+	thumbnailFlag := fs.String("thumbnail", "", "Optional video thumbnail path")
 	if err := fs.Parse(args); err != nil {
-		return "", "", "", err
+		return sendMediaOptions{}, err
 	}
-	return strings.TrimSpace(*captionFlag), strings.TrimSpace(*contentTypeFlag), resolveSyntax(*languageFlag, *syntaxFlag), nil
+	if !allowVideo && (*widthFlag != 0 || *heightFlag != 0 || *durationFlag != 0 || *streamingFlag || strings.TrimSpace(*thumbnailFlag) != "") {
+		return sendMediaOptions{}, fmt.Errorf("%s does not support video metadata flags", name)
+	}
+	video, err := buildVideoMetadata(*widthFlag, *heightFlag, *durationFlag, *streamingFlag, *thumbnailFlag)
+	if err != nil {
+		return sendMediaOptions{}, err
+	}
+	return sendMediaOptions{
+		Caption:     strings.TrimSpace(*captionFlag),
+		ContentType: strings.TrimSpace(*contentTypeFlag),
+		Syntax:      resolveSyntax(*languageFlag, *syntaxFlag),
+		Video:       video,
+	}, nil
+}
+
+func buildVideoMetadata(width int, height int, duration int, supportsStreaming bool, thumbnailPath string) (*message.VideoMetadata, error) {
+	thumbnailPath = strings.TrimSpace(thumbnailPath)
+	if width == 0 && height == 0 && duration == 0 && !supportsStreaming && thumbnailPath == "" {
+		return nil, nil
+	}
+	if width < 0 || height < 0 || duration < 0 {
+		return nil, fmt.Errorf("video metadata must not be negative")
+	}
+	video := &message.VideoMetadata{
+		Width:             width,
+		Height:            height,
+		DurationSeconds:   duration,
+		SupportsStreaming: supportsStreaming,
+	}
+	if thumbnailPath != "" {
+		content, err := os.ReadFile(thumbnailPath)
+		if err != nil {
+			return nil, fmt.Errorf("read thumbnail: %w", err)
+		}
+		video.Thumbnail = &message.MediaThumbnail{
+			Filename:    filepath.Base(thumbnailPath),
+			ContentType: "image/jpeg",
+			Content:     append([]byte(nil), content...),
+		}
+	}
+	return video, nil
 }
 
 func resolveSyntax(legacyLanguage string, syntax string) string {
