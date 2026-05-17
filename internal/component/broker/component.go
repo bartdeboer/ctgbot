@@ -250,11 +250,15 @@ func (c *Component) sendMedia(
 			Text: cmd.Caption,
 		},
 		Attachments: []message.Media{{
-			Filename:    cmd.Filename,
-			ContentType: cmd.ContentType,
-			Syntax:      cmd.Syntax,
-			Content:     append([]byte(nil), cmd.Content...),
-			Video:       cmd.Video,
+			Filename:          cmd.Filename,
+			ContentType:       cmd.ContentType,
+			Syntax:            cmd.Syntax,
+			Content:           append([]byte(nil), cmd.Content...),
+			Width:             cmd.Width,
+			Height:            cmd.Height,
+			DurationSeconds:   cmd.DurationSeconds,
+			SupportsStreaming: cmd.SupportsStreaming,
+			Thumbnail:         cmd.Thumbnail,
 		}},
 	})
 }

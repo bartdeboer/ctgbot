@@ -107,7 +107,10 @@ func TestAPISendVideoSetsTelegramMetadataParams(t *testing.T) {
 	api := &TelegramAPIV2{token: "token"}
 	api.setBot(b)
 
-	err = api.SendVideo(context.Background(), 123, 4, "video.mp4", "caption", []byte("mp4"), &message.VideoMetadata{
+	err = api.SendVideo(context.Background(), 123, 4, "caption", message.Media{
+		Filename:          "video.mp4",
+		ContentType:       "video/mp4",
+		Content:           []byte("mp4"),
 		Width:             1280,
 		Height:            720,
 		DurationSeconds:   82,
