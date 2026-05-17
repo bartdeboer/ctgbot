@@ -203,7 +203,7 @@ func (c *Component) handleStrategyList(ctx context.Context, req commandengine.Re
 }
 
 func (c *Component) handleStrategyAddEmbedding(ctx context.Context, req commandengine.Request, cmd strategyAddEmbeddingCommand) (commandengine.Result, error) {
-	strategy := semanticStrategy{
+	record := strategy{
 		Name:        cmd.Name,
 		Type:        strategyTypeEmbedding,
 		SourceKind:  firstNonEmpty(cmd.SourceKind, strategySourceMessages),
@@ -212,16 +212,16 @@ func (c *Component) handleStrategyAddEmbedding(ctx context.Context, req commande
 		Prompt:      cmd.Prompt,
 		BatchSize:   cmd.BatchSize,
 	}
-	if strategy.BatchSize <= 0 {
-		strategy.BatchSize = c.config.EmbeddingBatchSize
+	if record.BatchSize <= 0 {
+		record.BatchSize = c.config.EmbeddingBatchSize
 	}
-	if strategy.BatchSize <= 0 {
-		strategy.BatchSize = DefaultEmbeddingBatchSize
+	if record.BatchSize <= 0 {
+		record.BatchSize = DefaultEmbeddingBatchSize
 	}
-	if err := c.store.saveStrategy(ctx, &strategy); err != nil {
+	if err := c.store.saveStrategy(ctx, &record); err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: fmt.Sprintf("semantic strategy saved: %s", strategy.Name)}, nil
+	return commandengine.Result{Text: fmt.Sprintf("semantic strategy saved: %s", record.Name)}, nil
 }
 
 func (c *Component) handleIndex(ctx context.Context, req commandengine.Request, cmd indexCommand) (commandengine.Result, error) {

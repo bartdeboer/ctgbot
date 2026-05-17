@@ -105,7 +105,7 @@ func TestStrategyEmbeddingIndexAndSearch(t *testing.T) {
 		{ID: horseID, ThreadID: threadID, Text: "The black horse runs through the field."},
 		{ID: databaseID, ThreadID: threadID, Text: "We discussed SQLite embeddings and semantic search strategies."},
 	}})
-	if err := store.saveStrategy(context.Background(), &semanticStrategy{
+	if err := store.saveStrategy(context.Background(), &strategy{
 		Name:        "qwen-embed",
 		Type:        strategyTypeEmbedding,
 		SourceKind:  strategySourceMessages,

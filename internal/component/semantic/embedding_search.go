@@ -102,7 +102,7 @@ func (c *Component) IndexThread(ctx context.Context, req IndexRequest) (IndexRes
 			if err != nil {
 				return err
 			}
-			record := semanticEmbedding{
+			record := indexedEmbedding{
 				StrategyName:   strategy.Name,
 				SourceType:     strategySourceMessages,
 				SourceID:       message.ID.String(),
@@ -128,7 +128,7 @@ func (c *Component) IndexThread(ctx context.Context, req IndexRequest) (IndexRes
 
 	for _, message := range items {
 		hash := textHash(message.Text)
-		if err := c.store.saveMessage(ctx, semanticMessage{
+		if err := c.store.saveMessage(ctx, indexedMessage{
 			ID:        message.ID.String(),
 			ChatID:    message.ChatID.String(),
 			ThreadID:  message.ThreadID.String(),
@@ -240,7 +240,7 @@ func (c *Component) SearchStrategy(ctx context.Context, req StrategySearchReques
 	return component.SearchResponse{Results: results}, nil
 }
 
-func (c *Component) embeddingStrategy(ctx context.Context, name string) (*semanticStrategy, error) {
+func (c *Component) embeddingStrategy(ctx context.Context, name string) (*strategy, error) {
 	if c == nil || c.store == nil {
 		return nil, fmt.Errorf("missing semantic store")
 	}
@@ -266,7 +266,7 @@ func (c *Component) embeddingStrategy(ctx context.Context, name string) (*semant
 	return strategy, nil
 }
 
-func embeddingQueryText(strategy *semanticStrategy, query string) string {
+func embeddingQueryText(strategy *strategy, query string) string {
 	prompt := ""
 	if strategy != nil {
 		prompt = strings.TrimSpace(strategy.Prompt)

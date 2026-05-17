@@ -26,7 +26,7 @@ const (
 
 type store struct{ db *gorm.DB }
 
-type semanticStrategy struct {
+type strategy struct {
 	Name           string `gorm:"primaryKey"`
 	Type           string `gorm:"index"`
 	SourceKind     string `gorm:"index"`
@@ -41,9 +41,9 @@ type semanticStrategy struct {
 	UpdatedAt      time.Time
 }
 
-func (semanticStrategy) TableName() string { return "semantic_strategies" }
+func (strategy) TableName() string { return "strategies" }
 
-type semanticMessage struct {
+type indexedMessage struct {
 	ID        string `gorm:"primaryKey"`
 	ChatID    string `gorm:"index"`
 	ThreadID  string `gorm:"index"`
@@ -53,9 +53,9 @@ type semanticMessage struct {
 	UpdatedAt time.Time
 }
 
-func (semanticMessage) TableName() string { return "semantic_messages" }
+func (indexedMessage) TableName() string { return "messages" }
 
-type semanticDerivation struct {
+type derivation struct {
 	ID             string `gorm:"primaryKey"`
 	MessageID      string `gorm:"index"`
 	StrategyName   string `gorm:"index"`
@@ -67,13 +67,13 @@ type semanticDerivation struct {
 	UpdatedAt      time.Time
 }
 
-func (semanticDerivation) TableName() string { return "semantic_derivations" }
+func (derivation) TableName() string { return "derivations" }
 
-type semanticEmbedding struct {
+type indexedEmbedding struct {
 	ID             string `gorm:"primaryKey"`
-	StrategyName   string `gorm:"index:idx_semantic_embedding_source,unique;index"`
-	SourceType     string `gorm:"index:idx_semantic_embedding_source,unique"`
-	SourceID       string `gorm:"index:idx_semantic_embedding_source,unique;index"`
+	StrategyName   string `gorm:"index:idx_embedding_source,unique;index"`
+	SourceType     string `gorm:"index:idx_embedding_source,unique"`
+	SourceID       string `gorm:"index:idx_embedding_source,unique;index"`
 	SourceTextHash string `gorm:"index"`
 	ChatID         string `gorm:"index"`
 	ThreadID       string `gorm:"index"`
@@ -85,7 +85,7 @@ type semanticEmbedding struct {
 	UpdatedAt      time.Time
 }
 
-func (semanticEmbedding) TableName() string { return "semantic_embeddings" }
+func (indexedEmbedding) TableName() string { return "embeddings" }
 
 type semanticStats struct {
 	Strategies  int64
@@ -106,7 +106,7 @@ func openStore(homePath string) (*store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open semantic db: %w", err)
 	}
-	if err := db.AutoMigrate(&semanticStrategy{}, &semanticMessage{}, &semanticDerivation{}, &semanticEmbedding{}); err != nil {
+	if err := db.AutoMigrate(&strategy{}, &indexedMessage{}, &derivation{}, &indexedEmbedding{}); err != nil {
 		return nil, fmt.Errorf("migrate semantic db: %w", err)
 	}
 	return &store{db: db}, nil
@@ -114,7 +114,7 @@ func openStore(homePath string) (*store, error) {
 
 func newStoreID() string { return modeluuid.New().String() }
 
-func (s *store) saveStrategy(ctx context.Context, strategy *semanticStrategy) error {
+func (s *store) saveStrategy(ctx context.Context, strategy *strategy) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("missing semantic store")
 	}
@@ -142,8 +142,8 @@ func (s *store) saveStrategy(ctx context.Context, strategy *semanticStrategy) er
 	return s.db.WithContext(ctx).Save(strategy).Error
 }
 
-func (s *store) strategy(ctx context.Context, name string) (*semanticStrategy, error) {
-	var strategy semanticStrategy
+func (s *store) strategy(ctx context.Context, name string) (*strategy, error) {
+	var strategy strategy
 	err := s.db.WithContext(ctx).First(&strategy, "name = ?", normalizeStrategyName(name)).Error
 	if err == nil {
 		return &strategy, nil
@@ -154,20 +154,20 @@ func (s *store) strategy(ctx context.Context, name string) (*semanticStrategy, e
 	return nil, err
 }
 
-func (s *store) listStrategies(ctx context.Context) ([]semanticStrategy, error) {
-	var out []semanticStrategy
+func (s *store) listStrategies(ctx context.Context) ([]strategy, error) {
+	var out []strategy
 	return out, s.db.WithContext(ctx).Order("name asc").Find(&out).Error
 }
 
-func (s *store) saveMessage(ctx context.Context, message semanticMessage) error {
+func (s *store) saveMessage(ctx context.Context, message indexedMessage) error {
 	if strings.TrimSpace(message.ID) == "" {
 		return fmt.Errorf("missing semantic message id")
 	}
 	return s.db.WithContext(ctx).Save(&message).Error
 }
 
-func (s *store) embedding(ctx context.Context, strategyName string, sourceType string, sourceID string) (*semanticEmbedding, error) {
-	var embedding semanticEmbedding
+func (s *store) embedding(ctx context.Context, strategyName string, sourceType string, sourceID string) (*indexedEmbedding, error) {
+	var embedding indexedEmbedding
 	err := s.db.WithContext(ctx).
 		Where("strategy_name = ? AND source_type = ? AND source_id = ?", normalizeStrategyName(strategyName), strings.TrimSpace(sourceType), strings.TrimSpace(sourceID)).
 		First(&embedding).Error
@@ -180,27 +180,27 @@ func (s *store) embedding(ctx context.Context, strategyName string, sourceType s
 	return nil, err
 }
 
-func (s *store) saveEmbedding(ctx context.Context, embedding semanticEmbedding) error {
+func (s *store) saveEmbedding(ctx context.Context, embedding indexedEmbedding) error {
 	if strings.TrimSpace(embedding.ID) == "" {
 		embedding.ID = newStoreID()
 	}
 	return s.db.WithContext(ctx).Save(&embedding).Error
 }
 
-func (s *store) embeddingsForThread(ctx context.Context, strategyName string, threadID string) ([]semanticEmbedding, error) {
-	var out []semanticEmbedding
+func (s *store) embeddingsForThread(ctx context.Context, strategyName string, threadID string) ([]indexedEmbedding, error) {
+	var out []indexedEmbedding
 	return out, s.db.WithContext(ctx).
 		Where("strategy_name = ? AND thread_id = ?", normalizeStrategyName(strategyName), strings.TrimSpace(threadID)).
 		Order("created_at asc, id asc").
 		Find(&out).Error
 }
 
-func (s *store) messagesByIDs(ctx context.Context, ids []string) (map[string]semanticMessage, error) {
-	out := map[string]semanticMessage{}
+func (s *store) messagesByIDs(ctx context.Context, ids []string) (map[string]indexedMessage, error) {
+	out := map[string]indexedMessage{}
 	if len(ids) == 0 {
 		return out, nil
 	}
-	var messages []semanticMessage
+	var messages []indexedMessage
 	if err := s.db.WithContext(ctx).Where("id IN ?", ids).Find(&messages).Error; err != nil {
 		return nil, err
 	}
@@ -212,16 +212,16 @@ func (s *store) messagesByIDs(ctx context.Context, ids []string) (map[string]sem
 
 func (s *store) stats(ctx context.Context) (semanticStats, error) {
 	var stats semanticStats
-	if err := s.db.WithContext(ctx).Model(&semanticStrategy{}).Count(&stats.Strategies).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&strategy{}).Count(&stats.Strategies).Error; err != nil {
 		return stats, err
 	}
-	if err := s.db.WithContext(ctx).Model(&semanticMessage{}).Count(&stats.Messages).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&indexedMessage{}).Count(&stats.Messages).Error; err != nil {
 		return stats, err
 	}
-	if err := s.db.WithContext(ctx).Model(&semanticDerivation{}).Count(&stats.Derivations).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&derivation{}).Count(&stats.Derivations).Error; err != nil {
 		return stats, err
 	}
-	if err := s.db.WithContext(ctx).Model(&semanticEmbedding{}).Count(&stats.Embeddings).Error; err != nil {
+	if err := s.db.WithContext(ctx).Model(&indexedEmbedding{}).Count(&stats.Embeddings).Error; err != nil {
 		return stats, err
 	}
 	return stats, nil
