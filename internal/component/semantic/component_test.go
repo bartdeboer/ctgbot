@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -204,6 +205,7 @@ func TestStrategySearchAllAndScopedDrop(t *testing.T) {
 type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
 
 func (f fakeMessageSource) ForEachMessage(_ context.Context, scope component.MessageScope, visit component.MessageVisitor) error {
+	var messages []coremodel.ThreadMessage
 	for _, message := range f.messages {
 		switch {
 		case scope.All:
@@ -214,6 +216,21 @@ func (f fakeMessageSource) ForEachMessage(_ context.Context, scope component.Mes
 		case scope.ThreadID.IsNull() && scope.ChatID.IsNull() && !scope.All:
 			continue
 		}
+		messages = append(messages, message)
+	}
+	sort.SliceStable(messages, func(i, j int) bool {
+		if messages[i].CreatedAt.Equal(messages[j].CreatedAt) {
+			return messages[i].ID.String() < messages[j].ID.String()
+		}
+		if scope.Order == component.MessageOrderNewestFirst {
+			return messages[i].CreatedAt.After(messages[j].CreatedAt)
+		}
+		return messages[i].CreatedAt.Before(messages[j].CreatedAt)
+	})
+	if scope.Limit > 0 && len(messages) > scope.Limit {
+		messages = messages[:scope.Limit]
+	}
+	for _, message := range messages {
 		if err := visit(message); err != nil {
 			return err
 		}

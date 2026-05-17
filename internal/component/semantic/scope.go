@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
@@ -18,6 +19,8 @@ type scope struct {
 	ChatID   modeluuid.UUID
 	ThreadID modeluuid.UUID
 	All      bool
+	Limit    int
+	Order    component.MessageOrder
 }
 
 func resolveScope(ctx commandengine.Context, flags scopeFlags) (scope, error) {

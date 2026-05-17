@@ -49,6 +49,10 @@ func (c *Component) Index(ctx context.Context, req IndexRequest) (IndexResult, e
 	if req.Scope == (scope{}) && !req.ThreadID.IsNull() {
 		req.Scope = scope{ThreadID: req.ThreadID}
 	}
+	if req.MaxMessages > 0 {
+		req.Scope.Limit = req.MaxMessages
+		req.Scope.Order = component.MessageOrderNewestFirst
+	}
 	strategy, err := c.embeddingStrategy(ctx, req.Strategy)
 	if err != nil {
 		return IndexResult{}, err
@@ -62,9 +66,6 @@ func (c *Component) Index(ctx context.Context, req IndexRequest) (IndexResult, e
 		return IndexResult{}, err
 	}
 	items := searchableMessages(messages)
-	if req.MaxMessages > 0 && len(items) > req.MaxMessages {
-		items = items[len(items)-req.MaxMessages:]
-	}
 	result := IndexResult{Messages: len(items)}
 	batchSize := req.BatchSize
 	if batchSize <= 0 {
@@ -175,6 +176,8 @@ func (c *Component) messagesForScope(ctx context.Context, scope scope) ([]coremo
 		ChatID:   scope.ChatID,
 		ThreadID: scope.ThreadID,
 		All:      scope.All,
+		Limit:    scope.Limit,
+		Order:    scope.Order,
 	}, func(message coremodel.ThreadMessage) error {
 		messages = append(messages, message)
 		return nil

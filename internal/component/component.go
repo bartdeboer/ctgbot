@@ -74,9 +74,18 @@ type MessageScope struct {
 	ChatID   modeluuid.UUID
 	ThreadID modeluuid.UUID
 	All      bool
+	Limit    int
+	Order    MessageOrder
 }
 
 type MessageVisitor func(coremodel.ThreadMessage) error
+
+type MessageOrder string
+
+const (
+	MessageOrderOldestFirst MessageOrder = "oldest_first"
+	MessageOrderNewestFirst MessageOrder = "newest_first"
+)
 
 type EmbeddingKind string
 

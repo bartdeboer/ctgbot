@@ -38,6 +38,7 @@ func (s *service) ForEachMessage(ctx context.Context, scope component.MessageSco
 	if visit == nil {
 		return fmt.Errorf("missing message visitor")
 	}
+	var messages []coremodel.ThreadMessage
 	switch {
 	case scope.All:
 		if !scope.ChatID.IsNull() || !scope.ThreadID.IsNull() {
@@ -47,62 +48,72 @@ func (s *service) ForEachMessage(ctx context.Context, scope component.MessageSco
 		if err != nil {
 			return err
 		}
-		sort.SliceStable(chats, func(i, j int) bool {
-			if chats[i].CreatedAt.Equal(chats[j].CreatedAt) {
-				return chats[i].ID.String() < chats[j].ID.String()
-			}
-			return chats[i].CreatedAt.Before(chats[j].CreatedAt)
-		})
 		for _, chat := range chats {
-			if err := s.forEachChatMessage(ctx, chat.ID, visit); err != nil {
+			chatMessages, err := s.chatMessages(ctx, chat.ID)
+			if err != nil {
 				return err
 			}
+			messages = append(messages, chatMessages...)
 		}
-		return nil
 	case !scope.ThreadID.IsNull():
 		if !scope.ChatID.IsNull() {
 			return fmt.Errorf("message scope chat and thread are mutually exclusive")
 		}
-		messages, err := s.Storage.Messages().ListByThreadID(ctx, scope.ThreadID)
+		var err error
+		messages, err = s.Storage.Messages().ListByThreadID(ctx, scope.ThreadID)
 		if err != nil {
 			return err
 		}
-		for _, message := range messages {
-			if err := visit(message); err != nil {
-				return err
-			}
-		}
-		return nil
 	case !scope.ChatID.IsNull():
-		return s.forEachChatMessage(ctx, scope.ChatID, visit)
+		var err error
+		messages, err = s.chatMessages(ctx, scope.ChatID)
+		if err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("missing message scope")
 	}
-}
-
-func (s *service) forEachChatMessage(ctx context.Context, chatID modeluuid.UUID, visit component.MessageVisitor) error {
-	threads, err := s.Storage.Threads().ListByChatID(ctx, chatID)
-	if err != nil {
-		return err
+	sortMessages(messages, scope.Order)
+	if scope.Limit > 0 && len(messages) > scope.Limit {
+		messages = messages[:scope.Limit]
 	}
-	sort.SliceStable(threads, func(i, j int) bool {
-		if threads[i].CreatedAt.Equal(threads[j].CreatedAt) {
-			return threads[i].ID.String() < threads[j].ID.String()
-		}
-		return threads[i].CreatedAt.Before(threads[j].CreatedAt)
-	})
-	for _, thread := range threads {
-		messages, err := s.Storage.Messages().ListByThreadID(ctx, thread.ID)
-		if err != nil {
+	for _, message := range messages {
+		if err := visit(message); err != nil {
 			return err
-		}
-		for _, message := range messages {
-			if err := visit(message); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
+}
+
+func (s *service) chatMessages(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
+	threads, err := s.Storage.Threads().ListByChatID(ctx, chatID)
+	if err != nil {
+		return nil, err
+	}
+	var out []coremodel.ThreadMessage
+	for _, thread := range threads {
+		messages, err := s.Storage.Messages().ListByThreadID(ctx, thread.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, messages...)
+	}
+	return out, nil
+}
+
+func sortMessages(messages []coremodel.ThreadMessage, order component.MessageOrder) {
+	sort.SliceStable(messages, func(i, j int) bool {
+		if messages[i].CreatedAt.Equal(messages[j].CreatedAt) {
+			if order == component.MessageOrderNewestFirst {
+				return messages[i].ID.String() > messages[j].ID.String()
+			}
+			return messages[i].ID.String() < messages[j].ID.String()
+		}
+		if order == component.MessageOrderNewestFirst {
+			return messages[i].CreatedAt.After(messages[j].CreatedAt)
+		}
+		return messages[i].CreatedAt.Before(messages[j].CreatedAt)
+	})
 }
 
 func (s *service) EnabledChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error) {
