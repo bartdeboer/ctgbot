@@ -35,7 +35,7 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 		return component.SearchResponse{}, fmt.Errorf("missing semantic message source")
 	}
 	var messages []coremodel.ThreadMessage
-	if err := c.messages.ForEachMessage(ctx, component.MessageScope{ThreadID: req.ThreadID}, func(message coremodel.ThreadMessage) error {
+	if err := c.messages.ForEachMessage(ctx, component.MessageScope{ThreadID: req.ThreadID, Kinds: semanticMessageKinds()}, func(message coremodel.ThreadMessage) error {
 		messages = append(messages, message)
 		return nil
 	}); err != nil {
@@ -148,12 +148,25 @@ func (c *Component) beginCompletionSession(ctx context.Context, provider compone
 func searchableMessages(messages []coremodel.ThreadMessage) []coremodel.ThreadMessage {
 	out := make([]coremodel.ThreadMessage, 0, len(messages))
 	for _, message := range messages {
-		if strings.TrimSpace(message.Text) == "" || message.ID.IsNull() {
+		if !semanticMessageKind(message.Kind) || strings.TrimSpace(message.Text) == "" || message.ID.IsNull() {
 			continue
 		}
 		out = append(out, message)
 	}
 	return out
+}
+
+func semanticMessageKinds() []coremodel.MessageKind {
+	return []coremodel.MessageKind{coremodel.MessageKindUser, coremodel.MessageKindAgent}
+}
+
+func semanticMessageKind(kind coremodel.MessageKind) bool {
+	for _, allowed := range semanticMessageKinds() {
+		if kind == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Component) scoreBatch(ctx context.Context, provider component.CompletionProvider, model string, query string, messages []coremodel.ThreadMessage) ([]scoredMessage, error) {

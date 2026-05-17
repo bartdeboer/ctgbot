@@ -73,6 +73,7 @@ func (s *service) ForEachMessage(ctx context.Context, scope component.MessageSco
 	default:
 		return fmt.Errorf("missing message scope")
 	}
+	messages = filterMessages(messages, scope)
 	sortMessages(messages, scope.Order)
 	if scope.Limit > 0 && len(messages) > scope.Limit {
 		messages = messages[:scope.Limit]
@@ -83,6 +84,31 @@ func (s *service) ForEachMessage(ctx context.Context, scope component.MessageSco
 		}
 	}
 	return nil
+}
+
+func filterMessages(messages []coremodel.ThreadMessage, scope component.MessageScope) []coremodel.ThreadMessage {
+	if len(scope.Kinds) == 0 {
+		return messages
+	}
+	out := messages[:0]
+	for _, message := range messages {
+		if messageScopeAllows(scope, message) {
+			out = append(out, message)
+		}
+	}
+	return out
+}
+
+func messageScopeAllows(scope component.MessageScope, message coremodel.ThreadMessage) bool {
+	if len(scope.Kinds) == 0 {
+		return true
+	}
+	for _, kind := range scope.Kinds {
+		if message.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *service) chatMessages(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {

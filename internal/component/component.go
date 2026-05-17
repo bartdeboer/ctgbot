@@ -76,6 +76,7 @@ type MessageScope struct {
 	All      bool
 	Limit    int
 	Order    MessageOrder
+	Kinds    []coremodel.MessageKind
 }
 
 type MessageVisitor func(coremodel.ThreadMessage) error
