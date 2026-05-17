@@ -124,7 +124,10 @@ type Embedder interface {
 }
 
 type TranscriptionRequest struct {
-	Media message.Media
+	Media    message.Media
+	Model    string
+	Language string
+	ThreadID modeluuid.UUID
 }
 
 type TranscriptionResult struct {
@@ -156,6 +159,7 @@ type ModelMode string
 const (
 	ModelModeCompletion ModelMode = "completion"
 	ModelModeEmbedding  ModelMode = "embedding"
+	ModelModeASR        ModelMode = "asr"
 )
 
 type Model struct {

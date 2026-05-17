@@ -9,6 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
 type turnMode string
@@ -91,12 +92,12 @@ func runtimeComponents(runtime *ChatRuntime) []*component.Loaded {
 	return runtime.Components
 }
 
-func transcribeInboundAudio(ctx context.Context, runtime *ChatRuntime, media message.Media) (string, string, error) {
+func transcribeInboundAudio(ctx context.Context, runtime *ChatRuntime, threadID modeluuid.UUID, media message.Media) (string, string, error) {
 	transcriber, ref, err := transcriberForRuntime(runtime)
 	if err != nil || transcriber == nil {
 		return "", "", err
 	}
-	result, err := transcriber.Transcribe(ctx, component.TranscriptionRequest{Media: media})
+	result, err := transcriber.Transcribe(ctx, component.TranscriptionRequest{Media: media, ThreadID: threadID})
 	if err != nil {
 		return "", ref, err
 	}

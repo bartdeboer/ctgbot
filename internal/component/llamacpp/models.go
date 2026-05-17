@@ -125,6 +125,8 @@ func cleanModelMode(mode string) string {
 	switch mode {
 	case "embedding", "embed":
 		return "embedding"
+	case "asr", "transcription", "transcribe", "speech-to-text", "stt":
+		return "asr"
 	default:
 		return "completion"
 	}

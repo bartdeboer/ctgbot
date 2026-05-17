@@ -273,7 +273,7 @@ func (b *Broker) handleResolvedInboundTurn(
 				return failConversation(nil, nil, err)
 			}
 		}
-		transcript, ref, audioErr := transcribeInboundAudio(ctx, runtime, media)
+		transcript, ref, audioErr := transcribeInboundAudio(ctx, runtime, thread.ID, media)
 		if audioErr != nil {
 			return failConversation(nil, nil, audioErr)
 		}

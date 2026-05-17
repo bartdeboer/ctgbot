@@ -146,6 +146,17 @@ func TestBuildRegisterCommandParsesEmbeddingFlags(t *testing.T) {
 	}
 }
 
+func TestBuildRegisterCommandParsesASRMode(t *testing.T) {
+	built, err := buildRegisterCommand(testRequest(map[string]string{"name": "whisper", "path": "/models/whisper.bin"}, []string{"--asr"}))
+	if err != nil {
+		t.Fatalf("buildRegisterCommand() error = %v", err)
+	}
+	cmd := built.(installCommand)
+	if cmd.Name != "whisper" || cmd.Mode != component.ModelModeASR {
+		t.Fatalf("cmd = %#v", cmd)
+	}
+}
+
 func testRequest(params map[string]string, extra []string) *clir.Request {
 	return &clir.Request{Params: params, Extra: extra}
 }
