@@ -7,9 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -30,7 +33,7 @@ func TestSearchScoresThreadMessages(t *testing.T) {
 		config:   ComponentConfig{Completion: "llm/qwen", BatchSize: 10, Limit: 5, MinScore: 0.4, MaxOutputTokens: 256},
 		resolver: fakeResolver{provider: fakeCompletionProvider{reply: `{"scores":[{"id":"` + messageID.String() + `","score":0.7,"reason":"mentions ORM tradeoffs"}]}`}},
 	}
-	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Text: "GORM vs raw SQL"}}})
+	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "GORM vs raw SQL"}}})
 	response, err := c.Search(context.Background(), component.SearchRequest{Query: "database abstraction layer", ThreadID: threadID})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
@@ -54,9 +57,9 @@ func TestSearchKeepsCompletionSessionOpenAcrossBatches(t *testing.T) {
 		config:   ComponentConfig{Completion: "llm/qwen", BatchSize: 10, Limit: 5, MinScore: 0.4, MaxOutputTokens: 256},
 		resolver: fakeResolver{provider: provider},
 	}
-	messages := []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Text: "first message"}}
+	messages := []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "first message"}}
 	for i := 0; i < 24; i++ {
-		messages = append(messages, coremodel.ThreadMessage{ID: modeluuid.New(), ThreadID: threadID, Text: "other message"})
+		messages = append(messages, coremodel.ThreadMessage{ID: modeluuid.New(), ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "other message"})
 	}
 	c.SetSearchMessageSource(fakeMessageSource{messages: messages})
 	if _, err := c.Search(context.Background(), component.SearchRequest{Query: "anything", ThreadID: threadID}); err != nil {
@@ -80,7 +83,7 @@ func TestSearchPassesCompletionIdleTimeoutToSession(t *testing.T) {
 		config:   ComponentConfig{Completion: "llm/qwen", BatchSize: 10, Limit: 5, MinScore: 0.4, MaxOutputTokens: 256},
 		resolver: fakeResolver{provider: provider},
 	}
-	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Text: "message"}}})
+	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "message"}}})
 	if _, err := c.Search(context.Background(), component.SearchRequest{Query: "anything", ThreadID: threadID, CompletionIdleTimeout: 10 * time.Second}); err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -104,8 +107,9 @@ func TestStrategyEmbeddingIndexAndSearch(t *testing.T) {
 		resolver: fakeResolver{component: embedder},
 	}
 	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{
-		{ID: horseID, ThreadID: threadID, Text: "The black horse runs through the field."},
-		{ID: databaseID, ThreadID: threadID, Text: "We discussed SQLite embeddings and semantic search strategies."},
+		{ID: horseID, ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "The black horse runs through the field."},
+		{ID: databaseID, ThreadID: threadID, Kind: coremodel.MessageKindAgent, Text: "We discussed SQLite embeddings and semantic search strategies."},
+		{ID: modeluuid.New(), ThreadID: threadID, Kind: coremodel.MessageKindSystem, Text: "conversation runtime refreshed"},
 	}})
 	if err := store.saveStrategy(context.Background(), &strategy{
 		Name:        "qwen-embed",
@@ -159,8 +163,8 @@ func TestStrategySearchAllAndScopedDrop(t *testing.T) {
 		resolver: fakeResolver{component: fakeEmbedder{}},
 	}
 	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{
-		{ID: firstMessageID, ChatID: chatID, ThreadID: firstThreadID, Text: "We discussed Gmail attachments."},
-		{ID: secondMessageID, ChatID: chatID, ThreadID: secondThreadID, Text: "We discussed SQLite vector search."},
+		{ID: firstMessageID, ChatID: chatID, ThreadID: firstThreadID, Kind: coremodel.MessageKindUser, Text: "We discussed Gmail attachments."},
+		{ID: secondMessageID, ChatID: chatID, ThreadID: secondThreadID, Kind: coremodel.MessageKindAgent, Text: "We discussed SQLite vector search."},
 	}})
 	if err := store.saveStrategy(context.Background(), &strategy{
 		Name:        "qwen-embed",
@@ -230,7 +234,83 @@ func TestBuildScopedCommandsParseScopeFlags(t *testing.T) {
 	}
 }
 
+func TestBuildDefaultSearchCommandLeavesStrategyUnset(t *testing.T) {
+	built, err := buildDefaultSearchCommand(&clir.Request{
+		Params: map[string]string{"query": "inbound filters"},
+		Extra:  []string{"--limit", "3"},
+	})
+	if err != nil {
+		t.Fatalf("buildDefaultSearchCommand() error = %v", err)
+	}
+	search := built.(strategySearchCommand)
+	if search.Strategy != "" || search.Query != "inbound filters" || search.Limit != 3 {
+		t.Fatalf("search command = %#v, want default strategy query", search)
+	}
+}
+
+func TestResolveSearchStrategyUsesOnlyEnabledEmbeddingStrategy(t *testing.T) {
+	store, err := openStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("openStore() error = %v", err)
+	}
+	if err := store.saveStrategy(context.Background(), &strategy{Name: "qwen-embed", Type: strategyTypeEmbedding, SourceKind: strategySourceMessages, EmbedderRef: "llamacpp", Model: "qwen"}); err != nil {
+		t.Fatalf("saveStrategy() error = %v", err)
+	}
+	c := &Component{store: store}
+	got, err := c.resolveSearchStrategy(context.Background(), "")
+	if err != nil {
+		t.Fatalf("resolveSearchStrategy() error = %v", err)
+	}
+	if got != "qwen-embed" {
+		t.Fatalf("strategy=%q, want qwen-embed", got)
+	}
+}
+
+func TestResolveSearchStrategyRequiresExplicitNameWhenMultipleStrategiesExist(t *testing.T) {
+	store, err := openStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("openStore() error = %v", err)
+	}
+	for _, name := range []string{"first", "second"} {
+		if err := store.saveStrategy(context.Background(), &strategy{Name: name, Type: strategyTypeEmbedding, SourceKind: strategySourceMessages, EmbedderRef: "llamacpp", Model: "qwen"}); err != nil {
+			t.Fatalf("saveStrategy(%s) error = %v", name, err)
+		}
+	}
+	c := &Component{store: store}
+	_, err = c.resolveSearchStrategy(context.Background(), "")
+	if err == nil || !strings.Contains(err.Error(), "multiple semantic search strategies") {
+		t.Fatalf("resolveSearchStrategy() error = %v, want multiple strategy error", err)
+	}
+}
+
+func TestInstructionRoutePatternsIncludeSemanticSearch(t *testing.T) {
+	patterns := commandset.InstructionRoutePatterns(
+		(&Component{}).CommandDefinitions(),
+		coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+	)
+	if !containsString(patterns, "search <query>") {
+		t.Fatalf("InstructionRoutePatterns() = %#v, missing search <query>", patterns)
+	}
+	if containsString(patterns, "search <strategy> <query>") {
+		t.Fatalf("InstructionRoutePatterns() = %#v, should hide legacy strategy search route", patterns)
+	}
+	for _, definition := range (&Component{}).CommandDefinitions() {
+		if definition.CanonicalPattern() == "search <query>" && definition.InstructionVisibility != commandengine.InstructionImportant {
+			t.Fatalf("search <query> visibility = %q, want important", definition.InstructionVisibility)
+		}
+	}
+}
+
 type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
 
 func (f fakeMessageSource) ForEachMessage(_ context.Context, scope component.MessageScope, visit component.MessageVisitor) error {
 	var messages []coremodel.ThreadMessage
@@ -242,6 +322,9 @@ func (f fakeMessageSource) ForEachMessage(_ context.Context, scope component.Mes
 		case !scope.ChatID.IsNull() && message.ChatID != scope.ChatID:
 			continue
 		case scope.ThreadID.IsNull() && scope.ChatID.IsNull() && !scope.All:
+			continue
+		}
+		if !fakeScopeAllowsKind(scope, message.Kind) {
 			continue
 		}
 		messages = append(messages, message)
@@ -264,6 +347,18 @@ func (f fakeMessageSource) ForEachMessage(_ context.Context, scope component.Mes
 		}
 	}
 	return nil
+}
+
+func fakeScopeAllowsKind(scope component.MessageScope, kind coremodel.MessageKind) bool {
+	if len(scope.Kinds) == 0 {
+		return true
+	}
+	for _, allowed := range scope.Kinds {
+		if kind == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 type fakeCompletionProvider struct{ reply string }

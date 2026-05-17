@@ -178,6 +178,7 @@ func (c *Component) messagesForScope(ctx context.Context, scope scope) ([]coremo
 		All:      scope.All,
 		Limit:    scope.Limit,
 		Order:    scope.Order,
+		Kinds:    semanticMessageKinds(),
 	}, func(message coremodel.ThreadMessage) error {
 		messages = append(messages, message)
 		return nil

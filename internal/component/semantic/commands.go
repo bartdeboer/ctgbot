@@ -64,7 +64,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
 		{
 			Pattern: "strategy list",
-			Help:    "List semantic search strategies",
+			Help:    "List search strategies",
 			Sources: []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:  policy,
 			Build:   func(*clir.Request) (any, error) { return strategyListCommand{}, nil },
@@ -91,8 +91,16 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Build:   buildIndexDropCommand,
 		},
 		{
-			Pattern: "search <strategy> <query>",
-			Help:    "Search current thread history using a semantic strategy",
+			Pattern:               "search <query>",
+			Help:                  "Search current thread history",
+			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+			Build:                 buildDefaultSearchCommand,
+		},
+		{
+			Pattern: "strategy <strategy> search <query>",
+			Help:    "Search current thread history using a search strategy",
 			Sources: []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:  policy,
 			Build:   buildStrategySearchCommand,
@@ -179,6 +187,14 @@ func buildIndexDropCommand(req *clir.Request) (any, error) {
 }
 
 func buildStrategySearchCommand(req *clir.Request) (any, error) {
+	return buildSearchCommand(req, true)
+}
+
+func buildDefaultSearchCommand(req *clir.Request) (any, error) {
+	return buildSearchCommand(req, false)
+}
+
+func buildSearchCommand(req *clir.Request, requireStrategy bool) (any, error) {
 	fs := flag.NewFlagSet("semantic search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 0, "Maximum results")
@@ -193,7 +209,7 @@ func buildStrategySearchCommand(req *clir.Request) (any, error) {
 		return nil, fmt.Errorf("unexpected search arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	cmd := strategySearchCommand{Strategy: strings.TrimSpace(req.Params["strategy"]), Query: strings.TrimSpace(req.Params["query"]), Limit: *limit, ExcerptSize: *excerptSize, Full: *full, Scope: scope}
-	if cmd.Strategy == "" {
+	if requireStrategy && cmd.Strategy == "" {
 		return nil, fmt.Errorf("missing strategy")
 	}
 	if cmd.Query == "" {
@@ -217,7 +233,8 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		commandengine.RegisterPattern[strategyAddEmbeddingCommand](registry, "strategy add embedding <name>", c.handleStrategyAddEmbedding),
 		commandengine.RegisterPattern[indexCommand](registry, "index create <strategy>", c.handleIndex),
 		commandengine.RegisterPattern[indexDropCommand](registry, "index drop <strategy>", c.handleIndexDrop),
-		commandengine.RegisterPattern[strategySearchCommand](registry, "search <strategy> <query>", c.handleStrategySearch),
+		commandengine.RegisterPattern[strategySearchCommand](registry, "search <query>", c.handleStrategySearch),
+		commandengine.RegisterPattern[strategySearchCommand](registry, "strategy <strategy> search <query>", c.handleStrategySearch),
 		commandengine.RegisterPattern[statsCommand](registry, "stats", c.handleStats),
 	}
 	for _, err := range handlers {
@@ -302,16 +319,48 @@ func (c *Component) handleStrategySearch(ctx context.Context, req commandengine.
 	if err != nil {
 		return commandengine.Result{}, err
 	}
+	strategyName, err := c.resolveSearchStrategy(ctx, cmd.Strategy)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
 	options, err := searchOutputOptions(c.config, cmd)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
 	started := time.Now()
-	response, err := c.SearchStrategy(ctx, StrategySearchRequest{Strategy: cmd.Strategy, Query: cmd.Query, Scope: scope, Limit: options.Limit})
+	response, err := c.SearchStrategy(ctx, StrategySearchRequest{Strategy: strategyName, Query: cmd.Query, Scope: scope, Limit: options.Limit})
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: renderSearchResponse(cmd.Strategy+": "+cmd.Query, time.Since(started), response, options)}, nil
+	return commandengine.Result{Text: renderSearchResponse(strategyName+": "+cmd.Query, time.Since(started), response, options)}, nil
+}
+
+func (c *Component) resolveSearchStrategy(ctx context.Context, requested string) (string, error) {
+	requested = normalizeStrategyName(requested)
+	if requested != "" {
+		return requested, nil
+	}
+	if c == nil || c.store == nil {
+		return "", fmt.Errorf("missing semantic store")
+	}
+	strategies, err := c.store.listStrategies(ctx)
+	if err != nil {
+		return "", err
+	}
+	var candidates []string
+	for _, strategy := range strategies {
+		if strategy.Enabled && strategy.Type == strategyTypeEmbedding {
+			candidates = append(candidates, strategy.Name)
+		}
+	}
+	switch len(candidates) {
+	case 0:
+		return "", fmt.Errorf("no semantic search strategy configured; create one with semantic strategy add embedding <name>")
+	case 1:
+		return candidates[0], nil
+	default:
+		return "", fmt.Errorf("multiple semantic search strategies configured; use semantic strategy <strategy> search <query> with one of: %s", strings.Join(candidates, ", "))
+	}
 }
 
 func (c *Component) handleStats(ctx context.Context, req commandengine.Request, cmd statsCommand) (commandengine.Result, error) {
