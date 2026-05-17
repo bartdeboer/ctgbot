@@ -20,7 +20,7 @@ const (
 	DefaultMaxMessages        = 200
 	DefaultMaxOutputTokens    = 2048
 	DefaultMinScore           = 0.4
-	DefaultEmbeddingBatchSize = 32
+	DefaultEmbeddingBatchSize = 128
 )
 
 type ComponentConfig struct {
