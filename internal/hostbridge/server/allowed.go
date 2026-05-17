@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -14,6 +15,7 @@ import (
 type AllowedCommand struct {
 	Name           string            `json:"name"`
 	Args           []string          `json:"args"`
+	ArgsPattern    string            `json:"args_pattern,omitempty"`
 	Dir            string            `json:"dir"`
 	Delay          string            `json:"delay"`
 	Env            map[string]string `json:"env"`
@@ -39,12 +41,9 @@ func BuildExecutionPlan(commandName string, args []string, spec AllowedCommand) 
 	if err != nil {
 		return ExecutionPlan{}, err
 	}
-	planArgs := append([]string{}, spec.Args...)
-	if len(args) > 0 {
-		if !spec.AllowExtraArgs {
-			return ExecutionPlan{}, fmt.Errorf("command does not allow extra args: %s", commandName)
-		}
-		planArgs = append(planArgs, args...)
+	planArgs, err := buildPlanArgs(commandName, spec, args)
+	if err != nil {
+		return ExecutionPlan{}, err
 	}
 	return ExecutionPlan{
 		Name:  spec.Name,
@@ -124,6 +123,7 @@ func StaticAllowedCommandResolver(allowed map[string]AllowedCommand) AllowedComm
 
 func normalizeAllowedCommand(spec AllowedCommand) (AllowedCommand, bool) {
 	spec.Name = strings.TrimSpace(spec.Name)
+	spec.ArgsPattern = strings.TrimSpace(spec.ArgsPattern)
 	spec.Dir = strings.TrimSpace(spec.Dir)
 	spec.Delay = strings.TrimSpace(spec.Delay)
 	spec.Args = cleanCommandArgs(spec.Args)
@@ -132,6 +132,113 @@ func normalizeAllowedCommand(spec AllowedCommand) (AllowedCommand, bool) {
 		return AllowedCommand{}, false
 	}
 	return spec, true
+}
+
+func buildPlanArgs(commandName string, spec AllowedCommand, runtimeArgs []string) ([]string, error) {
+	if strings.TrimSpace(spec.ArgsPattern) == "" {
+		if hasArgTemplate(spec.Args) {
+			return nil, fmt.Errorf("command %s uses argument templates without args_pattern", commandName)
+		}
+		planArgs := append([]string{}, spec.Args...)
+		if len(runtimeArgs) > 0 {
+			if !spec.AllowExtraArgs {
+				return nil, fmt.Errorf("command does not allow extra args: %s", commandName)
+			}
+			planArgs = append(planArgs, runtimeArgs...)
+		}
+		return planArgs, nil
+	}
+	params, extraArgs, err := matchArgsPattern(commandName, spec.ArgsPattern, runtimeArgs)
+	if err != nil {
+		return nil, err
+	}
+	planArgs, err := renderCommandArgs(commandName, spec.Args, params)
+	if err != nil {
+		return nil, err
+	}
+	if len(extraArgs) > 0 {
+		if !spec.AllowExtraArgs {
+			return nil, fmt.Errorf("command does not allow extra args: %s", commandName)
+		}
+		planArgs = append(planArgs, extraArgs...)
+	}
+	return planArgs, nil
+}
+
+var (
+	argsPatternParamRE = regexp.MustCompile(`^<([A-Za-z_][A-Za-z0-9_]*)>$`)
+	argTemplateRE      = regexp.MustCompile(`\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}`)
+)
+
+func matchArgsPattern(commandName string, pattern string, args []string) (map[string]string, []string, error) {
+	tokens := strings.Fields(strings.TrimSpace(pattern))
+	if len(args) < len(tokens) {
+		return nil, nil, fmt.Errorf("command %s expects %d args, got %d", commandName, len(tokens), len(args))
+	}
+	params := map[string]string{}
+	for i, token := range tokens {
+		value := args[i]
+		if match := argsPatternParamRE.FindStringSubmatch(token); len(match) == 2 {
+			name := match[1]
+			if previous, ok := params[name]; ok && previous != value {
+				return nil, nil, fmt.Errorf("command %s argument %s was provided more than once with different values", commandName, name)
+			}
+			params[name] = value
+			continue
+		}
+		if token != value {
+			return nil, nil, fmt.Errorf("command %s expects arg %d to be %q", commandName, i+1, token)
+		}
+	}
+	return params, append([]string{}, args[len(tokens):]...), nil
+}
+
+func renderCommandArgs(commandName string, args []string, params map[string]string) ([]string, error) {
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		rendered, err := renderCommandArg(commandName, arg, params)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rendered)
+	}
+	return out, nil
+}
+
+func renderCommandArg(commandName string, arg string, params map[string]string) (string, error) {
+	if !strings.Contains(arg, "{{") {
+		return arg, nil
+	}
+	missing := ""
+	rendered := argTemplateRE.ReplaceAllStringFunc(arg, func(token string) string {
+		match := argTemplateRE.FindStringSubmatch(token)
+		if len(match) != 2 {
+			missing = token
+			return token
+		}
+		value, ok := params[match[1]]
+		if !ok {
+			missing = match[1]
+			return token
+		}
+		return value
+	})
+	if missing != "" {
+		return "", fmt.Errorf("command %s has unresolved argument template %q", commandName, missing)
+	}
+	if strings.Contains(rendered, "{{") || strings.Contains(rendered, "}}") {
+		return "", fmt.Errorf("command %s has malformed argument template %q", commandName, arg)
+	}
+	return rendered, nil
+}
+
+func hasArgTemplate(args []string) bool {
+	for _, arg := range args {
+		if strings.Contains(arg, "{{") || strings.Contains(arg, "}}") {
+			return true
+		}
+	}
+	return false
 }
 
 func cleanCommandArgs(args []string) []string {
