@@ -123,6 +123,34 @@ type Embedder interface {
 	Embed(ctx context.Context, req EmbedRequest) (EmbedResponse, error)
 }
 
+type TranscriptionRequest struct {
+	Media message.Media
+}
+
+type TranscriptionResult struct {
+	Text     string
+	Language string
+	Model    string
+}
+
+type Transcriber interface {
+	Component
+	Transcribe(ctx context.Context, req TranscriptionRequest) (TranscriptionResult, error)
+}
+
+type SpeechRequest struct {
+	Text string
+}
+
+type SpeechResult struct {
+	Media message.Media
+}
+
+type SpeechSynthesizer interface {
+	Component
+	Synthesize(ctx context.Context, req SpeechRequest) (SpeechResult, error)
+}
+
 type ModelMode string
 
 const (

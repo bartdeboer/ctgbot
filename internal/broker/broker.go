@@ -263,11 +263,34 @@ func (b *Broker) handleResolvedInboundTurn(
 		}
 	}
 
+	options := turnOptions{Mode: turnModeText}
+	turnPrompt := rawText
+	if media, ok := audioAttachment(inbound.Payload.Attachments); ok {
+		options.Mode = turnModeAudio
+		if runtime == nil {
+			runtime, err = b.runtimeForChat(ctx, chat)
+			if err != nil {
+				return failConversation(nil, nil, err)
+			}
+		}
+		transcript, ref, audioErr := transcribeInboundAudio(ctx, runtime, media)
+		if audioErr != nil {
+			return failConversation(nil, nil, audioErr)
+		}
+		if transcript != "" {
+			turnPrompt = transcribedAudioPrompt(rawText, transcript)
+			inbound.Payload.Text.Text = turnPrompt
+			if ref != "" {
+				inbound.Metadata = append(inbound.Metadata, "transcriber="+ref)
+			}
+		}
+	}
+
 	storedInbound, err := b.App.StoreInboundMessage(ctx, inbound)
 	if err != nil {
 		return failConversation(nil, nil, err)
 	}
-	if rawText == "" && len(savedPaths) > 0 {
+	if strings.TrimSpace(turnPrompt) == "" && len(savedPaths) > 0 {
 		message, relayErr := b.relaySystemMessage(ctx, runtime, chat, thread, uploadSavedMessage(savedPaths))
 		if relayErr != nil {
 			return failConversation(storedInbound, nil, relayErr)
@@ -279,9 +302,8 @@ func (b *Broker) handleResolvedInboundTurn(
 		return EventOutcome{Inbound: storedInbound, Outbound: outbound}, nil
 	}
 	turnInbound := *storedInbound
-	turnPrompt := rawText
 	if len(savedPaths) > 0 {
-		turnPrompt = injectFilesIntoPrompt(savedPaths, rawText)
+		turnPrompt = injectFilesIntoPrompt(savedPaths, turnPrompt)
 	}
 	turnInbound.Text = prepareTurnInbound(inbound, turnPrompt)
 
@@ -291,7 +313,7 @@ func (b *Broker) handleResolvedInboundTurn(
 			return failConversation(storedInbound, nil, err)
 		}
 	}
-	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound)
+	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound, options)
 	if err != nil {
 		return failConversation(storedInbound, outbound, err)
 	}
