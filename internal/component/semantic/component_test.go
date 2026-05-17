@@ -7,9 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -230,7 +233,83 @@ func TestBuildScopedCommandsParseScopeFlags(t *testing.T) {
 	}
 }
 
+func TestBuildDefaultSearchCommandLeavesStrategyUnset(t *testing.T) {
+	built, err := buildDefaultSearchCommand(&clir.Request{
+		Params: map[string]string{"query": "inbound filters"},
+		Extra:  []string{"--limit", "3"},
+	})
+	if err != nil {
+		t.Fatalf("buildDefaultSearchCommand() error = %v", err)
+	}
+	search := built.(strategySearchCommand)
+	if search.Strategy != "" || search.Query != "inbound filters" || search.Limit != 3 {
+		t.Fatalf("search command = %#v, want default strategy query", search)
+	}
+}
+
+func TestResolveSearchStrategyUsesOnlyEnabledEmbeddingStrategy(t *testing.T) {
+	store, err := openStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("openStore() error = %v", err)
+	}
+	if err := store.saveStrategy(context.Background(), &strategy{Name: "qwen-embed", Type: strategyTypeEmbedding, SourceKind: strategySourceMessages, EmbedderRef: "llamacpp", Model: "qwen"}); err != nil {
+		t.Fatalf("saveStrategy() error = %v", err)
+	}
+	c := &Component{store: store}
+	got, err := c.resolveSearchStrategy(context.Background(), "")
+	if err != nil {
+		t.Fatalf("resolveSearchStrategy() error = %v", err)
+	}
+	if got != "qwen-embed" {
+		t.Fatalf("strategy=%q, want qwen-embed", got)
+	}
+}
+
+func TestResolveSearchStrategyRequiresExplicitNameWhenMultipleStrategiesExist(t *testing.T) {
+	store, err := openStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("openStore() error = %v", err)
+	}
+	for _, name := range []string{"first", "second"} {
+		if err := store.saveStrategy(context.Background(), &strategy{Name: name, Type: strategyTypeEmbedding, SourceKind: strategySourceMessages, EmbedderRef: "llamacpp", Model: "qwen"}); err != nil {
+			t.Fatalf("saveStrategy(%s) error = %v", name, err)
+		}
+	}
+	c := &Component{store: store}
+	_, err = c.resolveSearchStrategy(context.Background(), "")
+	if err == nil || !strings.Contains(err.Error(), "multiple semantic search strategies") {
+		t.Fatalf("resolveSearchStrategy() error = %v, want multiple strategy error", err)
+	}
+}
+
+func TestInstructionRoutePatternsIncludeSemanticSearch(t *testing.T) {
+	patterns := commandset.InstructionRoutePatterns(
+		(&Component{}).CommandDefinitions(),
+		coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+	)
+	if !containsString(patterns, "search <query>") {
+		t.Fatalf("InstructionRoutePatterns() = %#v, missing search <query>", patterns)
+	}
+	if containsString(patterns, "search <strategy> <query>") {
+		t.Fatalf("InstructionRoutePatterns() = %#v, should hide legacy strategy search route", patterns)
+	}
+	for _, definition := range (&Component{}).CommandDefinitions() {
+		if definition.CanonicalPattern() == "search <query>" && definition.InstructionVisibility != commandengine.InstructionImportant {
+			t.Fatalf("search <query> visibility = %q, want important", definition.InstructionVisibility)
+		}
+	}
+}
+
 type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
 
 func (f fakeMessageSource) ForEachMessage(_ context.Context, scope component.MessageScope, visit component.MessageVisitor) error {
 	var messages []coremodel.ThreadMessage

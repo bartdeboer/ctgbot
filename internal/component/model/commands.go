@@ -40,9 +40,9 @@ func (c *Component) UsesLocalCommandRoutes() bool { return true }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
-		modelCommand("list", listCommand{}, "List installed models", nil),
-		modelCommand("install <name> <url>", nil, "Download and register a model", buildInstallCommand),
-		modelCommand("register <name> <path>", nil, "Register an existing local model", buildRegisterCommand),
+		modelCommand("list", listCommand{}, "List installed AI models", nil),
+		modelCommand("install <name> <url>", nil, "Download and register an AI model", buildInstallCommand),
+		modelCommand("register <name> <path>", nil, "Register an existing local AI model", buildRegisterCommand),
 	}
 }
 
