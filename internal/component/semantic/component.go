@@ -22,6 +22,8 @@ type ComponentResolver interface {
 type Component struct {
 	registration coremodel.Component
 	config       ComponentConfig
+	homePath     string
+	store        *store
 	resolver     ComponentResolver
 	messages     component.SearchMessageSource
 	logf         func(format string, args ...any)
@@ -41,7 +43,11 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if err != nil {
 		return nil, err
 	}
-	return &Component{registration: registration, config: config, resolver: resolver, logf: logf}, nil
+	store, err := openStore(home.Path)
+	if err != nil {
+		return nil, err
+	}
+	return &Component{registration: registration, config: config, homePath: home.Path, store: store, resolver: resolver, logf: logf}, nil
 }
 
 func (c *Component) Type() string { return Type }
@@ -59,18 +65,47 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 func (c *Component) Skill() component.Skill {
 	return component.Skill{
 		Name:        "semantic-search",
-		Description: "Search current thread history by meaning using a configured completion model.",
+		Description: "Index and search current thread history by meaning using named strategies.",
 		Text: strings.TrimSpace(`Use semantic search when exact keywords may not match prior discussion.
 
 Examples:
-  hostbridge semantic/qwen3-q5 search "database abstraction layer"
-  hostbridge semantic/qwen3-q5 search "prompt injection email safety" --limit 5
-  hostbridge semantic/qwen3-q5 search "prompt injection email safety" --max-messages 80
-  hostbridge semantic/qwen3-q5 search "prompt injection email safety" --keep-warm-for 10s
-  hostbridge semantic/qwen3-q5 search "broadly related memory" --min-score 0.2
+  hostbridge semantic/local strategy add embedding qwen-embed --embedder llamacpp/local --model qwen3-embed-0.6b
+  hostbridge semantic/local index qwen-embed
+  hostbridge semantic/local search qwen-embed "database abstraction layer"
+  hostbridge semantic/local search qwen-embed "prompt injection email safety" --limit 5
+  hostbridge semantic/local stats
 
-Results include exact ctgbot message IDs, scores, excerpts, and optional reasons.`),
+Results include exact ctgbot message IDs, scores, and excerpts.`),
 	}
+}
+
+func (c *Component) resolveEmbedder(ctx context.Context, ref string) (component.Embedder, string, error) {
+	if c == nil {
+		return nil, "", fmt.Errorf("missing semantic component")
+	}
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, "", fmt.Errorf("missing embedder ref")
+	}
+	if c.resolver == nil {
+		return nil, ref, fmt.Errorf("missing component resolver")
+	}
+	registration, err := c.resolver.ResolveComponentRef(ctx, ref)
+	if err != nil {
+		return nil, ref, err
+	}
+	loaded, err := c.resolver.ResolveComponent(ctx, registration.ID)
+	if err != nil {
+		return nil, registration.Ref(), err
+	}
+	if loaded == nil {
+		return nil, registration.Ref(), fmt.Errorf("embedder component not found: %s", registration.Ref())
+	}
+	embedder, ok := loaded.Component.(component.Embedder)
+	if !ok {
+		return nil, loaded.Registration.Ref(), fmt.Errorf("component %s does not implement embedder", loaded.Registration.Ref())
+	}
+	return embedder, loaded.Registration.Ref(), nil
 }
 
 func (c *Component) resolveCompletionProvider(ctx context.Context) (component.CompletionProvider, string, error) {

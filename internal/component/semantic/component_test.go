@@ -87,6 +87,60 @@ func TestSearchPassesCompletionIdleTimeoutToSession(t *testing.T) {
 	}
 }
 
+func TestStrategyEmbeddingIndexAndSearch(t *testing.T) {
+	threadID := modeluuid.New()
+	horseID := modeluuid.New()
+	databaseID := modeluuid.New()
+	store, err := openStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("openStore() error = %v", err)
+	}
+	embedder := fakeEmbedder{}
+	c := &Component{
+		config:   ComponentConfig{Limit: 5, EmbeddingBatchSize: 10},
+		store:    store,
+		resolver: fakeResolver{component: embedder},
+	}
+	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{
+		{ID: horseID, ThreadID: threadID, Text: "The black horse runs through the field."},
+		{ID: databaseID, ThreadID: threadID, Text: "We discussed SQLite embeddings and semantic search strategies."},
+	}})
+	if err := store.saveStrategy(context.Background(), &semanticStrategy{
+		Name:        "qwen-embed",
+		Type:        strategyTypeEmbedding,
+		SourceKind:  strategySourceMessages,
+		EmbedderRef: "llamacpp/local",
+		Model:       "qwen3-embed",
+		Prompt:      defaultQueryInstruction,
+	}); err != nil {
+		t.Fatalf("saveStrategy() error = %v", err)
+	}
+	indexed, err := c.IndexThread(context.Background(), IndexRequest{Strategy: "qwen-embed", ThreadID: threadID})
+	if err != nil {
+		t.Fatalf("IndexThread() error = %v", err)
+	}
+	if indexed.Messages != 2 || indexed.Embedded != 2 || indexed.Skipped != 0 {
+		t.Fatalf("indexed = %#v, want 2/2/0", indexed)
+	}
+	indexedAgain, err := c.IndexThread(context.Background(), IndexRequest{Strategy: "qwen-embed", ThreadID: threadID})
+	if err != nil {
+		t.Fatalf("IndexThread() second error = %v", err)
+	}
+	if indexedAgain.Embedded != 0 || indexedAgain.Skipped != 2 {
+		t.Fatalf("indexedAgain = %#v, want skipped existing embeddings", indexedAgain)
+	}
+	results, err := c.SearchStrategy(context.Background(), StrategySearchRequest{Strategy: "qwen-embed", ThreadID: threadID, Query: "database search", Limit: 1})
+	if err != nil {
+		t.Fatalf("SearchStrategy() error = %v", err)
+	}
+	if len(results.Results) != 1 {
+		t.Fatalf("results = %#v, want one", results.Results)
+	}
+	if results.Results[0].MessageID != databaseID {
+		t.Fatalf("top result = %s, want database message %s", results.Results[0].MessageID, databaseID)
+	}
+}
+
 type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
 
 func (f fakeMessageSource) ThreadMessages(context.Context, modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
@@ -136,12 +190,51 @@ func (f fakeCompletionSession) Close() error {
 	return f.close()
 }
 
-type fakeResolver struct{ provider component.CompletionProvider }
+type fakeEmbedder struct{}
+
+func (fakeEmbedder) Type() string { return "embedder" }
+
+func (fakeEmbedder) Embed(_ context.Context, req component.EmbedRequest) (component.EmbedResponse, error) {
+	out := make([]component.Embedding, 0, len(req.Inputs))
+	for _, input := range req.Inputs {
+		out = append(out, component.Embedding{
+			ID:         input.ID,
+			Vector:     fakeVector(input.Text),
+			Dim:        3,
+			Model:      req.Model,
+			Normalized: true,
+		})
+	}
+	return component.EmbedResponse{Embeddings: out}, nil
+}
+
+func fakeVector(text string) []float32 {
+	text = strings.ToLower(text)
+	var out [3]float32
+	if strings.Contains(text, "horse") {
+		out[0] = 1
+	}
+	if strings.Contains(text, "database") || strings.Contains(text, "sqlite") || strings.Contains(text, "search") {
+		out[1] = 1
+	}
+	if strings.Contains(text, "email") || strings.Contains(text, "gmail") {
+		out[2] = 1
+	}
+	return out[:]
+}
+
+type fakeResolver struct {
+	provider  component.CompletionProvider
+	component component.Component
+}
 
 func (f fakeResolver) ResolveComponentRef(context.Context, string) (*coremodel.Component, error) {
 	return &coremodel.Component{ID: modeluuid.New(), Type: "llm", Name: "qwen", Enabled: true}, nil
 }
 
 func (f fakeResolver) ResolveComponent(context.Context, modeluuid.UUID) (*component.Loaded, error) {
+	if f.component != nil {
+		return &component.Loaded{Registration: coremodel.Component{Type: f.component.Type(), Name: "local"}, Component: f.component}, nil
+	}
 	return &component.Loaded{Registration: coremodel.Component{Type: "llm", Name: "qwen"}, Component: f.provider}, nil
 }

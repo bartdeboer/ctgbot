@@ -10,22 +10,24 @@ import (
 const ComponentConfigFilename = "component.json"
 
 const (
-	DefaultBatchSize       = 40
-	DefaultLimit           = 10
-	DefaultMaxMessages     = 200
-	DefaultMaxOutputTokens = 2048
-	DefaultMinScore        = 0.4
+	DefaultBatchSize          = 40
+	DefaultLimit              = 10
+	DefaultMaxMessages        = 200
+	DefaultMaxOutputTokens    = 2048
+	DefaultMinScore           = 0.4
+	DefaultEmbeddingBatchSize = 32
 )
 
 type ComponentConfig struct {
-	Completion      string  `json:"completion"`
-	Model           string  `json:"model,omitempty"`
-	BatchSize       int     `json:"batch_size,omitempty"`
-	Limit           int     `json:"limit,omitempty"`
-	MaxMessages     int     `json:"max_messages,omitempty"`
-	MaxOutputTokens int     `json:"max_output_tokens,omitempty"`
-	MinScore        float64 `json:"min_score,omitempty"`
-	KeepWarmFor     string  `json:"keep_warm_for,omitempty"`
+	Completion         string  `json:"completion"`
+	Model              string  `json:"model,omitempty"`
+	BatchSize          int     `json:"batch_size,omitempty"`
+	EmbeddingBatchSize int     `json:"embedding_batch_size,omitempty"`
+	Limit              int     `json:"limit,omitempty"`
+	MaxMessages        int     `json:"max_messages,omitempty"`
+	MaxOutputTokens    int     `json:"max_output_tokens,omitempty"`
+	MinScore           float64 `json:"min_score,omitempty"`
+	KeepWarmFor        string  `json:"keep_warm_for,omitempty"`
 }
 
 func loadComponentConfig(home string) (ComponentConfig, error) {
@@ -51,6 +53,9 @@ func (c ComponentConfig) withDefaults() ComponentConfig {
 	c.Model = strings.TrimSpace(c.Model)
 	if c.BatchSize <= 0 {
 		c.BatchSize = DefaultBatchSize
+	}
+	if c.EmbeddingBatchSize <= 0 {
+		c.EmbeddingBatchSize = DefaultEmbeddingBatchSize
 	}
 	if c.Limit <= 0 {
 		c.Limit = DefaultLimit
