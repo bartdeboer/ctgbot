@@ -169,11 +169,12 @@ func TestStrategySearchAllAndScopedDrop(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("saveStrategy() error = %v", err)
 	}
-	if _, err := c.Index(context.Background(), IndexRequest{Strategy: "qwen-embed", Scope: scope{ThreadID: firstThreadID}}); err != nil {
-		t.Fatalf("Index(first thread) error = %v", err)
+	indexed, err := c.Index(context.Background(), IndexRequest{Strategy: "qwen-embed", Scope: scope{All: true}})
+	if err != nil {
+		t.Fatalf("Index(all) error = %v", err)
 	}
-	if _, err := c.Index(context.Background(), IndexRequest{Strategy: "qwen-embed", Scope: scope{ThreadID: secondThreadID}}); err != nil {
-		t.Fatalf("Index(second thread) error = %v", err)
+	if indexed.Embedded != 2 {
+		t.Fatalf("indexed = %#v, want 2 embedded", indexed)
 	}
 	results, err := c.SearchStrategy(context.Background(), StrategySearchRequest{Strategy: "qwen-embed", Scope: scope{All: true}, Query: "vector database", Limit: 1})
 	if err != nil {
@@ -202,24 +203,22 @@ func TestStrategySearchAllAndScopedDrop(t *testing.T) {
 
 type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
 
-func (f fakeMessageSource) ThreadMessages(_ context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
-	var out []coremodel.ThreadMessage
+func (f fakeMessageSource) ForEachMessage(_ context.Context, scope component.MessageScope, visit component.MessageVisitor) error {
 	for _, message := range f.messages {
-		if message.ThreadID == threadID {
-			out = append(out, message)
+		switch {
+		case scope.All:
+		case !scope.ThreadID.IsNull() && message.ThreadID != scope.ThreadID:
+			continue
+		case !scope.ChatID.IsNull() && message.ChatID != scope.ChatID:
+			continue
+		case scope.ThreadID.IsNull() && scope.ChatID.IsNull() && !scope.All:
+			continue
+		}
+		if err := visit(message); err != nil {
+			return err
 		}
 	}
-	return out, nil
-}
-
-func (f fakeMessageSource) ChatMessages(_ context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
-	var out []coremodel.ThreadMessage
-	for _, message := range f.messages {
-		if message.ChatID == chatID {
-			out = append(out, message)
-		}
-	}
-	return out, nil
+	return nil
 }
 
 type fakeCompletionProvider struct{ reply string }

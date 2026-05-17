@@ -34,8 +34,11 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	if c == nil || c.messages == nil {
 		return component.SearchResponse{}, fmt.Errorf("missing semantic message source")
 	}
-	messages, err := c.messages.ThreadMessages(ctx, req.ThreadID)
-	if err != nil {
+	var messages []coremodel.ThreadMessage
+	if err := c.messages.ForEachMessage(ctx, component.MessageScope{ThreadID: req.ThreadID}, func(message coremodel.ThreadMessage) error {
+		messages = append(messages, message)
+		return nil
+	}); err != nil {
 		return component.SearchResponse{}, err
 	}
 	items := searchableMessages(messages)

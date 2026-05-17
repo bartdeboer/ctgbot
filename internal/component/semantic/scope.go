@@ -55,14 +55,7 @@ func resolveScope(ctx commandengine.Context, flags scopeFlags) (scope, error) {
 }
 
 func resolveIndexScope(ctx commandengine.Context, flags scopeFlags) (scope, error) {
-	resolved, err := resolveScope(ctx, flags)
-	if err != nil {
-		return scope{}, err
-	}
-	if resolved.All {
-		return scope{}, fmt.Errorf("index create --all is not supported yet; choose --chat or --thread")
-	}
-	return resolved, nil
+	return resolveScope(ctx, flags)
 }
 
 func parseRequiredUUID(name string, value string) (modeluuid.UUID, error) {

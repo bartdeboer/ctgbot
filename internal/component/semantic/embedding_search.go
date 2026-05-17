@@ -170,16 +170,16 @@ func (c *Component) IndexThread(ctx context.Context, req IndexRequest) (IndexRes
 }
 
 func (c *Component) messagesForScope(ctx context.Context, scope scope) ([]coremodel.ThreadMessage, error) {
-	switch {
-	case scope.All:
-		return nil, fmt.Errorf("index create --all is not supported yet; choose --chat or --thread")
-	case !scope.ThreadID.IsNull():
-		return c.messages.ThreadMessages(ctx, scope.ThreadID)
-	case !scope.ChatID.IsNull():
-		return c.messages.ChatMessages(ctx, scope.ChatID)
-	default:
-		return nil, fmt.Errorf("missing index scope")
-	}
+	var messages []coremodel.ThreadMessage
+	err := c.messages.ForEachMessage(ctx, component.MessageScope{
+		ChatID:   scope.ChatID,
+		ThreadID: scope.ThreadID,
+		All:      scope.All,
+	}, func(message coremodel.ThreadMessage) error {
+		messages = append(messages, message)
+		return nil
+	})
+	return messages, err
 }
 
 func (c *Component) SearchStrategy(ctx context.Context, req StrategySearchRequest) (component.SearchResponse, error) {

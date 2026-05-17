@@ -63,13 +63,20 @@ type Searcher interface {
 }
 
 type SearchMessageSource interface {
-	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
-	ChatMessages(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
+	ForEachMessage(ctx context.Context, scope MessageScope, visit MessageVisitor) error
 }
 
 type SearchMessageSourceReceiver interface {
 	SetSearchMessageSource(source SearchMessageSource)
 }
+
+type MessageScope struct {
+	ChatID   modeluuid.UUID
+	ThreadID modeluuid.UUID
+	All      bool
+}
+
+type MessageVisitor func(coremodel.ThreadMessage) error
 
 type EmbeddingKind string
 
