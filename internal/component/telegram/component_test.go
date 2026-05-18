@@ -434,6 +434,26 @@ func TestSendSupersedesProviderMessageDeleteFailureStillSends(t *testing.T) {
 	}
 }
 
+func TestSendSupersedesProviderMessageKeepsOriginalWhenSendFails(t *testing.T) {
+	api := &fakeTelegramAPI{sendMessageErrs: []error{errors.New("send failed")}}
+	c := &Component{api: api}
+
+	err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID:           "123",
+		SupersedesProviderMessageID: "99",
+		Text: message.TextMessage{
+			Text:        "transcript",
+			ContentType: "text/html",
+		},
+	})
+	if err == nil {
+		t.Fatalf("Send() error = nil, want send failure")
+	}
+	if got := api.deletedSnapshot(); len(got) != 0 {
+		t.Fatalf("deleted = %#v, want no delete after send failure", got)
+	}
+}
+
 func TestSendDefaultMarkdownV2FallsBackToHTMLThenPlain(t *testing.T) {
 	api := &fakeTelegramAPI{sendMessageErrs: []error{fmt.Errorf("Bad Request: can't parse entities"), fmt.Errorf("Bad Request: can't parse entities")}}
 	c := &Component{api: api}

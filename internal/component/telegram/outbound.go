@@ -28,9 +28,12 @@ func (c *Component) Send(ctx context.Context, payload message.OutboundPayload) e
 	if err != nil {
 		return err
 	}
-	c.supersedeProviderMessage(ctx, chatID, payload.SupersedesProviderMessageID)
 	if len(payload.Attachments) == 0 {
-		return c.sendTextMessage(ctx, chatID, threadID, payload.Text)
+		if err := c.sendTextMessage(ctx, chatID, threadID, payload.Text); err != nil {
+			return err
+		}
+		c.supersedeProviderMessage(ctx, chatID, payload.SupersedesProviderMessageID)
+		return nil
 	}
 	for i, attachment := range payload.Attachments {
 		caption := ""
@@ -41,6 +44,7 @@ func (c *Component) Send(ctx context.Context, payload message.OutboundPayload) e
 			return err
 		}
 	}
+	c.supersedeProviderMessage(ctx, chatID, payload.SupersedesProviderMessageID)
 	return nil
 }
 
