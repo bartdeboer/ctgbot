@@ -10,7 +10,11 @@ import (
 	gmailapi "google.golang.org/api/gmail/v1"
 )
 
-const maxRenderedEmailBodyRunes = 20000
+const (
+	maxRenderedEmailBodyRunes = 20000
+	maxRenderedHeaderRunes    = 500
+	maxRenderedSubjectRunes   = 255
+)
 
 var selectedPromptMetadataHeaders = []string{
 	"Message-ID",
@@ -41,6 +45,14 @@ func headerValue(message *gmailapi.Message, name string) string {
 }
 
 func renderedHeaderValue(value string) string {
+	return renderedInlineValue(value, maxRenderedHeaderRunes)
+}
+
+func renderedSubjectValue(value string) string {
+	return renderedInlineValue(value, maxRenderedSubjectRunes)
+}
+
+func renderedInlineValue(value string, maxRunes int) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return ""
@@ -56,7 +68,7 @@ func renderedHeaderValue(value string) string {
 		return r
 	}, value)
 	value = strings.Join(strings.Fields(value), " ")
-	return capRunesInline(value, 500)
+	return capRunesInline(value, maxRunes)
 }
 
 func sanitizePromptBody(value string) string {
