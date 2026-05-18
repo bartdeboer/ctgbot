@@ -15,6 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	"github.com/bartdeboer/ctgbot/internal/workgate"
 )
 
 type ComponentResolver interface {
@@ -23,11 +24,12 @@ type ComponentResolver interface {
 }
 
 type Component struct {
-	registration coremodel.Component
-	runtime      runtimepkg.Runtime
-	home         runtimepkg.Home
-	config       ComponentConfig
-	resolver     ComponentResolver
+	registration   coremodel.Component
+	runtime        runtimepkg.Runtime
+	home           runtimepkg.Home
+	config         ComponentConfig
+	resolver       ComponentResolver
+	transcribeGate *workgate.Gate
 }
 
 var _ component.Component = (*Component)(nil)
@@ -47,11 +49,12 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 		return nil, err
 	}
 	return &Component{
-		registration: registration,
-		runtime:      runtime.Bind(registration, home, runtimeConfig),
-		home:         home,
-		config:       config,
-		resolver:     resolver,
+		registration:   registration,
+		runtime:        runtime.Bind(registration, home, runtimeConfig),
+		home:           home,
+		config:         config,
+		resolver:       resolver,
+		transcribeGate: workgate.New(),
 	}, nil
 }
 
@@ -81,6 +84,11 @@ func (c *Component) Transcribe(ctx context.Context, req component.TranscriptionR
 	if len(req.Media.Content) == 0 {
 		return component.TranscriptionResult{}, fmt.Errorf("missing audio content")
 	}
+	release, err := c.acquireTranscription(ctx, model.Name)
+	if err != nil {
+		return component.TranscriptionResult{}, err
+	}
+	defer release()
 	work, cleanup, err := c.prepareWorkdir("transcribe-*")
 	if err != nil {
 		return component.TranscriptionResult{}, err
@@ -113,6 +121,13 @@ func (c *Component) Transcribe(ctx context.Context, req component.TranscriptionR
 		return component.TranscriptionResult{}, fmt.Errorf("whispercpp returned empty transcript")
 	}
 	return component.TranscriptionResult{Text: text, Language: firstNonEmpty(req.Language, c.config.Language), Model: model.Name}, nil
+}
+
+func (c *Component) acquireTranscription(ctx context.Context, modelName string) (func(), error) {
+	if c == nil || c.transcribeGate == nil {
+		return func() {}, nil
+	}
+	return c.transcribeGate.Acquire(ctx, strings.TrimSpace(modelName), c.config.MaxConcurrent)
 }
 
 func (c *Component) run(ctx context.Context, threadID modeluuid.UUID, workspacePath string, name string, args []string) error {

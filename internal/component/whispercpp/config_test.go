@@ -44,6 +44,9 @@ func TestComponentConfigDefaultsToOfficialWhisperCommand(t *testing.T) {
 	if config.FFMpegCommand != "ffmpeg" {
 		t.Fatalf("FFMpegCommand = %q", config.FFMpegCommand)
 	}
+	if config.MaxConcurrent != 1 {
+		t.Fatalf("MaxConcurrent = %d, want 1", config.MaxConcurrent)
+	}
 }
 
 func envValue(env []string, key string) string {

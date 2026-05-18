@@ -23,6 +23,7 @@ type ComponentConfig struct {
 	DefaultModel   string   `json:"default_model,omitempty"`
 	Language       string   `json:"language,omitempty"`
 	Threads        int      `json:"threads,omitempty"`
+	MaxConcurrent  int      `json:"max_concurrent,omitempty"`
 	FFMpegCommand  string   `json:"ffmpeg_command,omitempty"`
 	WhisperCommand string   `json:"whisper_command,omitempty"`
 	WhisperArgs    []string `json:"whisper_args,omitempty"`
@@ -64,6 +65,9 @@ func (c ComponentConfig) withDefaults() ComponentConfig {
 	c.ModelStore = firstNonEmpty(c.ModelStore, "model")
 	c.DefaultModel = strings.TrimSpace(c.DefaultModel)
 	c.Language = strings.TrimSpace(c.Language)
+	if c.MaxConcurrent == 0 {
+		c.MaxConcurrent = 1
+	}
 	c.FFMpegCommand = firstNonEmpty(c.FFMpegCommand, "ffmpeg")
 	c.WhisperCommand = firstNonEmpty(c.WhisperCommand, DefaultWhisperCommand)
 	c.WhisperArgs = cleanArgs(c.WhisperArgs)

@@ -21,6 +21,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	backendruntime "github.com/bartdeboer/ctgbot/internal/runtime/backend"
+	"github.com/bartdeboer/ctgbot/internal/workgate"
 )
 
 type Component struct {
@@ -34,6 +35,7 @@ type Component struct {
 	logger          *log.Logger
 	runtimeMu       sync.Mutex
 	modelStates     map[string]*modelRuntimeState
+	inferenceGate   *workgate.Gate
 }
 
 type ComponentResolver interface {
@@ -83,6 +85,7 @@ func New(
 		resolver:        resolver,
 		client:          &http.Client{Timeout: 2 * time.Minute},
 		logger:          logger,
+		inferenceGate:   workgate.New(),
 	}, nil
 }
 
@@ -326,6 +329,11 @@ func (c *Component) completeWithOptions(ctx context.Context, modelName string, m
 	if cleanModelMode(model.Mode) != "completion" {
 		return "", fmt.Errorf("llama.cpp model %s is not configured for chat completions", model.Name)
 	}
+	release, err := c.acquireInference(ctx, model.Name)
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	maxTokens := model.MaxTokens
 	if maxOutputTokens > 0 {
 		maxTokens = maxOutputTokens
@@ -368,6 +376,13 @@ func (c *Component) completeWithOptions(ctx context.Context, modelName string, m
 		return "", nil
 	}
 	return decoded.Choices[0].Message.Content, nil
+}
+
+func (c *Component) acquireInference(ctx context.Context, modelName string) (func(), error) {
+	if c == nil || c.inferenceGate == nil {
+		return func() {}, nil
+	}
+	return c.inferenceGate.Acquire(ctx, cleanModelName(modelName), c.componentConfig.MaxConcurrent)
 }
 
 func (c *Component) logf(format string, args ...any) {
