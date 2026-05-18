@@ -63,12 +63,12 @@ func TestCommandDefinitionsUseTightInboxSurface(t *testing.T) {
 	for _, def := range c.CommandDefinitions() {
 		patterns[def.Pattern] = true
 	}
-	for _, pattern := range []string{"query <query>", "fetch <message_id>", "db help", "db schema", "db query <sql>", "message view <message_id>", "message display <message_id>", "sender store-only <email>", "sender notify <email>"} {
+	for _, pattern := range []string{"query <query>", "fetch <message_id>", "db help", "db schema", "db query <sql>", "message view <message_id>", "message display <message_id>", "sender <email> config list", "sender <email> config set <key> <value>"} {
 		if !patterns[pattern] {
 			t.Fatalf("missing command pattern %q in %#v", pattern, patterns)
 		}
 	}
-	for _, pattern := range []string{"query <sql>", "sql <sql>", "message path <message_id>", "attachment path <attachment_id>"} {
+	for _, pattern := range []string{"query <sql>", "sql <sql>", "message path <message_id>", "attachment path <attachment_id>", "sender store-only <email>", "sender notify <email>"} {
 		if patterns[pattern] {
 			t.Fatalf("obsolete command pattern still registered: %q", pattern)
 		}
@@ -207,8 +207,8 @@ func TestSenderPolicyAffectsInboundPrompt(t *testing.T) {
 
 func TestSenderStoreOnlyPolicyIsListedAndRendered(t *testing.T) {
 	c := newTestComponent(t, "work")
-	if _, err := c.handleSenderStoreOnly(context.Background(), commandengine.Request{}, senderStoreOnlyCommand{Email: "hello@example.com"}); err != nil {
-		t.Fatalf("handleSenderStoreOnly() error = %v", err)
+	if _, err := c.handleSenderConfigSet(context.Background(), commandengine.Request{}, senderConfigSetCommand{Email: "hello@example.com", Key: "notify-agent", Value: "disabled"}); err != nil {
+		t.Fatalf("handleSenderConfigSet(notify-agent disabled) error = %v", err)
 	}
 	result, err := c.handleSenderList(context.Background(), commandengine.Request{}, senderListCommand{})
 	if err != nil {
@@ -217,9 +217,26 @@ func TestSenderStoreOnlyPolicyIsListedAndRendered(t *testing.T) {
 	if !strings.Contains(result.Text, "hello@example.com") || !strings.Contains(result.Text, "store_only=true") {
 		t.Fatalf("sender list did not show store_only policy:\n%s", result.Text)
 	}
+	config, err := c.handleSenderConfigList(context.Background(), commandengine.Request{}, senderConfigListCommand{Email: "hello@example.com"})
+	if err != nil {
+		t.Fatalf("handleSenderConfigList() error = %v", err)
+	}
+	if !strings.Contains(config.Text, "notify-agent: disabled") {
+		t.Fatalf("sender config did not show notify-agent disabled:\n%s", config.Text)
+	}
 	prompt := c.inboundPrompt(storedMessage{ID: "msg-1", GmailMessageID: "gmail-1", GmailThreadID: "thread-1", FromEmail: "hello@example.com", FromLabel: "Hello", Subject: "Hi"}, "")
 	if !strings.Contains(prompt, "Sender policy: untrusted, store-only") {
 		t.Fatalf("prompt did not render store-only policy:\n%s", prompt)
+	}
+	if _, err := c.handleSenderConfigSet(context.Background(), commandengine.Request{}, senderConfigSetCommand{Email: "hello@example.com", Key: "notify-agent", Value: "enabled"}); err != nil {
+		t.Fatalf("handleSenderConfigSet(notify-agent enabled) error = %v", err)
+	}
+	policy, err := c.store.senderPolicy(context.Background(), "hello@example.com")
+	if err != nil {
+		t.Fatalf("senderPolicy() error = %v", err)
+	}
+	if policy == nil || policy.StoreOnly {
+		t.Fatalf("policy after notify-agent enabled = %#v", policy)
 	}
 }
 
