@@ -135,7 +135,8 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 		return component.SpeechResult{}, err
 	}
 
-	modelPath := runtimePathForModel(c.runtime, model.Path)
+	workspacePath := firstNonEmpty(req.WorkspacePath, filepath.Dir(model.Path))
+	modelPath := runtimePathForHostPath(c.runtime, workspacePath, model.Path)
 	voice := supertonicVoiceName(firstNonEmpty(req.Voice, c.config.DefaultVoice))
 	args := []string{
 		filepath.Join(work.runtime, "synthesize.py"),
@@ -146,7 +147,7 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 		"--output", filepath.Join(work.runtime, "speech.wav"),
 		"--metadata", filepath.Join(work.runtime, "metadata.json"),
 	}
-	out, err := c.runtime.CombinedOutput(ctx, filepath.Dir(model.Path), req.ThreadID, nil, c.config.PythonCommand, args...)
+	out, err := c.runtime.CombinedOutput(ctx, workspacePath, req.ThreadID, nil, c.config.PythonCommand, args...)
 	if err != nil {
 		return component.SpeechResult{}, fmt.Errorf("supertonic command: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
@@ -195,10 +196,15 @@ func (c *Component) prepareWorkdir(pattern string) (workdir, func(), error) {
 	return workdir{host: host, runtime: runtime}, func() { _ = os.RemoveAll(host) }, nil
 }
 
-func runtimePathForModel(runtime runtimepkg.Runtime, path string) string {
+func runtimePathForHostPath(runtime runtimepkg.Runtime, workspacePath string, path string) string {
 	path = strings.TrimSpace(path)
 	if path == "" || runtime == nil {
 		return path
+	}
+	if workspacePath = strings.TrimSpace(workspacePath); workspacePath != "" {
+		if rel, err := filepath.Rel(workspacePath, path); err == nil && rel != "." && !strings.HasPrefix(filepath.ToSlash(rel), "../") {
+			return filepath.Join(runtime.RuntimeWorkspacePath(workspacePath), rel)
+		}
 	}
 	return filepath.Join(runtime.RuntimeWorkspacePath(filepath.Dir(path)), filepath.Base(path))
 }

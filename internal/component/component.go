@@ -142,11 +142,12 @@ type Transcriber interface {
 }
 
 type SpeechRequest struct {
-	Text     string
-	Model    string
-	Voice    string
-	Language string
-	ThreadID modeluuid.UUID
+	Text          string
+	Model         string
+	Voice         string
+	Language      string
+	WorkspacePath string
+	ThreadID      modeluuid.UUID
 }
 
 type SpeechResult struct {

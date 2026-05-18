@@ -135,7 +135,7 @@ func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, text string)
 	if err != nil || synthesizer == nil {
 		return nil, "", err
 	}
-	result, err := synthesizer.Synthesize(ctx, component.SpeechRequest{Text: text})
+	result, err := synthesizer.Synthesize(ctx, component.SpeechRequest{Text: text, WorkspacePath: runtime.Workspace})
 	if err != nil {
 		return nil, ref, err
 	}
