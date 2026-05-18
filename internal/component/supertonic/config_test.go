@@ -43,3 +43,11 @@ func TestLoadComponentConfigOverrides(t *testing.T) {
 		t.Fatalf("config = %#v", config)
 	}
 }
+
+func TestHostPathForWorkspaceModelMapsRuntimeWorkspacePath(t *testing.T) {
+	got := hostPathForWorkspaceModel("/host/chat/workspace", "/workspace/models/supertonic3")
+	want := filepath.Join("/host/chat/workspace", "models", "supertonic3")
+	if got != want {
+		t.Fatalf("hostPathForWorkspaceModel() = %q, want %q", got, want)
+	}
+}

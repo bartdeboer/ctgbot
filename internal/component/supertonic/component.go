@@ -135,8 +135,9 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 		return component.SpeechResult{}, err
 	}
 
-	workspacePath := firstNonEmpty(req.WorkspacePath, filepath.Dir(model.Path))
-	modelPath := runtimePathForHostPath(c.runtime, workspacePath, model.Path)
+	hostModelPath := hostPathForWorkspaceModel(req.WorkspacePath, model.Path)
+	workspacePath := firstNonEmpty(req.WorkspacePath, filepath.Dir(hostModelPath))
+	modelPath := runtimePathForHostPath(c.runtime, workspacePath, hostModelPath)
 	voice := supertonicVoiceName(firstNonEmpty(req.Voice, c.config.DefaultVoice))
 	args := []string{
 		filepath.Join(work.runtime, "synthesize.py"),
@@ -207,6 +208,20 @@ func runtimePathForHostPath(runtime runtimepkg.Runtime, workspacePath string, pa
 		}
 	}
 	return filepath.Join(runtime.RuntimeWorkspacePath(filepath.Dir(path)), filepath.Base(path))
+}
+
+func hostPathForWorkspaceModel(workspacePath string, modelPath string) string {
+	workspacePath = strings.TrimSpace(workspacePath)
+	modelPath = strings.TrimSpace(modelPath)
+	if workspacePath == "" || modelPath == "" {
+		return modelPath
+	}
+	runtimePrefix := filepath.ToSlash(runtimepkg.DefaultWorkspaceRuntimePath) + "/"
+	slashPath := filepath.ToSlash(modelPath)
+	if strings.HasPrefix(slashPath, runtimePrefix) {
+		return filepath.Join(workspacePath, strings.TrimPrefix(slashPath, runtimePrefix))
+	}
+	return modelPath
 }
 
 type synthesisMetadata struct {
