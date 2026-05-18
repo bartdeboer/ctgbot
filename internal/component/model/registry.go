@@ -160,6 +160,8 @@ func cleanModelMode(mode string) string {
 		return string(component.ModelModeEmbedding)
 	case "asr", "transcription", "transcribe", "speech-to-text", "stt":
 		return string(component.ModelModeASR)
+	case "tts", "speech", "synthesis", "speech-synthesis", "text-to-speech":
+		return string(component.ModelModeTTS)
 	default:
 		return string(component.ModelModeCompletion)
 	}

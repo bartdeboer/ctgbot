@@ -62,10 +62,14 @@ func TestRegisterModelDefaultIsPerMode(t *testing.T) {
 	dir := t.TempDir()
 	qwenPath := filepath.Join(dir, "qwen.gguf")
 	whisperPath := filepath.Join(dir, "whisper.bin")
+	ttsPath := filepath.Join(dir, "supertonic3")
 	if err := os.WriteFile(qwenPath, []byte("qwen"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(whisperPath, []byte("whisper"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ttsPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: dir}, nil)
@@ -85,6 +89,12 @@ func TestRegisterModelDefaultIsPerMode(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RegisterModel(asr) error = %v", err)
 	}
+	if _, err := store.RegisterModel(context.Background(), component.ModelInstallRequest{
+		Model:   component.Model{Name: "supertonic3-f1", Path: ttsPath, Mode: component.ModelModeTTS},
+		Default: true,
+	}); err != nil {
+		t.Fatalf("RegisterModel(tts) error = %v", err)
+	}
 
 	completionDefault, err := store.DefaultModelForMode(context.Background(), component.ModelModeCompletion)
 	if err != nil {
@@ -99,6 +109,13 @@ func TestRegisterModelDefaultIsPerMode(t *testing.T) {
 	}
 	if asrDefault != "large-v3-turbo" {
 		t.Fatalf("asr default = %q", asrDefault)
+	}
+	ttsDefault, err := store.DefaultModelForMode(context.Background(), component.ModelModeTTS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ttsDefault != "supertonic3-f1" {
+		t.Fatalf("tts default = %q", ttsDefault)
 	}
 	legacyDefault, err := store.DefaultModel(context.Background())
 	if err != nil {
@@ -204,6 +221,17 @@ func TestBuildRegisterCommandParsesASRMode(t *testing.T) {
 	}
 	cmd := built.(installCommand)
 	if cmd.Name != "whisper" || cmd.Mode != component.ModelModeASR {
+		t.Fatalf("cmd = %#v", cmd)
+	}
+}
+
+func TestBuildRegisterCommandParsesTTSMode(t *testing.T) {
+	built, err := buildRegisterCommand(testRequest(map[string]string{"name": "supertonic3-f1", "path": "/models/supertonic3"}, []string{"--tts", "--default"}))
+	if err != nil {
+		t.Fatalf("buildRegisterCommand() error = %v", err)
+	}
+	cmd := built.(installCommand)
+	if cmd.Name != "supertonic3-f1" || cmd.Mode != component.ModelModeTTS || !cmd.Default {
 		t.Fatalf("cmd = %#v", cmd)
 	}
 }
