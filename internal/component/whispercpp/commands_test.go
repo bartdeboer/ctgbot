@@ -51,3 +51,21 @@ func TestWhisperArgsUseConfiguredTemplateAndRuntimeValues(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultWhisperArgsWriteTranscriptFile(t *testing.T) {
+	c := &Component{}
+	args := c.whisperArgs(map[string]string{
+		"model":         "/models/model.bin",
+		"wav":           "/work/input.wav",
+		"output_prefix": "/work/transcript",
+	}, "")
+	want := []string{"-m", "/models/model.bin", "-f", "/work/input.wav", "-fa", "-np", "-otxt", "-of", "/work/transcript", "-l", "auto"}
+	if len(args) != len(want) {
+		t.Fatalf("args = %#v, want %#v", args, want)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Fatalf("args = %#v, want %#v", args, want)
+		}
+	}
+}

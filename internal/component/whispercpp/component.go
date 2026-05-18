@@ -97,6 +97,7 @@ func (c *Component) Transcribe(ctx context.Context, req component.TranscriptionR
 
 	inputHost := filepath.Join(work.host, inputFilename(req.Media))
 	wavHost := filepath.Join(work.host, "input.wav")
+	transcriptHost := filepath.Join(work.host, "transcript.txt")
 	if err := os.WriteFile(inputHost, req.Media.Content, 0o600); err != nil {
 		return component.TranscriptionResult{}, err
 	}
@@ -104,9 +105,10 @@ func (c *Component) Transcribe(ctx context.Context, req component.TranscriptionR
 	modelDir := filepath.Dir(model.Path)
 	modelRuntime := filepath.Join(c.runtime.RuntimeWorkspacePath(modelDir), filepath.Base(model.Path))
 	values := map[string]string{
-		"input": filepath.Join(work.runtime, filepath.Base(inputHost)),
-		"wav":   filepath.Join(work.runtime, filepath.Base(wavHost)),
-		"model": modelRuntime,
+		"input":         filepath.Join(work.runtime, filepath.Base(inputHost)),
+		"wav":           filepath.Join(work.runtime, filepath.Base(wavHost)),
+		"model":         modelRuntime,
+		"output_prefix": filepath.Join(work.runtime, "transcript"),
 	}
 	if err := c.run(ctx, req.ThreadID, modelDir, c.config.FFMpegCommand, renderArgs(defaultFFMpegArgs(), values)); err != nil {
 		return component.TranscriptionResult{}, err
@@ -116,7 +118,11 @@ func (c *Component) Transcribe(ctx context.Context, req component.TranscriptionR
 	if err != nil {
 		return component.TranscriptionResult{}, fmt.Errorf("whispercpp command: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
-	text := cleanTranscript(string(out))
+	textBytes, err := os.ReadFile(transcriptHost)
+	if err != nil {
+		return component.TranscriptionResult{}, fmt.Errorf("read whispercpp transcript: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+	text := strings.TrimSpace(string(textBytes))
 	if text == "" {
 		return component.TranscriptionResult{}, fmt.Errorf("whispercpp returned empty transcript")
 	}
@@ -144,8 +150,8 @@ func (c *Component) whisperArgs(values map[string]string, language string) []str
 		args = defaultWhisperArgs()
 	}
 	args = renderArgs(args, values)
-	if strings.TrimSpace(language) != "" {
-		args = append(args, "-l", strings.TrimSpace(language))
+	if !hasArg(args, "-l") && !hasArg(args, "--language") {
+		args = append(args, "-l", firstNonEmpty(language, "auto"))
 	}
 	if c.config.Threads > 0 {
 		args = append(args, "-t", strconv.Itoa(c.config.Threads))
@@ -154,11 +160,11 @@ func (c *Component) whisperArgs(values map[string]string, language string) []str
 }
 
 func defaultFFMpegArgs() []string {
-	return []string{"-y", "-i", "{{input}}", "-ar", "16000", "-ac", "1", "{{wav}}"}
+	return []string{"-hide_banner", "-y", "-i", "{{input}}", "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", "{{wav}}"}
 }
 
 func defaultWhisperArgs() []string {
-	return []string{"-m", "{{model}}", "-f", "{{wav}}", "--no-timestamps"}
+	return []string{"-m", "{{model}}", "-f", "{{wav}}", "-fa", "-np", "-otxt", "-of", "{{output_prefix}}"}
 }
 
 type workdir struct {
@@ -194,8 +200,16 @@ func renderArgs(args []string, values map[string]string) []string {
 	return out
 }
 
-func cleanTranscript(text string) string {
-	return strings.TrimSpace(text)
+func hasArg(args []string, names ...string) bool {
+	for _, arg := range args {
+		arg = strings.TrimSpace(arg)
+		for _, name := range names {
+			if arg == name {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
