@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
 func (b *Broker) runStoredThreadTurn(
@@ -38,21 +37,21 @@ func (b *Broker) runStoredThreadTurn(
 			continue
 		}
 		if strings.TrimSpace(final.Text) == turnRuntime.LastText() {
+			if options.Mode == turnModeAudio {
+				if err := b.relaySynthesizedTurnReply(ctx, runtime, thread, final.Text); err != nil {
+					return outbound, err
+				}
+			}
 			continue
 		}
-		var attachments []message.Media
-		if options.Mode == turnModeAudio {
-			media, _, err := synthesizeTurnReply(ctx, runtime, final.Text)
-			if err != nil {
-				return outbound, err
-			}
-			if media != nil {
-				attachments = append(attachments, *media)
-			}
-		}
-		message, err := b.storeAndRelayMessageWithAttachments(ctx, runtime, chat, thread, *final, agentType(agentBinding), attachments)
+		message, err := b.storeAndRelayMessageWithAttachments(ctx, runtime, chat, thread, *final, agentType(agentBinding), nil)
 		if err != nil {
 			return outbound, err
+		}
+		if options.Mode == turnModeAudio {
+			if err := b.relaySynthesizedTurnReply(ctx, runtime, thread, final.Text); err != nil {
+				return outbound, err
+			}
 		}
 		outbound = append(outbound, *message)
 	}

@@ -175,3 +175,16 @@ func (b *Broker) relayVoiceTranscript(ctx context.Context, runtime *ChatRuntime,
 		Text:                        message.TextMessage{Text: strings.TrimSpace(transcript)},
 	})
 }
+
+func (b *Broker) relaySynthesizedTurnReply(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread, text string) error {
+	if runtime == nil || strings.TrimSpace(text) == "" {
+		return nil
+	}
+	media, _, err := synthesizeTurnReply(ctx, runtime, text)
+	if err != nil || media == nil {
+		return err
+	}
+	return b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, message.OutboundPayload{
+		Attachments: []message.Media{*media},
+	})
+}
