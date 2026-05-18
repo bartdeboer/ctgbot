@@ -128,10 +128,11 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 	}
 
 	modelPath := runtimePathForModel(c.runtime, model.Path)
+	voice := supertonicVoiceName(firstNonEmpty(req.Voice, c.config.DefaultVoice))
 	args := []string{
 		filepath.Join(work.runtime, "synthesize.py"),
 		"--model-dir", modelPath,
-		"--voice", firstNonEmpty(req.Voice, c.config.DefaultVoice),
+		"--voice", voice,
 		"--language", firstNonEmpty(req.Language, c.config.Language),
 		"--input", filepath.Join(work.runtime, "input.txt"),
 		"--output", filepath.Join(work.runtime, "speech.wav"),
@@ -158,7 +159,7 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 	return component.SpeechResult{
 		Media:            media,
 		Model:            model.Name,
-		Voice:            firstNonEmpty(req.Voice, c.config.DefaultVoice),
+		Voice:            voice,
 		Language:         firstNonEmpty(req.Language, c.config.Language),
 		DurationSeconds:  metadata.DurationSeconds,
 		SynthesisSeconds: metadata.SynthesisSeconds,
