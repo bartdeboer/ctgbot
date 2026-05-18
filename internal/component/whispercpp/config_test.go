@@ -15,6 +15,9 @@ func TestLoadRuntimeConfigUsesWhisperCppImageAndLibraryPath(t *testing.T) {
 	if config.Image != DefaultImage {
 		t.Fatalf("Image = %q, want %q", config.Image, DefaultImage)
 	}
+	if config.GPUs != "all" {
+		t.Fatalf("GPUs = %q, want all", config.GPUs)
+	}
 	if got := envValue(config.Env, "LD_LIBRARY_PATH"); got != DefaultLDLibraryPath {
 		t.Fatalf("LD_LIBRARY_PATH = %q, want %q in %#v", got, DefaultLDLibraryPath, config.Env)
 	}

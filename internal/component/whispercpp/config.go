@@ -35,6 +35,7 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 		return runtimepkg.BindConfig{}, err
 	}
 	config.Image = firstNonEmpty(config.Image, DefaultImage)
+	config.GPUs = firstNonEmpty(config.GPUs, "all")
 	config.Env = runtimepkg.MergeEnv(
 		[]string{"LD_LIBRARY_PATH=" + DefaultLDLibraryPath},
 		config.Env,
