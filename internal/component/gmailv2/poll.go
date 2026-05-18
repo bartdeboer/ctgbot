@@ -188,6 +188,14 @@ func (c *Component) pollOnce(ctx context.Context, client gmailClient, state *mai
 				if !fresh {
 					continue
 				}
+				storeOnly, err := c.senderStoreOnly(ctx, incoming.Record.FromEmail)
+				if err != nil {
+					return err
+				}
+				if storeOnly {
+					state.LastMessageID = strings.TrimSpace(message.Id)
+					continue
+				}
 				if err := emit(ctx, c.inboundEventFromStoredMessage(incoming.Record, incoming.TextBody)); err != nil {
 					return err
 				}
@@ -248,6 +256,14 @@ func (c *Component) shouldSkipMessage(message *gmailapi.Message) bool {
 		}
 	}
 	return false
+}
+
+func (c *Component) senderStoreOnly(ctx context.Context, email string) (bool, error) {
+	policy, err := c.store.senderPolicy(ctx, email)
+	if err != nil || policy == nil {
+		return false, err
+	}
+	return policy.StoreOnly, nil
 }
 
 func isHistoryExpired(err error) bool {
