@@ -48,6 +48,8 @@ func (c *Component) sendAttachment(ctx context.Context, chatID int64, threadID i
 		return c.api.SendPhoto(ctx, chatID, threadID, media.Filename, caption, media.Content)
 	case strings.HasPrefix(contentType, "video/"):
 		return c.api.SendVideo(ctx, chatID, threadID, caption, media)
+	case strings.EqualFold(strings.TrimSpace(media.Kind), "voice"):
+		return c.api.SendVoice(ctx, chatID, threadID, caption, media)
 	case strings.HasPrefix(contentType, "audio/"):
 		return c.api.SendAudio(ctx, chatID, threadID, media.Filename, caption, media.Content)
 	default:

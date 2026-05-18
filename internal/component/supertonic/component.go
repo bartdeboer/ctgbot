@@ -125,7 +125,7 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 	}
 	defer cleanup()
 	textHost := filepath.Join(work.host, "input.txt")
-	outputHost := filepath.Join(work.host, "speech.wav")
+	opusHost := filepath.Join(work.host, "speech.ogg")
 	metadataHost := filepath.Join(work.host, "metadata.json")
 	scriptHost := filepath.Join(work.host, "synthesize.py")
 	if err := os.WriteFile(textHost, []byte(text), 0o600); err != nil {
@@ -146,13 +146,14 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 		"--language", firstNonEmpty(req.Language, c.config.Language),
 		"--input", filepath.Join(work.runtime, "input.txt"),
 		"--output", filepath.Join(work.runtime, "speech.wav"),
+		"--opus-output", filepath.Join(work.runtime, "speech.ogg"),
 		"--metadata", filepath.Join(work.runtime, "metadata.json"),
 	}
 	out, err := c.runtime.CombinedOutput(ctx, workspacePath, req.ThreadID, nil, c.config.PythonCommand, args...)
 	if err != nil {
 		return component.SpeechResult{}, fmt.Errorf("supertonic command: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
-	content, err := os.ReadFile(outputHost)
+	content, err := os.ReadFile(opusHost)
 	if err != nil {
 		return component.SpeechResult{}, fmt.Errorf("read supertonic speech: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
@@ -161,8 +162,9 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 	}
 	metadata := readSynthesisMetadata(metadataHost)
 	media := message.Media{
-		Filename:        "speech.wav",
-		ContentType:     "audio/wav",
+		Kind:            "voice",
+		Filename:        "speech.ogg",
+		ContentType:     "audio/ogg",
 		Content:         content,
 		DurationSeconds: roundSeconds(metadata.DurationSeconds),
 	}
@@ -250,6 +252,7 @@ func roundSeconds(value float64) int {
 const synthesisScript = `
 import argparse
 import json
+import subprocess
 import time
 from supertonic import TTS
 
@@ -259,6 +262,7 @@ parser.add_argument("--voice", required=True)
 parser.add_argument("--language", required=True)
 parser.add_argument("--input", required=True)
 parser.add_argument("--output", required=True)
+parser.add_argument("--opus-output", required=True)
 parser.add_argument("--metadata", required=True)
 args = parser.parse_args()
 
@@ -278,6 +282,17 @@ else:
     wav = result
     duration = 0
 tts.save_audio(wav, args.output)
+subprocess.run([
+    "ffmpeg",
+    "-hide_banner",
+    "-loglevel", "error",
+    "-y",
+    "-i", args.output,
+    "-c:a", "libopus",
+    "-b:a", "32k",
+    "-vbr", "on",
+    args.opus_output,
+], check=True)
 with open(args.metadata, "w", encoding="utf-8") as f:
     json.dump({
         "duration_seconds": duration,
