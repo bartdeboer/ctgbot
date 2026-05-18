@@ -44,10 +44,21 @@ func TestLoadComponentConfigOverrides(t *testing.T) {
 	}
 }
 
-func TestHostPathForWorkspaceModelMapsRuntimeWorkspacePath(t *testing.T) {
-	got := hostPathForWorkspaceModel("/host/chat/workspace", "/workspace/models/supertonic3")
-	want := filepath.Join("/host/chat/workspace", "models", "supertonic3")
+func TestModelHostPathKeepsAbsoluteModelPath(t *testing.T) {
+	got := modelHostPath("/workspace/models/supertonic3")
+	want := filepath.Join("/workspace", "models", "supertonic3")
 	if got != want {
-		t.Fatalf("hostPathForWorkspaceModel() = %q, want %q", got, want)
+		t.Fatalf("modelHostPath() = %q, want %q", got, want)
+	}
+}
+
+func TestModelHostPathResolvesRelativeModelPath(t *testing.T) {
+	got := modelHostPath("models/supertonic3")
+	want, err := filepath.Abs(filepath.Join("models", "supertonic3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("modelHostPath() = %q, want %q", got, want)
 	}
 }

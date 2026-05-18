@@ -311,7 +311,8 @@ func (f *fakeTranscriber) Transcribe(ctx context.Context, req component.Transcri
 }
 
 type fakeSynthesizer struct {
-	seen []string
+	seen     []string
+	requests []component.SpeechRequest
 }
 
 func (f *fakeSynthesizer) Type() string { return "piper" }
@@ -319,6 +320,7 @@ func (f *fakeSynthesizer) Type() string { return "piper" }
 func (f *fakeSynthesizer) Synthesize(ctx context.Context, req component.SpeechRequest) (component.SpeechResult, error) {
 	_ = ctx
 	f.seen = append(f.seen, req.Text)
+	f.requests = append(f.requests, req)
 	return component.SpeechResult{Media: message.Media{
 		Filename:    "speech.ogg",
 		ContentType: "audio/ogg",
@@ -666,6 +668,9 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	}
 	if len(synthesizer.seen) != 1 || synthesizer.seen[0] != "audio answer" {
 		t.Fatalf("synthesizer input = %#v", synthesizer.seen)
+	}
+	if len(synthesizer.requests) != 1 || synthesizer.requests[0].ThreadID != outcome.Inbound.ThreadID {
+		t.Fatalf("synthesizer thread id = %#v, want %s", synthesizer.requests, outcome.Inbound.ThreadID)
 	}
 	if got, want := len(messengerRecorder.payloads), 3; got != want {
 		t.Fatalf("relay payloads = %d, want %d", got, want)

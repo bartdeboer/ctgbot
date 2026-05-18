@@ -36,24 +36,19 @@ func (b *Broker) runStoredThreadTurn(
 		if final == nil || strings.TrimSpace(final.Text) == "" {
 			continue
 		}
-		if strings.TrimSpace(final.Text) == turnRuntime.LastText() {
-			if options.Mode == turnModeAudio {
-				if err := b.relaySynthesizedTurnReply(ctx, runtime, thread, final.Text); err != nil {
-					return outbound, err
-				}
+		finalAlreadyRelayed := strings.TrimSpace(final.Text) == turnRuntime.LastText()
+		if !finalAlreadyRelayed {
+			message, err := b.storeAndRelayMessageWithAttachments(ctx, runtime, chat, thread, *final, agentType(agentBinding), nil)
+			if err != nil {
+				return outbound, err
 			}
-			continue
+			outbound = append(outbound, *message)
 		}
-		message, err := b.storeAndRelayMessageWithAttachments(ctx, runtime, chat, thread, *final, agentType(agentBinding), nil)
-		if err != nil {
-			return outbound, err
-		}
-		if options.Mode == turnModeAudio {
+		if options.WantsSpeechReply() {
 			if err := b.relaySynthesizedTurnReply(ctx, runtime, thread, final.Text); err != nil {
 				return outbound, err
 			}
 		}
-		outbound = append(outbound, *message)
 	}
 
 	return outbound, nil

@@ -135,8 +135,8 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 		return component.SpeechResult{}, err
 	}
 
-	hostModelPath := hostPathForWorkspaceModel(req.WorkspacePath, model.Path)
-	workspacePath := firstNonEmpty(req.WorkspacePath, filepath.Dir(hostModelPath))
+	hostModelPath := modelHostPath(model.Path)
+	workspacePath := filepath.Dir(hostModelPath)
 	modelPath := runtimePathForHostPath(c.runtime, workspacePath, hostModelPath)
 	voice := supertonicVoiceName(firstNonEmpty(req.Voice, c.config.DefaultVoice))
 	args := []string{
@@ -210,16 +210,16 @@ func runtimePathForHostPath(runtime runtimepkg.Runtime, workspacePath string, pa
 	return filepath.Join(runtime.RuntimeWorkspacePath(filepath.Dir(path)), filepath.Base(path))
 }
 
-func hostPathForWorkspaceModel(workspacePath string, modelPath string) string {
-	workspacePath = strings.TrimSpace(workspacePath)
+func modelHostPath(modelPath string) string {
 	modelPath = strings.TrimSpace(modelPath)
-	if workspacePath == "" || modelPath == "" {
+	if modelPath == "" {
+		return ""
+	}
+	if filepath.IsAbs(modelPath) {
 		return modelPath
 	}
-	runtimePrefix := filepath.ToSlash(runtimepkg.DefaultWorkspaceRuntimePath) + "/"
-	slashPath := filepath.ToSlash(modelPath)
-	if strings.HasPrefix(slashPath, runtimePrefix) {
-		return filepath.Join(workspacePath, strings.TrimPrefix(slashPath, runtimePrefix))
+	if abs, err := filepath.Abs(modelPath); err == nil {
+		return abs
 	}
 	return modelPath
 }
