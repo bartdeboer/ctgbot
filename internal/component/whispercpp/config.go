@@ -13,7 +13,9 @@ import (
 const (
 	Type                    = "whispercpp"
 	ComponentConfigFilename = "component.json"
-	DefaultImage            = "ctgbot-whispercpp:latest"
+	DefaultImage            = "ghcr.io/ggml-org/whisper.cpp:main-cuda"
+	DefaultWhisperCommand   = "/app/build/bin/whisper-cli"
+	DefaultLDLibraryPath    = "/usr/local/cuda/lib64:/app/build/src:/app/build/ggml/src:/app/build/ggml/src/ggml-cuda"
 )
 
 type ComponentConfig struct {
@@ -32,6 +34,10 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 		return runtimepkg.BindConfig{}, err
 	}
 	config.Image = firstNonEmpty(config.Image, DefaultImage)
+	config.Env = runtimepkg.MergeEnv(
+		[]string{"LD_LIBRARY_PATH=" + DefaultLDLibraryPath},
+		config.Env,
+	)
 	return config.Clean(), nil
 }
 
@@ -59,7 +65,7 @@ func (c ComponentConfig) withDefaults() ComponentConfig {
 	c.DefaultModel = strings.TrimSpace(c.DefaultModel)
 	c.Language = strings.TrimSpace(c.Language)
 	c.FFMpegCommand = firstNonEmpty(c.FFMpegCommand, "ffmpeg")
-	c.WhisperCommand = firstNonEmpty(c.WhisperCommand, "whisper-cli")
+	c.WhisperCommand = firstNonEmpty(c.WhisperCommand, DefaultWhisperCommand)
 	c.WhisperArgs = cleanArgs(c.WhisperArgs)
 	return c
 }
