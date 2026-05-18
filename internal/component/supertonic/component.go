@@ -31,6 +31,7 @@ type Component struct {
 	home              runtimepkg.Home
 	config            ComponentConfig
 	resolver          ComponentResolver
+	chatPayloadSender component.ChatPayloadSender
 	synthesisGate     *workgate.Gate
 	runtimeImage      string
 	runtimeDockerfile string
@@ -42,6 +43,7 @@ var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 var _ component.SpeechSynthesizer = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
+var _ component.ChatPayloadSenderReceiver = (*Component)(nil)
 
 func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver) (component.Component, error) {
 	_, _ = ctx, storage
@@ -66,6 +68,12 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 }
 
 func (c *Component) Type() string { return Type }
+
+func (c *Component) SetChatPayloadSender(sender component.ChatPayloadSender) {
+	if c != nil {
+		c.chatPayloadSender = sender
+	}
+}
 
 func (c *Component) ManagedFiles() []component.ManagedFile {
 	return []component.ManagedFile{

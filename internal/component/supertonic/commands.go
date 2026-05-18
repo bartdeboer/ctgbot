@@ -9,6 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
@@ -72,9 +73,21 @@ func (c *Component) handleSpeak(ctx context.Context, req commandengine.Request, 
 	if err != nil {
 		return commandengine.Result{}, err
 	}
+	sent := false
+	if c.chatPayloadSender != nil && !threadID.IsNull() {
+		if err := c.chatPayloadSender.SendPayload(ctx, threadID, message.OutboundPayload{
+			Attachments: []message.Media{result.Media},
+		}); err != nil {
+			return commandengine.Result{}, err
+		}
+		sent = true
+	}
 	lines := []string{
 		"speech synthesized",
 		fmt.Sprintf("bytes: %d", len(result.Media.Content)),
+	}
+	if sent {
+		lines[0] = "speech sent"
 	}
 	if result.DurationSeconds > 0 {
 		lines = append(lines, fmt.Sprintf("duration_seconds: %.2f", result.DurationSeconds))
