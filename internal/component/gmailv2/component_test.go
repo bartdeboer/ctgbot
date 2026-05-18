@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -62,12 +63,12 @@ func TestCommandDefinitionsUseTightInboxSurface(t *testing.T) {
 	for _, def := range c.CommandDefinitions() {
 		patterns[def.Pattern] = true
 	}
-	for _, pattern := range []string{"query <query>", "fetch <message_id>", "db help", "db schema", "db query <sql>", "message view <message_id>", "message display <message_id>"} {
+	for _, pattern := range []string{"query <query>", "fetch <message_id>", "db help", "db schema", "db query <sql>", "message view <message_id>", "message display <message_id>", "sender <email> config list", "sender <email> config set <key> <value>"} {
 		if !patterns[pattern] {
 			t.Fatalf("missing command pattern %q in %#v", pattern, patterns)
 		}
 	}
-	for _, pattern := range []string{"query <sql>", "sql <sql>", "message path <message_id>", "attachment path <attachment_id>"} {
+	for _, pattern := range []string{"query <sql>", "sql <sql>", "message path <message_id>", "attachment path <attachment_id>", "sender store-only <email>", "sender notify <email>"} {
 		if patterns[pattern] {
 			t.Fatalf("obsolete command pattern still registered: %q", pattern)
 		}
@@ -204,6 +205,41 @@ func TestSenderPolicyAffectsInboundPrompt(t *testing.T) {
 	}
 }
 
+func TestSenderStoreOnlyPolicyIsListedAndRendered(t *testing.T) {
+	c := newTestComponent(t, "work")
+	if _, err := c.handleSenderConfigSet(context.Background(), commandengine.Request{}, senderConfigSetCommand{Email: "hello@example.com", Key: "notify-agent", Value: "disabled"}); err != nil {
+		t.Fatalf("handleSenderConfigSet(notify-agent disabled) error = %v", err)
+	}
+	result, err := c.handleSenderList(context.Background(), commandengine.Request{}, senderListCommand{})
+	if err != nil {
+		t.Fatalf("handleSenderList() error = %v", err)
+	}
+	if !strings.Contains(result.Text, "hello@example.com") || !strings.Contains(result.Text, "store_only=true") {
+		t.Fatalf("sender list did not show store_only policy:\n%s", result.Text)
+	}
+	config, err := c.handleSenderConfigList(context.Background(), commandengine.Request{}, senderConfigListCommand{Email: "hello@example.com"})
+	if err != nil {
+		t.Fatalf("handleSenderConfigList() error = %v", err)
+	}
+	if !strings.Contains(config.Text, "notify-agent: disabled") {
+		t.Fatalf("sender config did not show notify-agent disabled:\n%s", config.Text)
+	}
+	prompt := c.inboundPrompt(storedMessage{ID: "msg-1", GmailMessageID: "gmail-1", GmailThreadID: "thread-1", FromEmail: "hello@example.com", FromLabel: "Hello", Subject: "Hi"}, "")
+	if !strings.Contains(prompt, "Sender policy: untrusted, store-only") {
+		t.Fatalf("prompt did not render store-only policy:\n%s", prompt)
+	}
+	if _, err := c.handleSenderConfigSet(context.Background(), commandengine.Request{}, senderConfigSetCommand{Email: "hello@example.com", Key: "notify-agent", Value: "enabled"}); err != nil {
+		t.Fatalf("handleSenderConfigSet(notify-agent enabled) error = %v", err)
+	}
+	policy, err := c.store.senderPolicy(context.Background(), "hello@example.com")
+	if err != nil {
+		t.Fatalf("senderPolicy() error = %v", err)
+	}
+	if policy == nil || policy.StoreOnly {
+		t.Fatalf("policy after notify-agent enabled = %#v", policy)
+	}
+}
+
 func TestInboundPromptShowsBodyWhenShowFullEnabled(t *testing.T) {
 	c := newTestComponent(t, "work")
 	if err := c.store.saveSenderPolicy(context.Background(), "hello@example.com", func(p *senderPolicy) { p.ShowFull = true }); err != nil {
@@ -241,6 +277,51 @@ func TestInboundPromptHidesBodyWhenShowFullDisabled(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "was stored as files and was not injected automatically") {
 		t.Fatalf("prompt did not explain hidden body:\n%s", prompt)
+	}
+}
+
+func TestStoreOnlySenderStoresWithoutEmittingInboundEvent(t *testing.T) {
+	c := newTestComponent(t, "work")
+	if err := c.store.saveSenderPolicy(context.Background(), "reports@example.com", func(p *senderPolicy) { p.StoreOnly = true }); err != nil {
+		t.Fatalf("saveSenderPolicy() error = %v", err)
+	}
+	client := fakeGmailClient{
+		history: &gmailapi.ListHistoryResponse{
+			HistoryId: 2,
+			History: []*gmailapi.History{{
+				MessagesAdded: []*gmailapi.HistoryMessageAdded{{Message: &gmailapi.Message{Id: "gmail-1"}}},
+			}},
+		},
+		messages: map[string]*gmailapi.Message{
+			"gmail-1": {
+				Id:       "gmail-1",
+				ThreadId: "thread-1",
+				Payload: &gmailapi.MessagePart{Headers: []*gmailapi.MessagePartHeader{
+					{Name: "From", Value: "DMARC Reports <reports@example.com>"},
+					{Name: "Subject", Value: "Report domain: example.com"},
+				}, Body: &gmailapi.MessagePartBody{Data: "cmVwb3J0"}, MimeType: "text/plain"},
+			},
+		},
+	}
+	state := mailboxState{HistoryID: 1}
+	emitted := 0
+	err := c.pollOnce(context.Background(), client, &state, func(ctx context.Context, event component.InboundEvent) error {
+		_, _ = ctx, event
+		emitted++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("pollOnce() error = %v", err)
+	}
+	if emitted != 0 {
+		t.Fatalf("emitted = %d, want 0", emitted)
+	}
+	stored, err := c.store.messageByGmailID(context.Background(), "gmail-1")
+	if err != nil {
+		t.Fatalf("messageByGmailID() error = %v", err)
+	}
+	if stored == nil {
+		t.Fatal("store-only message was not stored")
 	}
 }
 
@@ -326,22 +407,35 @@ func TestRawMessageFetchFailureIsNonFatal(t *testing.T) {
 }
 
 type fakeGmailClient struct {
-	rawErr error
+	profile  *gmailapi.Profile
+	history  *gmailapi.ListHistoryResponse
+	messages map[string]*gmailapi.Message
+	rawErr   error
 }
 
 func (f fakeGmailClient) GetProfile(context.Context, string) (*gmailapi.Profile, error) {
-	return nil, nil
+	if f.profile != nil {
+		return f.profile, nil
+	}
+	return &gmailapi.Profile{}, nil
 }
 
 func (f fakeGmailClient) ListHistory(context.Context, string, uint64, string) (*gmailapi.ListHistoryResponse, error) {
-	return nil, nil
+	if f.history != nil {
+		return f.history, nil
+	}
+	return &gmailapi.ListHistoryResponse{}, nil
 }
 
 func (f fakeGmailClient) SearchMessages(context.Context, string, string, int64) ([]*gmailapi.Message, error) {
 	return nil, nil
 }
 
-func (f fakeGmailClient) GetMessage(context.Context, string, string) (*gmailapi.Message, error) {
+func (f fakeGmailClient) GetMessage(ctx context.Context, userID string, messageID string) (*gmailapi.Message, error) {
+	_, _ = ctx, userID
+	if f.messages != nil {
+		return f.messages[strings.TrimSpace(messageID)], nil
+	}
 	return nil, nil
 }
 

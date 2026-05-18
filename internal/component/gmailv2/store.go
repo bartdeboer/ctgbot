@@ -62,6 +62,7 @@ type senderPolicy struct {
 	SenderEmail string `gorm:"uniqueIndex"`
 	Trusted     bool
 	ShowFull    bool
+	StoreOnly   bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -113,7 +114,8 @@ SELECT
   m.has_raw,
   m.has_html,
   COALESCE(p.trusted, false) AS trusted,
-  COALESCE(p.show_full, ` + defaultShowFullSQL + `) AS show_full
+  COALESCE(p.show_full, ` + defaultShowFullSQL + `) AS show_full,
+  COALESCE(p.store_only, false) AS store_only
 FROM gmail_messages m
 LEFT JOIN gmail_sender_policies p ON p.sender_email = m.from_email`,
 		`DROP VIEW IF EXISTS attachments`,
@@ -122,7 +124,7 @@ SELECT id, message_id, filename, content_type, disposition, content_id, size
 FROM gmail_attachments`,
 		`DROP VIEW IF EXISTS sender_policies`,
 		`CREATE VIEW sender_policies AS
-SELECT sender_email, trusted, show_full, updated_at
+SELECT sender_email, trusted, show_full, store_only, updated_at
 FROM gmail_sender_policies`,
 	}
 	for _, statement := range statements {

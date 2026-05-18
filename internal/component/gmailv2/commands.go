@@ -26,10 +26,12 @@ type messageViewCommand struct {
 	FullBody  bool
 }
 type messageDisplayCommand struct{ MessageID string }
-type senderTrustCommand struct{ Email string }
-type senderUntrustCommand struct{ Email string }
-type senderShowFullCommand struct{ Email string }
-type senderHideFullCommand struct{ Email string }
+type senderConfigListCommand struct{ Email string }
+type senderConfigSetCommand struct {
+	Email string
+	Key   string
+	Value string
+}
 type senderListCommand struct{}
 type senderRemoveCommand struct{ Email string }
 
@@ -44,10 +46,8 @@ func RegisterGobTypes(register func(any)) {
 	register(dbQueryCommand{})
 	register(messageViewCommand{})
 	register(messageDisplayCommand{})
-	register(senderTrustCommand{})
-	register(senderUntrustCommand{})
-	register(senderShowFullCommand{})
-	register(senderHideFullCommand{})
+	register(senderConfigListCommand{})
+	register(senderConfigSetCommand{})
 	register(senderListCommand{})
 	register(senderRemoveCommand{})
 }
@@ -69,10 +69,12 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		def("message display <message_id>", "Display a stored Gmail message in the current chat", func(req *clir.Request) (any, error) {
 			return messageDisplayCommand{MessageID: req.Params["message_id"]}, nil
 		}, commandengine.SourceHostbridge),
-		def("sender trust <email>", "Trust a Gmail sender", func(req *clir.Request) (any, error) { return senderTrustCommand{Email: req.Params["email"]}, nil }, commandengine.SourceHostbridge),
-		def("sender untrust <email>", "Pin a Gmail sender as untrusted", func(req *clir.Request) (any, error) { return senderUntrustCommand{Email: req.Params["email"]}, nil }, commandengine.SourceHostbridge),
-		def("sender show-full <email>", "Show full body for a Gmail sender", func(req *clir.Request) (any, error) { return senderShowFullCommand{Email: req.Params["email"]}, nil }, commandengine.SourceHostbridge),
-		def("sender hide-full <email>", "Hide full body for a Gmail sender", func(req *clir.Request) (any, error) { return senderHideFullCommand{Email: req.Params["email"]}, nil }, commandengine.SourceHostbridge),
+		def("sender <email> config list", "Show Gmail sender policy config", func(req *clir.Request) (any, error) {
+			return senderConfigListCommand{Email: req.Params["email"]}, nil
+		}, commandengine.SourceHostbridge),
+		def("sender <email> config set <key> <value>", "Set Gmail sender policy config", func(req *clir.Request) (any, error) {
+			return senderConfigSetCommand{Email: req.Params["email"], Key: req.Params["key"], Value: req.Params["value"]}, nil
+		}, commandengine.SourceHostbridge),
 		def("sender list", "List Gmail sender policies", func(*clir.Request) (any, error) { return senderListCommand{}, nil }, commandengine.SourceHostbridge),
 		def("sender remove <email>", "Remove a Gmail sender policy", func(req *clir.Request) (any, error) { return senderRemoveCommand{Email: req.Params["email"]}, nil }, commandengine.SourceHostbridge),
 	}
@@ -117,10 +119,8 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		commandengine.RegisterPattern[dbQueryCommand](registry, "db query <sql>", c.handleDBQuery),
 		commandengine.RegisterPattern[messageViewCommand](registry, "message view <message_id>", c.handleMessageView),
 		commandengine.RegisterPattern[messageDisplayCommand](registry, "message display <message_id>", c.handleMessageDisplay),
-		commandengine.RegisterPattern[senderTrustCommand](registry, "sender trust <email>", c.handleSenderTrust),
-		commandengine.RegisterPattern[senderUntrustCommand](registry, "sender untrust <email>", c.handleSenderUntrust),
-		commandengine.RegisterPattern[senderShowFullCommand](registry, "sender show-full <email>", c.handleSenderShowFull),
-		commandengine.RegisterPattern[senderHideFullCommand](registry, "sender hide-full <email>", c.handleSenderHideFull),
+		commandengine.RegisterPattern[senderConfigListCommand](registry, "sender <email> config list", c.handleSenderConfigList),
+		commandengine.RegisterPattern[senderConfigSetCommand](registry, "sender <email> config set <key> <value>", c.handleSenderConfigSet),
 		commandengine.RegisterPattern[senderListCommand](registry, "sender list", c.handleSenderList),
 		commandengine.RegisterPattern[senderRemoveCommand](registry, "sender remove <email>", c.handleSenderRemove),
 	}
@@ -243,7 +243,7 @@ Local read-only database queries:
   db schema
   db query "select id, from_email, subject, date from messages order by date desc limit 20"
   db query "select id, filename, content_type, size from attachments where message_id = '<message-id>'"
-  db query "select sender_email, trusted, show_full from sender_policies"
+  db query "select sender_email, trusted, show_full, store_only from sender_policies"
 
 Useful views:
   messages
@@ -277,6 +277,7 @@ view messages:
   has_html
   trusted
   show_full
+  store_only
 
 view attachments:
   id
@@ -291,7 +292,8 @@ view attachments:
 view sender_policies:
   sender_email
   trusted
-  show_full`)}, nil
+  show_full
+  store_only`)}, nil
 }
 
 func (c *Component) handleDBQuery(ctx context.Context, req commandengine.Request, cmd dbQueryCommand) (commandengine.Result, error) {
@@ -352,11 +354,7 @@ func (c *Component) handleMessageDisplay(ctx context.Context, req commandengine.
 func (c *Component) renderMessageView(ctx context.Context, record storedMessage, attachments []storedAttachment, fullBody bool) string {
 	policyText := "unknown"
 	if policy, _ := c.store.senderPolicy(ctx, record.FromEmail); policy != nil {
-		if policy.Trusted {
-			policyText = "trusted"
-		} else {
-			policyText = "untrusted"
-		}
+		policyText = senderPolicyText(policy)
 	}
 	lines := []string{
 		"Gmail message " + record.ID,
@@ -454,22 +452,55 @@ func formatDate(date time.Time) string {
 	return date.Format(time.RFC3339)
 }
 
-func (c *Component) handleSenderTrust(ctx context.Context, req commandengine.Request, cmd senderTrustCommand) (commandengine.Result, error) {
+func (c *Component) handleSenderConfigList(ctx context.Context, req commandengine.Request, cmd senderConfigListCommand) (commandengine.Result, error) {
 	_ = req
-	return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.Trusted = true })
+	email := normalizeEmail(cmd.Email)
+	if email == "" {
+		return commandengine.Result{}, fmt.Errorf("missing sender email")
+	}
+	policy, err := c.store.senderPolicy(ctx, email)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	trusted := false
+	showFull := c.componentConfig.DefaultShowFull
+	notifyAgent := true
+	explicit := false
+	if policy != nil {
+		explicit = true
+		trusted = policy.Trusted
+		showFull = policy.ShowFull
+		notifyAgent = !policy.StoreOnly
+	}
+	lines := []string{
+		"sender: " + email,
+		fmt.Sprintf("explicit_policy: %t", explicit),
+		"trusted: " + enabledDisabled(trusted),
+		"show-full: " + enabledDisabled(showFull),
+		"notify-agent: " + enabledDisabled(notifyAgent),
+	}
+	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
-func (c *Component) handleSenderUntrust(ctx context.Context, req commandengine.Request, cmd senderUntrustCommand) (commandengine.Result, error) {
+
+func (c *Component) handleSenderConfigSet(ctx context.Context, req commandengine.Request, cmd senderConfigSetCommand) (commandengine.Result, error) {
 	_ = req
-	return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.Trusted = false })
+	enabled, err := parseEnabledDisabled(cmd.Value)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	key := strings.ToLower(strings.TrimSpace(cmd.Key))
+	switch key {
+	case "trusted":
+		return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.Trusted = enabled })
+	case "show-full":
+		return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.ShowFull = enabled })
+	case "notify-agent":
+		return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.StoreOnly = !enabled })
+	default:
+		return commandengine.Result{}, fmt.Errorf("unsupported sender config key %q; use trusted, show-full, or notify-agent", cmd.Key)
+	}
 }
-func (c *Component) handleSenderShowFull(ctx context.Context, req commandengine.Request, cmd senderShowFullCommand) (commandengine.Result, error) {
-	_ = req
-	return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.ShowFull = true })
-}
-func (c *Component) handleSenderHideFull(ctx context.Context, req commandengine.Request, cmd senderHideFullCommand) (commandengine.Result, error) {
-	_ = req
-	return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.ShowFull = false })
-}
+
 func (c *Component) updateSender(ctx context.Context, email string, update func(*senderPolicy)) (commandengine.Result, error) {
 	if err := c.store.saveSenderPolicy(ctx, email, update); err != nil {
 		return commandengine.Result{}, err
@@ -488,10 +519,29 @@ func (c *Component) handleSenderList(ctx context.Context, req commandengine.Requ
 	}
 	var lines []string
 	for _, p := range policies {
-		lines = append(lines, fmt.Sprintf("%s trusted=%t show_full=%t", p.SenderEmail, p.Trusted, p.ShowFull))
+		lines = append(lines, fmt.Sprintf("%s trusted=%t show_full=%t store_only=%t", p.SenderEmail, p.Trusted, p.ShowFull, p.StoreOnly))
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
+
+func parseEnabledDisabled(value string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "enabled", "enable", "true", "yes", "on", "1":
+		return true, nil
+	case "disabled", "disable", "false", "no", "off", "0":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unsupported config value %q; use enabled or disabled", value)
+	}
+}
+
+func enabledDisabled(enabled bool) string {
+	if enabled {
+		return "enabled"
+	}
+	return "disabled"
+}
+
 func (c *Component) handleSenderRemove(ctx context.Context, req commandengine.Request, cmd senderRemoveCommand) (commandengine.Result, error) {
 	_ = req
 	deleted, err := c.store.deleteSenderPolicy(ctx, cmd.Email)
