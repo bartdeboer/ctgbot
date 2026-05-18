@@ -44,7 +44,7 @@ func (c *Component) parseMessage(message *gmailapi.Message) parsedMessage {
 		ToJSON:         mustJSON(addressList(headerValue(message, "To"))),
 		CcJSON:         mustJSON(addressList(headerValue(message, "Cc"))),
 		BccJSON:        mustJSON(addressList(headerValue(message, "Bcc"))),
-		Subject:        renderedHeaderValue(headerValue(message, "Subject")),
+		Subject:        renderedSubjectValue(headerValue(message, "Subject")),
 		Date:           date,
 		Snippet:        strings.TrimSpace(message.Snippet),
 		HeadersJSON:    mustJSON(headers),

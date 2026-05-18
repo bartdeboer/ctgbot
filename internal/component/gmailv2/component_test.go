@@ -174,6 +174,25 @@ func TestParseMessageStoresMetadataWithoutPaths(t *testing.T) {
 	}
 }
 
+func TestParseMessageCapsRenderedSubjectShorterThanHeaders(t *testing.T) {
+	c := newTestComponent(t, "work")
+	longSubject := strings.Repeat("s", maxRenderedSubjectRunes+10)
+	parsed := c.parseMessage(&gmailapi.Message{Id: "gmail-1", ThreadId: "thread-1", Payload: &gmailapi.MessagePart{Headers: []*gmailapi.MessagePartHeader{
+		{Name: "From", Value: "Example Sender <hello@example.com>"},
+		{Name: "Subject", Value: longSubject},
+	}}})
+	wantSubject := strings.Repeat("s", maxRenderedSubjectRunes) + " [truncated]"
+	if parsed.Record.Subject != wantSubject {
+		t.Fatalf("subject = %q, want %q", parsed.Record.Subject, wantSubject)
+	}
+
+	longHeader := strings.Repeat("h", maxRenderedHeaderRunes+10)
+	wantHeader := strings.Repeat("h", maxRenderedHeaderRunes) + " [truncated]"
+	if got := renderedHeaderValue(longHeader); got != wantHeader {
+		t.Fatalf("header = %q, want %q", got, wantHeader)
+	}
+}
+
 func TestSenderPolicyAffectsInboundPrompt(t *testing.T) {
 	c := newTestComponent(t, "work")
 	if err := c.store.saveSenderPolicy(context.Background(), "hello@example.com", func(p *senderPolicy) { p.Trusted = false }); err != nil {
