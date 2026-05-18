@@ -11,7 +11,7 @@ func TestLoadComponentConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadComponentConfig() error = %v", err)
 	}
-	if config.ModelStore != "model" || config.DefaultVoice != "F1" || config.Language != "en" || config.PythonCommand != "python" || config.MaxConcurrent != 1 {
+	if config.ModelStore != "model" || config.DefaultVoice != "F5" || config.Language != "en" || config.PythonCommand != "python" || config.MaxConcurrent != 1 {
 		t.Fatalf("config = %#v", config)
 	}
 }

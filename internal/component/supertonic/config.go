@@ -60,7 +60,7 @@ func loadComponentConfig(homePath string) (ComponentConfig, error) {
 func (c ComponentConfig) withDefaults() ComponentConfig {
 	c.ModelStore = firstNonEmpty(c.ModelStore, "model")
 	c.DefaultModel = strings.TrimSpace(c.DefaultModel)
-	c.DefaultVoice = firstNonEmpty(c.DefaultVoice, "F1")
+	c.DefaultVoice = firstNonEmpty(c.DefaultVoice, "F5")
 	c.Language = firstNonEmpty(c.Language, "en")
 	c.PythonCommand = firstNonEmpty(c.PythonCommand, "python")
 	if c.MaxConcurrent == 0 {
