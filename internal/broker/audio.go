@@ -36,6 +36,10 @@ func voiceInputAttachment(text string, attachments []message.Media) (message.Med
 }
 
 func isAudioMedia(media message.Media) bool {
+	switch strings.ToLower(strings.TrimSpace(media.Kind)) {
+	case "audio", "voice":
+		return true
+	}
 	contentType := strings.ToLower(strings.TrimSpace(media.ContentType))
 	if contentType != "" {
 		mediaType, _, err := mime.ParseMediaType(contentType)

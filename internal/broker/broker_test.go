@@ -635,9 +635,8 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 			ProviderMessageID: "voice-1",
 			Actor:             message.Actor{ID: "bart", Label: "bart", Roles: []simplerbac.Role{simplerbac.RoleUser}},
 			Attachments: []message.Media{{
-				Filename:    "voice.ogg",
-				ContentType: "audio/ogg",
-				Content:     []byte("voice bytes"),
+				Kind:    "voice",
+				Content: []byte("voice bytes"),
 			}},
 		},
 	})
@@ -652,8 +651,7 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	}
 	if !strings.Contains(outcome.Inbound.MetadataJSON, "input=audio") ||
 		!strings.Contains(outcome.Inbound.MetadataJSON, "transcriber=whisper") ||
-		!strings.Contains(outcome.Inbound.MetadataJSON, "transcription_model=fake-whisper") ||
-		!strings.Contains(outcome.Inbound.MetadataJSON, "original_filename=voice.ogg") {
+		!strings.Contains(outcome.Inbound.MetadataJSON, "transcription_model=fake-whisper") {
 		t.Fatalf("inbound metadata = %q, want transcription metadata", outcome.Inbound.MetadataJSON)
 	}
 	artifacts, err := storage.Artifacts().ListByMessageID(context.Background(), outcome.Inbound.ID)
