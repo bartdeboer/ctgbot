@@ -13,6 +13,13 @@ func (c *Component) resolveModel(ctx context.Context, name string) (component.Mo
 	if err != nil {
 		return component.Model{}, err
 	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name, err = store.DefaultModelForMode(ctx, component.ModelModeASR)
+		if err != nil {
+			return component.Model{}, err
+		}
+	}
 	return store.GetModel(ctx, strings.TrimSpace(name))
 }
 

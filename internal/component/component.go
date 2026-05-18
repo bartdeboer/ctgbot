@@ -192,6 +192,7 @@ type ModelStore interface {
 	InstallModel(ctx context.Context, req ModelInstallRequest) (Model, error)
 	RegisterModel(ctx context.Context, req ModelInstallRequest) (Model, error)
 	DefaultModel(ctx context.Context) (string, error)
+	DefaultModelForMode(ctx context.Context, mode ModelMode) (string, error)
 }
 
 type Constructor func(

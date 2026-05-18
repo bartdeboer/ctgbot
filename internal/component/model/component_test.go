@@ -58,6 +58,57 @@ func TestRegisterModelStoresAndResolvesModel(t *testing.T) {
 	}
 }
 
+func TestRegisterModelDefaultIsPerMode(t *testing.T) {
+	dir := t.TempDir()
+	qwenPath := filepath.Join(dir, "qwen.gguf")
+	whisperPath := filepath.Join(dir, "whisper.bin")
+	if err := os.WriteFile(qwenPath, []byte("qwen"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(whisperPath, []byte("whisper"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: dir}, nil)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	store := created.(*Component)
+	if _, err := store.RegisterModel(context.Background(), component.ModelInstallRequest{
+		Model:   component.Model{Name: "qwen3-q4", Path: qwenPath, Mode: component.ModelModeCompletion},
+		Default: true,
+	}); err != nil {
+		t.Fatalf("RegisterModel(completion) error = %v", err)
+	}
+	if _, err := store.RegisterModel(context.Background(), component.ModelInstallRequest{
+		Model:   component.Model{Name: "large-v3-turbo", Path: whisperPath, Mode: component.ModelModeASR},
+		Default: true,
+	}); err != nil {
+		t.Fatalf("RegisterModel(asr) error = %v", err)
+	}
+
+	completionDefault, err := store.DefaultModelForMode(context.Background(), component.ModelModeCompletion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completionDefault != "qwen3-q4" {
+		t.Fatalf("completion default = %q", completionDefault)
+	}
+	asrDefault, err := store.DefaultModelForMode(context.Background(), component.ModelModeASR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asrDefault != "large-v3-turbo" {
+		t.Fatalf("asr default = %q", asrDefault)
+	}
+	legacyDefault, err := store.DefaultModel(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacyDefault != "qwen3-q4" {
+		t.Fatalf("legacy default = %q, want completion default", legacyDefault)
+	}
+}
+
 func TestComponentConfigModelPathResolvesRelativeRegistryPaths(t *testing.T) {
 	home := t.TempDir()
 	modelRoot := t.TempDir()

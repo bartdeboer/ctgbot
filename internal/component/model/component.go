@@ -96,6 +96,14 @@ func (c *Component) DefaultModel(ctx context.Context) (string, error) {
 	return strings.TrimSpace(c.registry.DefaultModel), nil
 }
 
+func (c *Component) DefaultModelForMode(ctx context.Context, mode component.ModelMode) (string, error) {
+	_ = ctx
+	if c == nil {
+		return "", fmt.Errorf("missing model component")
+	}
+	return c.defaultModelForMode(mode), nil
+}
+
 func (c *Component) InstallModel(ctx context.Context, req component.ModelInstallRequest) (component.Model, error) {
 	_ = ctx
 	if c == nil {
@@ -144,12 +152,39 @@ func (c *Component) saveModel(name string, record ModelRecord, makeDefault bool)
 	}
 	c.registry.Models[name] = cleanModelRecord(record)
 	if makeDefault {
-		c.registry.DefaultModel = name
+		mode := cleanModelMode(record.Mode)
+		if c.registry.DefaultModels == nil {
+			c.registry.DefaultModels = map[string]string{}
+		}
+		c.registry.DefaultModels[mode] = name
+		if mode == string(component.ModelModeCompletion) {
+			c.registry.DefaultModel = name
+		}
 	}
 	if err := saveRegistry(c.home.Path, c.registry); err != nil {
 		return component.Model{}, err
 	}
 	return c.resolve(name, c.registry.Models[name]), nil
+}
+
+func (c *Component) defaultModelForMode(mode component.ModelMode) string {
+	modeKey := cleanModelMode(string(mode))
+	if c.registry.DefaultModels != nil {
+		if name := cleanModelName(c.registry.DefaultModels[modeKey]); name != "" {
+			return name
+		}
+	}
+	legacyDefault := cleanModelName(c.registry.DefaultModel)
+	if legacyDefault == "" {
+		return ""
+	}
+	if modeKey == string(component.ModelModeCompletion) {
+		return legacyDefault
+	}
+	if record, ok := c.registry.Models[legacyDefault]; ok && cleanModelMode(record.Mode) == modeKey {
+		return legacyDefault
+	}
+	return ""
 }
 
 func (c *Component) resolve(name string, record ModelRecord) component.Model {

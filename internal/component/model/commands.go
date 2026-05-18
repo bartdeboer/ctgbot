@@ -156,18 +156,42 @@ func (c *Component) handleList(ctx context.Context) (commandengine.Result, error
 	if strings.TrimSpace(c.registry.DefaultModel) != "" {
 		lines = append(lines, "default_model: "+c.registry.DefaultModel)
 	}
+	for _, mode := range []component.ModelMode{component.ModelModeCompletion, component.ModelModeEmbedding, component.ModelModeASR} {
+		if name := c.defaultModelForMode(mode); name != "" {
+			lines = append(lines, fmt.Sprintf("default_%s_model: %s", mode, name))
+		}
+	}
 	if len(models) == 0 {
 		lines = append(lines, "(no models installed)")
 		return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 	}
 	for _, model := range models {
-		suffix := ""
+		var suffixes []string
 		if model.Name == c.registry.DefaultModel {
-			suffix = " default=true"
+			suffixes = append(suffixes, "legacy_default=true")
+		}
+		if defaultMode := defaultModeForModel(c, model.Name); defaultMode != "" {
+			suffixes = append(suffixes, "default_"+defaultMode+"=true")
+		}
+		suffix := ""
+		if len(suffixes) > 0 {
+			suffix = " " + strings.Join(suffixes, " ")
 		}
 		lines = append(lines, fmt.Sprintf("- %s%s mode=%s path=%s port=%d", model.Name, suffix, model.Mode, model.Path, model.HostPort))
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
+}
+
+func defaultModeForModel(c *Component, modelName string) string {
+	if c == nil {
+		return ""
+	}
+	for _, mode := range []component.ModelMode{component.ModelModeCompletion, component.ModelModeEmbedding, component.ModelModeASR} {
+		if c.defaultModelForMode(mode) == modelName {
+			return string(mode)
+		}
+	}
+	return ""
 }
 
 func (c *Component) handleInstall(ctx context.Context, cmd installCommand) (commandengine.Result, error) {
