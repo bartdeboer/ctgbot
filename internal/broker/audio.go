@@ -23,13 +23,15 @@ type turnOptions struct {
 	Mode turnMode
 }
 
-func audioAttachment(attachments []message.Media) (message.Media, bool) {
-	for _, media := range attachments {
-		if isAudioMedia(media) {
-			return media, true
-		}
+func voiceInputAttachment(text string, attachments []message.Media) (message.Media, bool) {
+	if strings.TrimSpace(text) != "" || len(attachments) != 1 {
+		return message.Media{}, false
 	}
-	return message.Media{}, false
+	media := attachments[0]
+	if !isAudioMedia(media) {
+		return message.Media{}, false
+	}
+	return media, true
 }
 
 func isAudioMedia(media message.Media) bool {
@@ -92,20 +94,35 @@ func runtimeComponents(runtime *ChatRuntime) []*component.Loaded {
 	return runtime.Components
 }
 
-func transcribeInboundAudio(ctx context.Context, runtime *ChatRuntime, threadID modeluuid.UUID, media message.Media) (string, string, error) {
+type transcriptionOutcome struct {
+	Text     string
+	Ref      string
+	Model    string
+	Language string
+}
+
+func transcribeInboundAudio(ctx context.Context, runtime *ChatRuntime, threadID modeluuid.UUID, media message.Media) (transcriptionOutcome, error) {
 	transcriber, ref, err := transcriberForRuntime(runtime)
-	if err != nil || transcriber == nil {
-		return "", "", err
+	if err != nil {
+		return transcriptionOutcome{}, err
+	}
+	if transcriber == nil {
+		return transcriptionOutcome{}, fmt.Errorf("audio message received but no transcriber is configured")
 	}
 	result, err := transcriber.Transcribe(ctx, component.TranscriptionRequest{Media: media, ThreadID: threadID})
 	if err != nil {
-		return "", ref, err
+		return transcriptionOutcome{Ref: ref}, err
 	}
 	text := strings.TrimSpace(result.Text)
 	if text == "" {
-		return "", ref, fmt.Errorf("audio transcription via %s returned empty text", ref)
+		return transcriptionOutcome{Ref: ref}, fmt.Errorf("audio transcription via %s returned empty text", ref)
 	}
-	return text, ref, nil
+	return transcriptionOutcome{
+		Text:     text,
+		Ref:      ref,
+		Model:    strings.TrimSpace(result.Model),
+		Language: strings.TrimSpace(result.Language),
+	}, nil
 }
 
 func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, text string) (*message.Media, string, error) {
@@ -123,14 +140,23 @@ func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, text string)
 	return &result.Media, ref, nil
 }
 
-func transcribedAudioPrompt(originalText string, transcript string) string {
-	originalText = strings.TrimSpace(originalText)
-	transcript = strings.TrimSpace(transcript)
-	if transcript == "" {
-		return originalText
+func transcriptionMetadata(media message.Media, result transcriptionOutcome) []string {
+	var metadata []string
+	metadata = append(metadata, "input=audio")
+	if result.Ref != "" {
+		metadata = append(metadata, "transcriber="+result.Ref)
 	}
-	if originalText == "" {
-		return "Transcribed audio message:\n\n" + transcript
+	if result.Model != "" {
+		metadata = append(metadata, "transcription_model="+result.Model)
 	}
-	return originalText + "\n\nTranscribed audio attachment:\n\n" + transcript
+	if result.Language != "" {
+		metadata = append(metadata, "transcription_language="+result.Language)
+	}
+	if filename := strings.TrimSpace(media.Filename); filename != "" {
+		metadata = append(metadata, "original_filename="+filename)
+	}
+	if contentType := strings.TrimSpace(media.ContentType); contentType != "" {
+		metadata = append(metadata, "original_content_type="+contentType)
+	}
+	return metadata
 }

@@ -246,7 +246,8 @@ func (b *Broker) handleResolvedInboundTurn(
 	}
 
 	var savedPaths []string
-	if len(inbound.Payload.Attachments) > 0 {
+	voiceMedia, isVoiceTurn := voiceInputAttachment(rawText, inbound.Payload.Attachments)
+	if len(inbound.Payload.Attachments) > 0 && !isVoiceTurn {
 		if runtime == nil {
 			runtime, err = b.runtimeForChat(ctx, chat)
 			if err != nil {
@@ -265,7 +266,7 @@ func (b *Broker) handleResolvedInboundTurn(
 
 	options := turnOptions{Mode: turnModeText}
 	turnPrompt := rawText
-	if media, ok := audioAttachment(inbound.Payload.Attachments); ok {
+	if isVoiceTurn {
 		options.Mode = turnModeAudio
 		if runtime == nil {
 			runtime, err = b.runtimeForChat(ctx, chat)
@@ -273,16 +274,15 @@ func (b *Broker) handleResolvedInboundTurn(
 				return failConversation(nil, nil, err)
 			}
 		}
-		transcript, ref, audioErr := transcribeInboundAudio(ctx, runtime, thread.ID, media)
+		transcription, audioErr := transcribeInboundAudio(ctx, runtime, thread.ID, voiceMedia)
 		if audioErr != nil {
 			return failConversation(nil, nil, audioErr)
 		}
-		if transcript != "" {
-			turnPrompt = transcribedAudioPrompt(rawText, transcript)
+		if transcription.Text != "" {
+			turnPrompt = transcription.Text
 			inbound.Payload.Text.Text = turnPrompt
-			if ref != "" {
-				inbound.Metadata = append(inbound.Metadata, "transcriber="+ref)
-			}
+			inbound.Payload.Attachments = nil
+			inbound.Metadata = append(inbound.Metadata, transcriptionMetadata(voiceMedia, transcription)...)
 		}
 	}
 

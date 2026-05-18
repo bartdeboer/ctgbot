@@ -647,8 +647,21 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	if outcome.Inbound == nil || !strings.Contains(outcome.Inbound.Text, "hello from voice") {
 		t.Fatalf("inbound text = %#v, want transcript", outcome.Inbound)
 	}
-	if got := agentRecorder.prompts[0]; !strings.Contains(got, "Transcribed audio message") || !strings.Contains(got, "hello from voice") {
-		t.Fatalf("agent prompt = %q, want transcribed audio prompt", got)
+	if got := agentRecorder.prompts[0]; got != "hello from voice" {
+		t.Fatalf("agent prompt = %q, want transcript only", got)
+	}
+	if !strings.Contains(outcome.Inbound.MetadataJSON, "input=audio") ||
+		!strings.Contains(outcome.Inbound.MetadataJSON, "transcriber=whisper") ||
+		!strings.Contains(outcome.Inbound.MetadataJSON, "transcription_model=fake-whisper") ||
+		!strings.Contains(outcome.Inbound.MetadataJSON, "original_filename=voice.ogg") {
+		t.Fatalf("inbound metadata = %q, want transcription metadata", outcome.Inbound.MetadataJSON)
+	}
+	artifacts, err := storage.Artifacts().ListByMessageID(context.Background(), outcome.Inbound.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("voice artifacts = %d, want none", len(artifacts))
 	}
 	if len(transcriber.seen) != 1 || string(transcriber.seen[0].Content) != "voice bytes" {
 		t.Fatalf("transcriber media = %#v", transcriber.seen)
@@ -665,6 +678,84 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	}
 	if len(finalPayload.Attachments) != 1 || finalPayload.Attachments[0].ContentType != "audio/ogg" {
 		t.Fatalf("final attachments = %#v", finalPayload.Attachments)
+	}
+}
+
+func TestAudioWithTextIsHandledAsFileUpload(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentRecorder := &fakeAgentRecorder{finalText: "done"}
+	transcriber := &fakeTranscriber{text: "should not run"}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
+		return registry.Add("whisper", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, registration, rt, home, storage
+			return transcriber, nil
+		})
+	})
+	b := newTestBroker(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	whisper := &coremodel.Component{Type: "whisper", Name: "whisper", Runtime: "local", Enabled: true}
+	for _, registration := range []*coremodel.Component{telegram, codex, whisper} {
+		if err := storage.Components().Save(context.Background(), registration); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+		{ChatID: chat.ID, ComponentID: whisper.ID, Role: coremodel.ChatComponentRoleCommand, Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
+		ComponentID: telegram.ID,
+		ExternalID:  "voice-1",
+		Payload: message.InboundPayload{
+			ProviderType:      "telegram",
+			ProviderChannelID: "chat-1",
+			ProviderThreadID:  "thread-7",
+			ProviderMessageID: "voice-1",
+			Actor:             message.Actor{ID: "bart", Label: "bart", Roles: []simplerbac.Role{simplerbac.RoleUser}},
+			Text:              message.TextMessage{Text: "please inspect this audio file"},
+			Attachments: []message.Media{{
+				Filename:    "clip.ogg",
+				ContentType: "audio/ogg",
+				Content:     []byte("voice bytes"),
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("HandleInbound() error = %v", err)
+	}
+	if len(transcriber.seen) != 0 {
+		t.Fatalf("transcriber should not run for text+audio upload: %#v", transcriber.seen)
+	}
+	if outcome.Inbound == nil || outcome.Inbound.Text != "please inspect this audio file" {
+		t.Fatalf("inbound text = %#v", outcome.Inbound)
+	}
+	artifacts, err := storage.Artifacts().ListByMessageID(context.Background(), outcome.Inbound.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 || artifacts[0].Filename != "clip.ogg" {
+		t.Fatalf("artifacts = %#v, want uploaded audio artifact", artifacts)
+	}
+	if got := agentRecorder.prompts[0]; !strings.Contains(got, "Files made available") ||
+		!strings.Contains(got, "/workspace/inbox/clip.ogg") ||
+		!strings.Contains(got, "please inspect this audio file") {
+		t.Fatalf("agent prompt = %q, want file upload prompt", got)
 	}
 }
 
