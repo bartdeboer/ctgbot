@@ -39,6 +39,9 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 		[]string{"LD_LIBRARY_PATH=" + DefaultLDLibraryPath},
 		config.Env,
 	)
+	if len(config.Cmd) == 0 {
+		config.Cmd = []string{"tail -f /dev/null"}
+	}
 	return config.Clean(), nil
 }
 

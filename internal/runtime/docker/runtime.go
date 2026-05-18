@@ -87,6 +87,7 @@ func (f *Factory) Bind(
 		env:          append([]string{}, config.Env...),
 		gpus:         strings.TrimSpace(config.GPUs),
 		seccomp:      strings.TrimSpace(config.Seccomp),
+		cmd:          append([]string{}, config.Cmd...),
 	}
 }
 
@@ -100,6 +101,7 @@ type Runtime struct {
 	env          []string
 	gpus         string
 	seccomp      string
+	cmd          []string
 }
 
 func (r *Runtime) Kind() string {
@@ -309,7 +311,7 @@ func (r *Runtime) sandbox(
 			Mounts([]sandboxengine.Mount{{Source: r.home.Path, Target: runtimeHomePath}}).
 			SecurityOpts(securityOpts).
 			AddHosts(sandboxAddHosts()).
-			Cmd([]string{"tail", "-f", "/dev/null"}).
+			Cmd(r.idleCmd()).
 			Build()
 		return r.sandboxes.CreateSandbox(spec), func() {}, nil
 	}
@@ -350,9 +352,16 @@ func (r *Runtime) sandbox(
 		Mounts(mounts).
 		SecurityOpts(securityOpts).
 		AddHosts(sandboxAddHosts()).
-		Cmd([]string{"tail", "-f", "/dev/null"}).
+		Cmd(r.idleCmd()).
 		Build()
 	return r.sandboxes.CreateSandbox(spec), cleanup, nil
+}
+
+func (r *Runtime) idleCmd() []string {
+	if r != nil && len(r.cmd) > 0 {
+		return append([]string{}, r.cmd...)
+	}
+	return []string{"tail", "-f", "/dev/null"}
 }
 
 func sandboxAddHosts() []string {

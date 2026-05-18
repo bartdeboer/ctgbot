@@ -31,6 +31,7 @@ func (c BindConfig) Clean() BindConfig {
 	c.GPUs = strings.TrimSpace(c.GPUs)
 	c.Seccomp = strings.ToLower(strings.TrimSpace(c.Seccomp))
 	c.Env = cleanEnv(c.Env)
+	c.Cmd = cleanArgs(c.Cmd)
 	return c
 }
 
@@ -82,6 +83,24 @@ func envKey(value string) string {
 }
 
 func cleanEnv(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func cleanArgs(values []string) []string {
 	if len(values) == 0 {
 		return nil
 	}

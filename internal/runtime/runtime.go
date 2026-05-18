@@ -19,6 +19,7 @@ type BindConfig struct {
 	Env     []string `json:"env"`
 	GPUs    string   `json:"gpus"`
 	Seccomp string   `json:"seccomp"`
+	Cmd     []string `json:"cmd,omitempty"`
 }
 
 type Status struct {

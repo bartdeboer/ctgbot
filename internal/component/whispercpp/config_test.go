@@ -18,6 +18,9 @@ func TestLoadRuntimeConfigUsesWhisperCppImageAndLibraryPath(t *testing.T) {
 	if got := envValue(config.Env, "LD_LIBRARY_PATH"); got != DefaultLDLibraryPath {
 		t.Fatalf("LD_LIBRARY_PATH = %q, want %q in %#v", got, DefaultLDLibraryPath, config.Env)
 	}
+	if len(config.Cmd) != 1 || config.Cmd[0] != "tail -f /dev/null" {
+		t.Fatalf("Cmd = %#v, want whisper.cpp shell idle command", config.Cmd)
+	}
 }
 
 func TestLoadRuntimeConfigAllowsLibraryPathOverride(t *testing.T) {
