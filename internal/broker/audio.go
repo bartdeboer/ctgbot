@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
@@ -159,4 +160,14 @@ func transcriptionMetadata(media message.Media, result transcriptionOutcome) []s
 		metadata = append(metadata, "original_content_type="+contentType)
 	}
 	return metadata
+}
+
+func (b *Broker) relayVoiceTranscript(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread, providerMessageID string, transcript string) error {
+	if runtime == nil || strings.TrimSpace(transcript) == "" {
+		return nil
+	}
+	return b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, message.OutboundPayload{
+		SupersedesProviderMessageID: strings.TrimSpace(providerMessageID),
+		Text:                        message.TextMessage{Text: strings.TrimSpace(transcript)},
+	})
 }

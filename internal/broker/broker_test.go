@@ -669,10 +669,14 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	if len(synthesizer.seen) != 1 || synthesizer.seen[0] != "audio answer" {
 		t.Fatalf("synthesizer input = %#v", synthesizer.seen)
 	}
-	if got, want := len(messengerRecorder.payloads), 2; got != want {
+	if got, want := len(messengerRecorder.payloads), 3; got != want {
 		t.Fatalf("relay payloads = %d, want %d", got, want)
 	}
-	finalPayload := messengerRecorder.payloads[1]
+	transcriptPayload := messengerRecorder.payloads[0]
+	if transcriptPayload.Text.Text != "hello from voice" || transcriptPayload.SupersedesProviderMessageID != "voice-1" {
+		t.Fatalf("transcript payload = %#v", transcriptPayload)
+	}
+	finalPayload := messengerRecorder.payloads[2]
 	if got := finalPayload.Text.Text; got != "audio answer" {
 		t.Fatalf("final text = %q, want audio answer", got)
 	}

@@ -283,6 +283,9 @@ func (b *Broker) handleResolvedInboundTurn(
 			inbound.Payload.Text.Text = turnPrompt
 			inbound.Payload.Attachments = nil
 			inbound.Metadata = append(inbound.Metadata, transcriptionMetadata(voiceMedia, transcription)...)
+			if err := b.relayVoiceTranscript(ctx, runtime, thread, inbound.Payload.ProviderMessageID, transcription.Text); err != nil {
+				b.logf("voice transcript relay failed chat=%s thread=%s err=%v", chat.ID, thread.ID, err)
+			}
 		}
 	}
 
