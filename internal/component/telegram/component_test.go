@@ -58,6 +58,11 @@ type sentChatAction struct {
 	action   message.ChatAction
 }
 
+type deletedMessage struct {
+	chatID    int64
+	messageID int
+}
+
 type fakeTelegramAPI struct {
 	mu sync.Mutex
 
@@ -71,6 +76,8 @@ type fakeTelegramAPI struct {
 	videos          []sentVideo
 	audios          []sentPhoto
 	actions         []sentChatAction
+	deleted         []deletedMessage
+	deleteErr       error
 	sendMessageErrs []error
 	downloads       map[string][]byte
 }
@@ -127,6 +134,14 @@ func (f *fakeTelegramAPI) SendAudio(ctx context.Context, chatID int64, threadID 
 	return nil
 }
 
+func (f *fakeTelegramAPI) DeleteMessage(ctx context.Context, chatID int64, messageID int) error {
+	_ = ctx
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleted = append(f.deleted, deletedMessage{chatID: chatID, messageID: messageID})
+	return f.deleteErr
+}
+
 func (f *fakeTelegramAPI) SendChatAction(ctx context.Context, chatID int64, threadID int, action message.ChatAction) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -151,6 +166,12 @@ func (f *fakeTelegramAPI) messageSnapshot() []sentMessage {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]sentMessage(nil), f.messages...)
+}
+
+func (f *fakeTelegramAPI) deletedSnapshot() []deletedMessage {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]deletedMessage(nil), f.deleted...)
 }
 
 func (f *fakeTelegramAPI) actionCount() int {
@@ -369,6 +390,67 @@ func TestSendUsesMarkdownV2ByDefault(t *testing.T) {
 	}
 	if messages[0].parseMode != "MarkdownV2" {
 		t.Fatalf("parse mode = %q, want MarkdownV2", messages[0].parseMode)
+	}
+}
+
+func TestSendSupersedesProviderMessageBestEffortDeletesOriginal(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID:           "123",
+		ProviderThreadID:            "4",
+		SupersedesProviderMessageID: "99",
+		Text:                        message.TextMessage{Text: "transcript"},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	deleted := api.deletedSnapshot()
+	if len(deleted) != 1 || deleted[0].chatID != 123 || deleted[0].messageID != 99 {
+		t.Fatalf("deleted = %#v, want original message delete", deleted)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 1 || messages[0].text != "transcript" {
+		t.Fatalf("messages = %#v", messages)
+	}
+}
+
+func TestSendSupersedesProviderMessageDeleteFailureStillSends(t *testing.T) {
+	api := &fakeTelegramAPI{deleteErr: errors.New("boom")}
+	c := &Component{api: api}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID:           "123",
+		SupersedesProviderMessageID: "99",
+		Text:                        message.TextMessage{Text: "transcript"},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	if len(api.deletedSnapshot()) != 1 {
+		t.Fatalf("deleted = %#v", api.deletedSnapshot())
+	}
+	if len(api.messageSnapshot()) != 1 {
+		t.Fatalf("messages = %#v", api.messageSnapshot())
+	}
+}
+
+func TestSendSupersedesProviderMessageKeepsOriginalWhenSendFails(t *testing.T) {
+	api := &fakeTelegramAPI{sendMessageErrs: []error{errors.New("send failed")}}
+	c := &Component{api: api}
+
+	err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID:           "123",
+		SupersedesProviderMessageID: "99",
+		Text: message.TextMessage{
+			Text:        "transcript",
+			ContentType: "text/html",
+		},
+	})
+	if err == nil {
+		t.Fatalf("Send() error = nil, want send failure")
+	}
+	if got := api.deletedSnapshot(); len(got) != 0 {
+		t.Fatalf("deleted = %#v, want no delete after send failure", got)
 	}
 }
 

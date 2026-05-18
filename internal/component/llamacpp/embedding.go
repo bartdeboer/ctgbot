@@ -46,6 +46,11 @@ func (c *Component) Embed(ctx context.Context, req component.EmbedRequest) (comp
 	if len(inputs) == 0 {
 		return component.EmbedResponse{}, fmt.Errorf("missing embedding input")
 	}
+	release, err := c.acquireInference(ctx, model.Name)
+	if err != nil {
+		return component.EmbedResponse{}, err
+	}
+	defer release()
 	texts := make([]string, 0, len(inputs))
 	for _, input := range inputs {
 		texts = append(texts, input.Text)

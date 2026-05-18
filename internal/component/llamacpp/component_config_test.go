@@ -65,6 +65,9 @@ func TestLoadComponentConfigDefaultsWhenMissing(t *testing.T) {
 	if got, want := config.HostPort, 19080; got != want {
 		t.Fatalf("HostPort = %d, want %d", got, want)
 	}
+	if got, want := config.MaxConcurrent, 1; got != want {
+		t.Fatalf("MaxConcurrent = %d, want %d", got, want)
+	}
 }
 
 func TestLoadComponentConfigReadsComponentJSON(t *testing.T) {

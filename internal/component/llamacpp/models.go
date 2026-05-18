@@ -38,6 +38,12 @@ func (c *Component) resolveModel(name string) (resolvedModel, error) {
 	if err != nil {
 		return resolvedModel{}, err
 	}
+	if name == "" {
+		name, err = store.DefaultModelForMode(context.Background(), component.ModelModeCompletion)
+		if err != nil {
+			return resolvedModel{}, err
+		}
+	}
 	model, err := store.GetModel(context.Background(), name)
 	if err != nil {
 		return resolvedModel{}, err
@@ -125,6 +131,8 @@ func cleanModelMode(mode string) string {
 	switch mode {
 	case "embedding", "embed":
 		return "embedding"
+	case "asr", "transcription", "transcribe", "speech-to-text", "stt":
+		return "asr"
 	default:
 		return "completion"
 	}

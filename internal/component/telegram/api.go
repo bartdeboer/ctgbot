@@ -24,6 +24,7 @@ type TelegramAPI interface {
 	SendPhoto(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
 	SendVideo(ctx context.Context, chatID int64, threadID int, caption string, media message.Media) error
 	SendAudio(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
+	DeleteMessage(ctx context.Context, chatID int64, messageID int) error
 	SendChatAction(ctx context.Context, chatID int64, threadID int, action message.ChatAction) error
 	DownloadFile(ctx context.Context, fileID string) ([]byte, error)
 }
@@ -126,6 +127,18 @@ func (a *TelegramAPIV2) SendMessage(ctx context.Context, chatID int64, threadID 
 	}
 
 	_, err = b.SendMessage(ctx, p)
+	return err
+}
+
+func (a *TelegramAPIV2) DeleteMessage(ctx context.Context, chatID int64, messageID int) error {
+	b, err := a.ensureBot()
+	if err != nil {
+		return err
+	}
+	_, err = b.DeleteMessage(ctx, &bot.DeleteMessageParams{
+		ChatID:    chatID,
+		MessageID: messageID,
+	})
 	return err
 }
 

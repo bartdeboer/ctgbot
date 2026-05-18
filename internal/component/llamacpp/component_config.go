@@ -25,6 +25,7 @@ type ComponentConfig struct {
 	ContextSize    int     `json:"ctx_size"`
 	GPULayers      int     `json:"gpu_layers"`
 	MaxTokens      int     `json:"max_tokens"`
+	MaxConcurrent  int     `json:"max_concurrent,omitempty"`
 	Temperature    float64 `json:"temperature"`
 	KeepRunning    bool    `json:"keep_running"`
 	StripReasoning bool    `json:"strip_reasoning"`
@@ -76,6 +77,9 @@ func (c ComponentConfig) withDefaults() ComponentConfig {
 	}
 	if c.MaxTokens == 0 {
 		c.MaxTokens = 1024
+	}
+	if c.MaxConcurrent == 0 {
+		c.MaxConcurrent = 1
 	}
 	if c.Temperature == 0 {
 		c.Temperature = 0.2

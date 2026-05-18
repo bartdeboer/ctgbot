@@ -69,10 +69,11 @@ func (p InboundPayload) ResolvedActor() Actor {
 }
 
 type OutboundPayload struct {
-	ProviderChannelID string
-	ProviderThreadID  string
-	Text              TextMessage
-	Attachments       []Media
+	ProviderChannelID           string
+	ProviderThreadID            string
+	SupersedesProviderMessageID string
+	Text                        TextMessage
+	Attachments                 []Media
 }
 
 func (p OutboundPayload) IsZero() bool {

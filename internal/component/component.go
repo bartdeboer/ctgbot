@@ -123,11 +123,43 @@ type Embedder interface {
 	Embed(ctx context.Context, req EmbedRequest) (EmbedResponse, error)
 }
 
+type TranscriptionRequest struct {
+	Media    message.Media
+	Model    string
+	Language string
+	ThreadID modeluuid.UUID
+}
+
+type TranscriptionResult struct {
+	Text     string
+	Language string
+	Model    string
+}
+
+type Transcriber interface {
+	Component
+	Transcribe(ctx context.Context, req TranscriptionRequest) (TranscriptionResult, error)
+}
+
+type SpeechRequest struct {
+	Text string
+}
+
+type SpeechResult struct {
+	Media message.Media
+}
+
+type SpeechSynthesizer interface {
+	Component
+	Synthesize(ctx context.Context, req SpeechRequest) (SpeechResult, error)
+}
+
 type ModelMode string
 
 const (
 	ModelModeCompletion ModelMode = "completion"
 	ModelModeEmbedding  ModelMode = "embedding"
+	ModelModeASR        ModelMode = "asr"
 )
 
 type Model struct {
@@ -160,6 +192,7 @@ type ModelStore interface {
 	InstallModel(ctx context.Context, req ModelInstallRequest) (Model, error)
 	RegisterModel(ctx context.Context, req ModelInstallRequest) (Model, error)
 	DefaultModel(ctx context.Context) (string, error)
+	DefaultModelForMode(ctx context.Context, mode ModelMode) (string, error)
 }
 
 type Constructor func(

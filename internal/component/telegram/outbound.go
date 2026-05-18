@@ -29,7 +29,11 @@ func (c *Component) Send(ctx context.Context, payload message.OutboundPayload) e
 		return err
 	}
 	if len(payload.Attachments) == 0 {
-		return c.sendTextMessage(ctx, chatID, threadID, payload.Text)
+		if err := c.sendTextMessage(ctx, chatID, threadID, payload.Text); err != nil {
+			return err
+		}
+		c.supersedeProviderMessage(ctx, chatID, payload.SupersedesProviderMessageID)
+		return nil
 	}
 	for i, attachment := range payload.Attachments {
 		caption := ""
@@ -40,7 +44,23 @@ func (c *Component) Send(ctx context.Context, payload message.OutboundPayload) e
 			return err
 		}
 	}
+	c.supersedeProviderMessage(ctx, chatID, payload.SupersedesProviderMessageID)
 	return nil
+}
+
+func (c *Component) supersedeProviderMessage(ctx context.Context, chatID int64, providerMessageID string) {
+	providerMessageID = strings.TrimSpace(providerMessageID)
+	if providerMessageID == "" || c == nil || c.api == nil {
+		return
+	}
+	messageID, err := strconv.Atoi(providerMessageID)
+	if err != nil {
+		c.logf("telegram supersede message id parse failed chat=%d provider_message_id=%q err=%v", chatID, providerMessageID, err)
+		return
+	}
+	if err := c.api.DeleteMessage(ctx, chatID, messageID); err != nil {
+		c.logf("telegram supersede delete failed chat=%d message=%d err=%v", chatID, messageID, err)
+	}
 }
 
 func (c *Component) StartChatAction(ctx context.Context, target message.ChatTarget, action message.ChatAction) (func(), error) {

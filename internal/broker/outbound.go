@@ -71,6 +71,10 @@ func (b *Broker) resolveRelayBindingsForChat(ctx context.Context, chatID modeluu
 }
 
 func (b *Broker) storeAndRelayMessage(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, threadMessage coremodel.ThreadMessage, sourceType string) (*coremodel.ThreadMessage, error) {
+	return b.storeAndRelayMessageWithAttachments(ctx, runtime, chat, thread, threadMessage, sourceType, nil)
+}
+
+func (b *Broker) storeAndRelayMessageWithAttachments(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, threadMessage coremodel.ThreadMessage, sourceType string, attachments []message.Media) (*coremodel.ThreadMessage, error) {
 	threadMessage.ChatID = chat.ID
 	threadMessage.ThreadID = thread.ID
 	threadMessage.Direction = coremodel.MessageDirectionOutbound
@@ -80,11 +84,12 @@ func (b *Broker) storeAndRelayMessage(ctx context.Context, runtime *ChatRuntime,
 	if strings.TrimSpace(threadMessage.ActorLabel) == "" {
 		threadMessage.ActorLabel = sourceType
 	}
-	if err := b.App.StoreOutboundMessage(ctx, &threadMessage, nil); err != nil {
+	if err := b.App.StoreOutboundMessage(ctx, &threadMessage, attachments); err != nil {
 		return nil, err
 	}
 	payload := message.OutboundPayload{
-		Text: message.TextMessage{Text: threadMessage.Text},
+		Text:        message.TextMessage{Text: threadMessage.Text},
+		Attachments: append([]message.Media(nil), attachments...),
 	}
 	if runtime != nil {
 		if err := b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, payload); err != nil {

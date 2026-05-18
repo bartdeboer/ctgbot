@@ -17,8 +17,9 @@ import (
 const RegistryFilename = "models.json"
 
 type Registry struct {
-	DefaultModel string                 `json:"default_model,omitempty"`
-	Models       map[string]ModelRecord `json:"models,omitempty"`
+	DefaultModel  string                 `json:"default_model,omitempty"`
+	DefaultModels map[string]string      `json:"default_models,omitempty"`
+	Models        map[string]ModelRecord `json:"models,omitempty"`
 }
 
 type ModelRecord struct {
@@ -52,12 +53,14 @@ func loadRegistry(homePath string) (Registry, error) {
 		return Registry{}, fmt.Errorf("read model registry %s: %w", path, err)
 	}
 	registry.DefaultModel = cleanModelName(registry.DefaultModel)
+	registry.DefaultModels = cleanDefaultModels(registry.DefaultModels)
 	registry.Models = cleanRegistry(registry.Models)
 	return registry, nil
 }
 
 func saveRegistry(homePath string, registry Registry) error {
 	registry.DefaultModel = cleanModelName(registry.DefaultModel)
+	registry.DefaultModels = cleanDefaultModels(registry.DefaultModels)
 	registry.Models = cleanRegistry(registry.Models)
 	data, err := json.MarshalIndent(registry, "", "  ")
 	if err != nil {
@@ -65,6 +68,25 @@ func saveRegistry(homePath string, registry Registry) error {
 	}
 	data = append(data, '\n')
 	return atomicWriteFile(filepath.Join(strings.TrimSpace(homePath), RegistryFilename), data, 0o644)
+}
+
+func cleanDefaultModels(defaults map[string]string) map[string]string {
+	if len(defaults) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(defaults))
+	for mode, name := range defaults {
+		mode = cleanModelMode(mode)
+		name = cleanModelName(name)
+		if mode == "" || name == "" {
+			continue
+		}
+		out[mode] = name
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func cleanRegistry(models map[string]ModelRecord) map[string]ModelRecord {
@@ -136,6 +158,8 @@ func cleanModelMode(mode string) string {
 	switch mode {
 	case "embedding", "embed":
 		return string(component.ModelModeEmbedding)
+	case "asr", "transcription", "transcribe", "speech-to-text", "stt":
+		return string(component.ModelModeASR)
 	default:
 		return string(component.ModelModeCompletion)
 	}

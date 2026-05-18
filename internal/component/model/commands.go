@@ -100,7 +100,9 @@ func buildModelCommand(req *clir.Request, name string) (installCommand, error) {
 	hostPort := fs.Int("host-port", 0, "Host port for this model service")
 	ctxSize := fs.Int("ctx-size", 0, "llama.cpp context size")
 	gpuLayers := fs.Int("gpu-layers", 0, "llama.cpp GPU layers")
+	modeFlag := fs.String("mode", "", "Model mode: completion, embedding, asr")
 	embedding := fs.Bool("embedding", false, "Register this model for embedding mode")
+	asr := fs.Bool("asr", false, "Register this model for ASR/transcription mode")
 	pooling := fs.String("pooling", "", "llama.cpp embedding pooling mode")
 	ubatch := fs.Int("ubatch-size", 0, "llama.cpp physical batch size")
 	normalize := fs.Bool("normalize", true, "L2-normalize embedding vectors client-side")
@@ -119,7 +121,29 @@ func buildModelCommand(req *clir.Request, name string) (installCommand, error) {
 	if *embedding {
 		mode = component.ModelModeEmbedding
 	}
+	if *asr {
+		mode = component.ModelModeASR
+	}
+	if strings.TrimSpace(*modeFlag) != "" && parseModelMode(*modeFlag) == "" {
+		return installCommand{}, fmt.Errorf("unsupported model mode: %s", *modeFlag)
+	}
+	if parsed := parseModelMode(*modeFlag); parsed != "" {
+		mode = parsed
+	}
 	return installCommand{Name: modelName, Mode: mode, Filename: *filename, SHA256: *sha, HostPort: *hostPort, ContextSize: *ctxSize, UBatchSize: *ubatch, GPULayers: *gpuLayers, Pooling: *pooling, Normalize: *normalize, Default: *makeDefault}, nil
+}
+
+func parseModelMode(mode string) component.ModelMode {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "embedding", "embed":
+		return component.ModelModeEmbedding
+	case "asr", "transcription", "transcribe", "speech-to-text", "stt":
+		return component.ModelModeASR
+	case "completion", "complete", "chat", "llm":
+		return component.ModelModeCompletion
+	default:
+		return ""
+	}
 }
 
 func (c *Component) handleList(ctx context.Context) (commandengine.Result, error) {
@@ -132,18 +156,42 @@ func (c *Component) handleList(ctx context.Context) (commandengine.Result, error
 	if strings.TrimSpace(c.registry.DefaultModel) != "" {
 		lines = append(lines, "default_model: "+c.registry.DefaultModel)
 	}
+	for _, mode := range []component.ModelMode{component.ModelModeCompletion, component.ModelModeEmbedding, component.ModelModeASR} {
+		if name := c.defaultModelForMode(mode); name != "" {
+			lines = append(lines, fmt.Sprintf("default_%s_model: %s", mode, name))
+		}
+	}
 	if len(models) == 0 {
 		lines = append(lines, "(no models installed)")
 		return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 	}
 	for _, model := range models {
-		suffix := ""
+		var suffixes []string
 		if model.Name == c.registry.DefaultModel {
-			suffix = " default=true"
+			suffixes = append(suffixes, "legacy_default=true")
+		}
+		if defaultMode := defaultModeForModel(c, model.Name); defaultMode != "" {
+			suffixes = append(suffixes, "default_"+defaultMode+"=true")
+		}
+		suffix := ""
+		if len(suffixes) > 0 {
+			suffix = " " + strings.Join(suffixes, " ")
 		}
 		lines = append(lines, fmt.Sprintf("- %s%s mode=%s path=%s port=%d", model.Name, suffix, model.Mode, model.Path, model.HostPort))
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
+}
+
+func defaultModeForModel(c *Component, modelName string) string {
+	if c == nil {
+		return ""
+	}
+	for _, mode := range []component.ModelMode{component.ModelModeCompletion, component.ModelModeEmbedding, component.ModelModeASR} {
+		if c.defaultModelForMode(mode) == modelName {
+			return string(mode)
+		}
+	}
+	return ""
 }
 
 func (c *Component) handleInstall(ctx context.Context, cmd installCommand) (commandengine.Result, error) {

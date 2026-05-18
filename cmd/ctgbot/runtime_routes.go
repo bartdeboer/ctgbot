@@ -29,6 +29,7 @@ import (
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
 	"github.com/bartdeboer/ctgbot/internal/component/telegram"
+	whispercppcomponent "github.com/bartdeboer/ctgbot/internal/component/whispercpp"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -696,6 +697,11 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(semanticcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return semanticcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(whispercppcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return whispercppcomponent.New(ctx, registration, runtime, home, storage, rtSystem)
 	}); err != nil {
 		return nil, err
 	}

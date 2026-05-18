@@ -17,6 +17,7 @@ import (
 	modelcomponent "github.com/bartdeboer/ctgbot/internal/component/model"
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
+	whispercppcomponent "github.com/bartdeboer/ctgbot/internal/component/whispercpp"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 )
 
@@ -100,6 +101,7 @@ func RegisterGobTypes(register func(any)) {
 	llamacppcomponent.RegisterGobTypes(register)
 	modelcomponent.RegisterGobTypes(register)
 	messagingcomponent.RegisterGobTypes(register)
+	whispercppcomponent.RegisterGobTypes(register)
 }
 
 func GlobalDirectPrefixes() []string {
@@ -122,6 +124,8 @@ func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 		return (*modelcomponent.Component)(nil), true
 	case semanticcomponent.Type:
 		return (*semanticcomponent.Component)(nil), true
+	case whispercppcomponent.Type:
+		return (*whispercppcomponent.Component)(nil), true
 	default:
 		return nil, false
 	}

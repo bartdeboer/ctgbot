@@ -246,7 +246,8 @@ func (b *Broker) handleResolvedInboundTurn(
 	}
 
 	var savedPaths []string
-	if len(inbound.Payload.Attachments) > 0 {
+	voiceMedia, isVoiceTurn := voiceInputAttachment(rawText, inbound.Payload.Attachments)
+	if len(inbound.Payload.Attachments) > 0 && !isVoiceTurn {
 		if runtime == nil {
 			runtime, err = b.runtimeForChat(ctx, chat)
 			if err != nil {
@@ -263,11 +264,36 @@ func (b *Broker) handleResolvedInboundTurn(
 		}
 	}
 
+	options := turnOptions{Mode: turnModeText}
+	turnPrompt := rawText
+	if isVoiceTurn {
+		options.Mode = turnModeAudio
+		if runtime == nil {
+			runtime, err = b.runtimeForChat(ctx, chat)
+			if err != nil {
+				return failConversation(nil, nil, err)
+			}
+		}
+		transcription, audioErr := transcribeInboundAudio(ctx, runtime, thread.ID, voiceMedia)
+		if audioErr != nil {
+			return failConversation(nil, nil, audioErr)
+		}
+		if transcription.Text != "" {
+			turnPrompt = transcription.Text
+			inbound.Payload.Text.Text = turnPrompt
+			inbound.Payload.Attachments = nil
+			inbound.Metadata = append(inbound.Metadata, transcriptionMetadata(voiceMedia, transcription)...)
+			if err := b.relayVoiceTranscript(ctx, runtime, thread, inbound.Payload.ProviderMessageID, transcription.Text); err != nil {
+				b.logf("voice transcript relay failed chat=%s thread=%s err=%v", chat.ID, thread.ID, err)
+			}
+		}
+	}
+
 	storedInbound, err := b.App.StoreInboundMessage(ctx, inbound)
 	if err != nil {
 		return failConversation(nil, nil, err)
 	}
-	if rawText == "" && len(savedPaths) > 0 {
+	if strings.TrimSpace(turnPrompt) == "" && len(savedPaths) > 0 {
 		message, relayErr := b.relaySystemMessage(ctx, runtime, chat, thread, uploadSavedMessage(savedPaths))
 		if relayErr != nil {
 			return failConversation(storedInbound, nil, relayErr)
@@ -279,9 +305,8 @@ func (b *Broker) handleResolvedInboundTurn(
 		return EventOutcome{Inbound: storedInbound, Outbound: outbound}, nil
 	}
 	turnInbound := *storedInbound
-	turnPrompt := rawText
 	if len(savedPaths) > 0 {
-		turnPrompt = injectFilesIntoPrompt(savedPaths, rawText)
+		turnPrompt = injectFilesIntoPrompt(savedPaths, turnPrompt)
 	}
 	turnInbound.Text = prepareTurnInbound(inbound, turnPrompt)
 
@@ -291,7 +316,7 @@ func (b *Broker) handleResolvedInboundTurn(
 			return failConversation(storedInbound, nil, err)
 		}
 	}
-	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound)
+	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound, options)
 	if err != nil {
 		return failConversation(storedInbound, outbound, err)
 	}
