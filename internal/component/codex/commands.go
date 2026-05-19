@@ -9,12 +9,14 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
+var _ configsurface.ConfigSurface = (*Component)(nil)
 
 var suggestedCodexModels = []string{
 	"gpt-5.5",
@@ -33,7 +35,7 @@ var suggestedCodexReasoningEfforts = []string{
 }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		codexCommand("container refresh", RefreshContainer{}, "Delete and recreate the Codex runtime on next turn",
 			hiddenAlias("refresh"),
 		),
@@ -44,39 +46,13 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		),
 		codexCommand("interrupt", InterruptTurn{}, "Interrupt the active Codex turn"),
 		codexCommand("status", Status{}, "Show Codex conversation and runtime status"),
-		codexCommand("model", ModelStatus{}, "Show the Codex model for this thread"),
-		codexCommand("model list", ModelList{}, "List suggested Codex models"),
-		{
-			Pattern: "model set <model>",
-			Help:    "Set the Codex model for this thread",
-			Build: func(req *clir.Request) (any, error) {
-				model := strings.TrimSpace(req.Params["model"])
-				if model == "" {
-					return nil, fmt.Errorf("missing model")
-				}
-				return ModelSet{Model: model}, nil
-			},
-			Sources: codexCommandSources(),
-			Policy:  codexCommandPolicy(),
-		},
-		codexCommand("model clear", ModelClear{}, "Clear the thread model override"),
-		codexCommand("model effort", ModelEffortStatus{}, "Show the Codex reasoning effort for this thread"),
-		codexCommand("model effort list", ModelEffortList{}, "List suggested Codex reasoning efforts"),
-		{
-			Pattern: "model effort set <effort>",
-			Help:    "Set the Codex reasoning effort for this thread",
-			Build: func(req *clir.Request) (any, error) {
-				effort := strings.TrimSpace(req.Params["effort"])
-				if effort == "" {
-					return nil, fmt.Errorf("missing reasoning effort")
-				}
-				return ModelEffortSet{Effort: effort}, nil
-			},
-			Sources: codexCommandSources(),
-			Policy:  codexCommandPolicy(),
-		},
-		codexCommand("model effort clear", ModelEffortClear{}, "Clear the thread reasoning effort override"),
 	}
+	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
+		Sources:       codexCommandSources(),
+		Policy:        codexCommandPolicy(),
+		SupportsUnset: true,
+	})...)
+	return definitions
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
@@ -115,44 +91,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[ModelStatus](registry, "model", func(ctx context.Context, req commandengine.Request, _ ModelStatus) (commandengine.Result, error) {
-		return c.modelStatus(ctx, req)
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[ModelList](registry, "model list", func(ctx context.Context, req commandengine.Request, _ ModelList) (commandengine.Result, error) {
-		return c.modelList(ctx)
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[ModelSet](registry, "model set <model>", func(ctx context.Context, req commandengine.Request, cmd ModelSet) (commandengine.Result, error) {
-		return c.modelSet(ctx, req, cmd)
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[ModelClear](registry, "model clear", func(ctx context.Context, req commandengine.Request, _ ModelClear) (commandengine.Result, error) {
-		return c.modelClear(ctx, req)
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[ModelEffortStatus](registry, "model effort", func(ctx context.Context, req commandengine.Request, _ ModelEffortStatus) (commandengine.Result, error) {
-		return c.modelEffortStatus(ctx, req)
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[ModelEffortList](registry, "model effort list", func(ctx context.Context, req commandengine.Request, _ ModelEffortList) (commandengine.Result, error) {
-		return c.modelEffortList(ctx)
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[ModelEffortSet](registry, "model effort set <effort>", func(ctx context.Context, req commandengine.Request, cmd ModelEffortSet) (commandengine.Result, error) {
-		return c.modelEffortSet(ctx, req, cmd)
-	}); err != nil {
-		return err
-	}
-	return commandengine.RegisterPattern[ModelEffortClear](registry, "model effort clear", func(ctx context.Context, req commandengine.Request, _ ModelEffortClear) (commandengine.Result, error) {
-		return c.modelEffortClear(ctx, req)
-	})
+	return configsurface.RegisterCommandHandlers(registry, c)
 }
 
 func (c *Component) refresh(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
@@ -284,108 +223,6 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 		lines = append(lines, "runtime_notice: "+strings.TrimSpace(notice))
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
-}
-
-func (c *Component) modelStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := agentcommon.Thread(ctx, c.storage, req, Type)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	settings, err := c.resolveThreadSettings(ctx, thread)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: fmt.Sprintf("codex model: %s\nsource: %s", settings.Model, settings.ModelSource)}, nil
-}
-
-func (c *Component) modelList(ctx context.Context) (commandengine.Result, error) {
-	_ = ctx
-	return commandengine.Result{Text: "suggested Codex models:\n" + strings.Join(suggestedCodexModels, "\n")}, nil
-}
-
-func (c *Component) modelSet(ctx context.Context, req commandengine.Request, cmd ModelSet) (commandengine.Result, error) {
-	thread, err := agentcommon.Thread(ctx, c.storage, req, Type)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	model := strings.TrimSpace(cmd.Model)
-	if model == "" {
-		return commandengine.Result{}, fmt.Errorf("missing model")
-	}
-	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
-		state.Model = model
-	}); err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: "codex model=" + model}, nil
-}
-
-func (c *Component) modelClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := agentcommon.Thread(ctx, c.storage, req, Type)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
-		state.Model = ""
-	}); err != nil {
-		return commandengine.Result{}, err
-	}
-	settings, err := c.resolveThreadSettings(ctx, thread)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: fmt.Sprintf("codex model cleared\ncodex model: %s\nsource: %s", settings.Model, settings.ModelSource)}, nil
-}
-
-func (c *Component) modelEffortStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := agentcommon.Thread(ctx, c.storage, req, Type)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	settings, err := c.resolveThreadSettings(ctx, thread)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: fmt.Sprintf("codex reasoning effort: %s\nsource: %s", settings.ReasoningEffort, settings.ReasoningEffortSource)}, nil
-}
-
-func (c *Component) modelEffortList(ctx context.Context) (commandengine.Result, error) {
-	_ = ctx
-	return commandengine.Result{Text: "suggested Codex reasoning efforts:\n" + strings.Join(suggestedCodexReasoningEfforts, "\n")}, nil
-}
-
-func (c *Component) modelEffortSet(ctx context.Context, req commandengine.Request, cmd ModelEffortSet) (commandengine.Result, error) {
-	thread, err := agentcommon.Thread(ctx, c.storage, req, Type)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	effort := strings.TrimSpace(cmd.Effort)
-	if effort == "" {
-		return commandengine.Result{}, fmt.Errorf("missing reasoning effort")
-	}
-	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
-		state.ReasoningEffort = effort
-	}); err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: "codex reasoning effort=" + effort}, nil
-}
-
-func (c *Component) modelEffortClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := agentcommon.Thread(ctx, c.storage, req, Type)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
-		state.ReasoningEffort = ""
-	}); err != nil {
-		return commandengine.Result{}, err
-	}
-	settings, err := c.resolveThreadSettings(ctx, thread)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: fmt.Sprintf("codex reasoning effort cleared\ncodex reasoning effort: %s\nsource: %s", settings.ReasoningEffort, settings.ReasoningEffortSource)}, nil
 }
 
 func codexCommand(pattern string, command any, help string, aliases ...commandengine.Route) commandengine.Definition {

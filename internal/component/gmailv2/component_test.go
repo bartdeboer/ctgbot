@@ -9,10 +9,13 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface/conformtest"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	gmailapi "google.golang.org/api/gmail/v1"
 )
 
@@ -63,7 +66,7 @@ func TestCommandDefinitionsUseTightInboxSurface(t *testing.T) {
 	for _, def := range c.CommandDefinitions() {
 		patterns[def.Pattern] = true
 	}
-	for _, pattern := range []string{"query <query>", "fetch <message_id>", "db help", "db schema", "db query <sql>", "message view <message_id>", "message display <message_id>", "sender <email> config list", "sender <email> config set <key> <value>"} {
+	for _, pattern := range []string{"query <query>", "fetch <message_id>", "db help", "db schema", "db query <sql>", "message view <message_id>", "message display <message_id>", "sender <email> config list", "sender <email> config get <key>", "sender <email> config set <key> <value>", "sender <email> config unset <key>", "config list", "config get <key>", "config set <key> <value>", "config unset <key>"} {
 		if !patterns[pattern] {
 			t.Fatalf("missing command pattern %q in %#v", pattern, patterns)
 		}
@@ -72,6 +75,55 @@ func TestCommandDefinitionsUseTightInboxSurface(t *testing.T) {
 		if patterns[pattern] {
 			t.Fatalf("obsolete command pattern still registered: %q", pattern)
 		}
+	}
+}
+
+func TestComponentConfigSurface(t *testing.T) {
+	c := newTestComponent(t, "work")
+	conformtest.Assert(t, c, commandengine.Request{Context: commandengine.Context{Source: commandengine.SourceHostbridge, Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}, conformtest.Case{
+		WritableKey:      "max-poll-messages",
+		WritableValue:    "7",
+		ExpectedSetValue: "7",
+		ExpectedUnset:    "20",
+	})
+
+	engine, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, c)
+	if err != nil {
+		t.Fatalf("NewEngineForSource() error = %v", err)
+	}
+	base := commandengine.Request{Context: commandengine.Context{Source: commandengine.SourceHostbridge, Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}
+
+	list, err := engine.Run(context.Background(), base, []string{"config", "list"})
+	if err != nil {
+		t.Fatalf("config list error = %v", err)
+	}
+	for _, want := range []string{"poll-interval=1m0s", "max-poll-messages=20", "materialize-raw=true", "skip-labels=SENT,DRAFT,SPAM,TRASH"} {
+		if !strings.Contains(list.Text, want) {
+			t.Fatalf("config list missing %q:\n%s", want, list.Text)
+		}
+	}
+
+	set, err := engine.Run(context.Background(), base, []string{"config", "set", "max-poll-messages", "7"})
+	if err != nil {
+		t.Fatalf("config set error = %v", err)
+	}
+	if got, want := strings.TrimSpace(set.Text), "max-poll-messages=7"; got != want {
+		t.Fatalf("config set text = %q, want %q", got, want)
+	}
+	loaded, err := loadComponentConfig(c.home.Path)
+	if err != nil {
+		t.Fatalf("loadComponentConfig() error = %v", err)
+	}
+	if loaded.MaxPollMessages != 7 {
+		t.Fatalf("MaxPollMessages = %d, want 7", loaded.MaxPollMessages)
+	}
+
+	unset, err := engine.Run(context.Background(), base, []string{"config", "unset", "max-poll-messages"})
+	if err != nil {
+		t.Fatalf("config unset error = %v", err)
+	}
+	if got, want := strings.TrimSpace(unset.Text), "max-poll-messages=20"; got != want {
+		t.Fatalf("config unset text = %q, want %q", got, want)
 	}
 }
 
@@ -208,7 +260,7 @@ func TestSenderPolicyAffectsInboundPrompt(t *testing.T) {
 func TestSenderStoreOnlyPolicyIsListedAndRendered(t *testing.T) {
 	c := newTestComponent(t, "work")
 	if _, err := c.handleSenderConfigSet(context.Background(), commandengine.Request{}, senderConfigSetCommand{Email: "hello@example.com", Key: "notify-agent", Value: "disabled"}); err != nil {
-		t.Fatalf("handleSenderConfigSet(notify-agent disabled) error = %v", err)
+		t.Fatalf("handleSenderConfigSet(notify-agent false) error = %v", err)
 	}
 	result, err := c.handleSenderList(context.Background(), commandengine.Request{}, senderListCommand{})
 	if err != nil {
@@ -221,22 +273,22 @@ func TestSenderStoreOnlyPolicyIsListedAndRendered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleSenderConfigList() error = %v", err)
 	}
-	if !strings.Contains(config.Text, "notify-agent: disabled") {
-		t.Fatalf("sender config did not show notify-agent disabled:\n%s", config.Text)
+	if !strings.Contains(config.Text, "notify-agent=false") {
+		t.Fatalf("sender config did not show notify-agent false:\n%s", config.Text)
 	}
 	prompt := c.inboundPrompt(storedMessage{ID: "msg-1", GmailMessageID: "gmail-1", GmailThreadID: "thread-1", FromEmail: "hello@example.com", FromLabel: "Hello", Subject: "Hi"}, "")
 	if !strings.Contains(prompt, "Sender policy: untrusted, store-only") {
 		t.Fatalf("prompt did not render store-only policy:\n%s", prompt)
 	}
 	if _, err := c.handleSenderConfigSet(context.Background(), commandengine.Request{}, senderConfigSetCommand{Email: "hello@example.com", Key: "notify-agent", Value: "enabled"}); err != nil {
-		t.Fatalf("handleSenderConfigSet(notify-agent enabled) error = %v", err)
+		t.Fatalf("handleSenderConfigSet(notify-agent true) error = %v", err)
 	}
 	policy, err := c.store.senderPolicy(context.Background(), "hello@example.com")
 	if err != nil {
 		t.Fatalf("senderPolicy() error = %v", err)
 	}
 	if policy == nil || policy.StoreOnly {
-		t.Fatalf("policy after notify-agent enabled = %#v", policy)
+		t.Fatalf("policy after notify-agent true = %#v", policy)
 	}
 }
 

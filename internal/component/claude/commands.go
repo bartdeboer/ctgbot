@@ -9,6 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
@@ -16,29 +17,23 @@ import (
 
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
+var _ configsurface.ConfigSurface = (*Component)(nil)
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		claudeCommand("container refresh", RefreshContainer{}, "Delete and recreate the Claude runtime on next turn"),
 		claudeCommand("container start", StartContainer{}, "Start the Claude runtime container"),
 		claudeCommand("container stop", StopContainer{}, "Stop the Claude runtime container but keep its data"),
 		claudeCommand("chat purge", PurgeChat{}, "Reset the Claude conversation and delete the runtime container"),
 		claudeCommand("interrupt", InterruptTurn{}, "Interrupt the active Claude turn"),
 		claudeCommand("status", Status{}, "Show Claude conversation and runtime status"),
-		claudeCommand("model", ModelStatus{}, "Show the Claude model for this thread"),
-		{
-			Pattern: "model set <model>", Help: "Set the Claude model for this thread",
-			Build: func(req *clir.Request) (any, error) {
-				model := strings.TrimSpace(req.Params["model"])
-				if model == "" {
-					return nil, fmt.Errorf("missing model")
-				}
-				return ModelSet{Model: model}, nil
-			},
-			Sources: claudeCommandSources(), Policy: claudeCommandPolicy(),
-		},
-		claudeCommand("model clear", ModelClear{}, "Clear the thread model override"),
 	}
+	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
+		Sources:       claudeCommandSources(),
+		Policy:        claudeCommandPolicy(),
+		SupportsUnset: true,
+	})...)
+	return definitions
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
@@ -77,19 +72,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[ModelStatus](registry, "model", func(ctx context.Context, req commandengine.Request, _ ModelStatus) (commandengine.Result, error) {
-		return c.modelStatus(ctx, req)
-	}); err != nil {
-		return err
-	}
-	if err := commandengine.RegisterPattern[ModelSet](registry, "model set <model>", func(ctx context.Context, req commandengine.Request, cmd ModelSet) (commandengine.Result, error) {
-		return c.modelSet(ctx, req, cmd)
-	}); err != nil {
-		return err
-	}
-	return commandengine.RegisterPattern[ModelClear](registry, "model clear", func(ctx context.Context, req commandengine.Request, _ ModelClear) (commandengine.Result, error) {
-		return c.modelClear(ctx, req)
-	})
+	return configsurface.RegisterCommandHandlers(registry, c)
 }
 
 func (c *Component) refresh(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
@@ -201,48 +184,6 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 		}
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
-}
-
-func (c *Component) modelStatus(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := c.thread(ctx, req)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	settings, err := c.resolveThreadSettings(ctx, thread)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: fmt.Sprintf("claude model: %s\nsource: %s", settings.Model, settings.ModelSource)}, nil
-}
-
-func (c *Component) modelSet(ctx context.Context, req commandengine.Request, cmd ModelSet) (commandengine.Result, error) {
-	thread, err := c.thread(ctx, req)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	model := strings.TrimSpace(cmd.Model)
-	if model == "" {
-		return commandengine.Result{}, fmt.Errorf("missing model")
-	}
-	if err := c.updateThreadState(ctx, thread, func(state *threadState) { state.Model = model }); err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: "claude model=" + model}, nil
-}
-
-func (c *Component) modelClear(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, err := c.thread(ctx, req)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	if err := c.updateThreadState(ctx, thread, func(state *threadState) { state.Model = "" }); err != nil {
-		return commandengine.Result{}, err
-	}
-	settings, err := c.resolveThreadSettings(ctx, thread)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: fmt.Sprintf("claude model cleared\nclaude model: %s\nsource: %s", settings.Model, settings.ModelSource)}, nil
 }
 
 func (c *Component) thread(ctx context.Context, req commandengine.Request) (*coremodel.Thread, error) {

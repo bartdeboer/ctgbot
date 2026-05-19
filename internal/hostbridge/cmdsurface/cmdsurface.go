@@ -19,6 +19,7 @@ import (
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
 	supertoniccomponent "github.com/bartdeboer/ctgbot/internal/component/supertonic"
 	whispercppcomponent "github.com/bartdeboer/ctgbot/internal/component/whispercpp"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 )
 
@@ -91,6 +92,7 @@ func LegacyCodexShorthandEnabled(ref string) bool {
 }
 
 func RegisterGobTypes(register func(any)) {
+	configsurface.RegisterGobTypes(register)
 	componentadmin.RegisterGobTypes(register)
 	brokercomponent.RegisterGobTypes(register)
 	sqlcomponent.RegisterGobTypes(register)

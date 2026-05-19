@@ -22,7 +22,7 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 		{name: "refresh", ref: "codex", in: []string{"refresh"}, want: []string{"codex", "refresh"}},
 		{name: "interrupt", ref: "codex", in: []string{"interrupt"}, want: []string{"codex", "interrupt"}},
 		{name: "model is direct model component", ref: "codex", in: []string{"model"}, want: []string{"model"}},
-		{name: "codex model is explicit", ref: "codex", in: []string{"codex", "model", "set", "gpt-5.5"}, want: []string{"codex", "model", "set", "gpt-5.5"}},
+		{name: "codex config is explicit", ref: "codex", in: []string{"codex", "config", "set", "model", "gpt-5.5"}, want: []string{"codex", "config", "set", "model", "gpt-5.5"}},
 		{name: "llamacpp status is explicit", ref: "llamacpp/default", in: []string{"llamacpp", "status"}, want: []string{"llamacpp", "status"}},
 		{name: "status is global", ref: "llamacpp/default", in: []string{"status"}, want: []string{"status"}},
 		{name: "full current ref is direct", ref: "llamacpp/default", in: []string{"llamacpp/default", "status"}, want: []string{"llamacpp/default", "status"}},
@@ -77,7 +77,7 @@ func TestHostbridgeRouterUsesCodexDefinitions(t *testing.T) {
 		{argv: normalizedArgs([]string{"status"}, "codex"), want: "status"},
 		{argv: normalizedArgs([]string{"refresh"}, "codex"), want: "codex container refresh"},
 		{argv: normalizedArgs([]string{"interrupt"}, "codex"), want: "codex interrupt"},
-		{argv: normalizedArgs([]string{"codex", "model"}, "codex"), want: "codex model"},
+		{argv: normalizedArgs([]string{"codex", "config", "get", "model"}, "codex"), want: "codex config get <key>"},
 		{argv: normalizedArgs([]string{"sql", "SELECT 1"}, "codex"), want: "sql"},
 	}
 
@@ -198,21 +198,13 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 		occursOnce  []string
 	}{
 		{
-			name: "model group",
-			argv: []string{"codex", "model", "help"},
+			name: "config group",
+			argv: []string{"codex", "config", "help"},
 			contains: []string{
-				"codex model clear",
-				"codex model list",
-				"codex model set",
-			},
-		},
-		{
-			name: "model effort group",
-			argv: []string{"codex", "model", "effort", "help"},
-			contains: []string{
-				"codex model effort clear",
-				"codex model effort list",
-				"codex model effort set",
+				"codex config list",
+				"codex config get <key>",
+				"codex config set <key> <value>",
+				"codex config unset <key>",
 			},
 		},
 		{
@@ -292,8 +284,8 @@ func TestHelpRequestKeepsExactExecutableRoutes(t *testing.T) {
 		},
 		{
 			name:    "param value named help",
-			argv:    []string{"codex", "model", "effort", "set", "help"},
-			pattern: "codex model effort set <effort>",
+			argv:    []string{"codex", "config", "set", "model", "help"},
+			pattern: "codex config set <key> <value>",
 		},
 	}
 

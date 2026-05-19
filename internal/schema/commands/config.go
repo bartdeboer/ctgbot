@@ -28,7 +28,7 @@ func ConfigCommands() []commandengine.Definition {
 	return []commandengine.Definition{
 		{
 			Pattern:               "config list",
-			Help:                  "List available config keys",
+			Help:                  "List config keys, values, defaults, and options",
 			Build:                 func(req *clir.Request) (any, error) { return ConfigList{}, nil },
 			Sources:               allSources(),
 			Policy:                anyOperator(),
@@ -36,7 +36,7 @@ func ConfigCommands() []commandengine.Definition {
 		},
 		{
 			Pattern: "config get <key>",
-			Help:    "Show a config value",
+			Help:    "Show config value, default, and options for one key",
 			Build: func(req *clir.Request) (any, error) {
 				key := strings.TrimSpace(req.Params["key"])
 				if key == "" {

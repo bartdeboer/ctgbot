@@ -850,13 +850,13 @@ func TestConfigMessageCommands(t *testing.T) {
 			return messengerState.relayPayloads[0].Text.Text
 		}
 
-		if got := run("/config get hostbridge.tcp_listen_addr"); got != "hostbridge.tcp-listen-addr=127.0.0.1:4567" {
+		if got := run("/config get hostbridge.tcp_listen_addr"); !strings.Contains(got, "hostbridge.tcp-listen-addr=127.0.0.1:4567") {
 			t.Fatalf("config get reply = %q", got)
 		}
 		if got := run("/config set hostbridge.tcp_listen_addr 127.0.0.1:4568"); got != "hostbridge.tcp-listen-addr=127.0.0.1:4568" {
 			t.Fatalf("config set reply = %q", got)
 		}
-		if got := run("/config get hostbridge.tcp_listen_addr"); got != "hostbridge.tcp-listen-addr=127.0.0.1:4568" {
+		if got := run("/config get hostbridge.tcp_listen_addr"); !strings.Contains(got, "hostbridge.tcp-listen-addr=127.0.0.1:4568") {
 			t.Fatalf("config get after set reply = %q", got)
 		}
 	})

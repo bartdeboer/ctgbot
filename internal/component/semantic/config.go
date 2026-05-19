@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +54,22 @@ func loadComponentConfig(home string) (ComponentConfig, error) {
 	return config.withDefaults(), nil
 }
 
+func saveComponentConfig(home string, config ComponentConfig) error {
+	path := filepath.Join(strings.TrimSpace(home), ComponentConfigFilename)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create semantic component config dir: %w", err)
+	}
+	body, err := json.MarshalIndent(config.withDefaults(), "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode semantic component config: %w", err)
+	}
+	body = append(body, '\n')
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		return fmt.Errorf("write semantic component config %s: %w", path, err)
+	}
+	return nil
+}
+
 func (c ComponentConfig) withDefaults() ComponentConfig {
 	c.Completion = strings.TrimSpace(c.Completion)
 	c.Model = strings.TrimSpace(c.Model)
@@ -77,5 +94,6 @@ func (c ComponentConfig) withDefaults() ComponentConfig {
 	if c.MinScore <= 0 {
 		c.MinScore = DefaultMinScore
 	}
+	c.KeepWarmFor = strings.TrimSpace(c.KeepWarmFor)
 	return c
 }

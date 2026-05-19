@@ -41,6 +41,7 @@ func RegisterGobTypes(register func(any)) {
 	register(TurnConfigList{})
 	register(TurnConfigGet{})
 	register(TurnConfigSet{})
+	register(TurnConfigUnset{})
 }
 
 func buildEcho(req *clir.Request) (any, error) {

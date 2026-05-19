@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
+	threadconfig "github.com/bartdeboer/ctgbot/internal/app/config/thread"
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	messagingdomain "github.com/bartdeboer/ctgbot/internal/messaging"
@@ -67,6 +69,11 @@ type threadConfigSetCommand struct {
 	Value     string
 }
 
+type threadConfigUnsetCommand struct {
+	ThreadRef string
+	Key       string
+}
+
 type messageListCommand struct {
 	ThreadRef string
 	Cursor    string
@@ -87,6 +94,7 @@ func RegisterGobTypes(register func(any)) {
 	register(threadConfigListCommand{})
 	register(threadConfigGetCommand{})
 	register(threadConfigSetCommand{})
+	register(threadConfigUnsetCommand{})
 	register(messageListCommand{})
 	register(messageSendCommand{})
 }
@@ -176,6 +184,16 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 		},
 		{
+			Pattern: "thread <thread> config unset <key>",
+			Help:    "Remove a persistent thread config override",
+			Build:   buildThreadConfigUnsetCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			Aliases: []commandengine.Route{
+				{Pattern: "thread config unset <key>", Absolute: true},
+			},
+		},
+		{
 			Pattern:               "thread list",
 			Help:                  "List recent active threads",
 			Build:                 buildListCommand,
@@ -227,6 +245,9 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.Register[threadConfigSetCommand](registry, c.handleThreadConfigSet); err != nil {
+		return err
+	}
+	if err := commandengine.Register[threadConfigUnsetCommand](registry, c.handleThreadConfigUnset); err != nil {
 		return err
 	}
 	if err := commandengine.Register[messageListCommand](registry, c.handleMessageList); err != nil {
@@ -316,11 +337,11 @@ func (c *Component) handleThreadConfigList(ctx context.Context, req commandengin
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	lines, err := c.Service.ThreadConfigList(ctx, req.Context.Actor, threadID)
+	text, err := c.Service.ThreadConfigList(ctx, req.Context.Actor, threadID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
+	return commandengine.Result{Text: text}, nil
 }
 
 func (c *Component) handleThreadConfigGet(ctx context.Context, req commandengine.Request, cmd threadConfigGetCommand) (commandengine.Result, error) {
@@ -335,7 +356,8 @@ func (c *Component) handleThreadConfigGet(ctx context.Context, req commandengine
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "thread config " + key + "=" + value}, nil
+	field, _ := threadconfig.Schema().Field(key)
+	return commandengine.Result{Text: configsurface.FormatGet(field, value)}, nil
 }
 
 func (c *Component) handleThreadConfigSet(ctx context.Context, req commandengine.Request, cmd threadConfigSetCommand) (commandengine.Result, error) {
@@ -350,7 +372,22 @@ func (c *Component) handleThreadConfigSet(ctx context.Context, req commandengine
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "thread config " + key + "=" + value}, nil
+	return commandengine.Result{Text: key + "=" + value}, nil
+}
+
+func (c *Component) handleThreadConfigUnset(ctx context.Context, req commandengine.Request, cmd threadConfigUnsetCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	key, value, err := c.Service.ThreadConfigUnset(ctx, req.Context.Actor, threadID, cmd.Key)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: key + "=" + value}, nil
 }
 
 func (c *Component) handleMessageList(ctx context.Context, req commandengine.Request, cmd messageListCommand) (commandengine.Result, error) {
@@ -584,6 +621,21 @@ func buildThreadConfigSetCommand(req *clir.Request) (any, error) {
 		Key:       key,
 		Value:     strings.TrimSpace(req.Params["value"]),
 	}, nil
+}
+
+func buildThreadConfigUnsetCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	key := strings.TrimSpace(req.Params["key"])
+	if key == "" {
+		return nil, fmt.Errorf("missing thread config key")
+	}
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected thread config arguments: %s", extra)
+	}
+	return threadConfigUnsetCommand{ThreadRef: threadRef, Key: key}, nil
 }
 
 func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID modeluuid.UUID) string {

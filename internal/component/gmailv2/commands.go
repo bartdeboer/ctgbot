@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
@@ -27,11 +28,20 @@ type messageViewCommand struct {
 }
 type messageDisplayCommand struct{ MessageID string }
 type senderConfigListCommand struct{ Email string }
+type senderConfigGetCommand struct {
+	Email string
+	Key   string
+}
 type senderConfigSetCommand struct {
 	Email string
 	Key   string
 	Value string
 }
+type senderConfigUnsetCommand struct {
+	Email string
+	Key   string
+}
+
 type senderListCommand struct{}
 type senderRemoveCommand struct{ Email string }
 
@@ -47,13 +57,15 @@ func RegisterGobTypes(register func(any)) {
 	register(messageViewCommand{})
 	register(messageDisplayCommand{})
 	register(senderConfigListCommand{})
+	register(senderConfigGetCommand{})
 	register(senderConfigSetCommand{})
+	register(senderConfigUnsetCommand{})
 	register(senderListCommand{})
 	register(senderRemoveCommand{})
 }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		def("status", "Show Gmail v2 component status", func(*clir.Request) (any, error) { return statusCommand{}, nil }, commandengine.SourceCLI),
 		def("message <text>", "Send a Gmail message", buildMessageCommand, commandengine.SourceHostbridge),
 		def("query <query>", "Search Gmail messages", func(req *clir.Request) (any, error) { return searchCommand{Query: req.Params["query"]}, nil }, commandengine.SourceHostbridge),
@@ -72,12 +84,24 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		def("sender <email> config list", "Show Gmail sender policy config", func(req *clir.Request) (any, error) {
 			return senderConfigListCommand{Email: req.Params["email"]}, nil
 		}, commandengine.SourceHostbridge),
+		def("sender <email> config get <key>", "Show Gmail sender policy config", func(req *clir.Request) (any, error) {
+			return senderConfigGetCommand{Email: req.Params["email"], Key: req.Params["key"]}, nil
+		}, commandengine.SourceHostbridge),
 		def("sender <email> config set <key> <value>", "Set Gmail sender policy config", func(req *clir.Request) (any, error) {
 			return senderConfigSetCommand{Email: req.Params["email"], Key: req.Params["key"], Value: req.Params["value"]}, nil
+		}, commandengine.SourceHostbridge),
+		def("sender <email> config unset <key>", "Unset Gmail sender policy config", func(req *clir.Request) (any, error) {
+			return senderConfigUnsetCommand{Email: req.Params["email"], Key: req.Params["key"]}, nil
 		}, commandengine.SourceHostbridge),
 		def("sender list", "List Gmail sender policies", func(*clir.Request) (any, error) { return senderListCommand{}, nil }, commandengine.SourceHostbridge),
 		def("sender remove <email>", "Remove a Gmail sender policy", func(req *clir.Request) (any, error) { return senderRemoveCommand{Email: req.Params["email"]}, nil }, commandengine.SourceHostbridge),
 	}
+	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
+		Sources:       []commandengine.Source{commandengine.SourceHostbridge},
+		Policy:        simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+		SupportsUnset: true,
+	})...)
+	return definitions
 }
 
 func buildMessageViewCommand(req *clir.Request) (any, error) {
@@ -120,9 +144,12 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		commandengine.RegisterPattern[messageViewCommand](registry, "message view <message_id>", c.handleMessageView),
 		commandengine.RegisterPattern[messageDisplayCommand](registry, "message display <message_id>", c.handleMessageDisplay),
 		commandengine.RegisterPattern[senderConfigListCommand](registry, "sender <email> config list", c.handleSenderConfigList),
+		commandengine.RegisterPattern[senderConfigGetCommand](registry, "sender <email> config get <key>", c.handleSenderConfigGet),
 		commandengine.RegisterPattern[senderConfigSetCommand](registry, "sender <email> config set <key> <value>", c.handleSenderConfigSet),
+		commandengine.RegisterPattern[senderConfigUnsetCommand](registry, "sender <email> config unset <key>", c.handleSenderConfigUnset),
 		commandengine.RegisterPattern[senderListCommand](registry, "sender list", c.handleSenderList),
 		commandengine.RegisterPattern[senderRemoveCommand](registry, "sender remove <email>", c.handleSenderRemove),
+		configsurface.RegisterCommandHandlers(registry, c),
 	}
 	for _, err := range handlers {
 		if err != nil {
@@ -453,60 +480,78 @@ func formatDate(date time.Time) string {
 }
 
 func (c *Component) handleSenderConfigList(ctx context.Context, req commandengine.Request, cmd senderConfigListCommand) (commandengine.Result, error) {
-	_ = req
-	email := normalizeEmail(cmd.Email)
-	if email == "" {
-		return commandengine.Result{}, fmt.Errorf("missing sender email")
-	}
-	policy, err := c.store.senderPolicy(ctx, email)
+	surface, err := c.senderConfigSurface(ctx, cmd.Email)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	trusted := false
-	showFull := c.componentConfig.DefaultShowFull
-	notifyAgent := true
-	explicit := false
-	if policy != nil {
-		explicit = true
-		trusted = policy.Trusted
-		showFull = policy.ShowFull
-		notifyAgent = !policy.StoreOnly
+	schema, err := surface.ConfigSchema(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
 	}
-	lines := []string{
-		"sender: " + email,
-		fmt.Sprintf("explicit_policy: %t", explicit),
-		"trusted: " + enabledDisabled(trusted),
-		"show-full: " + enabledDisabled(showFull),
-		"notify-agent: " + enabledDisabled(notifyAgent),
+	text := "sender=" + surface.email + "\n" + configsurface.FormatList(ctx, req, surface, schema)
+	return commandengine.Result{Text: text}, nil
+}
+
+func (c *Component) handleSenderConfigGet(ctx context.Context, req commandengine.Request, cmd senderConfigGetCommand) (commandengine.Result, error) {
+	surface, err := c.senderConfigSurface(ctx, cmd.Email)
+	if err != nil {
+		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
+	schema, err := surface.ConfigSchema(ctx, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	field, ok := schema.Field(cmd.Key)
+	if !ok {
+		return commandengine.Result{}, unknownSenderConfig(cmd.Key)
+	}
+	value, err := surface.ConfigGet(ctx, req, field.Key)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: configsurface.FormatGet(field, value)}, nil
 }
 
 func (c *Component) handleSenderConfigSet(ctx context.Context, req commandengine.Request, cmd senderConfigSetCommand) (commandengine.Result, error) {
-	_ = req
-	enabled, err := parseEnabledDisabled(cmd.Value)
+	surface, err := c.senderConfigSurface(ctx, cmd.Email)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	key := strings.ToLower(strings.TrimSpace(cmd.Key))
-	switch key {
-	case "trusted":
-		return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.Trusted = enabled })
-	case "show-full":
-		return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.ShowFull = enabled })
-	case "notify-agent":
-		return c.updateSender(ctx, cmd.Email, func(p *senderPolicy) { p.StoreOnly = !enabled })
-	default:
-		return commandengine.Result{}, fmt.Errorf("unsupported sender config key %q; use trusted, show-full, or notify-agent", cmd.Key)
-	}
-}
-
-func (c *Component) updateSender(ctx context.Context, email string, update func(*senderPolicy)) (commandengine.Result, error) {
-	if err := c.store.saveSenderPolicy(ctx, email, update); err != nil {
+	key := configsurface.NormalizeKey(cmd.Key)
+	if err := surface.ConfigSet(ctx, req, key, cmd.Value); err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "sender policy updated: " + normalizeEmail(email)}, nil
+	surface, err = c.senderConfigSurface(ctx, cmd.Email)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	value, err := surface.ConfigGet(ctx, req, key)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: key + "=" + value}, nil
 }
+
+func (c *Component) handleSenderConfigUnset(ctx context.Context, req commandengine.Request, cmd senderConfigUnsetCommand) (commandengine.Result, error) {
+	surface, err := c.senderConfigSurface(ctx, cmd.Email)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	key := configsurface.NormalizeKey(cmd.Key)
+	if err := surface.ConfigUnset(ctx, req, key); err != nil {
+		return commandengine.Result{}, err
+	}
+	surface, err = c.senderConfigSurface(ctx, cmd.Email)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	value, err := surface.ConfigGet(ctx, req, key)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: key + "=" + value}, nil
+}
+
 func (c *Component) handleSenderList(ctx context.Context, req commandengine.Request, cmd senderListCommand) (commandengine.Result, error) {
 	_ = req
 	_ = cmd

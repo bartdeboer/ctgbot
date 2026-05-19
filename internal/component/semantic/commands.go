@@ -10,6 +10,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
@@ -61,7 +62,7 @@ func (c *Component) UsesLocalCommandRoutes() bool { return true }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	policy := simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent)
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		{
 			Pattern: "strategy list",
 			Help:    "List search strategies",
@@ -113,6 +114,12 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Build:   func(*clir.Request) (any, error) { return statsCommand{}, nil },
 		},
 	}
+	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
+		Sources:       []commandengine.Source{commandengine.SourceHostbridge},
+		Policy:        policy,
+		SupportsUnset: true,
+	})...)
+	return definitions
 }
 
 func buildStrategyAddEmbeddingCommand(req *clir.Request) (any, error) {
@@ -236,6 +243,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		commandengine.RegisterPattern[strategySearchCommand](registry, "search <query>", c.handleStrategySearch),
 		commandengine.RegisterPattern[strategySearchCommand](registry, "strategy <strategy> search <query>", c.handleStrategySearch),
 		commandengine.RegisterPattern[statsCommand](registry, "stats", c.handleStats),
+		configsurface.RegisterCommandHandlers(registry, c),
 	}
 	for _, err := range handlers {
 		if err != nil {
