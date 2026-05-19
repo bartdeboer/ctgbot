@@ -72,9 +72,10 @@ type Chat struct {
 }
 
 type Thread struct {
-	ID     modeluuid.UUID `gorm:"primaryKey"`
-	ChatID modeluuid.UUID `gorm:"index"`
-	Label  string
+	ID         modeluuid.UUID `gorm:"primaryKey"`
+	ChatID     modeluuid.UUID `gorm:"index"`
+	Label      string
+	ConfigJSON string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

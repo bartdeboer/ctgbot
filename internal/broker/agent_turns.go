@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	messagingdomain "github.com/bartdeboer/ctgbot/internal/messaging"
 )
 
 func (b *Broker) runStoredThreadTurn(
@@ -16,6 +17,10 @@ func (b *Broker) runStoredThreadTurn(
 	voiceInput bool,
 	detectedInputLanguage string,
 ) ([]coremodel.ThreadMessage, error) {
+	threadConfig, err := messagingdomain.ParseThreadConfig(thread.ConfigJSON)
+	if err != nil {
+		return nil, err
+	}
 	turnRuntime := &agentTurnRuntime{
 		ctx:                   ctx,
 		broker:                b,
@@ -24,6 +29,10 @@ func (b *Broker) runStoredThreadTurn(
 		thread:                thread,
 		voiceInput:            voiceInput,
 		detectedInputLanguage: cleanLanguageCode(detectedInputLanguage),
+		voiceOutput:           threadConfig.VoiceOutput || (voiceInput && threadConfig.VoiceReplyToVoiceInput),
+		voiceLanguage:         threadConfig.VoiceLanguage,
+		voiceName:             threadConfig.VoiceName,
+		voiceModel:            threadConfig.VoiceModel,
 	}
 
 	var outbound []coremodel.ThreadMessage

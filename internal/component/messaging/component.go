@@ -63,6 +63,21 @@ type messageSendCommand struct {
 	Text      string
 }
 
+type threadConfigListCommand struct {
+	ThreadRef string
+}
+
+type threadConfigGetCommand struct {
+	ThreadRef string
+	Key       string
+}
+
+type threadConfigSetCommand struct {
+	ThreadRef string
+	Key       string
+	Value     string
+}
+
 func RegisterGobTypes(register func(any)) {
 	register(listCommand{})
 	register(currentStatusCommand{})
@@ -71,6 +86,9 @@ func RegisterGobTypes(register func(any)) {
 	register(componentBindCommand{})
 	register(messageListCommand{})
 	register(messageSendCommand{})
+	register(threadConfigListCommand{})
+	register(threadConfigGetCommand{})
+	register(threadConfigSetCommand{})
 }
 
 func New(service *messagingdomain.Service, inbound component.ResolvedInboundQueuer) *Component {
@@ -126,6 +144,36 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 		},
 		{
+			Pattern: "thread <thread> config list",
+			Help:    "List thread config values",
+			Build:   buildThreadConfigListCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			Aliases: []commandengine.Route{
+				{Pattern: "thread config list", Absolute: true},
+			},
+		},
+		{
+			Pattern: "thread <thread> config get <key>",
+			Help:    "Show a thread config value",
+			Build:   buildThreadConfigGetCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			Aliases: []commandengine.Route{
+				{Pattern: "thread config get <key>", Absolute: true},
+			},
+		},
+		{
+			Pattern: "thread <thread> config set <key> <value>",
+			Help:    "Set a thread config value",
+			Build:   buildThreadConfigSetCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			Aliases: []commandengine.Route{
+				{Pattern: "thread config set <key> <value>", Absolute: true},
+			},
+		},
+		{
 			Pattern:               "thread list",
 			Help:                  "List recent active threads",
 			Build:                 buildListCommand,
@@ -171,6 +219,15 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.Register[messageListCommand](registry, c.handleMessageList); err != nil {
+		return err
+	}
+	if err := commandengine.Register[threadConfigListCommand](registry, c.handleThreadConfigList); err != nil {
+		return err
+	}
+	if err := commandengine.Register[threadConfigGetCommand](registry, c.handleThreadConfigGet); err != nil {
+		return err
+	}
+	if err := commandengine.Register[threadConfigSetCommand](registry, c.handleThreadConfigSet); err != nil {
 		return err
 	}
 	return commandengine.Register[messageSendCommand](registry, c.handleMessageSend)
@@ -267,6 +324,51 @@ func (c *Component) handleMessageList(ctx context.Context, req commandengine.Req
 	return commandengine.Result{
 		Text: formatMessagePage(threadID, page),
 	}, nil
+}
+
+func (c *Component) handleThreadConfigList(ctx context.Context, req commandengine.Request, cmd threadConfigListCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	values, err := c.Service.ThreadConfigList(ctx, req.Context.Actor, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: formatThreadConfigValues(values)}, nil
+}
+
+func (c *Component) handleThreadConfigGet(ctx context.Context, req commandengine.Request, cmd threadConfigGetCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	value, err := c.Service.ThreadConfigGet(ctx, req.Context.Actor, threadID, cmd.Key)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: formatThreadConfigValue(value)}, nil
+}
+
+func (c *Component) handleThreadConfigSet(ctx context.Context, req commandengine.Request, cmd threadConfigSetCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	value, err := c.Service.ThreadConfigSet(ctx, req.Context.Actor, threadID, cmd.Key, cmd.Value)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "thread config set: " + formatThreadConfigValue(value)}, nil
 }
 
 func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Request, cmd messageSendCommand) (commandengine.Result, error) {
@@ -563,4 +665,57 @@ func shortID(id modeluuid.UUID) string {
 		return value
 	}
 	return value[:8]
+}
+
+func buildThreadConfigListCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected thread config list arguments: %s", extra)
+	}
+	return threadConfigListCommand{ThreadRef: threadRef}, nil
+}
+
+func buildThreadConfigGetCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	key := strings.TrimSpace(req.Params["key"])
+	if key == "" {
+		return nil, fmt.Errorf("missing thread config key")
+	}
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected thread config get arguments: %s", extra)
+	}
+	return threadConfigGetCommand{ThreadRef: threadRef, Key: key}, nil
+}
+
+func buildThreadConfigSetCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	key := strings.TrimSpace(req.Params["key"])
+	if key == "" {
+		return nil, fmt.Errorf("missing thread config key")
+	}
+	return threadConfigSetCommand{ThreadRef: threadRef, Key: key, Value: strings.TrimSpace(req.Params["value"])}, nil
+}
+
+func formatThreadConfigValues(values []messagingdomain.ThreadConfigValue) string {
+	if len(values) == 0 {
+		return "no thread config values"
+	}
+	lines := make([]string, 0, len(values))
+	for _, value := range values {
+		lines = append(lines, formatThreadConfigValue(value))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatThreadConfigValue(value messagingdomain.ThreadConfigValue) string {
+	return strings.TrimSpace(value.Key) + "=" + strings.TrimSpace(value.Value)
 }
