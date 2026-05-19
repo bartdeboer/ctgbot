@@ -160,21 +160,28 @@ func (b *Broker) runtimeSpec(ctx context.Context, chat coremodel.Chat) (runtimeS
 }
 
 type agentTurnRuntime struct {
-	ctx         context.Context
-	broker      *Broker
-	runtime     *ChatRuntime
-	chat        coremodel.Chat
-	thread      coremodel.Thread
-	componentID modeluuid.UUID
-	outputs     []coremodel.ThreadMessage
-	lastText    string
+	ctx                   context.Context
+	broker                *Broker
+	runtime               *ChatRuntime
+	chat                  coremodel.Chat
+	thread                coremodel.Thread
+	componentID           modeluuid.UUID
+	outputs               []coremodel.ThreadMessage
+	lastText              string
+	voiceInput            bool
+	detectedInputLanguage string
+	voiceOutput           bool
+	voiceLanguage         string
+	voiceName             string
+	voiceModel            string
+	voiceDeviceTarget     string
 }
 
 func (r *agentTurnRuntime) Commands() commandengine.CommandExecutor {
 	if r == nil || r.runtime == nil {
 		return nil
 	}
-	return r.runtime.AgentCommands
+	return turnCommandExecutor{turn: r, next: r.runtime.AgentCommands}
 }
 
 func (r *agentTurnRuntime) Instructions() component.TurnInstructions {

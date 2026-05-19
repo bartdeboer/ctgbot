@@ -329,3 +329,35 @@ func TestHostbridgeCommandsRequireAgentRole(t *testing.T) {
 		t.Fatal("Parse() as user succeeded, want RBAC denial")
 	}
 }
+
+func TestHostbridgeTurnCommandsParse(t *testing.T) {
+	router, err := commandengine.NewRouter(HostbridgeCommands(), commandengine.SourceHostbridge)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+	base := commandengine.Request{Context: commandengine.Context{Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}
+
+	setReq, err := router.Parse(context.Background(), base, []string{"turn", "config", "set", "voice.language", "nl"})
+	if err != nil {
+		t.Fatalf("Parse(turn config set) error = %v", err)
+	}
+	if got, want := setReq.Command, (TurnConfigSet{Key: "voice.language", Value: "nl"}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("turn config set command = %#v, want %#v", got, want)
+	}
+
+	getReq, err := router.Parse(context.Background(), base, []string{"turn", "config", "get", "voice.name"})
+	if err != nil {
+		t.Fatalf("Parse(turn config get) error = %v", err)
+	}
+	if got, want := getReq.Command, (TurnConfigGet{Key: "voice.name"}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("turn config get command = %#v, want %#v", got, want)
+	}
+
+	listReq, err := router.Parse(context.Background(), base, []string{"turn", "config", "list"})
+	if err != nil {
+		t.Fatalf("Parse(turn config list) error = %v", err)
+	}
+	if got, want := listReq.Command, (TurnConfigList{}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("turn config list command = %#v, want %#v", got, want)
+	}
+}

@@ -142,11 +142,20 @@ type Transcriber interface {
 }
 
 type SpeechRequest struct {
-	Text string
+	Text     string
+	Model    string
+	Voice    string
+	Language string
+	ThreadID modeluuid.UUID
 }
 
 type SpeechResult struct {
-	Media message.Media
+	Media            message.Media
+	Model            string
+	Voice            string
+	Language         string
+	DurationSeconds  float64
+	SynthesisSeconds float64
 }
 
 type SpeechSynthesizer interface {
@@ -160,6 +169,7 @@ const (
 	ModelModeCompletion ModelMode = "completion"
 	ModelModeEmbedding  ModelMode = "embedding"
 	ModelModeASR        ModelMode = "asr"
+	ModelModeTTS        ModelMode = "tts"
 )
 
 type Model struct {

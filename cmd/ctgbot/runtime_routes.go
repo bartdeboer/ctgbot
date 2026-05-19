@@ -28,6 +28,7 @@ import (
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
+	supertoniccomponent "github.com/bartdeboer/ctgbot/internal/component/supertonic"
 	"github.com/bartdeboer/ctgbot/internal/component/telegram"
 	whispercppcomponent "github.com/bartdeboer/ctgbot/internal/component/whispercpp"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -702,6 +703,11 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(whispercppcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return whispercppcomponent.New(ctx, registration, runtime, home, storage, rtSystem)
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(supertoniccomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return supertoniccomponent.New(ctx, registration, runtime, home, storage, rtSystem)
 	}); err != nil {
 		return nil, err
 	}

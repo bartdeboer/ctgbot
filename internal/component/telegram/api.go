@@ -24,6 +24,7 @@ type TelegramAPI interface {
 	SendPhoto(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
 	SendVideo(ctx context.Context, chatID int64, threadID int, caption string, media message.Media) error
 	SendAudio(ctx context.Context, chatID int64, threadID int, filename string, caption string, content []byte) error
+	SendVoice(ctx context.Context, chatID int64, threadID int, caption string, media message.Media) error
 	DeleteMessage(ctx context.Context, chatID int64, messageID int) error
 	SendChatAction(ctx context.Context, chatID int64, threadID int, action message.ChatAction) error
 	DownloadFile(ctx context.Context, fileID string) ([]byte, error)
@@ -217,6 +218,22 @@ func (a *TelegramAPIV2) SendAudio(ctx context.Context, chatID int64, threadID in
 		Caption:         strings.TrimSpace(caption),
 	}
 	_, err = b.SendAudio(ctx, p)
+	return err
+}
+
+func (a *TelegramAPIV2) SendVoice(ctx context.Context, chatID int64, threadID int, caption string, media message.Media) error {
+	b, err := a.ensureBot()
+	if err != nil {
+		return err
+	}
+	p := &bot.SendVoiceParams{
+		ChatID:          chatID,
+		MessageThreadID: threadID,
+		Voice:           &models.InputFileUpload{Filename: strings.TrimSpace(media.Filename), Data: bytes.NewReader(media.Content)},
+		Caption:         strings.TrimSpace(caption),
+		Duration:        media.DurationSeconds,
+	}
+	_, err = b.SendVoice(ctx, p)
 	return err
 }
 

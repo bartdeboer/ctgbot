@@ -75,6 +75,7 @@ type fakeTelegramAPI struct {
 	photos          []sentPhoto
 	videos          []sentVideo
 	audios          []sentPhoto
+	voices          []sentVideo
 	actions         []sentChatAction
 	deleted         []deletedMessage
 	deleteErr       error
@@ -134,6 +135,13 @@ func (f *fakeTelegramAPI) SendAudio(ctx context.Context, chatID int64, threadID 
 	return nil
 }
 
+func (f *fakeTelegramAPI) SendVoice(ctx context.Context, chatID int64, threadID int, caption string, media message.Media) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.voices = append(f.voices, sentVideo{chatID: chatID, threadID: threadID, filename: media.Filename, caption: caption, content: string(media.Content), media: media})
+	return nil
+}
+
 func (f *fakeTelegramAPI) DeleteMessage(ctx context.Context, chatID int64, messageID int) error {
 	_ = ctx
 	f.mu.Lock()
@@ -166,6 +174,29 @@ func (f *fakeTelegramAPI) messageSnapshot() []sentMessage {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]sentMessage(nil), f.messages...)
+}
+
+func TestSendAttachmentRoutesVoiceMediaToTelegramVoice(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api}
+	err := c.sendAttachment(context.Background(), 123, 7, "", message.Media{
+		Kind:        "voice",
+		Filename:    "speech.ogg",
+		ContentType: "audio/ogg",
+		Content:     []byte("opus bytes"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(api.voices), 1; got != want {
+		t.Fatalf("voices = %d, want %d", got, want)
+	}
+	if got := len(api.audios); got != 0 {
+		t.Fatalf("audios = %d, want 0", got)
+	}
+	if api.voices[0].filename != "speech.ogg" || api.voices[0].content != "opus bytes" {
+		t.Fatalf("voice = %#v", api.voices[0])
+	}
 }
 
 func (f *fakeTelegramAPI) deletedSnapshot() []deletedMessage {

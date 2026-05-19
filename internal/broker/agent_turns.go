@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
 func (b *Broker) runStoredThreadTurn(
@@ -14,14 +13,17 @@ func (b *Broker) runStoredThreadTurn(
 	chat coremodel.Chat,
 	thread coremodel.Thread,
 	turnInbound coremodel.ThreadMessage,
-	options turnOptions,
+	voiceInput bool,
+	detectedInputLanguage string,
 ) ([]coremodel.ThreadMessage, error) {
 	turnRuntime := &agentTurnRuntime{
-		ctx:     ctx,
-		broker:  b,
-		runtime: runtime,
-		chat:    chat,
-		thread:  thread,
+		ctx:                   ctx,
+		broker:                b,
+		runtime:               runtime,
+		chat:                  chat,
+		thread:                thread,
+		voiceInput:            voiceInput,
+		detectedInputLanguage: cleanLanguageCode(detectedInputLanguage),
 	}
 
 	var outbound []coremodel.ThreadMessage
@@ -37,24 +39,19 @@ func (b *Broker) runStoredThreadTurn(
 		if final == nil || strings.TrimSpace(final.Text) == "" {
 			continue
 		}
-		if strings.TrimSpace(final.Text) == turnRuntime.LastText() {
-			continue
-		}
-		var attachments []message.Media
-		if options.Mode == turnModeAudio {
-			media, _, err := synthesizeTurnReply(ctx, runtime, final.Text)
+		finalAlreadyRelayed := strings.TrimSpace(final.Text) == turnRuntime.LastText()
+		if !finalAlreadyRelayed {
+			message, err := b.storeAndRelayMessageWithAttachments(ctx, runtime, chat, thread, *final, agentType(agentBinding), nil)
 			if err != nil {
 				return outbound, err
 			}
-			if media != nil {
-				attachments = append(attachments, *media)
+			outbound = append(outbound, *message)
+		}
+		if turnRuntime.voiceOutput {
+			if err := b.relaySynthesizedTurnReply(ctx, runtime, turnRuntime, final.Text); err != nil {
+				return outbound, err
 			}
 		}
-		message, err := b.storeAndRelayMessageWithAttachments(ctx, runtime, chat, thread, *final, agentType(agentBinding), attachments)
-		if err != nil {
-			return outbound, err
-		}
-		outbound = append(outbound, *message)
 	}
 
 	return outbound, nil

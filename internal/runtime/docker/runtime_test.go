@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgebridge "github.com/bartdeboer/ctgbot/internal/hostbridge/bridge"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -30,7 +31,8 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
 
 	threadID := modeluuid.New()
-	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, nil, true)
+	commands := commandengine.NewEngine(nil, commandengine.NewRegistry())
+	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, commands, true)
 	if err != nil {
 		if strings.Contains(err.Error(), "bind: operation not permitted") || (strings.Contains(err.Error(), "listen tcp") && strings.Contains(err.Error(), "operation not permitted")) {
 			t.Skipf("hostbridge listener unavailable in this environment: %v", err)
@@ -63,6 +65,32 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 		}
 	} else if len(sandbox.AddHosts) != 0 {
 		t.Fatalf("unexpected add-hosts on %s: %#v", goruntime.GOOS, sandbox.AddHosts)
+	}
+}
+
+func TestSandboxDoesNotBindHostbridgeWithoutCommands(t *testing.T) {
+	root := t.TempDir()
+	bridge := hostbridgebridge.NewBridge(root, nil, nil)
+	t.Cleanup(func() {
+		_ = bridge.Close()
+	})
+
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, bridge)
+	registration := coremodel.Component{Type: "mockagent", Name: "helper", Runtime: "docker"}
+	home := factory.ComponentHome(registration)
+	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
+
+	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, true)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+
+	if got := findEnv(sandbox.Env, "HOSTBRIDGE_ADDR"); got != "" {
+		t.Fatalf("HOSTBRIDGE_ADDR = %q, want empty", got)
+	}
+	if hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
+		t.Fatalf("unexpected hostbridge TLS mount in %#v", sandbox.Mounts)
 	}
 }
 

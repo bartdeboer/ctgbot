@@ -9,20 +9,10 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/languagedetect"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
-
-type turnMode string
-
-const (
-	turnModeText  turnMode = "text"
-	turnModeAudio turnMode = "audio"
-)
-
-type turnOptions struct {
-	Mode turnMode
-}
 
 func voiceInputAttachment(text string, attachments []message.Media) (message.Media, bool) {
 	if strings.TrimSpace(text) != "" || len(attachments) != 1 {
@@ -36,6 +26,10 @@ func voiceInputAttachment(text string, attachments []message.Media) (message.Med
 }
 
 func isAudioMedia(media message.Media) bool {
+	switch strings.ToLower(strings.TrimSpace(media.Kind)) {
+	case "audio", "voice":
+		return true
+	}
 	contentType := strings.ToLower(strings.TrimSpace(media.ContentType))
 	if contentType != "" {
 		mediaType, _, err := mime.ParseMediaType(contentType)
@@ -63,7 +57,7 @@ func transcriberForRuntime(runtime *ChatRuntime) (component.Transcriber, string,
 			continue
 		}
 		if transcriber != nil {
-			return nil, "", fmt.Errorf("multiple transcribers configured; bind exactly one transcriber for audio turns")
+			return nil, "", fmt.Errorf("multiple transcribers configured; bind exactly one transcriber for audio input")
 		}
 		transcriber = candidate
 		ref = loaded.Registration.Ref()
@@ -80,7 +74,7 @@ func synthesizerForRuntime(runtime *ChatRuntime) (component.SpeechSynthesizer, s
 			continue
 		}
 		if synthesizer != nil {
-			return nil, "", fmt.Errorf("multiple speech synthesizers configured; bind exactly one synthesizer for audio turns")
+			return nil, "", fmt.Errorf("multiple speech synthesizers configured; bind exactly one synthesizer for voice output")
 		}
 		synthesizer = candidate
 		ref = loaded.Registration.Ref()
@@ -126,12 +120,12 @@ func transcribeInboundAudio(ctx context.Context, runtime *ChatRuntime, threadID 
 	}, nil
 }
 
-func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, text string) (*message.Media, string, error) {
+func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, turn *agentTurnRuntime, text string) (*message.Media, string, error) {
 	synthesizer, ref, err := synthesizerForRuntime(runtime)
 	if err != nil || synthesizer == nil {
 		return nil, "", err
 	}
-	result, err := synthesizer.Synthesize(ctx, component.SpeechRequest{Text: text})
+	result, err := synthesizer.Synthesize(ctx, speechRequestForTurn(text, turn))
 	if err != nil {
 		return nil, ref, err
 	}
@@ -139,6 +133,52 @@ func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, text string)
 		return nil, ref, fmt.Errorf("speech synthesis via %s returned empty media", ref)
 	}
 	return &result.Media, ref, nil
+}
+
+func speechRequestForTurn(text string, turn *agentTurnRuntime) component.SpeechRequest {
+	language := ""
+	threadID := modeluuid.Nil
+	voiceName := ""
+	voiceModel := ""
+	if turn != nil {
+		threadID = turn.thread.ID
+		language = cleanLanguageCode(turn.voiceLanguage)
+		if language == "" {
+			language = replySpeechLanguage(text, turn.detectedInputLanguage)
+		}
+		voiceName = strings.TrimSpace(turn.voiceName)
+		voiceModel = strings.TrimSpace(turn.voiceModel)
+	}
+	return component.SpeechRequest{
+		Text:     strings.TrimSpace(text),
+		ThreadID: threadID,
+		Language: language,
+		Voice:    voiceName,
+		Model:    voiceModel,
+	}
+}
+
+func replySpeechLanguage(text string, inputLanguage string) string {
+	inputLanguage = cleanLanguageCode(inputLanguage)
+	if inputLanguage == "" {
+		return ""
+	}
+	candidates := []string{inputLanguage}
+	if inputLanguage != "en" {
+		candidates = append(candidates, "en")
+	}
+	if detected, ok := languagedetect.Detect(text, candidates); ok {
+		return detected
+	}
+	return inputLanguage
+}
+
+func cleanLanguageCode(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if idx := strings.IndexAny(value, "-_"); idx >= 0 {
+		value = value[:idx]
+	}
+	return value
 }
 
 func transcriptionMetadata(media message.Media, result transcriptionOutcome) []string {
@@ -169,5 +209,18 @@ func (b *Broker) relayVoiceTranscript(ctx context.Context, runtime *ChatRuntime,
 	return b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, message.OutboundPayload{
 		SupersedesProviderMessageID: strings.TrimSpace(providerMessageID),
 		Text:                        message.TextMessage{Text: strings.TrimSpace(transcript)},
+	})
+}
+
+func (b *Broker) relaySynthesizedTurnReply(ctx context.Context, runtime *ChatRuntime, turn *agentTurnRuntime, text string) error {
+	if runtime == nil || turn == nil || strings.TrimSpace(text) == "" {
+		return nil
+	}
+	media, _, err := synthesizeTurnReply(ctx, runtime, turn, text)
+	if err != nil || media == nil {
+		return err
+	}
+	return b.relayPayloadToRelayBindings(ctx, runtime.Relays, turn.thread, message.OutboundPayload{
+		Attachments: []message.Media{*media},
 	})
 }

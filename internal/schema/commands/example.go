@@ -38,6 +38,9 @@ func RegisterGobTypes(register func(any)) {
 	register(RunCommand{})
 	register(SendPayload{})
 	register(SendMedia{})
+	register(TurnConfigList{})
+	register(TurnConfigGet{})
+	register(TurnConfigSet{})
 }
 
 func buildEcho(req *clir.Request) (any, error) {

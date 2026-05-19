@@ -166,13 +166,14 @@ func (c *fakeMessenger) StartChatAction(ctx context.Context, target message.Chat
 }
 
 type fakeAgentRecorder struct {
-	prompts     []string
-	homes       []runtimepkg.Home
-	streamText  string
-	finalText   string
-	entered     chan struct{}
-	release     <-chan struct{}
-	interrupted chan struct{}
+	prompts      []string
+	homes        []runtimepkg.Home
+	streamText   string
+	finalText    string
+	entered      chan struct{}
+	release      <-chan struct{}
+	interrupted  chan struct{}
+	turnCommands []any
 }
 
 type fakeAgent struct {
@@ -184,6 +185,11 @@ func (c *fakeAgent) Type() string { return "codex" }
 func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
 	_ = ctx
 	c.recorder.prompts = append(c.recorder.prompts, turn.Inbound.Text)
+	for _, cmd := range c.recorder.turnCommands {
+		if _, err := turn.Runtime.Commands().Execute(context.Background(), commandengine.Request{Command: cmd}); err != nil {
+			return nil, err
+		}
+	}
 	if c.recorder.entered != nil {
 		c.recorder.entered <- struct{}{}
 	}
@@ -298,8 +304,9 @@ type guardInboundFixture struct {
 }
 
 type fakeTranscriber struct {
-	text string
-	seen []message.Media
+	text     string
+	language string
+	seen     []message.Media
 }
 
 func (f *fakeTranscriber) Type() string { return "whisper" }
@@ -307,11 +314,12 @@ func (f *fakeTranscriber) Type() string { return "whisper" }
 func (f *fakeTranscriber) Transcribe(ctx context.Context, req component.TranscriptionRequest) (component.TranscriptionResult, error) {
 	_ = ctx
 	f.seen = append(f.seen, req.Media)
-	return component.TranscriptionResult{Text: f.text, Model: "fake-whisper"}, nil
+	return component.TranscriptionResult{Text: f.text, Language: f.language, Model: "fake-whisper"}, nil
 }
 
 type fakeSynthesizer struct {
-	seen []string
+	seen     []string
+	requests []component.SpeechRequest
 }
 
 func (f *fakeSynthesizer) Type() string { return "piper" }
@@ -319,6 +327,7 @@ func (f *fakeSynthesizer) Type() string { return "piper" }
 func (f *fakeSynthesizer) Synthesize(ctx context.Context, req component.SpeechRequest) (component.SpeechResult, error) {
 	_ = ctx
 	f.seen = append(f.seen, req.Text)
+	f.requests = append(f.requests, req)
 	return component.SpeechResult{Media: message.Media{
 		Filename:    "speech.ogg",
 		ContentType: "audio/ogg",
@@ -578,12 +587,15 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	}
 }
 
-func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
+func TestVoiceInputUsesTranscriberWithoutImplicitVoiceOutput(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	messengerRecorder := &fakeMessengerRecorder{}
-	agentRecorder := &fakeAgentRecorder{finalText: "audio answer"}
-	transcriber := &fakeTranscriber{text: "hello from voice"}
+	agentRecorder := &fakeAgentRecorder{
+		streamText: "Dit is een Nederlands antwoord op de gesproken test.",
+		finalText:  "Dit is een Nederlands antwoord op de gesproken test.",
+	}
+	transcriber := &fakeTranscriber{text: "hello from voice", language: "nl"}
 	synthesizer := &fakeSynthesizer{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
 		if err := registry.Add("whisper", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
@@ -635,9 +647,8 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 			ProviderMessageID: "voice-1",
 			Actor:             message.Actor{ID: "bart", Label: "bart", Roles: []simplerbac.Role{simplerbac.RoleUser}},
 			Attachments: []message.Media{{
-				Filename:    "voice.ogg",
-				ContentType: "audio/ogg",
-				Content:     []byte("voice bytes"),
+				Kind:    "voice",
+				Content: []byte("voice bytes"),
 			}},
 		},
 	})
@@ -653,7 +664,7 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	if !strings.Contains(outcome.Inbound.MetadataJSON, "input=audio") ||
 		!strings.Contains(outcome.Inbound.MetadataJSON, "transcriber=whisper") ||
 		!strings.Contains(outcome.Inbound.MetadataJSON, "transcription_model=fake-whisper") ||
-		!strings.Contains(outcome.Inbound.MetadataJSON, "original_filename=voice.ogg") {
+		!strings.Contains(outcome.Inbound.MetadataJSON, "transcription_language=nl") {
 		t.Fatalf("inbound metadata = %q, want transcription metadata", outcome.Inbound.MetadataJSON)
 	}
 	artifacts, err := storage.Artifacts().ListByMessageID(context.Background(), outcome.Inbound.ID)
@@ -666,22 +677,19 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	if len(transcriber.seen) != 1 || string(transcriber.seen[0].Content) != "voice bytes" {
 		t.Fatalf("transcriber media = %#v", transcriber.seen)
 	}
-	if len(synthesizer.seen) != 1 || synthesizer.seen[0] != "audio answer" {
-		t.Fatalf("synthesizer input = %#v", synthesizer.seen)
+	if len(synthesizer.seen) != 0 {
+		t.Fatalf("synthesizer input = %#v, want no implicit voice output", synthesizer.seen)
 	}
-	if got, want := len(messengerRecorder.payloads), 3; got != want {
+	if got, want := len(messengerRecorder.payloads), 2; got != want {
 		t.Fatalf("relay payloads = %d, want %d", got, want)
 	}
 	transcriptPayload := messengerRecorder.payloads[0]
 	if transcriptPayload.Text.Text != "hello from voice" || transcriptPayload.SupersedesProviderMessageID != "voice-1" {
 		t.Fatalf("transcript payload = %#v", transcriptPayload)
 	}
-	finalPayload := messengerRecorder.payloads[2]
-	if got := finalPayload.Text.Text; got != "audio answer" {
-		t.Fatalf("final text = %q, want audio answer", got)
-	}
-	if len(finalPayload.Attachments) != 1 || finalPayload.Attachments[0].ContentType != "audio/ogg" {
-		t.Fatalf("final attachments = %#v", finalPayload.Attachments)
+	finalPayload := messengerRecorder.payloads[1]
+	if got := finalPayload.Text.Text; got != "Dit is een Nederlands antwoord op de gesproken test." {
+		t.Fatalf("final text = %q, want Dutch answer", got)
 	}
 }
 

@@ -34,6 +34,7 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 		{name: "component global direct", ref: "codex", in: []string{"component", "help"}, want: []string{"component", "help"}},
 		{name: "status global direct", ref: "codex", in: []string{"status"}, want: []string{"status"}},
 		{name: "thread global direct", ref: "codex", in: []string{"thread", "list"}, want: []string{"thread", "list"}},
+		{name: "turn global direct", ref: "codex", in: []string{"turn", "config", "list"}, want: []string{"turn", "config", "list"}},
 		{name: "sql direct", ref: "codex", in: []string{"sql", "SELECT 1"}, want: []string{"sql", "SELECT 1"}},
 	}
 
