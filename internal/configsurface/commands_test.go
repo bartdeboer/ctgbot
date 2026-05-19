@@ -45,8 +45,9 @@ func TestConfigSurfaceCommandAdapter(t *testing.T) {
 		t.Fatalf("RegisterCommandHandlers() error = %v", err)
 	}
 	router, err := commandengine.NewRouter(CommandDefinitions(DefinitionOptions{
-		Sources: []commandengine.Source{commandengine.SourceMessage},
-		Policy:  simplerbac.Public(),
+		Sources:       []commandengine.Source{commandengine.SourceMessage},
+		Policy:        simplerbac.Public(),
+		SupportsUnset: true,
 	}), commandengine.SourceMessage)
 	if err != nil {
 		t.Fatalf("NewRouter() error = %v", err)

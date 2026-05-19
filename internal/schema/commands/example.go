@@ -34,7 +34,6 @@ func RegisterGobTypes(register func(any)) {
 	register(ConfigList{})
 	register(ConfigGet{})
 	register(ConfigSet{})
-	register(ConfigUnset{})
 	register(ConfigHostbridgeScaffold{})
 	register(RunCommand{})
 	register(SendPayload{})

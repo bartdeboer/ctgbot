@@ -115,8 +115,9 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		},
 	}
 	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
-		Sources: []commandengine.Source{commandengine.SourceHostbridge},
-		Policy:  policy,
+		Sources:       []commandengine.Source{commandengine.SourceHostbridge},
+		Policy:        policy,
+		SupportsUnset: true,
 	})...)
 	return definitions
 }

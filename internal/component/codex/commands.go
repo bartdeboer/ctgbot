@@ -80,8 +80,9 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		codexCommand("model effort clear", ModelEffortClear{}, "Clear the thread reasoning effort override"),
 	}
 	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
-		Sources: codexCommandSources(),
-		Policy:  codexCommandPolicy(),
+		Sources:       codexCommandSources(),
+		Policy:        codexCommandPolicy(),
+		SupportsUnset: true,
 	})...)
 	return definitions
 }

@@ -4,7 +4,7 @@
 // The package intentionally does not own storage. Implementations may store
 // values in clistate, database columns, JSON blobs, component profile files, or
 // domain-specific tables. The shared contract is only the user/agent command
-// vocabulary: config list/get/set/unset.
+// vocabulary: config list/get/set, with optional unset support.
 package configsurface
 
 import (
@@ -20,15 +20,18 @@ import (
 // redacted by the implementation unless it deliberately exposes a privileged
 // raw-read command elsewhere.
 //
-// ConfigSet stores an explicit override. ConfigUnset removes an explicit
-// override and lets the implementation fall back to its default/effective value.
-// Implementations should reject ConfigSet and ConfigUnset for non-writable
-// fields.
+// ConfigSet stores an explicit override. Implementations should reject
+// ConfigSet for non-writable fields.
 type ConfigSurface interface {
 	ConfigSchema(ctx context.Context, req commandengine.Request) (ConfigSchema, error)
 
 	ConfigGet(ctx context.Context, req commandengine.Request, key string) (value string, err error)
 	ConfigSet(ctx context.Context, req commandengine.Request, key string, value string) error
+}
+
+// ConfigUnsetter is implemented by config surfaces that can remove an explicit
+// override and fall back to their default/effective value.
+type ConfigUnsetter interface {
 	ConfigUnset(ctx context.Context, req commandengine.Request, key string) error
 }
 

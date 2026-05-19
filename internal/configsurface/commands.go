@@ -26,12 +26,13 @@ type ConfigUnset struct {
 }
 
 type DefinitionOptions struct {
-	Sources []commandengine.Source
-	Policy  simplerbac.Rule
+	Sources       []commandengine.Source
+	Policy        simplerbac.Rule
+	SupportsUnset bool
 }
 
 func CommandDefinitions(options DefinitionOptions) []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		{
 			Pattern:               "config list",
 			Help:                  "List config keys, values, defaults, and options",
@@ -67,7 +68,9 @@ func CommandDefinitions(options DefinitionOptions) []commandengine.Definition {
 			Sources: append([]commandengine.Source{}, options.Sources...),
 			Policy:  options.Policy,
 		},
-		{
+	}
+	if options.SupportsUnset {
+		definitions = append(definitions, commandengine.Definition{
 			Pattern: "config unset <key>",
 			Help:    "Remove a config override and fall back to the default",
 			Build: func(req *clir.Request) (any, error) {
@@ -79,8 +82,9 @@ func CommandDefinitions(options DefinitionOptions) []commandengine.Definition {
 			},
 			Sources: append([]commandengine.Source{}, options.Sources...),
 			Policy:  options.Policy,
-		},
+		})
 	}
+	return definitions
 }
 
 func RegisterGobTypes(register func(any)) {
@@ -139,6 +143,10 @@ func RegisterCommandHandlers(registry *commandengine.Registry, surface ConfigSur
 	}); err != nil {
 		return err
 	}
+	unsetter, ok := surface.(ConfigUnsetter)
+	if !ok {
+		return nil
+	}
 	return commandengine.RegisterPattern[ConfigUnset](registry, "config unset <key>", func(ctx context.Context, req commandengine.Request, cmd ConfigUnset) (commandengine.Result, error) {
 		_, field, err := fieldForCommand(ctx, req, surface, cmd.Key)
 		if err != nil {
@@ -147,7 +155,7 @@ func RegisterCommandHandlers(registry *commandengine.Registry, surface ConfigSur
 		if !field.Writable {
 			return commandengine.Result{}, fmt.Errorf("config %s is read-only", field.Key)
 		}
-		if err := surface.ConfigUnset(ctx, req, field.Key); err != nil {
+		if err := unsetter.ConfigUnset(ctx, req, field.Key); err != nil {
 			return commandengine.Result{}, err
 		}
 		value, err := surface.ConfigGet(ctx, req, field.Key)

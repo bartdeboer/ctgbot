@@ -42,8 +42,9 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		claudeCommand("model clear", ModelClear{}, "Clear the thread model override"),
 	}
 	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
-		Sources: claudeCommandSources(),
-		Policy:  claudeCommandPolicy(),
+		Sources:       claudeCommandSources(),
+		Policy:        claudeCommandPolicy(),
+		SupportsUnset: true,
 	})...)
 	return definitions
 }

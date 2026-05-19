@@ -97,8 +97,9 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		def("sender remove <email>", "Remove a Gmail sender policy", func(req *clir.Request) (any, error) { return senderRemoveCommand{Email: req.Params["email"]}, nil }, commandengine.SourceHostbridge),
 	}
 	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
-		Sources: []commandengine.Source{commandengine.SourceHostbridge},
-		Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+		Sources:       []commandengine.Source{commandengine.SourceHostbridge},
+		Policy:        simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+		SupportsUnset: true,
 	})...)
 	return definitions
 }

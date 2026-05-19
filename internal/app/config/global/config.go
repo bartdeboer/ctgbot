@@ -60,11 +60,6 @@ func (s Surface) ConfigSet(ctx context.Context, req commandengine.Request, key s
 	return err
 }
 
-func (s Surface) ConfigUnset(ctx context.Context, req commandengine.Request, key string) error {
-	_, _, _ = ctx, req, key
-	return fmt.Errorf("global config unset is not supported yet")
-}
-
 func fieldType(valueType configengine.ValueType) configsurface.FieldType {
 	switch valueType {
 	case configengine.ValueBool:

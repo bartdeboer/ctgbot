@@ -74,25 +74,6 @@ func RegisterConfigHandlers(registry *commandengine.Registry, manager *configeng
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.Register[schemacommands.ConfigUnset](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ConfigUnset) (commandengine.Result, error) {
-		_, field, err := globalConfigField(ctx, req, surface, cmd.Key)
-		if err != nil {
-			return commandengine.Result{}, err
-		}
-		if !field.Writable {
-			return commandengine.Result{}, fmt.Errorf("config %s is read-only", field.Key)
-		}
-		if err := surface.ConfigUnset(ctx, req, field.Key); err != nil {
-			return commandengine.Result{}, err
-		}
-		value, err := surface.ConfigGet(ctx, req, field.Key)
-		if err != nil {
-			return commandengine.Result{}, err
-		}
-		return commandengine.Result{Text: field.Key + "=" + value}, nil
-	}); err != nil {
-		return err
-	}
 	handler := firstConfigHandler(handlers)
 	if handler == nil {
 		return nil

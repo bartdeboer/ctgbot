@@ -20,10 +20,6 @@ type ConfigSet struct {
 	Value string
 }
 
-type ConfigUnset struct {
-	Key string
-}
-
 type ConfigHostbridgeScaffold struct {
 	Alias string
 }
@@ -61,19 +57,6 @@ func ConfigCommands() []commandengine.Definition {
 					return nil, fmt.Errorf("missing config key")
 				}
 				return ConfigSet{Key: key, Value: req.Params["value"]}, nil
-			},
-			Sources: allSources(),
-			Policy:  anyOperator(),
-		},
-		{
-			Pattern: "config unset <key>",
-			Help:    "Remove a config override and fall back to the default",
-			Build: func(req *clir.Request) (any, error) {
-				key := strings.TrimSpace(req.Params["key"])
-				if key == "" {
-					return nil, fmt.Errorf("missing config key")
-				}
-				return ConfigUnset{Key: key}, nil
 			},
 			Sources: allSources(),
 			Policy:  anyOperator(),
