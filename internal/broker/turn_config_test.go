@@ -39,11 +39,11 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 		t.Fatalf("turn config list error = %v", err)
 	}
 	for _, want := range []string{
-		"turn config input.voice=true",
-		"turn config input.language=nl",
-		"turn config voice.output=true",
-		"turn config voice.language=nl",
-		"turn config voice.name=F3",
+		"input.voice=true",
+		"input.language=nl",
+		"voice.output=true",
+		"voice.language=nl",
+		"voice.name=F3",
 	} {
 		if !strings.Contains(result.Text, want) {
 			t.Fatalf("turn config list text = %q, want %q", result.Text, want)
@@ -55,6 +55,17 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 	}
 	if got, want := turn.voiceName, "F5"; got != want {
 		t.Fatalf("voice name = %q, want overwritten value %q", got, want)
+	}
+
+	unset, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigUnset{Key: "voice.name"}})
+	if err != nil {
+		t.Fatalf("turn config unset error = %v", err)
+	}
+	if got, want := strings.TrimSpace(unset.Text), "turn config voice.name="; got != want {
+		t.Fatalf("turn config unset text = %q, want %q", got, want)
+	}
+	if turn.voiceName != "" {
+		t.Fatalf("voice name = %q, want unset", turn.voiceName)
 	}
 }
 

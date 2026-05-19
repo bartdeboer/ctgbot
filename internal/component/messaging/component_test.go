@@ -132,10 +132,10 @@ func TestThreadConfigCommandsUpdateCurrentThread(t *testing.T) {
 		t.Fatalf("Run(thread config list) error = %v", err)
 	}
 	for _, want := range []string{
-		"thread config voice.reply-to-voice-input=true",
-		"thread config voice.output=false",
-		"thread config voice.language=nl",
-		"thread config voice.name=F5",
+		"voice.reply-to-voice-input=true",
+		"voice.output=false",
+		"voice.language=nl",
+		"voice.name=F5",
 	} {
 		if !strings.Contains(result.Text, want) {
 			t.Fatalf("thread config list missing %q:\n%s", want, result.Text)
@@ -148,6 +148,21 @@ func TestThreadConfigCommandsUpdateCurrentThread(t *testing.T) {
 	}
 	if !updated.VoiceReplyToVoiceInput || updated.VoiceName != "F5" || updated.VoiceLanguage != "nl" {
 		t.Fatalf("thread voice config = %#v, want persisted values", updated)
+	}
+
+	unset, err := engine.Run(ctx, req, []string{"thread", "config", "unset", "voice.name"})
+	if err != nil {
+		t.Fatalf("Run(thread config unset) error = %v", err)
+	}
+	if got, want := strings.TrimSpace(unset.Text), "thread config voice.name="; got != want {
+		t.Fatalf("unset result = %q, want %q", got, want)
+	}
+	updated, err = storage.Threads().GetByID(ctx, thread.ID)
+	if err != nil {
+		t.Fatalf("GetByID(thread after unset) error = %v", err)
+	}
+	if updated.VoiceName != "" {
+		t.Fatalf("thread voice name = %q, want unset", updated.VoiceName)
 	}
 }
 

@@ -3,9 +3,10 @@ package messaging
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 
+	threadconfig "github.com/bartdeboer/ctgbot/internal/app/config/thread"
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
@@ -13,33 +14,21 @@ import (
 )
 
 const (
-	ThreadConfigVoiceReplyToVoiceInput = "voice.reply-to-voice-input"
-	ThreadConfigVoiceOutput            = "voice.output"
-	ThreadConfigVoiceLanguage          = "voice.language"
-	ThreadConfigVoiceName              = "voice.name"
-	ThreadConfigVoiceModel             = "voice.model"
-	ThreadConfigVoiceDeviceTarget      = "voice.device-target"
+	ThreadConfigVoiceReplyToVoiceInput = threadconfig.VoiceReplyToVoiceInput
+	ThreadConfigVoiceOutput            = threadconfig.VoiceOutput
+	ThreadConfigVoiceLanguage          = threadconfig.VoiceLanguage
+	ThreadConfigVoiceName              = threadconfig.VoiceName
+	ThreadConfigVoiceModel             = threadconfig.VoiceModel
+	ThreadConfigVoiceDeviceTarget      = threadconfig.VoiceDeviceTarget
 )
 
-var threadConfigKeys = []string{
-	ThreadConfigVoiceReplyToVoiceInput,
-	ThreadConfigVoiceOutput,
-	ThreadConfigVoiceLanguage,
-	ThreadConfigVoiceName,
-	ThreadConfigVoiceModel,
-	ThreadConfigVoiceDeviceTarget,
-}
-
-func (s *Service) ThreadConfigList(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID) ([]string, error) {
+func (s *Service) ThreadConfigList(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID) (string, error) {
 	thread, err := s.threadConfigThread(ctx, actor, threadID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	lines := make([]string, 0, len(threadConfigKeys))
-	for _, key := range threadConfigKeys {
-		lines = append(lines, "thread config "+key+"="+threadConfigValue(*thread, key))
-	}
-	return lines, nil
+	surface := threadconfig.NewSurface(thread)
+	return configsurface.FormatList(ctx, commandengine.Request{}, surface, threadconfig.Schema()), nil
 }
 
 func (s *Service) ThreadConfigGet(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, key string) (string, string, error) {
@@ -47,14 +36,33 @@ func (s *Service) ThreadConfigGet(ctx context.Context, actor coremodel.Actor, th
 	if err != nil {
 		return "", "", err
 	}
-	key = normalizeThreadConfigKey(key)
-	if !knownThreadConfig(key) {
-		return "", "", unknownThreadConfig(key)
+	key = threadconfig.NormalizeKey(key)
+	value, err := threadconfig.NewSurface(thread).ConfigGet(ctx, commandengine.Request{}, key)
+	if err != nil {
+		return "", "", err
 	}
-	return key, threadConfigValue(*thread, key), nil
+	return key, value, nil
 }
 
 func (s *Service) ThreadConfigSet(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, key string, value string) (string, string, error) {
+	return s.updateThreadConfig(ctx, actor, threadID, key, func(surface *threadconfig.Surface, key string) (string, error) {
+		if err := surface.ConfigSet(ctx, commandengine.Request{}, key, value); err != nil {
+			return "", err
+		}
+		return surface.ConfigGet(ctx, commandengine.Request{}, key)
+	})
+}
+
+func (s *Service) ThreadConfigUnset(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, key string) (string, string, error) {
+	return s.updateThreadConfig(ctx, actor, threadID, key, func(surface *threadconfig.Surface, key string) (string, error) {
+		if err := surface.ConfigUnset(ctx, commandengine.Request{}, key); err != nil {
+			return "", err
+		}
+		return surface.ConfigGet(ctx, commandengine.Request{}, key)
+	})
+}
+
+func (s *Service) updateThreadConfig(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID, key string, update func(*threadconfig.Surface, string) (string, error)) (string, string, error) {
 	if err := s.ensureStorage(); err != nil {
 		return "", "", err
 	}
@@ -64,11 +72,10 @@ func (s *Service) ThreadConfigSet(ctx context.Context, actor coremodel.Actor, th
 	if !actor.HasRole(simplerbac.RoleRoot) && !actor.HasRole(simplerbac.RoleAgent) {
 		return "", "", fmt.Errorf("set thread config denied: missing role")
 	}
-	key = normalizeThreadConfigKey(key)
-	if !knownThreadConfig(key) {
-		return "", "", unknownThreadConfig(key)
+	key = threadconfig.NormalizeKey(key)
+	if !threadconfig.KnownKey(key) {
+		return "", "", threadconfig.UnknownKey(key)
 	}
-	value = strings.TrimSpace(value)
 	var updatedValue string
 	if err := s.Storage.Transaction(ctx, func(tx repository.Storage) error {
 		thread, err := tx.Threads().GetByID(ctx, threadID)
@@ -78,10 +85,11 @@ func (s *Service) ThreadConfigSet(ctx context.Context, actor coremodel.Actor, th
 		if thread == nil {
 			return fmt.Errorf("thread not found: %s", threadID)
 		}
-		if err := setThreadConfigValue(thread, key, value); err != nil {
+		value, err := update(threadconfig.NewSurface(thread), key)
+		if err != nil {
 			return err
 		}
-		updatedValue = threadConfigValue(*thread, key)
+		updatedValue = value
 		return tx.Threads().Save(ctx, thread)
 	}); err != nil {
 		return "", "", err
@@ -98,90 +106,4 @@ func (s *Service) threadConfigThread(ctx context.Context, actor coremodel.Actor,
 	}
 	thread, _, err := s.loadThreadAndChat(ctx, threadID)
 	return thread, err
-}
-
-func setThreadConfigValue(thread *coremodel.Thread, key string, value string) error {
-	switch key {
-	case ThreadConfigVoiceReplyToVoiceInput:
-		parsed, err := parseThreadConfigBool(key, value)
-		if err != nil {
-			return err
-		}
-		thread.VoiceReplyToVoiceInput = parsed
-	case ThreadConfigVoiceOutput:
-		parsed, err := parseThreadConfigBool(key, value)
-		if err != nil {
-			return err
-		}
-		thread.VoiceOutput = parsed
-	case ThreadConfigVoiceLanguage:
-		thread.VoiceLanguage = cleanThreadConfigLanguage(value)
-	case ThreadConfigVoiceName:
-		thread.VoiceName = strings.TrimSpace(value)
-	case ThreadConfigVoiceModel:
-		thread.VoiceModel = strings.TrimSpace(value)
-	case ThreadConfigVoiceDeviceTarget:
-		thread.VoiceDeviceTarget = strings.TrimSpace(value)
-	default:
-		return unknownThreadConfig(key)
-	}
-	return nil
-}
-
-func threadConfigValue(thread coremodel.Thread, key string) string {
-	switch key {
-	case ThreadConfigVoiceReplyToVoiceInput:
-		return strconv.FormatBool(thread.VoiceReplyToVoiceInput)
-	case ThreadConfigVoiceOutput:
-		return strconv.FormatBool(thread.VoiceOutput)
-	case ThreadConfigVoiceLanguage:
-		return strings.TrimSpace(thread.VoiceLanguage)
-	case ThreadConfigVoiceName:
-		return strings.TrimSpace(thread.VoiceName)
-	case ThreadConfigVoiceModel:
-		return strings.TrimSpace(thread.VoiceModel)
-	case ThreadConfigVoiceDeviceTarget:
-		return strings.TrimSpace(thread.VoiceDeviceTarget)
-	default:
-		return ""
-	}
-}
-
-func normalizeThreadConfigKey(key string) string {
-	return strings.ReplaceAll(strings.TrimSpace(strings.ToLower(key)), "_", "-")
-}
-
-func knownThreadConfig(key string) bool {
-	for _, candidate := range threadConfigKeys {
-		if candidate == key {
-			return true
-		}
-	}
-	return false
-}
-
-func unknownThreadConfig(key string) error {
-	if strings.TrimSpace(key) == "" {
-		return fmt.Errorf("missing thread config key")
-	}
-	return fmt.Errorf("unknown thread config %q", key)
-}
-
-func parseThreadConfigBool(key string, value string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "true", "1", "yes", "on", "enabled":
-		return true, nil
-	case "false", "0", "no", "off", "disabled":
-		return false, nil
-	default:
-		return false, fmt.Errorf("thread config %s expects true or false", key)
-	}
-}
-
-func cleanThreadConfigLanguage(value string) string {
-	value = strings.TrimSpace(strings.ToLower(value))
-	if idx := strings.IndexAny(value, "-_"); idx >= 0 {
-		value = value[:idx]
-	}
-	return value
 }

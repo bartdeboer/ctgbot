@@ -360,4 +360,12 @@ func TestHostbridgeTurnCommandsParse(t *testing.T) {
 	if got, want := listReq.Command, (TurnConfigList{}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("turn config list command = %#v, want %#v", got, want)
 	}
+
+	unsetReq, err := router.Parse(context.Background(), base, []string{"turn", "config", "unset", "voice.name"})
+	if err != nil {
+		t.Fatalf("Parse(turn config unset) error = %v", err)
+	}
+	if got, want := unsetReq.Command, (TurnConfigUnset{Key: "voice.name"}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("turn config unset command = %#v, want %#v", got, want)
+	}
 }
