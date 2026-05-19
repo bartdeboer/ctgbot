@@ -65,9 +65,9 @@ func TestDirectPrefixesIncludeTypeAndRef(t *testing.T) {
 func TestGlobalDirectPrefixesIncludeStatus(t *testing.T) {
 	prefixes := GlobalDirectPrefixes()
 	for _, prefix := range prefixes {
-		if prefix == "status" {
+		if prefix == "turn" {
 			return
 		}
 	}
-	t.Fatalf("GlobalDirectPrefixes() = %#v, want status", prefixes)
+	t.Fatalf("GlobalDirectPrefixes() = %#v, want turn", prefixes)
 }
