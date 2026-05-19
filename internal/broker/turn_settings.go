@@ -26,12 +26,12 @@ type turnCommandExecutor struct {
 
 func (e turnCommandExecutor) Execute(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	switch cmd := req.Command.(type) {
-	case schemacommands.TurnSet:
-		return e.turn.setTurnSetting(cmd.Key, cmd.Value)
-	case schemacommands.TurnGet:
-		return e.turn.getTurnSetting(cmd.Key)
-	case schemacommands.TurnClear:
-		return e.turn.clearTurnSetting(cmd.Key)
+	case schemacommands.TurnConfigSet:
+		return e.turn.setTurnConfig(cmd.Key, cmd.Value)
+	case schemacommands.TurnConfigGet:
+		return e.turn.getTurnConfig(cmd.Key)
+	case schemacommands.TurnConfigList:
+		return e.turn.listTurnConfig()
 	default:
 		if e.next == nil {
 			return commandengine.Result{}, fmt.Errorf("missing command executor")
@@ -40,11 +40,11 @@ func (e turnCommandExecutor) Execute(ctx context.Context, req commandengine.Requ
 	}
 }
 
-func (r *agentTurnRuntime) setTurnSetting(key string, value string) (commandengine.Result, error) {
+func (r *agentTurnRuntime) setTurnConfig(key string, value string) (commandengine.Result, error) {
 	if r == nil {
 		return commandengine.Result{}, fmt.Errorf("missing turn runtime")
 	}
-	key = normalizeTurnSettingKey(key)
+	key = normalizeTurnConfigKey(key)
 	value = strings.TrimSpace(value)
 	switch key {
 	case "voice.language":
@@ -54,50 +54,34 @@ func (r *agentTurnRuntime) setTurnSetting(key string, value string) (commandengi
 	case "voice.model":
 		r.settings.Voice.Model = value
 	default:
-		return commandengine.Result{}, unknownTurnSetting(key)
+		return commandengine.Result{}, unknownTurnConfig(key)
 	}
-	return commandengine.Result{Text: fmt.Sprintf("turn %s=%s", key, turnSettingValue(r.settings, key))}, nil
+	return commandengine.Result{Text: fmt.Sprintf("turn config %s=%s", key, turnConfigValue(r.settings, key))}, nil
 }
 
-func (r *agentTurnRuntime) getTurnSetting(key string) (commandengine.Result, error) {
+func (r *agentTurnRuntime) getTurnConfig(key string) (commandengine.Result, error) {
 	if r == nil {
 		return commandengine.Result{}, fmt.Errorf("missing turn runtime")
 	}
-	key = normalizeTurnSettingKey(key)
-	if key == "" {
-		return commandengine.Result{Text: formatTurnSettings(r.settings)}, nil
+	key = normalizeTurnConfigKey(key)
+	if !knownTurnConfig(key) {
+		return commandengine.Result{}, unknownTurnConfig(key)
 	}
-	if !knownTurnSetting(key) {
-		return commandengine.Result{}, unknownTurnSetting(key)
-	}
-	return commandengine.Result{Text: fmt.Sprintf("turn %s=%s", key, turnSettingValue(r.settings, key))}, nil
+	return commandengine.Result{Text: fmt.Sprintf("turn config %s=%s", key, turnConfigValue(r.settings, key))}, nil
 }
 
-func (r *agentTurnRuntime) clearTurnSetting(key string) (commandengine.Result, error) {
+func (r *agentTurnRuntime) listTurnConfig() (commandengine.Result, error) {
 	if r == nil {
 		return commandengine.Result{}, fmt.Errorf("missing turn runtime")
 	}
-	key = normalizeTurnSettingKey(key)
-	switch key {
-	case "voice":
-		r.settings.Voice = turnVoiceSettings{}
-	case "voice.language":
-		r.settings.Voice.Language = ""
-	case "voice.name":
-		r.settings.Voice.Name = ""
-	case "voice.model":
-		r.settings.Voice.Model = ""
-	default:
-		return commandengine.Result{}, unknownTurnSetting(key)
-	}
-	return commandengine.Result{Text: "turn cleared: " + key}, nil
+	return commandengine.Result{Text: formatTurnConfig(r.settings)}, nil
 }
 
-func normalizeTurnSettingKey(key string) string {
+func normalizeTurnConfigKey(key string) string {
 	return strings.TrimSpace(strings.ToLower(key))
 }
 
-func knownTurnSetting(key string) bool {
+func knownTurnConfig(key string) bool {
 	switch key {
 	case "voice.language", "voice.name", "voice.model":
 		return true
@@ -106,7 +90,7 @@ func knownTurnSetting(key string) bool {
 	}
 }
 
-func turnSettingValue(settings turnSettings, key string) string {
+func turnConfigValue(settings turnSettings, key string) string {
 	switch key {
 	case "voice.language":
 		return settings.Voice.Language
@@ -119,17 +103,17 @@ func turnSettingValue(settings turnSettings, key string) string {
 	}
 }
 
-func formatTurnSettings(settings turnSettings) string {
+func formatTurnConfig(settings turnSettings) string {
 	return strings.Join([]string{
-		"turn voice.language=" + settings.Voice.Language,
-		"turn voice.name=" + settings.Voice.Name,
-		"turn voice.model=" + settings.Voice.Model,
+		"turn config voice.language=" + settings.Voice.Language,
+		"turn config voice.name=" + settings.Voice.Name,
+		"turn config voice.model=" + settings.Voice.Model,
 	}, "\n")
 }
 
-func unknownTurnSetting(key string) error {
+func unknownTurnConfig(key string) error {
 	if strings.TrimSpace(key) == "" {
-		return fmt.Errorf("missing turn setting key")
+		return fmt.Errorf("missing turn config key")
 	}
-	return fmt.Errorf("unknown turn setting %q", key)
+	return fmt.Errorf("unknown turn config %q", key)
 }

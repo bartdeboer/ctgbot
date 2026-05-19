@@ -337,27 +337,27 @@ func TestHostbridgeTurnCommandsParse(t *testing.T) {
 	}
 	base := commandengine.Request{Context: commandengine.Context{Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}
 
-	setReq, err := router.Parse(context.Background(), base, []string{"turn", "set", "voice.language", "nl"})
+	setReq, err := router.Parse(context.Background(), base, []string{"turn", "config", "set", "voice.language", "nl"})
 	if err != nil {
-		t.Fatalf("Parse(turn set) error = %v", err)
+		t.Fatalf("Parse(turn config set) error = %v", err)
 	}
-	if got, want := setReq.Command, (TurnSet{Key: "voice.language", Value: "nl"}); !reflect.DeepEqual(got, want) {
-		t.Fatalf("turn set command = %#v, want %#v", got, want)
+	if got, want := setReq.Command, (TurnConfigSet{Key: "voice.language", Value: "nl"}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("turn config set command = %#v, want %#v", got, want)
 	}
 
-	getReq, err := router.Parse(context.Background(), base, []string{"turn", "get", "voice.name"})
+	getReq, err := router.Parse(context.Background(), base, []string{"turn", "config", "get", "voice.name"})
 	if err != nil {
-		t.Fatalf("Parse(turn get) error = %v", err)
+		t.Fatalf("Parse(turn config get) error = %v", err)
 	}
-	if got, want := getReq.Command, (TurnGet{Key: "voice.name"}); !reflect.DeepEqual(got, want) {
-		t.Fatalf("turn get command = %#v, want %#v", got, want)
+	if got, want := getReq.Command, (TurnConfigGet{Key: "voice.name"}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("turn config get command = %#v, want %#v", got, want)
 	}
 
-	clearReq, err := router.Parse(context.Background(), base, []string{"turn", "clear", "voice"})
+	listReq, err := router.Parse(context.Background(), base, []string{"turn", "config", "list"})
 	if err != nil {
-		t.Fatalf("Parse(turn clear) error = %v", err)
+		t.Fatalf("Parse(turn config list) error = %v", err)
 	}
-	if got, want := clearReq.Command, (TurnClear{Key: "voice"}); !reflect.DeepEqual(got, want) {
-		t.Fatalf("turn clear command = %#v, want %#v", got, want)
+	if got, want := listReq.Command, (TurnConfigList{}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("turn config list command = %#v, want %#v", got, want)
 	}
 }

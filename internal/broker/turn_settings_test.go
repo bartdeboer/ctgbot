@@ -14,11 +14,11 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 	turn := &agentTurnRuntime{}
 	executor := turnCommandExecutor{turn: turn}
 
-	if _, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnSet{Key: "voice.language", Value: "nl-NL"}}); err != nil {
-		t.Fatalf("turn set language error = %v", err)
+	if _, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigSet{Key: "voice.language", Value: "nl-NL"}}); err != nil {
+		t.Fatalf("turn config set language error = %v", err)
 	}
-	if _, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnSet{Key: "voice.name", Value: "F3"}}); err != nil {
-		t.Fatalf("turn set voice error = %v", err)
+	if _, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigSet{Key: "voice.name", Value: "F3"}}); err != nil {
+		t.Fatalf("turn config set voice error = %v", err)
 	}
 	if got, want := turn.settings.Voice.Language, "nl"; got != want {
 		t.Fatalf("voice language = %q, want %q", got, want)
@@ -27,19 +27,19 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 		t.Fatalf("voice name = %q, want %q", got, want)
 	}
 
-	result, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnGet{}})
+	result, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigList{}})
 	if err != nil {
-		t.Fatalf("turn get error = %v", err)
+		t.Fatalf("turn config list error = %v", err)
 	}
-	if !strings.Contains(result.Text, "turn voice.language=nl") || !strings.Contains(result.Text, "turn voice.name=F3") {
-		t.Fatalf("turn get text = %q, want current settings", result.Text)
+	if !strings.Contains(result.Text, "turn config voice.language=nl") || !strings.Contains(result.Text, "turn config voice.name=F3") {
+		t.Fatalf("turn config list text = %q, want current settings", result.Text)
 	}
 
-	if _, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnClear{Key: "voice"}}); err != nil {
-		t.Fatalf("turn clear error = %v", err)
+	if _, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigSet{Key: "voice.name", Value: "F5"}}); err != nil {
+		t.Fatalf("turn config set overwrite error = %v", err)
 	}
-	if turn.settings.Voice != (turnVoiceSettings{}) {
-		t.Fatalf("voice settings = %#v, want cleared", turn.settings.Voice)
+	if got, want := turn.settings.Voice.Name, "F5"; got != want {
+		t.Fatalf("voice name = %q, want overwritten value %q", got, want)
 	}
 }
 
@@ -47,9 +47,9 @@ func TestTurnCommandExecutorRejectsUnknownSettings(t *testing.T) {
 	turn := &agentTurnRuntime{}
 	executor := turnCommandExecutor{turn: turn}
 
-	_, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnSet{Key: "unknown", Value: "x"}})
-	if err == nil || !strings.Contains(err.Error(), "unknown turn setting") {
-		t.Fatalf("turn set unknown error = %v, want unknown setting", err)
+	_, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigSet{Key: "unknown", Value: "x"}})
+	if err == nil || !strings.Contains(err.Error(), "unknown turn config") {
+		t.Fatalf("turn config set unknown error = %v, want unknown setting", err)
 	}
 }
 
