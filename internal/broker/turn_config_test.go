@@ -73,6 +73,31 @@ func TestTurnCommandExecutorRejectsUnknownAndReadOnlySettings(t *testing.T) {
 	}
 }
 
+func TestApplyThreadVoiceConfigEnablesVoiceRepliesToVoiceInput(t *testing.T) {
+	turn := &agentTurnRuntime{voiceInput: true}
+	turn.applyThreadVoiceConfig(coremodel.Thread{
+		VoiceReplyToVoiceInput: true,
+		VoiceLanguage:          "nl-NL",
+		VoiceName:              "F5",
+		VoiceModel:             "supertonic3",
+	})
+
+	if !turn.voiceOutput {
+		t.Fatal("voice output = false, want enabled for voice input")
+	}
+	if turn.voiceLanguage != "nl" || turn.voiceName != "F5" || turn.voiceModel != "supertonic3" {
+		t.Fatalf("turn voice config = language:%q name:%q model:%q", turn.voiceLanguage, turn.voiceName, turn.voiceModel)
+	}
+}
+
+func TestApplyThreadVoiceConfigDoesNotEnableReplyToTextInput(t *testing.T) {
+	turn := &agentTurnRuntime{}
+	turn.applyThreadVoiceConfig(coremodel.Thread{VoiceReplyToVoiceInput: true})
+	if turn.voiceOutput {
+		t.Fatal("voice output = true, want false for text input")
+	}
+}
+
 func TestSpeechRequestForTurnUsesExplicitVoiceConfigFirst(t *testing.T) {
 	threadID := modeluuid.New()
 	turn := &agentTurnRuntime{

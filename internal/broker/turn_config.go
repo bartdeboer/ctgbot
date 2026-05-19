@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
 
@@ -17,7 +18,7 @@ const (
 	turnConfigVoiceLanguage     = "voice.language"
 	turnConfigVoiceName         = "voice.name"
 	turnConfigVoiceModel        = "voice.model"
-	turnConfigVoiceDeviceTarget = "voice.device_target"
+	turnConfigVoiceDeviceTarget = "voice.device-target"
 )
 
 type turnCommandExecutor struct {
@@ -120,8 +121,29 @@ func (r *agentTurnRuntime) turnConfigValue(key string) string {
 	}
 }
 
+func (r *agentTurnRuntime) applyThreadVoiceConfig(thread coremodel.Thread) {
+	if r == nil {
+		return
+	}
+	if thread.VoiceOutput || (r.voiceInput && thread.VoiceReplyToVoiceInput) {
+		r.voiceOutput = true
+	}
+	if language := cleanLanguageCode(thread.VoiceLanguage); language != "" {
+		r.voiceLanguage = language
+	}
+	if voice := strings.TrimSpace(thread.VoiceName); voice != "" {
+		r.voiceName = voice
+	}
+	if model := strings.TrimSpace(thread.VoiceModel); model != "" {
+		r.voiceModel = model
+	}
+	if target := strings.TrimSpace(thread.VoiceDeviceTarget); target != "" {
+		r.voiceDeviceTarget = target
+	}
+}
+
 func normalizeTurnConfigKey(key string) string {
-	return strings.TrimSpace(strings.ToLower(key))
+	return strings.ReplaceAll(strings.TrimSpace(strings.ToLower(key)), "_", "-")
 }
 
 func knownTurnConfig(key string) bool {

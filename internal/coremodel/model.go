@@ -76,6 +76,13 @@ type Thread struct {
 	ChatID modeluuid.UUID `gorm:"index"`
 	Label  string
 
+	VoiceReplyToVoiceInput bool
+	VoiceOutput            bool
+	VoiceLanguage          string
+	VoiceName              string
+	VoiceModel             string
+	VoiceDeviceTarget      string
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
