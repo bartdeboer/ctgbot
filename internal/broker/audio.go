@@ -9,6 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/languagedetect"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
@@ -140,7 +141,7 @@ func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, threadID mod
 	if err != nil || synthesizer == nil {
 		return nil, "", err
 	}
-	result, err := synthesizer.Synthesize(ctx, component.SpeechRequest{Text: text, ThreadID: threadID, Language: strings.TrimSpace(language)})
+	result, err := synthesizer.Synthesize(ctx, component.SpeechRequest{Text: text, ThreadID: threadID, Language: replySpeechLanguage(text, language)})
 	if err != nil {
 		return nil, ref, err
 	}
@@ -148,6 +149,29 @@ func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, threadID mod
 		return nil, ref, fmt.Errorf("speech synthesis via %s returned empty media", ref)
 	}
 	return &result.Media, ref, nil
+}
+
+func replySpeechLanguage(text string, inputLanguage string) string {
+	inputLanguage = cleanLanguageCode(inputLanguage)
+	if inputLanguage == "" {
+		return ""
+	}
+	candidates := []string{inputLanguage}
+	if inputLanguage != "en" {
+		candidates = append(candidates, "en")
+	}
+	if detected, ok := languagedetect.Detect(text, candidates); ok {
+		return detected
+	}
+	return inputLanguage
+}
+
+func cleanLanguageCode(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if idx := strings.IndexAny(value, "-_"); idx >= 0 {
+		value = value[:idx]
+	}
+	return value
 }
 
 func transcriptionMetadata(media message.Media, result transcriptionOutcome) []string {

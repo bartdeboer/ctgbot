@@ -585,7 +585,10 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	messengerRecorder := &fakeMessengerRecorder{}
-	agentRecorder := &fakeAgentRecorder{streamText: "audio answer", finalText: "audio answer"}
+	agentRecorder := &fakeAgentRecorder{
+		streamText: "Dit is een Nederlands antwoord op de gesproken test.",
+		finalText:  "Dit is een Nederlands antwoord op de gesproken test.",
+	}
 	transcriber := &fakeTranscriber{text: "hello from voice", language: "nl"}
 	synthesizer := &fakeSynthesizer{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
@@ -668,7 +671,7 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	if len(transcriber.seen) != 1 || string(transcriber.seen[0].Content) != "voice bytes" {
 		t.Fatalf("transcriber media = %#v", transcriber.seen)
 	}
-	if len(synthesizer.seen) != 1 || synthesizer.seen[0] != "audio answer" {
+	if len(synthesizer.seen) != 1 || synthesizer.seen[0] != "Dit is een Nederlands antwoord op de gesproken test." {
 		t.Fatalf("synthesizer input = %#v", synthesizer.seen)
 	}
 	if len(synthesizer.requests) != 1 || synthesizer.requests[0].ThreadID != outcome.Inbound.ThreadID {
@@ -685,8 +688,8 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 		t.Fatalf("transcript payload = %#v", transcriptPayload)
 	}
 	finalPayload := messengerRecorder.payloads[1]
-	if got := finalPayload.Text.Text; got != "audio answer" {
-		t.Fatalf("final text = %q, want audio answer", got)
+	if got := finalPayload.Text.Text; got != "Dit is een Nederlands antwoord op de gesproken test." {
+		t.Fatalf("final text = %q, want Dutch answer", got)
 	}
 	audioPayload := messengerRecorder.payloads[2]
 	if audioPayload.Text.Text != "" || len(audioPayload.Attachments) != 1 || audioPayload.Attachments[0].ContentType != "audio/ogg" {
