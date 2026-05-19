@@ -9,6 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface/conformtest"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -103,6 +104,13 @@ func TestSemanticConfigSurface(t *testing.T) {
 		homePath:     home,
 		config:       ComponentConfig{}.withDefaults(),
 	}
+	conformtest.Assert(t, c, commandengine.Request{Context: commandengine.Context{Source: commandengine.SourceHostbridge, Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}, conformtest.Case{
+		WritableKey:      "limit",
+		WritableValue:    "7",
+		ExpectedSetValue: "7",
+		ExpectedUnset:    "10",
+	})
+
 	engine, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, c)
 	if err != nil {
 		t.Fatalf("NewEngineForSource() error = %v", err)

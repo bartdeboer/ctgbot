@@ -11,6 +11,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface/conformtest"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -79,6 +80,13 @@ func TestCommandDefinitionsUseTightInboxSurface(t *testing.T) {
 
 func TestComponentConfigSurface(t *testing.T) {
 	c := newTestComponent(t, "work")
+	conformtest.Assert(t, c, commandengine.Request{Context: commandengine.Context{Source: commandengine.SourceHostbridge, Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}, conformtest.Case{
+		WritableKey:      "max-poll-messages",
+		WritableValue:    "7",
+		ExpectedSetValue: "7",
+		ExpectedUnset:    "20",
+	})
+
 	engine, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, c)
 	if err != nil {
 		t.Fatalf("NewEngineForSource() error = %v", err)
