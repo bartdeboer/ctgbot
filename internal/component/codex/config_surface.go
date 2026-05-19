@@ -3,6 +3,7 @@ package codex
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -11,8 +12,9 @@ import (
 )
 
 const (
-	codexConfigModel  = "model"
-	codexConfigEffort = "effort"
+	codexConfigModel                = "model"
+	codexConfigEffort               = "effort"
+	codexConfigContainerKeepRunning = "container.keep-running"
 )
 
 func (c *Component) ConfigSchema(ctx context.Context, req commandengine.Request) (configsurface.ConfigSchema, error) {
@@ -34,6 +36,14 @@ func (c *Component) ConfigSchema(ctx context.Context, req commandengine.Request)
 			Default:  defaults.ReasoningEffort,
 			Options:  append([]string{}, suggestedCodexReasoningEfforts...),
 		},
+		{
+			Key:      codexConfigContainerKeepRunning,
+			Help:     "Keep the Codex runtime container running between turns",
+			Type:     configsurface.FieldTypeBool,
+			Writable: true,
+			Default:  strconv.FormatBool(defaults.KeepRunning),
+			Options:  []string{"true", "false"},
+		},
 	}}, nil
 }
 
@@ -51,6 +61,8 @@ func (c *Component) ConfigGet(ctx context.Context, req commandengine.Request, ke
 		return settings.Model, nil
 	case codexConfigEffort:
 		return settings.ReasoningEffort, nil
+	case codexConfigContainerKeepRunning:
+		return strconv.FormatBool(settings.KeepRunning), nil
 	default:
 		return "", unknownCodexConfig(key)
 	}
@@ -70,6 +82,12 @@ func (c *Component) ConfigSet(ctx context.Context, req commandengine.Request, ke
 		return c.updateThreadState(ctx, thread, func(state *threadState) { state.Model = value })
 	case codexConfigEffort:
 		return c.updateThreadState(ctx, thread, func(state *threadState) { state.ReasoningEffort = value })
+	case codexConfigContainerKeepRunning:
+		parsed, err := configsurface.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("config %s expects true or false", codexConfigContainerKeepRunning)
+		}
+		return c.updateThreadState(ctx, thread, func(state *threadState) { state.KeepRunning = &parsed })
 	default:
 		return unknownCodexConfig(key)
 	}
@@ -85,6 +103,8 @@ func (c *Component) ConfigUnset(ctx context.Context, req commandengine.Request, 
 		return c.updateThreadState(ctx, thread, func(state *threadState) { state.Model = "" })
 	case codexConfigEffort:
 		return c.updateThreadState(ctx, thread, func(state *threadState) { state.ReasoningEffort = "" })
+	case codexConfigContainerKeepRunning:
+		return c.updateThreadState(ctx, thread, func(state *threadState) { state.KeepRunning = nil })
 	default:
 		return unknownCodexConfig(key)
 	}

@@ -209,6 +209,8 @@ func TestCodexConfigSurfaceCommands(t *testing.T) {
 			"options: gpt-5.5, gpt-5.4",
 			"effort=",
 			"options: low, medium, high, xhigh",
+			"container.keep-running=false",
+			"Keep the Codex runtime container running between turns",
 		} {
 			if !strings.Contains(list.Text, want) {
 				t.Fatalf("config list missing %q:\n%s", want, list.Text)
@@ -241,6 +243,17 @@ func TestCodexConfigSurfaceCommands(t *testing.T) {
 
 		if _, err := engine.Run(ctx, base, []string{"codex", "config", "set", "effort", "high"}); err != nil {
 			t.Fatalf("codex config set effort error = %v", err)
+		}
+		assertThreadState(t, c, ctx, thread.ID, threadState{Model: "gpt-test", ReasoningEffort: "high"})
+
+		if _, err := engine.Run(ctx, base, []string{"codex", "config", "set", "container.keep-running", "true"}); err != nil {
+			t.Fatalf("codex config set container.keep-running error = %v", err)
+		}
+		keepRunning := true
+		assertThreadState(t, c, ctx, thread.ID, threadState{Model: "gpt-test", ReasoningEffort: "high", KeepRunning: &keepRunning})
+
+		if _, err := engine.Run(ctx, base, []string{"codex", "config", "unset", "container.keep-running"}); err != nil {
+			t.Fatalf("codex config unset container.keep-running error = %v", err)
 		}
 		assertThreadState(t, c, ctx, thread.ID, threadState{Model: "gpt-test", ReasoningEffort: "high"})
 

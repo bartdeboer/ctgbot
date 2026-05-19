@@ -3,13 +3,17 @@ package claude
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/configsurface"
 )
 
-const claudeConfigModel = "model"
+const (
+	claudeConfigModel                = "model"
+	claudeConfigContainerKeepRunning = "container.keep-running"
+)
 
 func (c *Component) ConfigSchema(ctx context.Context, req commandengine.Request) (configsurface.ConfigSchema, error) {
 	_, _ = ctx, req
@@ -20,6 +24,14 @@ func (c *Component) ConfigSchema(ctx context.Context, req commandengine.Request)
 			Type:     configsurface.FieldTypeString,
 			Writable: true,
 			Default:  c.defaultModel(),
+		},
+		{
+			Key:      claudeConfigContainerKeepRunning,
+			Help:     "Keep the Claude runtime container running between turns",
+			Type:     configsurface.FieldTypeBool,
+			Writable: true,
+			Default:  "false",
+			Options:  []string{"true", "false"},
 		},
 	}}, nil
 }
@@ -36,6 +48,8 @@ func (c *Component) ConfigGet(ctx context.Context, req commandengine.Request, ke
 	switch configsurface.NormalizeKey(key) {
 	case claudeConfigModel:
 		return settings.Model, nil
+	case claudeConfigContainerKeepRunning:
+		return strconv.FormatBool(settings.KeepRunning), nil
 	default:
 		return "", unknownClaudeConfig(key)
 	}
@@ -53,6 +67,12 @@ func (c *Component) ConfigSet(ctx context.Context, req commandengine.Request, ke
 	switch configsurface.NormalizeKey(key) {
 	case claudeConfigModel:
 		return c.updateThreadState(ctx, thread, func(state *threadState) { state.Model = value })
+	case claudeConfigContainerKeepRunning:
+		parsed, err := configsurface.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("config %s expects true or false", claudeConfigContainerKeepRunning)
+		}
+		return c.updateThreadState(ctx, thread, func(state *threadState) { state.KeepRunning = &parsed })
 	default:
 		return unknownClaudeConfig(key)
 	}
@@ -66,6 +86,8 @@ func (c *Component) ConfigUnset(ctx context.Context, req commandengine.Request, 
 	switch configsurface.NormalizeKey(key) {
 	case claudeConfigModel:
 		return c.updateThreadState(ctx, thread, func(state *threadState) { state.Model = "" })
+	case claudeConfigContainerKeepRunning:
+		return c.updateThreadState(ctx, thread, func(state *threadState) { state.KeepRunning = nil })
 	default:
 		return unknownClaudeConfig(key)
 	}
