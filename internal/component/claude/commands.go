@@ -9,6 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
@@ -16,9 +17,10 @@ import (
 
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
+var _ configsurface.ConfigSurface = (*Component)(nil)
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		claudeCommand("container refresh", RefreshContainer{}, "Delete and recreate the Claude runtime on next turn"),
 		claudeCommand("container start", StartContainer{}, "Start the Claude runtime container"),
 		claudeCommand("container stop", StopContainer{}, "Stop the Claude runtime container but keep its data"),
@@ -39,6 +41,11 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		},
 		claudeCommand("model clear", ModelClear{}, "Clear the thread model override"),
 	}
+	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
+		Sources: claudeCommandSources(),
+		Policy:  claudeCommandPolicy(),
+	})...)
+	return definitions
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
@@ -87,9 +94,12 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	return commandengine.RegisterPattern[ModelClear](registry, "model clear", func(ctx context.Context, req commandengine.Request, _ ModelClear) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[ModelClear](registry, "model clear", func(ctx context.Context, req commandengine.Request, _ ModelClear) (commandengine.Result, error) {
 		return c.modelClear(ctx, req)
-	})
+	}); err != nil {
+		return err
+	}
+	return configsurface.RegisterCommandHandlers(registry, c)
 }
 
 func (c *Component) refresh(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {

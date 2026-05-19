@@ -9,12 +9,14 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
+var _ configsurface.ConfigSurface = (*Component)(nil)
 
 var suggestedCodexModels = []string{
 	"gpt-5.5",
@@ -33,7 +35,7 @@ var suggestedCodexReasoningEfforts = []string{
 }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		codexCommand("container refresh", RefreshContainer{}, "Delete and recreate the Codex runtime on next turn",
 			hiddenAlias("refresh"),
 		),
@@ -77,6 +79,11 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		},
 		codexCommand("model effort clear", ModelEffortClear{}, "Clear the thread reasoning effort override"),
 	}
+	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
+		Sources: codexCommandSources(),
+		Policy:  codexCommandPolicy(),
+	})...)
+	return definitions
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
@@ -150,9 +157,12 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	return commandengine.RegisterPattern[ModelEffortClear](registry, "model effort clear", func(ctx context.Context, req commandengine.Request, _ ModelEffortClear) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[ModelEffortClear](registry, "model effort clear", func(ctx context.Context, req commandengine.Request, _ ModelEffortClear) (commandengine.Result, error) {
 		return c.modelEffortClear(ctx, req)
-	})
+	}); err != nil {
+		return err
+	}
+	return configsurface.RegisterCommandHandlers(registry, c)
 }
 
 func (c *Component) refresh(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
