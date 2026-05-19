@@ -277,6 +277,13 @@ func (r *gormComponents) ListEnabled(ctx context.Context) ([]coremodel.Component
 	return out, err
 }
 
+func (r *gormComponents) DeleteByID(ctx context.Context, componentID modeluuid.UUID) (bool, error) {
+	result := r.db.WithContext(ctx).
+		Where("id = ?", componentID).
+		Delete(&coremodel.Component{})
+	return result.RowsAffected > 0, result.Error
+}
+
 type gormChatComponents struct{ db *gorm.DB }
 
 func (r *gormChatComponents) Save(ctx context.Context, binding *coremodel.ChatComponent) error {
@@ -316,6 +323,15 @@ func (r *gormChatComponents) ListEnabledByChatID(ctx context.Context, chatID mod
 	return bindings, err
 }
 
+func (r *gormChatComponents) ListByComponentID(ctx context.Context, componentID modeluuid.UUID) ([]coremodel.ChatComponent, error) {
+	var bindings []coremodel.ChatComponent
+	err := r.db.WithContext(ctx).
+		Where("component_id = ?", componentID).
+		Order("created_at ASC").
+		Find(&bindings).Error
+	return bindings, err
+}
+
 func (r *gormChatComponents) FindByComponentRoleAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChannelID string) (*coremodel.ChatComponent, error) {
 	var binding coremodel.ChatComponent
 	if err := first(r.db.WithContext(ctx).
@@ -327,6 +343,13 @@ func (r *gormChatComponents) FindByComponentRoleAndExternalChannelID(ctx context
 		return nil, nil
 	}
 	return &binding, nil
+}
+
+func (r *gormChatComponents) DeleteByComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error) {
+	result := r.db.WithContext(ctx).
+		Where("component_id = ?", componentID).
+		Delete(&coremodel.ChatComponent{})
+	return result.RowsAffected, result.Error
 }
 
 type gormInboundFilterBindings struct{ db *gorm.DB }
@@ -365,6 +388,23 @@ func (r *gormInboundFilterBindings) ListEnabledBySourceBindingID(ctx context.Con
 		Order("created_at ASC").
 		Find(&bindings).Error
 	return bindings, err
+}
+
+func (r *gormInboundFilterBindings) DeleteByFilterComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error) {
+	result := r.db.WithContext(ctx).
+		Where("filter_component_id = ?", componentID).
+		Delete(&coremodel.InboundFilterBinding{})
+	return result.RowsAffected, result.Error
+}
+
+func (r *gormInboundFilterBindings) DeleteBySourceBindingIDs(ctx context.Context, sourceBindingIDs []modeluuid.UUID) (int64, error) {
+	if len(sourceBindingIDs) == 0 {
+		return 0, nil
+	}
+	result := r.db.WithContext(ctx).
+		Where("source_binding_id IN ?", sourceBindingIDs).
+		Delete(&coremodel.InboundFilterBinding{})
+	return result.RowsAffected, result.Error
 }
 
 type gormInboundDrops struct{ db *gorm.DB }
@@ -580,6 +620,13 @@ func (r *gormThreadComponentMappings) DeleteByThreadAndComponent(ctx context.Con
 		Error
 }
 
+func (r *gormThreadComponentMappings) DeleteByComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error) {
+	result := r.db.WithContext(ctx).
+		Where("component_id = ?", componentID).
+		Delete(&coremodel.ThreadComponentMapping{})
+	return result.RowsAffected, result.Error
+}
+
 type gormThreadComponentStates struct{ db *gorm.DB }
 
 func (r *gormThreadComponentStates) Save(ctx context.Context, state *coremodel.ThreadComponentState) error {
@@ -615,6 +662,13 @@ func (r *gormThreadComponentStates) DeleteByThreadAndComponent(ctx context.Conte
 		Where("thread_id = ? AND component_id = ?", threadID, componentID).
 		Delete(&coremodel.ThreadComponentState{}).
 		Error
+}
+
+func (r *gormThreadComponentStates) DeleteByComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error) {
+	result := r.db.WithContext(ctx).
+		Where("component_id = ?", componentID).
+		Delete(&coremodel.ThreadComponentState{})
+	return result.RowsAffected, result.Error
 }
 
 type gormMessages struct{ db *gorm.DB }

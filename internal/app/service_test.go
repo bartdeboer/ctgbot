@@ -359,6 +359,77 @@ func TestServiceRegisterAndListComponents(t *testing.T) {
 	}
 }
 
+func TestServiceUnregisterComponentRemovesDependentRows(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+
+	chat := saveChat(t, storage, "Team")
+	thread := &coremodel.Thread{ChatID: chat.ID, Label: "Main"}
+	if err := storage.Threads().Save(ctx, thread); err != nil {
+		t.Fatal(err)
+	}
+	target := saveComponent(t, storage, "gmail", "legacy")
+	otherSource := saveComponent(t, storage, "source", "inbox")
+	otherFilter := saveComponent(t, storage, "filters", "allowlist")
+
+	targetSourceBinding := saveChatComponent(t, storage, chat.ID, target.ID, coremodel.ChatComponentRoleSource, "gmail")
+	otherSourceBinding := saveChatComponent(t, storage, chat.ID, otherSource.ID, coremodel.ChatComponentRoleSource, "inbox")
+	saveChatComponent(t, storage, chat.ID, target.ID, coremodel.ChatComponentRoleRelay, "gmail")
+	if err := storage.InboundFilterBindings().Save(ctx, &coremodel.InboundFilterBinding{SourceBindingID: targetSourceBinding.ID, FilterComponentID: otherFilter.ID, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.InboundFilterBindings().Save(ctx, &coremodel.InboundFilterBinding{SourceBindingID: otherSourceBinding.ID, FilterComponentID: target.ID, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.ThreadComponentMappings().Save(ctx, &coremodel.ThreadComponentMapping{ThreadID: thread.ID, ChatID: chat.ID, ComponentID: target.ID, ComponentThreadID: "provider-thread"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.ThreadComponentStates().Save(ctx, &coremodel.ThreadComponentState{ThreadID: thread.ID, ComponentID: target.ID, StateJSON: `{"ok":true}`}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.UnregisterComponent(ctx, "gmail/legacy")
+	if err != nil {
+		t.Fatalf("UnregisterComponent() error = %v", err)
+	}
+	if result.ComponentRef != "gmail/legacy" || !result.ComponentRemoved {
+		t.Fatalf("result = %#v, want removed gmail/legacy", result)
+	}
+	if result.ChatComponents != 2 || result.InboundFilterBindings != 2 || result.ThreadMappings != 1 || result.ThreadStates != 1 {
+		t.Fatalf("result counts = %#v, want chat=2 filters=2 mappings=1 states=1", result)
+	}
+	if got, err := storage.Components().GetByID(ctx, target.ID); err != nil || got != nil {
+		t.Fatalf("component after unregister = %#v err=%v, want nil", got, err)
+	}
+	if got, err := storage.ChatComponents().ListByComponentID(ctx, target.ID); err != nil || len(got) != 0 {
+		t.Fatalf("chat components after unregister = %#v err=%v, want none", got, err)
+	}
+	if got, err := storage.InboundFilterBindings().ListEnabledBySourceBindingID(ctx, targetSourceBinding.ID); err != nil || len(got) != 0 {
+		t.Fatalf("source filter bindings after unregister = %#v err=%v, want none", got, err)
+	}
+	if got, err := storage.InboundFilterBindings().GetBySourceBindingAndFilter(ctx, otherSourceBinding.ID, target.ID); err != nil || got != nil {
+		t.Fatalf("filter component binding after unregister = %#v err=%v, want nil", got, err)
+	}
+	if got, err := storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, thread.ID, target.ID); err != nil || got != nil {
+		t.Fatalf("thread mapping after unregister = %#v err=%v, want nil", got, err)
+	}
+	if got, err := storage.ThreadComponentStates().GetByThreadAndComponent(ctx, thread.ID, target.ID); err != nil || got != nil {
+		t.Fatalf("thread state after unregister = %#v err=%v, want nil", got, err)
+	}
+}
+
+func TestServiceUnregisterComponentReturnsMissingComponentError(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+
+	_, err := svc.UnregisterComponent(ctx, "gmail/missing")
+	if err == nil || !strings.Contains(err.Error(), "component not registered: gmail/missing") {
+		t.Fatalf("UnregisterComponent() error = %v, want missing component", err)
+	}
+}
+
 func TestServiceRunComponentCommand(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()

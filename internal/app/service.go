@@ -64,6 +64,7 @@ type ComponentAdminService interface {
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
 	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
 	RegisterComponent(ctx context.Context, componentRef string, runtimeKind string, homePath string) (RegisterComponentResult, error)
+	UnregisterComponent(ctx context.Context, componentRef string) (UnregisterComponentResult, error)
 	ListComponents(ctx context.Context) ([]ComponentInfo, error)
 	RunComponentCommand(ctx context.Context, request ComponentCommandRequest) (ComponentCommandResult, error)
 }

@@ -155,6 +155,26 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			return nil
 		})
 
+		b.Handle("component unregister <component>", "Unregister a component instance", func(req *clir.Request) error {
+			appService, err := openAppServiceForRoutes(req, store)
+			if err != nil {
+				return err
+			}
+			result, err := appService.UnregisterComponent(req.Context(), strings.TrimSpace(req.Params["component"]))
+			if err != nil {
+				return err
+			}
+			fmt.Println("component unregistered")
+			fmt.Printf("id: %s\n", result.ComponentID)
+			fmt.Printf("ref: %s\n", result.ComponentRef)
+			fmt.Printf("chat_components: %d\n", result.ChatComponents)
+			fmt.Printf("inbound_filter_bindings: %d\n", result.InboundFilterBindings)
+			fmt.Printf("thread_component_mappings: %d\n", result.ThreadMappings)
+			fmt.Printf("thread_component_states: %d\n", result.ThreadStates)
+			fmt.Printf("component_removed: %t\n", result.ComponentRemoved)
+			return nil
+		})
+
 		b.Handle("component list", "List registered components", func(req *clir.Request) error {
 			fs := flag.NewFlagSet("component list", flag.ContinueOnError)
 			fs.SetOutput(os.Stdout)
