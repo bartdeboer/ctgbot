@@ -279,6 +279,7 @@ func (b *Broker) handleResolvedInboundTurn(
 			return failConversation(nil, nil, audioErr)
 		}
 		if transcription.Text != "" {
+			options.SpeechLanguage = transcription.Language
 			turnPrompt = transcription.Text
 			inbound.Payload.Text.Text = turnPrompt
 			inbound.Payload.Attachments = nil

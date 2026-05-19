@@ -21,7 +21,8 @@ const (
 )
 
 type turnOptions struct {
-	Mode turnMode
+	Mode           turnMode
+	SpeechLanguage string
 }
 
 func (o turnOptions) WantsSpeechReply() bool {
@@ -134,12 +135,12 @@ func transcribeInboundAudio(ctx context.Context, runtime *ChatRuntime, threadID 
 	}, nil
 }
 
-func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, threadID modeluuid.UUID, text string) (*message.Media, string, error) {
+func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, threadID modeluuid.UUID, language string, text string) (*message.Media, string, error) {
 	synthesizer, ref, err := synthesizerForRuntime(runtime)
 	if err != nil || synthesizer == nil {
 		return nil, "", err
 	}
-	result, err := synthesizer.Synthesize(ctx, component.SpeechRequest{Text: text, ThreadID: threadID})
+	result, err := synthesizer.Synthesize(ctx, component.SpeechRequest{Text: text, ThreadID: threadID, Language: strings.TrimSpace(language)})
 	if err != nil {
 		return nil, ref, err
 	}
@@ -180,11 +181,11 @@ func (b *Broker) relayVoiceTranscript(ctx context.Context, runtime *ChatRuntime,
 	})
 }
 
-func (b *Broker) relaySynthesizedTurnReply(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread, text string) error {
+func (b *Broker) relaySynthesizedTurnReply(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread, options turnOptions, text string) error {
 	if runtime == nil || strings.TrimSpace(text) == "" {
 		return nil
 	}
-	media, _, err := synthesizeTurnReply(ctx, runtime, thread.ID, text)
+	media, _, err := synthesizeTurnReply(ctx, runtime, thread.ID, options.SpeechLanguage, text)
 	if err != nil || media == nil {
 		return err
 	}

@@ -298,8 +298,9 @@ type guardInboundFixture struct {
 }
 
 type fakeTranscriber struct {
-	text string
-	seen []message.Media
+	text     string
+	language string
+	seen     []message.Media
 }
 
 func (f *fakeTranscriber) Type() string { return "whisper" }
@@ -307,7 +308,7 @@ func (f *fakeTranscriber) Type() string { return "whisper" }
 func (f *fakeTranscriber) Transcribe(ctx context.Context, req component.TranscriptionRequest) (component.TranscriptionResult, error) {
 	_ = ctx
 	f.seen = append(f.seen, req.Media)
-	return component.TranscriptionResult{Text: f.text, Model: "fake-whisper"}, nil
+	return component.TranscriptionResult{Text: f.text, Language: f.language, Model: "fake-whisper"}, nil
 }
 
 type fakeSynthesizer struct {
@@ -585,7 +586,7 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	storage := repository.NewMemory()
 	messengerRecorder := &fakeMessengerRecorder{}
 	agentRecorder := &fakeAgentRecorder{streamText: "audio answer", finalText: "audio answer"}
-	transcriber := &fakeTranscriber{text: "hello from voice"}
+	transcriber := &fakeTranscriber{text: "hello from voice", language: "nl"}
 	synthesizer := &fakeSynthesizer{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
 		if err := registry.Add("whisper", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
@@ -653,7 +654,8 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	}
 	if !strings.Contains(outcome.Inbound.MetadataJSON, "input=audio") ||
 		!strings.Contains(outcome.Inbound.MetadataJSON, "transcriber=whisper") ||
-		!strings.Contains(outcome.Inbound.MetadataJSON, "transcription_model=fake-whisper") {
+		!strings.Contains(outcome.Inbound.MetadataJSON, "transcription_model=fake-whisper") ||
+		!strings.Contains(outcome.Inbound.MetadataJSON, "transcription_language=nl") {
 		t.Fatalf("inbound metadata = %q, want transcription metadata", outcome.Inbound.MetadataJSON)
 	}
 	artifacts, err := storage.Artifacts().ListByMessageID(context.Background(), outcome.Inbound.ID)
@@ -671,6 +673,9 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	}
 	if len(synthesizer.requests) != 1 || synthesizer.requests[0].ThreadID != outcome.Inbound.ThreadID {
 		t.Fatalf("synthesizer thread id = %#v, want %s", synthesizer.requests, outcome.Inbound.ThreadID)
+	}
+	if got, want := synthesizer.requests[0].Language, "nl"; got != want {
+		t.Fatalf("synthesizer language = %q, want %q", got, want)
 	}
 	if got, want := len(messengerRecorder.payloads), 3; got != want {
 		t.Fatalf("relay payloads = %d, want %d", got, want)
