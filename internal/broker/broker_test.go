@@ -649,8 +649,8 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	if outcome.Inbound == nil || !strings.Contains(outcome.Inbound.Text, "hello from voice") {
 		t.Fatalf("inbound text = %#v, want transcript", outcome.Inbound)
 	}
-	if got := agentRecorder.prompts[0]; !strings.Contains(got, "Detected language: nl") || !strings.Contains(got, "hello from voice") {
-		t.Fatalf("agent prompt = %q, want transcript with detected language", got)
+	if got := agentRecorder.prompts[0]; got != "hello from voice" {
+		t.Fatalf("agent prompt = %q, want transcript only", got)
 	}
 	if !strings.Contains(outcome.Inbound.MetadataJSON, "input=audio") ||
 		!strings.Contains(outcome.Inbound.MetadataJSON, "transcriber=whisper") ||

@@ -280,7 +280,7 @@ func (b *Broker) handleResolvedInboundTurn(
 		}
 		if transcription.Text != "" {
 			options.SpeechLanguage = transcription.Language
-			turnPrompt = audioTurnPrompt(transcription)
+			turnPrompt = transcription.Text
 			inbound.Payload.Text.Text = transcription.Text
 			inbound.Payload.Attachments = nil
 			inbound.Metadata = append(inbound.Metadata, transcriptionMetadata(voiceMedia, transcription)...)
