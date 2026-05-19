@@ -69,3 +69,16 @@ func TestDefaultWhisperArgsWriteTranscriptFile(t *testing.T) {
 		}
 	}
 }
+
+func TestDetectedLanguageFromWhisperOutput(t *testing.T) {
+	output := "whisper_init... auto-detected language: nl (p = 0.981234)\n"
+	if got, want := detectedLanguageFromWhisperOutput(output), "nl"; got != want {
+		t.Fatalf("detectedLanguageFromWhisperOutput() = %q, want %q", got, want)
+	}
+}
+
+func TestDetectedLanguageFromWhisperOutputMissing(t *testing.T) {
+	if got := detectedLanguageFromWhisperOutput("no language here"); got != "" {
+		t.Fatalf("detectedLanguageFromWhisperOutput() = %q, want empty", got)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -113,7 +114,8 @@ func (c *Component) Transcribe(ctx context.Context, req component.TranscriptionR
 	if err := c.run(ctx, req.ThreadID, modelDir, c.config.FFMpegCommand, renderArgs(defaultFFMpegArgs(), values)); err != nil {
 		return component.TranscriptionResult{}, err
 	}
-	args := c.whisperArgs(values, firstNonEmpty(req.Language, c.config.Language))
+	requestedLanguage := firstNonEmpty(req.Language, c.config.Language)
+	args := c.whisperArgs(values, requestedLanguage)
 	out, err := c.runtime.CombinedOutput(ctx, modelDir, req.ThreadID, nil, c.config.WhisperCommand, args...)
 	if err != nil {
 		return component.TranscriptionResult{}, fmt.Errorf("whispercpp command: %w\n%s", err, strings.TrimSpace(string(out)))
@@ -126,7 +128,11 @@ func (c *Component) Transcribe(ctx context.Context, req component.TranscriptionR
 	if text == "" {
 		return component.TranscriptionResult{}, fmt.Errorf("whispercpp returned empty transcript")
 	}
-	return component.TranscriptionResult{Text: text, Language: firstNonEmpty(req.Language, c.config.Language), Model: model.Name}, nil
+	language := requestedLanguage
+	if language == "" || strings.EqualFold(language, "auto") {
+		language = detectedLanguageFromWhisperOutput(string(out))
+	}
+	return component.TranscriptionResult{Text: text, Language: language, Model: model.Name}, nil
 }
 
 func (c *Component) acquireTranscription(ctx context.Context, modelName string) (func(), error) {
@@ -165,6 +171,16 @@ func defaultFFMpegArgs() []string {
 
 func defaultWhisperArgs() []string {
 	return []string{"-m", "{{model}}", "-f", "{{wav}}", "-fa", "-np", "-otxt", "-of", "{{output_prefix}}"}
+}
+
+var whisperDetectedLanguagePattern = regexp.MustCompile(`(?i)auto-detected language:\s*([a-z]{2,3})\b`)
+
+func detectedLanguageFromWhisperOutput(output string) string {
+	match := whisperDetectedLanguagePattern.FindStringSubmatch(output)
+	if len(match) < 2 {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(match[1]))
 }
 
 type workdir struct {
