@@ -47,6 +47,22 @@ func loadComponentConfig(homePath string) (ComponentConfig, error) {
 	return config.withDefaults(), nil
 }
 
+func saveComponentConfig(homePath string, config ComponentConfig) error {
+	path := filepath.Join(strings.TrimSpace(homePath), ComponentConfigFilename)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create gmailv2 component config dir: %w", err)
+	}
+	data, err := json.MarshalIndent(config.withDefaults(), "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode gmailv2 component config: %w", err)
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("write gmailv2 component config %s: %w", path, err)
+	}
+	return nil
+}
+
 func defaultComponentConfig() ComponentConfig {
 	yes := true
 	return ComponentConfig{

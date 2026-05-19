@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -119,6 +120,7 @@ var (
 	_ component.LocalCommandSurface       = (*Component)(nil)
 	_ component.MessageSender             = (*Component)(nil)
 	_ component.ChatPayloadSenderReceiver = (*Component)(nil)
+	_ configsurface.ConfigSurface         = (*Component)(nil)
 )
 
 func (c *Component) Type() string { return Type }

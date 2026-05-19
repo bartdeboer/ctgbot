@@ -9,10 +9,12 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	gmailapi "google.golang.org/api/gmail/v1"
 )
 
@@ -63,7 +65,7 @@ func TestCommandDefinitionsUseTightInboxSurface(t *testing.T) {
 	for _, def := range c.CommandDefinitions() {
 		patterns[def.Pattern] = true
 	}
-	for _, pattern := range []string{"query <query>", "fetch <message_id>", "db help", "db schema", "db query <sql>", "message view <message_id>", "message display <message_id>", "sender <email> config list", "sender <email> config set <key> <value>"} {
+	for _, pattern := range []string{"query <query>", "fetch <message_id>", "db help", "db schema", "db query <sql>", "message view <message_id>", "message display <message_id>", "sender <email> config list", "sender <email> config set <key> <value>", "config list", "config get <key>", "config set <key> <value>", "config unset <key>"} {
 		if !patterns[pattern] {
 			t.Fatalf("missing command pattern %q in %#v", pattern, patterns)
 		}
@@ -72,6 +74,48 @@ func TestCommandDefinitionsUseTightInboxSurface(t *testing.T) {
 		if patterns[pattern] {
 			t.Fatalf("obsolete command pattern still registered: %q", pattern)
 		}
+	}
+}
+
+func TestComponentConfigSurface(t *testing.T) {
+	c := newTestComponent(t, "work")
+	engine, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, c)
+	if err != nil {
+		t.Fatalf("NewEngineForSource() error = %v", err)
+	}
+	base := commandengine.Request{Context: commandengine.Context{Source: commandengine.SourceHostbridge, Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}
+
+	list, err := engine.Run(context.Background(), base, []string{"config", "list"})
+	if err != nil {
+		t.Fatalf("config list error = %v", err)
+	}
+	for _, want := range []string{"poll-interval=1m0s", "max-poll-messages=20", "materialize-raw=true", "skip-labels=SENT,DRAFT,SPAM,TRASH"} {
+		if !strings.Contains(list.Text, want) {
+			t.Fatalf("config list missing %q:\n%s", want, list.Text)
+		}
+	}
+
+	set, err := engine.Run(context.Background(), base, []string{"config", "set", "max-poll-messages", "7"})
+	if err != nil {
+		t.Fatalf("config set error = %v", err)
+	}
+	if got, want := strings.TrimSpace(set.Text), "max-poll-messages=7"; got != want {
+		t.Fatalf("config set text = %q, want %q", got, want)
+	}
+	loaded, err := loadComponentConfig(c.home.Path)
+	if err != nil {
+		t.Fatalf("loadComponentConfig() error = %v", err)
+	}
+	if loaded.MaxPollMessages != 7 {
+		t.Fatalf("MaxPollMessages = %d, want 7", loaded.MaxPollMessages)
+	}
+
+	unset, err := engine.Run(context.Background(), base, []string{"config", "unset", "max-poll-messages"})
+	if err != nil {
+		t.Fatalf("config unset error = %v", err)
+	}
+	if got, want := strings.TrimSpace(unset.Text), "max-poll-messages=20"; got != want {
+		t.Fatalf("config unset text = %q, want %q", got, want)
 	}
 }
 

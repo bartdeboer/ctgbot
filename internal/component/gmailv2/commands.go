@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
@@ -53,7 +54,7 @@ func RegisterGobTypes(register func(any)) {
 }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		def("status", "Show Gmail v2 component status", func(*clir.Request) (any, error) { return statusCommand{}, nil }, commandengine.SourceCLI),
 		def("message <text>", "Send a Gmail message", buildMessageCommand, commandengine.SourceHostbridge),
 		def("query <query>", "Search Gmail messages", func(req *clir.Request) (any, error) { return searchCommand{Query: req.Params["query"]}, nil }, commandengine.SourceHostbridge),
@@ -78,6 +79,11 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		def("sender list", "List Gmail sender policies", func(*clir.Request) (any, error) { return senderListCommand{}, nil }, commandengine.SourceHostbridge),
 		def("sender remove <email>", "Remove a Gmail sender policy", func(req *clir.Request) (any, error) { return senderRemoveCommand{Email: req.Params["email"]}, nil }, commandengine.SourceHostbridge),
 	}
+	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
+		Sources: []commandengine.Source{commandengine.SourceHostbridge},
+		Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+	})...)
+	return definitions
 }
 
 func buildMessageViewCommand(req *clir.Request) (any, error) {
@@ -123,6 +129,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		commandengine.RegisterPattern[senderConfigSetCommand](registry, "sender <email> config set <key> <value>", c.handleSenderConfigSet),
 		commandengine.RegisterPattern[senderListCommand](registry, "sender list", c.handleSenderList),
 		commandengine.RegisterPattern[senderRemoveCommand](registry, "sender remove <email>", c.handleSenderRemove),
+		configsurface.RegisterCommandHandlers(registry, c),
 	}
 	for _, err := range handlers {
 		if err != nil {

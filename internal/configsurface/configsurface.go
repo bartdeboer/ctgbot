@@ -41,11 +41,13 @@ type ConfigSchema struct {
 type FieldType string
 
 const (
-	FieldTypeString FieldType = "string"
-	FieldTypeBool   FieldType = "bool"
-	FieldTypeInt    FieldType = "int"
-	FieldTypeEnum   FieldType = "enum"
-	FieldTypeURL    FieldType = "url"
+	FieldTypeString     FieldType = "string"
+	FieldTypeBool       FieldType = "bool"
+	FieldTypeInt        FieldType = "int"
+	FieldTypeEnum       FieldType = "enum"
+	FieldTypeURL        FieldType = "url"
+	FieldTypeDuration   FieldType = "duration"
+	FieldTypeStringList FieldType = "string-list"
 )
 
 // FieldSchema describes one config key.
