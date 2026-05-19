@@ -27,6 +27,14 @@ type turnCommandExecutor struct {
 	next commandengine.CommandExecutor
 }
 
+func (e turnCommandExecutor) ActiveComponents() []string {
+	provider, ok := e.next.(interface{ ActiveComponents() []string })
+	if !ok || provider == nil {
+		return nil
+	}
+	return provider.ActiveComponents()
+}
+
 func (e turnCommandExecutor) Execute(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	switch cmd := req.Command.(type) {
 	case schemacommands.TurnConfigSet:

@@ -365,6 +365,13 @@ func (b *Bridge) logf(format string, args ...any) {
 }
 
 func activeCommandComponents(commands commandengine.CommandExecutor) string {
+	if provider, ok := commands.(interface{ ActiveComponents() []string }); ok && provider != nil {
+		refs := provider.ActiveComponents()
+		if len(refs) == 0 {
+			return ""
+		}
+		return strings.Join(append([]string(nil), refs...), ",")
+	}
 	engine, ok := commands.(*commandengine.Engine)
 	if !ok || len(engine.ActiveComponentRefs) == 0 {
 		return ""

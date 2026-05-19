@@ -23,6 +23,13 @@ func (e *Engine) WithActiveComponentRefs(refs []string) *Engine {
 	return e
 }
 
+func (e *Engine) ActiveComponents() []string {
+	if e == nil {
+		return nil
+	}
+	return append([]string(nil), e.ActiveComponentRefs...)
+}
+
 func (e *Engine) Run(ctx context.Context, base Request, argv []string) (Result, error) {
 	if e == nil {
 		return Result{}, fmt.Errorf("missing command engine")

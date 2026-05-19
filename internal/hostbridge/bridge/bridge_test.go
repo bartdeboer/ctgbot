@@ -61,6 +61,26 @@ func TestActiveCommandComponentsFromEngine(t *testing.T) {
 	}
 }
 
+func TestActiveCommandComponentsFromWrappedExecutor(t *testing.T) {
+	commands := activeComponentExecutor{refs: []string{"codex/codex", "gmailv2/personal"}}
+	if got, want := activeCommandComponents(commands), "codex/codex,gmailv2/personal"; got != want {
+		t.Fatalf("activeCommandComponents() = %q, want %q", got, want)
+	}
+}
+
+type activeComponentExecutor struct {
+	refs []string
+}
+
+func (e activeComponentExecutor) ActiveComponents() []string {
+	return append([]string(nil), e.refs...)
+}
+
+func (e activeComponentExecutor) Execute(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	_, _ = ctx, req
+	return commandengine.Result{}, nil
+}
+
 func TestPrepareRequestUsesTLSClientIdentityAsThread(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()

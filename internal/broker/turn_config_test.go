@@ -69,6 +69,16 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 	}
 }
 
+func TestTurnCommandExecutorPreservesActiveComponents(t *testing.T) {
+	next := commandengine.NewEngine(nil, nil).WithActiveComponentRefs([]string{"codex", "gmailv2/personal"})
+	executor := turnCommandExecutor{next: next}
+
+	got := executor.ActiveComponents()
+	if strings.Join(got, ",") != "codex,gmailv2/personal" {
+		t.Fatalf("ActiveComponents() = %#v", got)
+	}
+}
+
 func TestTurnCommandExecutorRejectsUnknownAndReadOnlySettings(t *testing.T) {
 	turn := &agentTurnRuntime{}
 	executor := turnCommandExecutor{turn: turn}
