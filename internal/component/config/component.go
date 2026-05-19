@@ -41,7 +41,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 	out := make([]commandengine.Definition, 0, 3)
 	for _, definition := range all {
 		switch definition.CanonicalPattern() {
-		case "config list", "config get <key>", "config set <key> <value>":
+		case "config list", "config get <key>", "config set <key> <value>", "config unset <key>":
 			out = append(out, definition)
 		}
 	}

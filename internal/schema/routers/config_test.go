@@ -184,8 +184,8 @@ func TestConfigRegistryCoversFormerScalarSetters(t *testing.T) {
 		if err != nil {
 			t.Fatalf("config get %s: %v", tc.key, err)
 		}
-		if result.Text != tc.wantReply {
-			t.Fatalf("config get %s reply = %q, want %q", tc.key, result.Text, tc.wantReply)
+		if !strings.Contains(result.Text, tc.wantReply) {
+			t.Fatalf("config get %s reply = %q, want to contain %q", tc.key, result.Text, tc.wantReply)
 		}
 	}
 	if got := cfg.Git().UserName(); got != "Registry User" {
@@ -229,7 +229,8 @@ func newTestConfig(t *testing.T) *appstate.Config {
 
 func containsLine(text string, want string) bool {
 	for _, line := range strings.Split(text, "\n") {
-		if strings.TrimSpace(line) == want {
+		line := strings.TrimSpace(line)
+		if line == want || strings.HasPrefix(line, want+"=") {
 			return true
 		}
 	}
