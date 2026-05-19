@@ -135,11 +135,11 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 			},
 		}
 
-		result, err := engine.Run(ctx, base, []string{"codex", "model", "set", "gpt-test"})
+		result, err := engine.Run(ctx, base, []string{"codex", "config", "set", "model", "gpt-test"})
 		if err != nil {
 			t.Fatalf("model set error = %v", err)
 		}
-		if got, want := result.Text, "codex model=gpt-test"; got != want {
+		if got, want := result.Text, "model=gpt-test"; got != want {
 			t.Fatalf("model set text = %q, want %q", got, want)
 		}
 		assertThreadState(t, c, ctx, thread.ID, threadState{Model: "gpt-test"})
@@ -311,26 +311,25 @@ func TestCodexCommandModelClearRemovesThreadComponentState(t *testing.T) {
 			},
 		}
 
-		statusResult, err := engine.Run(ctx, base, []string{"codex", "model"})
+		statusResult, err := engine.Run(ctx, base, []string{"codex", "config", "get", "model"})
 		if err != nil {
 			t.Fatalf("model status error = %v", err)
 		}
 		for _, want := range []string{
-			"codex model: legacy-model",
-			"source: thread_component_state",
+			"model=legacy-model",
+			"writable: true",
 		} {
 			if !strings.Contains(statusResult.Text, want) {
 				t.Fatalf("model status missing %q:\n%s", want, statusResult.Text)
 			}
 		}
 
-		clearResult, err := engine.Run(ctx, base, []string{"codex", "model", "clear"})
+		clearResult, err := engine.Run(ctx, base, []string{"codex", "config", "unset", "model"})
 		if err != nil {
 			t.Fatalf("model clear error = %v", err)
 		}
 		for _, want := range []string{
-			"codex model cleared",
-			"source: codex",
+			"model=",
 		} {
 			if !strings.Contains(clearResult.Text, want) {
 				t.Fatalf("model clear missing %q:\n%s", want, clearResult.Text)
@@ -376,11 +375,11 @@ func TestCodexCommandModelEffortSetUsesThreadComponentState(t *testing.T) {
 			},
 		}
 
-		result, err := engine.Run(ctx, base, []string{"codex", "model", "effort", "set", "high"})
+		result, err := engine.Run(ctx, base, []string{"codex", "config", "set", "effort", "high"})
 		if err != nil {
 			t.Fatalf("model effort set error = %v", err)
 		}
-		if got, want := result.Text, "codex reasoning effort=high"; got != want {
+		if got, want := result.Text, "effort=high"; got != want {
 			t.Fatalf("model effort text = %q, want %q", got, want)
 		}
 		assertThreadState(t, c, ctx, thread.ID, threadState{ReasoningEffort: "high"})
