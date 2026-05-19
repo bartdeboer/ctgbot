@@ -61,7 +61,7 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("turn config unset error = %v", err)
 	}
-	if got, want := strings.TrimSpace(unset.Text), "turn config voice.name="; got != want {
+	if got, want := strings.TrimSpace(unset.Text), "voice.name="; got != want {
 		t.Fatalf("turn config unset text = %q, want %q", got, want)
 	}
 	if turn.voiceName != "" {

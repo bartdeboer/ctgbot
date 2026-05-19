@@ -57,7 +57,7 @@ func (r *agentTurnRuntime) setTurnConfig(ctx context.Context, req commandengine.
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: fmt.Sprintf("turn config %s=%s", key, updated)}, nil
+	return commandengine.Result{Text: fmt.Sprintf("%s=%s", key, updated)}, nil
 }
 
 func (r *agentTurnRuntime) unsetTurnConfig(ctx context.Context, req commandengine.Request, key string) (commandengine.Result, error) {
@@ -72,7 +72,7 @@ func (r *agentTurnRuntime) unsetTurnConfig(ctx context.Context, req commandengin
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: fmt.Sprintf("turn config %s=%s", key, updated)}, nil
+	return commandengine.Result{Text: fmt.Sprintf("%s=%s", key, updated)}, nil
 }
 
 func (r *agentTurnRuntime) getTurnConfig(ctx context.Context, req commandengine.Request, key string) (commandengine.Result, error) {

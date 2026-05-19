@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
+	threadconfig "github.com/bartdeboer/ctgbot/internal/app/config/thread"
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	messagingdomain "github.com/bartdeboer/ctgbot/internal/messaging"
@@ -354,7 +356,8 @@ func (c *Component) handleThreadConfigGet(ctx context.Context, req commandengine
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "thread config " + key + "=" + value}, nil
+	field, _ := threadconfig.Schema().Field(key)
+	return commandengine.Result{Text: configsurface.FormatGet(field, value)}, nil
 }
 
 func (c *Component) handleThreadConfigSet(ctx context.Context, req commandengine.Request, cmd threadConfigSetCommand) (commandengine.Result, error) {
@@ -369,7 +372,7 @@ func (c *Component) handleThreadConfigSet(ctx context.Context, req commandengine
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "thread config " + key + "=" + value}, nil
+	return commandengine.Result{Text: key + "=" + value}, nil
 }
 
 func (c *Component) handleThreadConfigUnset(ctx context.Context, req commandengine.Request, cmd threadConfigUnsetCommand) (commandengine.Result, error) {
@@ -384,7 +387,7 @@ func (c *Component) handleThreadConfigUnset(ctx context.Context, req commandengi
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "thread config " + key + "=" + value}, nil
+	return commandengine.Result{Text: key + "=" + value}, nil
 }
 
 func (c *Component) handleMessageList(ctx context.Context, req commandengine.Request, cmd messageListCommand) (commandengine.Result, error) {

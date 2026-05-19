@@ -154,7 +154,7 @@ func TestThreadConfigCommandsUpdateCurrentThread(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run(thread config unset) error = %v", err)
 	}
-	if got, want := strings.TrimSpace(unset.Text), "thread config voice.name="; got != want {
+	if got, want := strings.TrimSpace(unset.Text), "voice.name="; got != want {
 		t.Fatalf("unset result = %q, want %q", got, want)
 	}
 	updated, err = storage.Threads().GetByID(ctx, thread.ID)
@@ -175,7 +175,7 @@ func TestThreadConfigCommandsUpdateReferencedThread(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run(thread <thread> config set) error = %v", err)
 	}
-	if got, want := strings.TrimSpace(result.Text), "thread config voice.output=true"; got != want {
+	if got, want := strings.TrimSpace(result.Text), "voice.output=true"; got != want {
 		t.Fatalf("result = %q, want %q", got, want)
 	}
 }
