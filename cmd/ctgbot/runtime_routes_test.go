@@ -71,6 +71,23 @@ func TestWorkspaceSetAndComponentRegister(t *testing.T) {
 		if componentRow.Runtime != "local" {
 			t.Fatalf("Runtime = %q, want local", componentRow.Runtime)
 		}
+
+		unregisterOutput := captureStdout(t, func() {
+			if err := router.Run(context.Background(), []string{"component", "unregister", "codex/work"}); err != nil {
+				t.Fatalf("component unregister: %v", err)
+			}
+		})
+		if !strings.Contains(unregisterOutput, "component unregistered") || !strings.Contains(unregisterOutput, "ref: codex/work") || !strings.Contains(unregisterOutput, "component_removed: true") {
+			t.Fatalf("unexpected unregister output: %q", unregisterOutput)
+		}
+		componentRow, err = system.Storage.Components().GetByTypeAndName(context.Background(), "codex", "work")
+		if err != nil {
+			t.Fatalf("GetByTypeAndName after unregister: %v", err)
+		}
+		if componentRow != nil {
+			t.Fatalf("component after unregister = %#v, want nil", componentRow)
+		}
+		assertDirExists(t, expectedHome)
 	})
 }
 

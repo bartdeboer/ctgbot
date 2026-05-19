@@ -48,19 +48,24 @@ type ComponentRepository interface {
 	GetDefaultByType(ctx context.Context, componentType string) (*coremodel.Component, error)
 	GetByTypeAndName(ctx context.Context, componentType string, name string) (*coremodel.Component, error)
 	ListEnabled(ctx context.Context) ([]coremodel.Component, error)
+	DeleteByID(ctx context.Context, componentID modeluuid.UUID) (bool, error)
 }
 
 type ChatComponentRepository interface {
 	Save(ctx context.Context, binding *coremodel.ChatComponent) error
 	GetByChatComponentRole(ctx context.Context, chatID modeluuid.UUID, componentID modeluuid.UUID, role coremodel.ChatComponentRole) (*coremodel.ChatComponent, error)
 	ListEnabledByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
+	ListByComponentID(ctx context.Context, componentID modeluuid.UUID) ([]coremodel.ChatComponent, error)
 	FindByComponentRoleAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChannelID string) (*coremodel.ChatComponent, error)
+	DeleteByComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error)
 }
 
 type InboundFilterBindingRepository interface {
 	Save(ctx context.Context, binding *coremodel.InboundFilterBinding) error
 	GetBySourceBindingAndFilter(ctx context.Context, sourceBindingID modeluuid.UUID, filterComponentID modeluuid.UUID) (*coremodel.InboundFilterBinding, error)
 	ListEnabledBySourceBindingID(ctx context.Context, sourceBindingID modeluuid.UUID) ([]coremodel.InboundFilterBinding, error)
+	DeleteByFilterComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error)
+	DeleteBySourceBindingIDs(ctx context.Context, sourceBindingIDs []modeluuid.UUID) (int64, error)
 }
 
 type InboundDropRepository interface {
@@ -90,12 +95,14 @@ type ThreadComponentMappingRepository interface {
 	FindByChatComponentAndThreadID(ctx context.Context, chatID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) (*coremodel.ThreadComponentMapping, error)
 	ListByChatID(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadComponentMapping, error)
 	DeleteByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) error
+	DeleteByComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error)
 }
 
 type ThreadComponentStateRepository interface {
 	Save(ctx context.Context, state *coremodel.ThreadComponentState) error
 	GetByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (*coremodel.ThreadComponentState, error)
 	DeleteByThreadAndComponent(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) error
+	DeleteByComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error)
 }
 
 type MessageRepository interface {

@@ -338,6 +338,17 @@ func (r memoryComponents) ListEnabled(ctx context.Context) ([]coremodel.Componen
 	return out, nil
 }
 
+func (r memoryComponents) DeleteByID(ctx context.Context, componentID modeluuid.UUID) (bool, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	if _, ok := r.s.components[componentID]; !ok {
+		return false, nil
+	}
+	delete(r.s.components, componentID)
+	return true, nil
+}
+
 type memoryChatComponents struct{ s *MemoryStorage }
 
 func (r memoryChatComponents) Save(ctx context.Context, binding *coremodel.ChatComponent) error {
@@ -385,6 +396,19 @@ func (r memoryChatComponents) ListEnabledByChatID(ctx context.Context, chatID mo
 	return out, nil
 }
 
+func (r memoryChatComponents) ListByComponentID(ctx context.Context, componentID modeluuid.UUID) ([]coremodel.ChatComponent, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var out []coremodel.ChatComponent
+	for _, binding := range r.s.chatComponents {
+		if binding.ComponentID == componentID {
+			out = append(out, binding)
+		}
+	}
+	return out, nil
+}
+
 func (r memoryChatComponents) FindByComponentRoleAndExternalChannelID(ctx context.Context, componentID modeluuid.UUID, role coremodel.ChatComponentRole, externalChannelID string) (*coremodel.ChatComponent, error) {
 	_ = ctx
 	externalChannelID = strings.TrimSpace(externalChannelID)
@@ -397,6 +421,20 @@ func (r memoryChatComponents) FindByComponentRoleAndExternalChannelID(ctx contex
 		}
 	}
 	return nil, nil
+}
+
+func (r memoryChatComponents) DeleteByComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var count int64
+	for id, binding := range r.s.chatComponents {
+		if binding.ComponentID == componentID {
+			delete(r.s.chatComponents, id)
+			count++
+		}
+	}
+	return count, nil
 }
 
 type memoryInboundFilterBindings struct{ s *MemoryStorage }
@@ -456,6 +494,41 @@ func (r memoryInboundFilterBindings) ListEnabledBySourceBindingID(ctx context.Co
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
 	return out, nil
+}
+
+func (r memoryInboundFilterBindings) DeleteByFilterComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var count int64
+	for id, binding := range r.s.inboundFilterBindings {
+		if binding.FilterComponentID == componentID {
+			delete(r.s.inboundFilterBindings, id)
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (r memoryInboundFilterBindings) DeleteBySourceBindingIDs(ctx context.Context, sourceBindingIDs []modeluuid.UUID) (int64, error) {
+	_ = ctx
+	if len(sourceBindingIDs) == 0 {
+		return 0, nil
+	}
+	sourceSet := map[modeluuid.UUID]struct{}{}
+	for _, id := range sourceBindingIDs {
+		sourceSet[id] = struct{}{}
+	}
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var count int64
+	for id, binding := range r.s.inboundFilterBindings {
+		if _, ok := sourceSet[binding.SourceBindingID]; ok {
+			delete(r.s.inboundFilterBindings, id)
+			count++
+		}
+	}
+	return count, nil
 }
 
 type memoryInboundDrops struct{ s *MemoryStorage }
@@ -771,6 +844,20 @@ func (r memoryThreadMappings) DeleteByThreadAndComponent(ctx context.Context, th
 	return nil
 }
 
+func (r memoryThreadMappings) DeleteByComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var count int64
+	for id, mapping := range r.s.threadComponentMappings {
+		if mapping.ComponentID == componentID {
+			delete(r.s.threadComponentMappings, id)
+			count++
+		}
+	}
+	return count, nil
+}
+
 type memoryThreadStates struct{ s *MemoryStorage }
 
 func (r memoryThreadStates) Save(ctx context.Context, state *coremodel.ThreadComponentState) error {
@@ -825,6 +912,20 @@ func (r memoryThreadStates) DeleteByThreadAndComponent(ctx context.Context, thre
 		}
 	}
 	return nil
+}
+
+func (r memoryThreadStates) DeleteByComponentID(ctx context.Context, componentID modeluuid.UUID) (int64, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var count int64
+	for id, state := range r.s.threadComponentStates {
+		if state.ComponentID == componentID {
+			delete(r.s.threadComponentStates, id)
+			count++
+		}
+	}
+	return count, nil
 }
 
 type memoryMessages struct{ s *MemoryStorage }
