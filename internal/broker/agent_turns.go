@@ -25,6 +25,7 @@ func (b *Broker) runStoredThreadTurn(
 		voiceInput:            voiceInput,
 		detectedInputLanguage: cleanLanguageCode(detectedInputLanguage),
 	}
+	turnRuntime.applyThreadVoiceConfig(thread)
 
 	var outbound []coremodel.ThreadMessage
 	for _, agentBinding := range runtime.Agents {

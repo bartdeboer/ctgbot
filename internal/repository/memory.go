@@ -209,6 +209,10 @@ func (r memoryThreads) Save(ctx context.Context, thread *coremodel.Thread) error
 		return nil
 	}
 	thread.Label = strings.TrimSpace(thread.Label)
+	thread.VoiceLanguage = strings.TrimSpace(thread.VoiceLanguage)
+	thread.VoiceName = strings.TrimSpace(thread.VoiceName)
+	thread.VoiceModel = strings.TrimSpace(thread.VoiceModel)
+	thread.VoiceDeviceTarget = strings.TrimSpace(thread.VoiceDeviceTarget)
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
 	now := time.Now()
