@@ -44,6 +44,7 @@ const (
 	FieldTypeString     FieldType = "string"
 	FieldTypeBool       FieldType = "bool"
 	FieldTypeInt        FieldType = "int"
+	FieldTypeFloat      FieldType = "float"
 	FieldTypeEnum       FieldType = "enum"
 	FieldTypeURL        FieldType = "url"
 	FieldTypeDuration   FieldType = "duration"

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
@@ -21,6 +22,7 @@ type ComponentResolver interface {
 
 type Component struct {
 	registration coremodel.Component
+	homePath     string
 	config       ComponentConfig
 	store        *store
 	resolver     ComponentResolver
@@ -35,6 +37,7 @@ var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 var _ component.Searcher = (*Component)(nil)
 var _ component.SearchMessageSourceReceiver = (*Component)(nil)
+var _ configsurface.ConfigSurface = (*Component)(nil)
 
 func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver, logf func(format string, args ...any)) (component.Component, error) {
 	_, _, _ = ctx, runtime, storage
@@ -46,7 +49,7 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if err != nil {
 		return nil, err
 	}
-	return &Component{registration: registration, config: config, store: store, resolver: resolver, logf: logf}, nil
+	return &Component{registration: registration, homePath: home.Path, config: config, store: store, resolver: resolver, logf: logf}, nil
 }
 
 func (c *Component) Type() string { return Type }
