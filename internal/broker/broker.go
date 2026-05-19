@@ -246,8 +246,8 @@ func (b *Broker) handleResolvedInboundTurn(
 	}
 
 	var savedPaths []string
-	voiceMedia, isVoiceTurn := voiceInputAttachment(rawText, inbound.Payload.Attachments)
-	if len(inbound.Payload.Attachments) > 0 && !isVoiceTurn {
+	voiceMedia, voiceInput := voiceInputAttachment(rawText, inbound.Payload.Attachments)
+	if len(inbound.Payload.Attachments) > 0 && !voiceInput {
 		if runtime == nil {
 			runtime, err = b.runtimeForChat(ctx, chat)
 			if err != nil {
@@ -264,10 +264,9 @@ func (b *Broker) handleResolvedInboundTurn(
 		}
 	}
 
-	options := turnOptions{Mode: turnModeText}
+	detectedInputLanguage := ""
 	turnPrompt := rawText
-	if isVoiceTurn {
-		options.Mode = turnModeAudio
+	if voiceInput {
 		if runtime == nil {
 			runtime, err = b.runtimeForChat(ctx, chat)
 			if err != nil {
@@ -279,7 +278,7 @@ func (b *Broker) handleResolvedInboundTurn(
 			return failConversation(nil, nil, audioErr)
 		}
 		if transcription.Text != "" {
-			options.SpeechLanguage = transcription.Language
+			detectedInputLanguage = transcription.Language
 			turnPrompt = transcription.Text
 			inbound.Payload.Text.Text = transcription.Text
 			inbound.Payload.Attachments = nil
@@ -317,7 +316,7 @@ func (b *Broker) handleResolvedInboundTurn(
 			return failConversation(storedInbound, nil, err)
 		}
 	}
-	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound, options)
+	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound, voiceInput, detectedInputLanguage)
 	if err != nil {
 		return failConversation(storedInbound, outbound, err)
 	}

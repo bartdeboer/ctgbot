@@ -13,14 +13,17 @@ func (b *Broker) runStoredThreadTurn(
 	chat coremodel.Chat,
 	thread coremodel.Thread,
 	turnInbound coremodel.ThreadMessage,
-	options turnOptions,
+	voiceInput bool,
+	detectedInputLanguage string,
 ) ([]coremodel.ThreadMessage, error) {
 	turnRuntime := &agentTurnRuntime{
-		ctx:     ctx,
-		broker:  b,
-		runtime: runtime,
-		chat:    chat,
-		thread:  thread,
+		ctx:                   ctx,
+		broker:                b,
+		runtime:               runtime,
+		chat:                  chat,
+		thread:                thread,
+		voiceInput:            voiceInput,
+		detectedInputLanguage: cleanLanguageCode(detectedInputLanguage),
 	}
 
 	var outbound []coremodel.ThreadMessage
@@ -44,8 +47,8 @@ func (b *Broker) runStoredThreadTurn(
 			}
 			outbound = append(outbound, *message)
 		}
-		if options.WantsSpeechReply() {
-			if err := b.relaySynthesizedTurnReply(ctx, runtime, thread, options, turnRuntime.settings, final.Text); err != nil {
+		if turnRuntime.voiceOutput {
+			if err := b.relaySynthesizedTurnReply(ctx, runtime, turnRuntime, final.Text); err != nil {
 				return outbound, err
 			}
 		}

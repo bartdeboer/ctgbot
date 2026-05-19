@@ -166,13 +166,14 @@ func (c *fakeMessenger) StartChatAction(ctx context.Context, target message.Chat
 }
 
 type fakeAgentRecorder struct {
-	prompts     []string
-	homes       []runtimepkg.Home
-	streamText  string
-	finalText   string
-	entered     chan struct{}
-	release     <-chan struct{}
-	interrupted chan struct{}
+	prompts      []string
+	homes        []runtimepkg.Home
+	streamText   string
+	finalText    string
+	entered      chan struct{}
+	release      <-chan struct{}
+	interrupted  chan struct{}
+	turnCommands []any
 }
 
 type fakeAgent struct {
@@ -184,6 +185,11 @@ func (c *fakeAgent) Type() string { return "codex" }
 func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
 	_ = ctx
 	c.recorder.prompts = append(c.recorder.prompts, turn.Inbound.Text)
+	for _, cmd := range c.recorder.turnCommands {
+		if _, err := turn.Runtime.Commands().Execute(context.Background(), commandengine.Request{Command: cmd}); err != nil {
+			return nil, err
+		}
+	}
 	if c.recorder.entered != nil {
 		c.recorder.entered <- struct{}{}
 	}
@@ -581,7 +587,7 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	}
 }
 
-func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
+func TestVoiceInputUsesTranscriberWithoutImplicitVoiceOutput(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	messengerRecorder := &fakeMessengerRecorder{}
@@ -671,16 +677,10 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	if len(transcriber.seen) != 1 || string(transcriber.seen[0].Content) != "voice bytes" {
 		t.Fatalf("transcriber media = %#v", transcriber.seen)
 	}
-	if len(synthesizer.seen) != 1 || synthesizer.seen[0] != "Dit is een Nederlands antwoord op de gesproken test." {
-		t.Fatalf("synthesizer input = %#v", synthesizer.seen)
+	if len(synthesizer.seen) != 0 {
+		t.Fatalf("synthesizer input = %#v, want no implicit voice output", synthesizer.seen)
 	}
-	if len(synthesizer.requests) != 1 || synthesizer.requests[0].ThreadID != outcome.Inbound.ThreadID {
-		t.Fatalf("synthesizer thread id = %#v, want %s", synthesizer.requests, outcome.Inbound.ThreadID)
-	}
-	if got, want := synthesizer.requests[0].Language, "nl"; got != want {
-		t.Fatalf("synthesizer language = %q, want %q", got, want)
-	}
-	if got, want := len(messengerRecorder.payloads), 3; got != want {
+	if got, want := len(messengerRecorder.payloads), 2; got != want {
 		t.Fatalf("relay payloads = %d, want %d", got, want)
 	}
 	transcriptPayload := messengerRecorder.payloads[0]
@@ -690,10 +690,6 @@ func TestAudioInboundUsesTranscriberAndSynthesizesFinalReply(t *testing.T) {
 	finalPayload := messengerRecorder.payloads[1]
 	if got := finalPayload.Text.Text; got != "Dit is een Nederlands antwoord op de gesproken test." {
 		t.Fatalf("final text = %q, want Dutch answer", got)
-	}
-	audioPayload := messengerRecorder.payloads[2]
-	if audioPayload.Text.Text != "" || len(audioPayload.Attachments) != 1 || audioPayload.Attachments[0].ContentType != "audio/ogg" {
-		t.Fatalf("audio payload = %#v", audioPayload)
 	}
 }
 

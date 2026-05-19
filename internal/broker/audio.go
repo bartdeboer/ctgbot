@@ -14,22 +14,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
-type turnMode string
-
-const (
-	turnModeText  turnMode = "text"
-	turnModeAudio turnMode = "audio"
-)
-
-type turnOptions struct {
-	Mode           turnMode
-	SpeechLanguage string
-}
-
-func (o turnOptions) WantsSpeechReply() bool {
-	return o.Mode == turnModeAudio
-}
-
 func voiceInputAttachment(text string, attachments []message.Media) (message.Media, bool) {
 	if strings.TrimSpace(text) != "" || len(attachments) != 1 {
 		return message.Media{}, false
@@ -73,7 +57,7 @@ func transcriberForRuntime(runtime *ChatRuntime) (component.Transcriber, string,
 			continue
 		}
 		if transcriber != nil {
-			return nil, "", fmt.Errorf("multiple transcribers configured; bind exactly one transcriber for audio turns")
+			return nil, "", fmt.Errorf("multiple transcribers configured; bind exactly one transcriber for audio input")
 		}
 		transcriber = candidate
 		ref = loaded.Registration.Ref()
@@ -90,7 +74,7 @@ func synthesizerForRuntime(runtime *ChatRuntime) (component.SpeechSynthesizer, s
 			continue
 		}
 		if synthesizer != nil {
-			return nil, "", fmt.Errorf("multiple speech synthesizers configured; bind exactly one synthesizer for audio turns")
+			return nil, "", fmt.Errorf("multiple speech synthesizers configured; bind exactly one synthesizer for voice output")
 		}
 		synthesizer = candidate
 		ref = loaded.Registration.Ref()
@@ -136,12 +120,12 @@ func transcribeInboundAudio(ctx context.Context, runtime *ChatRuntime, threadID 
 	}, nil
 }
 
-func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, threadID modeluuid.UUID, options turnOptions, settings turnSettings, text string) (*message.Media, string, error) {
+func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, turn *agentTurnRuntime, text string) (*message.Media, string, error) {
 	synthesizer, ref, err := synthesizerForRuntime(runtime)
 	if err != nil || synthesizer == nil {
 		return nil, "", err
 	}
-	result, err := synthesizer.Synthesize(ctx, speechRequestForTurn(text, threadID, options, settings))
+	result, err := synthesizer.Synthesize(ctx, speechRequestForTurn(text, turn))
 	if err != nil {
 		return nil, ref, err
 	}
@@ -151,17 +135,26 @@ func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, threadID mod
 	return &result.Media, ref, nil
 }
 
-func speechRequestForTurn(text string, threadID modeluuid.UUID, options turnOptions, settings turnSettings) component.SpeechRequest {
-	language := cleanLanguageCode(settings.Voice.Language)
-	if language == "" {
-		language = replySpeechLanguage(text, options.SpeechLanguage)
+func speechRequestForTurn(text string, turn *agentTurnRuntime) component.SpeechRequest {
+	language := ""
+	threadID := modeluuid.Nil
+	voiceName := ""
+	voiceModel := ""
+	if turn != nil {
+		threadID = turn.thread.ID
+		language = cleanLanguageCode(turn.voiceLanguage)
+		if language == "" {
+			language = replySpeechLanguage(text, turn.detectedInputLanguage)
+		}
+		voiceName = strings.TrimSpace(turn.voiceName)
+		voiceModel = strings.TrimSpace(turn.voiceModel)
 	}
 	return component.SpeechRequest{
 		Text:     strings.TrimSpace(text),
 		ThreadID: threadID,
 		Language: language,
-		Voice:    strings.TrimSpace(settings.Voice.Name),
-		Model:    strings.TrimSpace(settings.Voice.Model),
+		Voice:    voiceName,
+		Model:    voiceModel,
 	}
 }
 
@@ -219,15 +212,15 @@ func (b *Broker) relayVoiceTranscript(ctx context.Context, runtime *ChatRuntime,
 	})
 }
 
-func (b *Broker) relaySynthesizedTurnReply(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread, options turnOptions, settings turnSettings, text string) error {
-	if runtime == nil || strings.TrimSpace(text) == "" {
+func (b *Broker) relaySynthesizedTurnReply(ctx context.Context, runtime *ChatRuntime, turn *agentTurnRuntime, text string) error {
+	if runtime == nil || turn == nil || strings.TrimSpace(text) == "" {
 		return nil
 	}
-	media, _, err := synthesizeTurnReply(ctx, runtime, thread.ID, options, settings, text)
+	media, _, err := synthesizeTurnReply(ctx, runtime, turn, text)
 	if err != nil || media == nil {
 		return err
 	}
-	return b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, message.OutboundPayload{
+	return b.relayPayloadToRelayBindings(ctx, runtime.Relays, turn.thread, message.OutboundPayload{
 		Attachments: []message.Media{*media},
 	})
 }
