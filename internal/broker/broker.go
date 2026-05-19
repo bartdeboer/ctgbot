@@ -280,8 +280,8 @@ func (b *Broker) handleResolvedInboundTurn(
 		}
 		if transcription.Text != "" {
 			options.SpeechLanguage = transcription.Language
-			turnPrompt = transcription.Text
-			inbound.Payload.Text.Text = turnPrompt
+			turnPrompt = audioTurnPrompt(transcription)
+			inbound.Payload.Text.Text = transcription.Text
 			inbound.Payload.Attachments = nil
 			inbound.Metadata = append(inbound.Metadata, transcriptionMetadata(voiceMedia, transcription)...)
 			if err := b.relayVoiceTranscript(ctx, runtime, thread, inbound.Payload.ProviderMessageID, transcription.Text); err != nil {

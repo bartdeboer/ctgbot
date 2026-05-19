@@ -171,6 +171,15 @@ func transcriptionMetadata(media message.Media, result transcriptionOutcome) []s
 	return metadata
 }
 
+func audioTurnPrompt(result transcriptionOutcome) string {
+	text := strings.TrimSpace(result.Text)
+	language := strings.TrimSpace(result.Language)
+	if language == "" {
+		return text
+	}
+	return strings.TrimSpace("Transcribed voice message. Detected language: " + language + ". Reply in the same language unless the user asks otherwise.\n\nMessage:\n" + text)
+}
+
 func (b *Broker) relayVoiceTranscript(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread, providerMessageID string, transcript string) error {
 	if runtime == nil || strings.TrimSpace(transcript) == "" {
 		return nil
