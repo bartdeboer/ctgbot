@@ -177,6 +177,10 @@ type gormThreads struct{ db *gorm.DB }
 
 func (r *gormThreads) Save(ctx context.Context, thread *coremodel.Thread) error {
 	thread.Label = strings.TrimSpace(thread.Label)
+	thread.VoiceLanguage = clean(thread.VoiceLanguage)
+	thread.VoiceName = clean(thread.VoiceName)
+	thread.VoiceModel = clean(thread.VoiceModel)
+	thread.VoiceDeviceTarget = clean(thread.VoiceDeviceTarget)
 	ensureID(&thread.ID)
 	return r.db.WithContext(ctx).Save(thread).Error
 }

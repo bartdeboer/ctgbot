@@ -111,6 +111,71 @@ func TestThreadLabelSetDeniesUser(t *testing.T) {
 	}
 }
 
+func TestThreadConfigCommandsUpdateCurrentThread(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	engine := testMessagingEngine(t, storage)
+	req := testMessagingRequest(thread.ID, simplerbac.RoleAgent)
+
+	for _, argv := range [][]string{
+		{"thread", "config", "set", "voice.reply-to-voice-input", "true"},
+		{"thread", "config", "set", "voice.name", "F5"},
+		{"thread", "config", "set", "voice.language", "nl-NL"},
+	} {
+		if _, err := engine.Run(ctx, req, argv); err != nil {
+			t.Fatalf("Run(%v) error = %v", argv, err)
+		}
+	}
+
+	result, err := engine.Run(ctx, req, []string{"thread", "config", "list"})
+	if err != nil {
+		t.Fatalf("Run(thread config list) error = %v", err)
+	}
+	for _, want := range []string{
+		"thread config voice.reply-to-voice-input=true",
+		"thread config voice.output=false",
+		"thread config voice.language=nl",
+		"thread config voice.name=F5",
+	} {
+		if !strings.Contains(result.Text, want) {
+			t.Fatalf("thread config list missing %q:\n%s", want, result.Text)
+		}
+	}
+
+	updated, err := storage.Threads().GetByID(ctx, thread.ID)
+	if err != nil {
+		t.Fatalf("GetByID(thread) error = %v", err)
+	}
+	if !updated.VoiceReplyToVoiceInput || updated.VoiceName != "F5" || updated.VoiceLanguage != "nl" {
+		t.Fatalf("thread voice config = %#v, want persisted values", updated)
+	}
+}
+
+func TestThreadConfigCommandsUpdateReferencedThread(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	engine := testMessagingEngine(t, storage)
+
+	result, err := engine.Run(ctx, testMessagingRequest(modeluuid.Nil, simplerbac.RoleRoot), []string{"thread", thread.ID.String(), "config", "set", "voice.output", "enabled"})
+	if err != nil {
+		t.Fatalf("Run(thread <thread> config set) error = %v", err)
+	}
+	if got, want := strings.TrimSpace(result.Text), "thread config voice.output=true"; got != want {
+		t.Fatalf("result = %q, want %q", got, want)
+	}
+}
+
+func TestThreadConfigCommandsDenyUserSet(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	engine := testMessagingEngine(t, storage)
+
+	_, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleUser), []string{"thread", "config", "set", "voice.output", "true"})
+	if err == nil || !strings.Contains(err.Error(), "denied") {
+		t.Fatalf("Run(thread config set as user) error = %v, want denied", err)
+	}
+}
+
 func TestThreadComponentBindInfersProviderThreadIDFromSourceBinding(t *testing.T) {
 	ctx := context.Background()
 	storage, thread := testMessagingStorage(t, ctx)
