@@ -40,7 +40,7 @@ type SendPayload struct {
 }
 
 func HostbridgeCommands() []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		RunCommandDefinition(),
 		{
 			Pattern:               "message <text>",
@@ -67,6 +67,8 @@ func HostbridgeCommands() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionEssential,
 		},
 	}
+	definitions = append(definitions, TurnCommands()...)
+	return definitions
 }
 
 func RunCommandDefinition() commandengine.Definition {

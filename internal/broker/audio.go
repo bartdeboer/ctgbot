@@ -136,12 +136,12 @@ func transcribeInboundAudio(ctx context.Context, runtime *ChatRuntime, threadID 
 	}, nil
 }
 
-func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, threadID modeluuid.UUID, language string, text string) (*message.Media, string, error) {
+func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, threadID modeluuid.UUID, options turnOptions, settings turnSettings, text string) (*message.Media, string, error) {
 	synthesizer, ref, err := synthesizerForRuntime(runtime)
 	if err != nil || synthesizer == nil {
 		return nil, "", err
 	}
-	result, err := synthesizer.Synthesize(ctx, component.SpeechRequest{Text: text, ThreadID: threadID, Language: replySpeechLanguage(text, language)})
+	result, err := synthesizer.Synthesize(ctx, speechRequestForTurn(text, threadID, options, settings))
 	if err != nil {
 		return nil, ref, err
 	}
@@ -149,6 +149,20 @@ func synthesizeTurnReply(ctx context.Context, runtime *ChatRuntime, threadID mod
 		return nil, ref, fmt.Errorf("speech synthesis via %s returned empty media", ref)
 	}
 	return &result.Media, ref, nil
+}
+
+func speechRequestForTurn(text string, threadID modeluuid.UUID, options turnOptions, settings turnSettings) component.SpeechRequest {
+	language := cleanLanguageCode(settings.Voice.Language)
+	if language == "" {
+		language = replySpeechLanguage(text, options.SpeechLanguage)
+	}
+	return component.SpeechRequest{
+		Text:     strings.TrimSpace(text),
+		ThreadID: threadID,
+		Language: language,
+		Voice:    strings.TrimSpace(settings.Voice.Name),
+		Model:    strings.TrimSpace(settings.Voice.Model),
+	}
 }
 
 func replySpeechLanguage(text string, inputLanguage string) string {
@@ -205,11 +219,11 @@ func (b *Broker) relayVoiceTranscript(ctx context.Context, runtime *ChatRuntime,
 	})
 }
 
-func (b *Broker) relaySynthesizedTurnReply(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread, options turnOptions, text string) error {
+func (b *Broker) relaySynthesizedTurnReply(ctx context.Context, runtime *ChatRuntime, thread coremodel.Thread, options turnOptions, settings turnSettings, text string) error {
 	if runtime == nil || strings.TrimSpace(text) == "" {
 		return nil
 	}
-	media, _, err := synthesizeTurnReply(ctx, runtime, thread.ID, options.SpeechLanguage, text)
+	media, _, err := synthesizeTurnReply(ctx, runtime, thread.ID, options, settings, text)
 	if err != nil || media == nil {
 		return err
 	}

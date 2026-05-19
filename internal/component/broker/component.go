@@ -114,7 +114,8 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 	}
 	for _, definition := range definitions {
 		switch definition.CanonicalPattern() {
-		case "run <command>", "message <text>", "sendfile <path>", "sendstdin":
+		case "run <command>", "message <text>", "sendfile <path>", "sendstdin",
+			"turn set <key> <value>", "turn get", "turn get <key>", "turn clear <key>":
 			out = append(out, definition)
 		}
 	}

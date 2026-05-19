@@ -168,13 +168,14 @@ type agentTurnRuntime struct {
 	componentID modeluuid.UUID
 	outputs     []coremodel.ThreadMessage
 	lastText    string
+	settings    turnSettings
 }
 
 func (r *agentTurnRuntime) Commands() commandengine.CommandExecutor {
 	if r == nil || r.runtime == nil {
 		return nil
 	}
-	return r.runtime.AgentCommands
+	return turnCommandExecutor{turn: r, next: r.runtime.AgentCommands}
 }
 
 func (r *agentTurnRuntime) Instructions() component.TurnInstructions {

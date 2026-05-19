@@ -45,7 +45,7 @@ func (b *Broker) runStoredThreadTurn(
 			outbound = append(outbound, *message)
 		}
 		if options.WantsSpeechReply() {
-			if err := b.relaySynthesizedTurnReply(ctx, runtime, thread, options, final.Text); err != nil {
+			if err := b.relaySynthesizedTurnReply(ctx, runtime, thread, options, turnRuntime.settings, final.Text); err != nil {
 				return outbound, err
 			}
 		}
