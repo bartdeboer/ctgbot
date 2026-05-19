@@ -59,7 +59,7 @@ func TestDefaultWhisperArgsWriteTranscriptFile(t *testing.T) {
 		"wav":           "/work/input.wav",
 		"output_prefix": "/work/transcript",
 	}, "")
-	want := []string{"-m", "/models/model.bin", "-f", "/work/input.wav", "-fa", "-np", "-otxt", "-of", "/work/transcript", "-l", "auto"}
+	want := []string{"-m", "/models/model.bin", "-f", "/work/input.wav", "-fa", "-otxt", "-of", "/work/transcript", "-l", "auto"}
 	if len(args) != len(want) {
 		t.Fatalf("args = %#v, want %#v", args, want)
 	}

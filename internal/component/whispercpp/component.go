@@ -170,7 +170,7 @@ func defaultFFMpegArgs() []string {
 }
 
 func defaultWhisperArgs() []string {
-	return []string{"-m", "{{model}}", "-f", "{{wav}}", "-fa", "-np", "-otxt", "-of", "{{output_prefix}}"}
+	return []string{"-m", "{{model}}", "-f", "{{wav}}", "-fa", "-otxt", "-of", "{{output_prefix}}"}
 }
 
 var whisperDetectedLanguagePattern = regexp.MustCompile(`(?i)auto-detected language:\s*([a-z]{2,3})\b`)
