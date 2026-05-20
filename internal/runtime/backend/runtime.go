@@ -3,16 +3,13 @@ package backend
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
@@ -73,19 +70,6 @@ func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, hom
 
 func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
 	return strings.TrimSpace(workspacePath)
-}
-
-func (f *Factory) Bind(
-	registration coremodel.Component,
-	home runtimepkg.Home,
-	config runtimepkg.BindConfig,
-) runtimepkg.Runtime {
-	config = config.WithEnvOverride(f.env...)
-	return &unsupportedRuntime{
-		registration: registration,
-		home:         home,
-		config:       config,
-	}
 }
 
 func (f *Factory) BindBackend(
@@ -225,98 +209,4 @@ func (r *Runtime) waitReady(ctx context.Context) error {
 
 func (r *Runtime) containerName() string {
 	return "ctgbot-backend-" + safeName(r.registration.Ref())
-}
-
-type unsupportedRuntime struct {
-	registration coremodel.Component
-	home         runtimepkg.Home
-	config       runtimepkg.BindConfig
-}
-
-func (r *unsupportedRuntime) Kind() string { return Kind }
-
-func (r *unsupportedRuntime) ComponentHome() runtimepkg.Home { return r.home }
-
-func (r *unsupportedRuntime) RuntimeComponentHomePath() string {
-	return strings.TrimSpace(r.home.Path)
-}
-
-func (r *unsupportedRuntime) RuntimeWorkspacePath(workspacePath string) string {
-	return strings.TrimSpace(workspacePath)
-}
-
-func (r *unsupportedRuntime) Refresh(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
-	_, _, _ = ctx, workspacePath, threadID
-	return fmt.Errorf("backend runtime does not support thread sandbox refresh")
-}
-
-func (r *unsupportedRuntime) Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
-	_, _, _ = ctx, workspacePath, threadID
-	return runtimepkg.Status{}, fmt.Errorf("backend runtime does not support thread sandbox start")
-}
-
-func (r *unsupportedRuntime) Stop(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error {
-	_, _, _ = ctx, workspacePath, threadID
-	return fmt.Errorf("backend runtime does not support thread sandbox stop")
-}
-
-func (r *unsupportedRuntime) Interrupt(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (bool, error) {
-	_, _, _ = ctx, workspacePath, threadID
-	return false, fmt.Errorf("backend runtime does not support thread sandbox interrupt")
-}
-
-func (r *unsupportedRuntime) Status(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (runtimepkg.Status, error) {
-	_, _, _ = ctx, workspacePath, threadID
-	return runtimepkg.Status{}, fmt.Errorf("backend runtime does not support thread sandbox status")
-}
-
-func (r *unsupportedRuntime) Exec(
-	ctx context.Context,
-	workspacePath string,
-	threadID modeluuid.UUID,
-	commands commandengine.CommandExecutor,
-	stdout io.Writer,
-	stderr io.Writer,
-	name string,
-	args ...string,
-) error {
-	_, _, _, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, stdout, stderr, name, args, r.config
-	return fmt.Errorf("backend runtime does not support thread sandbox exec")
-}
-
-func (r *unsupportedRuntime) ExecTTY(
-	ctx context.Context,
-	workspacePath string,
-	threadID modeluuid.UUID,
-	commands commandengine.CommandExecutor,
-	stdout io.Writer,
-	stderr io.Writer,
-	name string,
-	args ...string,
-) error {
-	return r.Exec(ctx, workspacePath, threadID, commands, stdout, stderr, name, args...)
-}
-
-func (r *unsupportedRuntime) CombinedOutput(
-	ctx context.Context,
-	workspacePath string,
-	threadID modeluuid.UUID,
-	commands commandengine.CommandExecutor,
-	name string,
-	args ...string,
-) ([]byte, error) {
-	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, name, args, r.config
-	return nil, fmt.Errorf("backend runtime does not support thread sandbox combined output")
-}
-
-func (r *unsupportedRuntime) OpenHTTPRelayPort(
-	ctx context.Context,
-	workspacePath string,
-	threadID modeluuid.UUID,
-	commands commandengine.CommandExecutor,
-	callbackPort int,
-	callbackTimeout time.Duration,
-) (func(context.Context) error, error) {
-	_, _, _, _, _, _, _ = ctx, workspacePath, threadID, commands, callbackPort, callbackTimeout, r.config
-	return nil, fmt.Errorf("backend runtime does not support thread sandbox relay ports")
 }

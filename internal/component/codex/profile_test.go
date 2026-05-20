@@ -33,7 +33,7 @@ func (f *captureBindFactory) RuntimeComponentHomePath(registration coremodel.Com
 	return "/profile/components/codex/gpu"
 }
 func (f *captureBindFactory) RuntimeWorkspacePath(workspacePath string) string { return workspacePath }
-func (f *captureBindFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.Runtime {
+func (f *captureBindFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
 	_, _ = registration, home
 	f.config = config
 	return &capturedRuntime{home: f.home}

@@ -15,11 +15,12 @@ type Home struct {
 }
 
 type BindConfig struct {
-	Image   string   `json:"image"`
-	Env     []string `json:"env"`
-	GPUs    string   `json:"gpus"`
-	Seccomp string   `json:"seccomp"`
-	Cmd     []string `json:"cmd,omitempty"`
+	Image       string   `json:"image"`
+	Env         []string `json:"env"`
+	GPUs        string   `json:"gpus"`
+	Seccomp     string   `json:"seccomp"`
+	Cmd         []string `json:"cmd,omitempty"`
+	IdleTimeout string   `json:"idle_timeout,omitempty"`
 }
 
 type Status struct {
@@ -39,14 +40,27 @@ type Factory interface {
 	ComponentHome(registration coremodel.Component) Home
 	RuntimeComponentHomePath(registration coremodel.Component, home Home) string
 	RuntimeWorkspacePath(workspacePath string) string
+}
+
+type ThreadRuntimeFactory interface {
+	Factory
 	Bind(
 		registration coremodel.Component,
 		home Home,
 		config BindConfig,
-	) Runtime
+	) ThreadRuntime
 }
 
-type Runtime interface {
+type ServiceRuntime interface {
+	ComponentHome() Home
+	BaseURL() string
+	Start(ctx context.Context) (Status, error)
+	Stop(ctx context.Context) error
+	Refresh(ctx context.Context) error
+	Status(ctx context.Context) (Status, error)
+}
+
+type ThreadRuntime interface {
 	Kind() string
 	ComponentHome() Home
 	RuntimeComponentHomePath() string

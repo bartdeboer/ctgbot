@@ -17,6 +17,7 @@ type SandboxManager struct {
 	Logger     *log.Logger
 	locks      *sandboxLocks
 	sandboxes  map[string]*Sandbox
+	sessions   *sandboxSessions
 }
 
 // DockerManager is a compatibility alias. Prefer SandboxManager.
@@ -38,6 +39,7 @@ func NewSandboxManager(logger *log.Logger) *SandboxManager {
 		Containers: containerengine.NewManager(logger),
 		locks:      &sandboxLocks{locks: map[string]*sandboxLock{}},
 		sandboxes:  map[string]*Sandbox{},
+		sessions:   &sandboxSessions{states: map[string]*sandboxSessionState{}},
 	}
 }
 

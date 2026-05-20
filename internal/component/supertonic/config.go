@@ -32,6 +32,7 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 		return runtimepkg.BindConfig{}, err
 	}
 	config.Image = firstNonEmpty(config.Image, DefaultImage)
+	config.IdleTimeout = firstNonEmpty(config.IdleTimeout, "30s")
 	if len(config.Cmd) == 0 {
 		config.Cmd = []string{"tail", "-f", "/dev/null"}
 	}

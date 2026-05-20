@@ -40,7 +40,7 @@ type TurnRunner interface {
 
 type Component struct {
 	registration      coremodel.Component
-	runtime           runtimepkg.Runtime
+	runtime           runtimepkg.ThreadRuntime
 	storage           repository.Storage
 	resolveWorkspace  func(context.Context, coremodel.Chat) (string, error)
 	componentConfig   ComponentConfig
@@ -71,7 +71,11 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 	}
 	runtimeHomePath := runtimeFactory.RuntimeComponentHomePath(registration, home)
 	bindConfig := componentBindConfig(runtimeConfig, componentConfig, runtimeHomePath)
-	runtime := runtimeFactory.Bind(registration, home, bindConfig)
+	threadFactory, ok := runtimeFactory.(runtimepkg.ThreadRuntimeFactory)
+	if !ok {
+		return nil, fmt.Errorf("claude requires thread runtime, got %T", runtimeFactory)
+	}
+	runtime := threadFactory.Bind(registration, home, bindConfig)
 	return &Component{
 		registration:      registration,
 		runtime:           runtime,
@@ -299,7 +303,7 @@ func (c *Component) logf(format string, args ...any) {
 }
 
 type commandRuntime struct {
-	runtime       runtimepkg.Runtime
+	runtime       runtimepkg.ThreadRuntime
 	threadID      modeluuid.UUID
 	workspacePath string
 	commands      commandengine.CommandExecutor

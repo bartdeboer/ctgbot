@@ -119,7 +119,7 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 			}
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				state:       state,
 			}, nil
 		}); err != nil {

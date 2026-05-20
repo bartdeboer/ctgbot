@@ -2,21 +2,27 @@ package supertonic
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/durationparse"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/workgate"
 )
 
@@ -27,8 +33,10 @@ type ComponentResolver interface {
 
 type Component struct {
 	registration      coremodel.Component
-	runtime           runtimepkg.Runtime
+	sandboxes         sandboxengine.RuntimeManager
 	home              runtimepkg.Home
+	runtimeConfig     runtimepkg.BindConfig
+	runtimeHome       string
 	config            ComponentConfig
 	resolver          ComponentResolver
 	chatPayloadSender component.ChatPayloadSender
@@ -51,14 +59,20 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if err != nil {
 		return nil, err
 	}
+	provider, ok := runtime.(sandboxengine.Provider)
+	if !ok || provider.SandboxManager() == nil {
+		return nil, fmt.Errorf("supertonic requires a sandbox-capable runtime")
+	}
 	config, err := loadComponentConfig(home.Path)
 	if err != nil {
 		return nil, err
 	}
 	return &Component{
 		registration:      registration,
-		runtime:           runtime.Bind(registration, home, runtimeConfig),
+		sandboxes:         provider.SandboxManager(),
 		home:              home,
+		runtimeConfig:     runtimeConfig,
+		runtimeHome:       runtime.RuntimeComponentHomePath(registration, home),
 		config:            config,
 		resolver:          resolver,
 		synthesisGate:     workgate.New(),
@@ -84,7 +98,7 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 
 func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error) {
 	_ = ctx
-	if c == nil || (c.runtime != nil && c.runtime.Kind() != "docker") {
+	if c == nil {
 		return nil, nil
 	}
 	return []runtimeimage.Target{{
@@ -96,7 +110,7 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 }
 
 func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest) (component.SpeechResult, error) {
-	if c == nil || c.runtime == nil {
+	if c == nil || c.sandboxes == nil {
 		return component.SpeechResult{}, fmt.Errorf("missing supertonic runtime")
 	}
 	text := strings.TrimSpace(req.Text)
@@ -137,7 +151,7 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 
 	hostModelPath := modelHostPath(model.Path)
 	workspacePath := filepath.Dir(hostModelPath)
-	modelPath := runtimePathForHostPath(c.runtime, workspacePath, hostModelPath)
+	modelPath := filepath.Join(workspaceRuntimePath, filepath.Base(hostModelPath))
 	voice := supertonicVoiceName(firstNonEmpty(req.Voice, c.config.DefaultVoice))
 	args := []string{
 		filepath.Join(work.runtime, "synthesize.py"),
@@ -149,7 +163,17 @@ func (c *Component) Synthesize(ctx context.Context, req component.SpeechRequest)
 		"--opus-output", filepath.Join(work.runtime, "speech.ogg"),
 		"--metadata", filepath.Join(work.runtime, "metadata.json"),
 	}
-	out, err := c.runtime.CombinedOutput(ctx, workspacePath, req.ThreadID, nil, c.config.PythonCommand, args...)
+	spec, err := c.sandboxSpec(workspacePath)
+	if err != nil {
+		return component.SpeechResult{}, err
+	}
+	session, err := c.sandboxes.BeginSession(ctx, spec, c.sessionOptions())
+	if err != nil {
+		return component.SpeechResult{}, err
+	}
+	defer session.Close()
+
+	out, err := session.CombinedOutput(ctx, c.config.PythonCommand, args...)
 	if err != nil {
 		return component.SpeechResult{}, fmt.Errorf("supertonic command: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
@@ -185,6 +209,32 @@ func (c *Component) acquireSynthesis(ctx context.Context, modelName string) (fun
 	return c.synthesisGate.Acquire(ctx, strings.TrimSpace(modelName), c.config.MaxConcurrent)
 }
 
+func (c *Component) sandboxSpec(modelDir string) (sandboxengine.SandboxSpec, error) {
+	securityOpts, err := containerengine.SeccompSecurityOpts(c.runtimeConfig.Seccomp)
+	if err != nil {
+		return sandboxengine.SandboxSpec{}, err
+	}
+	name := sandboxengine.SafeName("ctgbot-"+c.registration.Ref()+"-"+workspaceKey(modelDir), "ctgbot-runtime")
+	return *sandboxengine.NewBuilder(name).
+		Image(firstNonEmpty(c.runtimeConfig.Image, DefaultImage)).
+		Workdir(workspaceRuntimePath).
+		UserMode("host").
+		GPUs(c.runtimeConfig.GPUs).
+		Env(c.runtimeConfig.Env).
+		Mounts([]sandboxengine.Mount{
+			{Source: c.home.Path, Target: c.runtimeHome},
+			{Source: modelDir, Target: workspaceRuntimePath, ReadOnly: true},
+		}).
+		SecurityOpts(securityOpts).
+		Cmd(idleCmd(c.runtimeConfig.Cmd)).
+		Build(), nil
+}
+
+func (c *Component) sessionOptions() sandboxengine.SessionOptions {
+	timeout, _ := durationparse.Parse(c.runtimeConfig.IdleTimeout, time.Second)
+	return sandboxengine.SessionOptions{IdleTimeout: timeout}
+}
+
 type workdir struct {
 	host    string
 	runtime string
@@ -195,21 +245,8 @@ func (c *Component) prepareWorkdir(pattern string) (workdir, func(), error) {
 	if err != nil {
 		return workdir{}, func() {}, err
 	}
-	runtime := filepath.Join(c.runtime.RuntimeComponentHomePath(), filepath.Base(host))
+	runtime := filepath.Join(c.runtimeHome, filepath.Base(host))
 	return workdir{host: host, runtime: runtime}, func() { _ = os.RemoveAll(host) }, nil
-}
-
-func runtimePathForHostPath(runtime runtimepkg.Runtime, workspacePath string, path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" || runtime == nil {
-		return path
-	}
-	if workspacePath = strings.TrimSpace(workspacePath); workspacePath != "" {
-		if rel, err := filepath.Rel(workspacePath, path); err == nil && rel != "." && !strings.HasPrefix(filepath.ToSlash(rel), "../") {
-			return filepath.Join(runtime.RuntimeWorkspacePath(workspacePath), rel)
-		}
-	}
-	return filepath.Join(runtime.RuntimeWorkspacePath(filepath.Dir(path)), filepath.Base(path))
 }
 
 func modelHostPath(modelPath string) string {
@@ -247,6 +284,20 @@ func roundSeconds(value float64) int {
 		return 0
 	}
 	return int(math.Round(value))
+}
+
+const workspaceRuntimePath = "/workspace"
+
+func idleCmd(cmd []string) []string {
+	if len(cmd) > 0 {
+		return append([]string{}, cmd...)
+	}
+	return []string{"tail", "-f", "/dev/null"}
+}
+
+func workspaceKey(value string) string {
+	sum := sha1.Sum([]byte(strings.TrimSpace(value)))
+	return hex.EncodeToString(sum[:])[:12]
 }
 
 const synthesisScript = `

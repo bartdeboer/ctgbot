@@ -61,7 +61,7 @@ func (f *Factory) Bind(
 	registration coremodel.Component,
 	home runtimepkg.Home,
 	config runtimepkg.BindConfig,
-) runtimepkg.Runtime {
+) runtimepkg.ThreadRuntime {
 	_ = registration
 	config = config.WithEnvOverride(f.env...)
 	return &Runtime{

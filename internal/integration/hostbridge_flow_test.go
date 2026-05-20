@@ -97,7 +97,7 @@ func TestHostbridgeFlow(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				bridge:      bridge,
 				state:       agentState,
 			}, nil
@@ -241,7 +241,7 @@ func TestHostbridgeSendMediaFlow(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeMediaAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				bridge:      bridge,
 				state:       agentState,
 			}, nil
@@ -398,7 +398,7 @@ func TestHostbridgeRunCommandFlow(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeRunAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				bridge:      bridge,
 				command:     "pwd",
 				state:       agentState,
@@ -512,7 +512,7 @@ func TestHostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &hostbridgeRunAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				bridge:      bridge,
 				command:     "echo-workspace",
 				state:       agentState,
@@ -635,21 +635,21 @@ func (c *mockCommandComponent) RegisterCommandHandlers(registry *commandengine.R
 
 type hostbridgeAgent struct {
 	componentID modeluuid.UUID
-	runtime     runtimepkg.Runtime
+	runtime     runtimepkg.ThreadRuntime
 	bridge      *hostbridgebridge.Bridge
 	state       *agentState
 }
 
 type hostbridgeMediaAgent struct {
 	componentID modeluuid.UUID
-	runtime     runtimepkg.Runtime
+	runtime     runtimepkg.ThreadRuntime
 	bridge      *hostbridgebridge.Bridge
 	state       *agentState
 }
 
 type hostbridgeRunAgent struct {
 	componentID modeluuid.UUID
-	runtime     runtimepkg.Runtime
+	runtime     runtimepkg.ThreadRuntime
 	bridge      *hostbridgebridge.Bridge
 	command     string
 	state       *agentState
