@@ -55,13 +55,6 @@ type SandboxSpec struct {
 	SecurityOpts []string
 	AddHosts     []string
 	Cmd          []string
-
-	// RecreateStopped treats a non-running container as stale and recreates it
-	// from the current spec instead of restarting the old immutable Docker
-	// container. Use this for component job/service sandboxes whose mounts, env,
-	// or idle command may change between ctgbot versions. Thread runtimes keep
-	// the default restart behavior.
-	RecreateStopped bool
 }
 
 type Sandbox struct {
