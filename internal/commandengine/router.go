@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/bartdeboer/go-clir"
 )
@@ -30,6 +31,9 @@ func NewRouter(definitions []Definition, source Source) (*Router, error) {
 		clir:                 clir.New(),
 		definitionsByPattern: map[string]Definition{},
 	}
+	router.clir.SetHelpEntryFormatter(func(w io.Writer, routes []clir.RouteInfo) {
+		writeHelpLines(w, routes, source)
+	})
 	seenRoutes := map[string]string{}
 	var routes []registeredRoute
 	for _, definition := range definitions {
@@ -77,16 +81,26 @@ func NewRouter(definitions []Definition, source Source) (*Router, error) {
 				state.Request.CanonicalPattern = registered.definition.CanonicalPattern()
 				state.Request.Route = registered.pattern
 				return nil
-			}, clirRouteOptions(registered.route)...)
+			}, clirRouteOptions(registered.definition, registered.route)...)
 		}
 	})
 	return router, nil
 }
 
-func clirRouteOptions(route Route) []clir.RouteOption {
+func clirRouteOptions(definition Definition, route Route) []clir.RouteOption {
 	var opts []clir.RouteOption
 	if route.Hidden {
 		opts = append(opts, clir.Hidden())
+	}
+	switch definition.InstructionVisibilityOrDefault() {
+	case InstructionHidden:
+		opts = append(opts, clir.Tag(string(InstructionHidden)))
+	case InstructionDiscoverable:
+		opts = append(opts, clir.Tag(string(InstructionDiscoverable)))
+	case InstructionImportant:
+		opts = append(opts, clir.Tag(string(InstructionImportant)))
+	case InstructionEssential:
+		opts = append(opts, clir.Tag(string(InstructionEssential)))
 	}
 	return opts
 }
@@ -134,11 +148,64 @@ func (r *Router) Match(ctx context.Context, argv []string) (RouteMatch, error) {
 	}, nil
 }
 
-func (r *Router) FPrintHelp(ctx context.Context, w io.Writer, argv []string) error {
+func (r *Router) FPrintHelp(ctx context.Context, w io.Writer, argv []string, actors ...Actor) error {
 	if r == nil || r.clir == nil {
 		return fmt.Errorf("missing command router")
 	}
-	return r.clir.FPrintHelp(ctx, w, argv)
+	if len(actors) == 0 {
+		return r.clir.FPrintHelp(ctx, w, argv)
+	}
+	return r.clir.FPrintHelp(ctx, w, argv, clir.FilterHelp(r.helpAllowedForActor(actors[0])))
+}
+
+func (r *Router) helpAllowedForActor(actor Actor) func(clir.RouteInfo) bool {
+	return func(info clir.RouteInfo) bool {
+		pattern := NormalizePattern(info.Pattern)
+		if pattern == "" {
+			return false
+		}
+		for _, definition := range r.definitionsByPattern {
+			if err := definition.Policy.Check(actor); err != nil {
+				continue
+			}
+			for _, route := range definition.Routes() {
+				if route.Hidden {
+					continue
+				}
+				if helpPatternCoversRoute(pattern, route.Pattern) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
+func helpPatternCoversRoute(helpPattern string, routePattern string) bool {
+	helpParts := strings.Fields(NormalizePattern(helpPattern))
+	routeParts := strings.Fields(NormalizePattern(routePattern))
+	if len(helpParts) == 0 || len(routeParts) < len(helpParts) {
+		return false
+	}
+	for i, part := range helpParts {
+		if routeParts[i] != part {
+			return false
+		}
+	}
+	return true
+}
+
+func writeHelpLines(w io.Writer, routes []clir.RouteInfo, source Source) {
+	for _, route := range routes {
+		line := NormalizePattern(route.Pattern)
+		if source == SourceMessage {
+			line = "/" + line
+		}
+		if description := strings.TrimSpace(route.Description); description != "" {
+			line += " - " + description
+		}
+		fmt.Fprintln(w, line)
+	}
 }
 
 func (r *Router) Definitions() []Definition {

@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"bytes"
 	"context"
 	"strings"
 
@@ -25,19 +26,28 @@ func (b *Broker) tryHandleMessageCommand(
 
 	result := commandengine.Result{Text: "command error: unknown command"}
 	if runtime != nil && runtime.MessageCommands != nil {
-		runResult, runErr := runtime.MessageCommands.Run(
-			ctx,
-			commandengine.Request{
-				Context: commandengine.Context{
-					Source:   commandengine.SourceMessage,
-					Actor:    messageCommandActor(inbound.Payload),
-					ChatID:   chat.ID,
-					ThreadID: thread.ID,
-				},
+		base := commandengine.Request{
+			Context: commandengine.Context{
+				Source:   commandengine.SourceMessage,
+				Actor:    messageCommandActor(inbound.Payload),
+				ChatID:   chat.ID,
+				ThreadID: thread.ID,
 			},
-			argv,
-		)
-		if runErr != nil {
+		}
+		if helpReq, ok := commandengine.ParseHelpRequest(argv); ok {
+			var buf bytes.Buffer
+			helpArgs := argv
+			if len(helpReq.Scope) == 0 {
+				helpArgs = nil
+			} else if !helpReq.All {
+				helpArgs = append(append([]string{}, helpReq.Scope...), "help", "all")
+			}
+			if err := runtime.MessageCommands.Router.FPrintHelp(ctx, &buf, helpArgs, base.Context.Actor); err != nil {
+				result = commandengine.Result{Text: "command error: " + strings.TrimSpace(err.Error())}
+			} else {
+				result = commandengine.Result{Text: strings.TrimSpace(buf.String())}
+			}
+		} else if runResult, runErr := runtime.MessageCommands.Run(ctx, base, argv); runErr != nil {
 			result = commandengine.Result{
 				Text: "command error: " + strings.TrimSpace(runErr.Error()),
 			}

@@ -174,3 +174,38 @@ func testDefinition(help string, pattern string, aliases ...Route) Definition {
 		Aliases: aliases,
 	}
 }
+
+func TestRouterFPrintHelpFiltersByActorPolicy(t *testing.T) {
+	router, err := NewRouter([]Definition{
+		{
+			Pattern: "root secret",
+			Help:    "Root only",
+			Build:   func(req *clir.Request) (any, error) { return testCommand{}, nil },
+			Sources: []Source{SourceMessage},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+		},
+		{
+			Pattern: "user status",
+			Help:    "User allowed",
+			Build:   func(req *clir.Request) (any, error) { return testCommand{}, nil },
+			Sources: []Source{SourceMessage},
+			Policy:  simplerbac.Any(simplerbac.RoleUser),
+		},
+	}, SourceMessage)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	actor := Actor{Roles: []simplerbac.Role{simplerbac.RoleUser}}
+	if err := router.FPrintHelp(context.Background(), &buf, []string{"help", "all"}, actor); err != nil {
+		t.Fatalf("FPrintHelp() error = %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "root secret") {
+		t.Fatalf("FPrintHelp() exposed root-only command: %q", out)
+	}
+	if !strings.Contains(out, "user status - User allowed") {
+		t.Fatalf("FPrintHelp() missing user command: %q", out)
+	}
+}

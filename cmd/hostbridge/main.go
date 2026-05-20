@@ -72,7 +72,11 @@ func parseOrRenderHelp(
 			return commandengine.Request{}, false, err
 		}
 		if !match.Matched || !match.Executable || !match.Exact {
-			if err := fprintContextualHelp(router, base.Context.Actor, helpWriter, helpReq.Scope); err != nil {
+			helpArgs := args
+			if len(helpReq.Scope) > 0 && !helpReq.All {
+				helpArgs = append(append([]string{}, helpReq.Scope...), "help", "all")
+			}
+			if err := router.FPrintHelp(ctx, helpWriter, helpArgs, base.Context.Actor); err != nil {
 				return commandengine.Request{}, false, err
 			}
 			return commandengine.Request{}, true, nil
@@ -81,19 +85,6 @@ func parseOrRenderHelp(
 
 	req, err := router.Parse(ctx, base, args)
 	return req, false, err
-}
-
-func fprintContextualHelp(router *commandengine.Router, actor commandengine.Actor, w io.Writer, scope []string) error {
-	for _, line := range commandset.HelpLines(router.Definitions(), commandset.HelpOptions{
-		Source: commandengine.SourceHostbridge,
-		Actor:  actor,
-		Scope:  scope,
-	}) {
-		if _, err := fmt.Fprintln(w, line); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func normalizedArgs(args []string, componentRef string) []string {
@@ -220,11 +211,11 @@ func printHelp(actor commandengine.Actor) {
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "Commands for ctgbot hostbridge:")
 	fmt.Fprintln(os.Stdout, "version - Show embedded hostbridge version")
-	for _, line := range commandset.HelpLines(hostbridgeDefinitions(), commandset.HelpOptions{
-		Source: commandengine.SourceHostbridge,
-		Actor:  actor,
-	}) {
-		fmt.Fprintln(os.Stdout, line)
+	router, err := hostbridgeRouter()
+	if err != nil {
+		fmt.Fprintln(os.Stdout, "help unavailable:", err)
+	} else if err := router.FPrintHelp(context.Background(), os.Stdout, nil, actor); err != nil {
+		fmt.Fprintln(os.Stdout, "help unavailable:", err)
 	}
 	fmt.Fprintln(os.Stdout, "")
 	fmt.Fprintln(os.Stdout, "environment:")

@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -413,7 +414,7 @@ func (b *Broker) RunHostbridgeCommand(ctx context.Context, req commandengine.Req
 	return runner.RunCommand(ctx, req, cmd)
 }
 
-func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string, error) {
+func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID, actor commandengine.Actor) (string, error) {
 	if b == nil {
 		return "", fmt.Errorf("missing broker")
 	}
@@ -434,5 +435,9 @@ func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string
 	if runtime == nil || runtime.MessageCommands == nil {
 		return componentbroker.FormatHelp(nil), nil
 	}
-	return componentbroker.FormatHelp(runtime.MessageCommands.Definitions()), nil
+	var buf bytes.Buffer
+	if err := runtime.MessageCommands.Router.FPrintHelp(ctx, &buf, nil, actor); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(buf.String()), nil
 }
