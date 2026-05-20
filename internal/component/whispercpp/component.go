@@ -21,6 +21,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/workgate"
 )
@@ -46,6 +47,7 @@ var _ component.ProfileOwner = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 var _ component.Transcriber = (*Component)(nil)
+var _ component.RuntimeImageProvider = (*Component)(nil)
 
 func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver) (component.Component, error) {
 	_, _ = ctx, storage
@@ -74,6 +76,20 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 }
 
 func (c *Component) Type() string { return Type }
+
+func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error) {
+	_ = ctx
+	if c == nil {
+		return nil, nil
+	}
+	return []runtimeimage.Target{{
+		Name:       Type,
+		Image:      firstNonEmpty(c.runtimeConfig.Image, DefaultImage),
+		Dockerfile: firstNonEmpty(c.runtimeConfig.Dockerfile, DefaultDockerfile),
+		NoCache:    c.runtimeConfig.NoCache,
+		Uses:       c.runtimeConfig.Uses,
+	}}, nil
+}
 
 func (c *Component) ManagedFiles() []component.ManagedFile {
 	return []component.ManagedFile{

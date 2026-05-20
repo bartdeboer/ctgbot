@@ -1,9 +1,13 @@
 package whispercpp
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
 func TestLoadRuntimeConfigUsesWhisperCppImageAndLibraryPath(t *testing.T) {
@@ -14,6 +18,9 @@ func TestLoadRuntimeConfigUsesWhisperCppImageAndLibraryPath(t *testing.T) {
 	}
 	if config.Image != DefaultImage {
 		t.Fatalf("Image = %q, want %q", config.Image, DefaultImage)
+	}
+	if config.Dockerfile != DefaultDockerfile {
+		t.Fatalf("Dockerfile = %q, want %q", config.Dockerfile, DefaultDockerfile)
 	}
 	if config.GPUs != "all" {
 		t.Fatalf("GPUs = %q, want all", config.GPUs)
@@ -59,6 +66,41 @@ func TestComponentConfigDefaultsToOfficialWhisperCommand(t *testing.T) {
 	if config.MaxConcurrent != 1 {
 		t.Fatalf("MaxConcurrent = %d, want 1", config.MaxConcurrent)
 	}
+}
+
+func TestRuntimeImageTargetsUseRuntimeConfig(t *testing.T) {
+	component := &Component{
+		registration: coremodel.Component{Type: Type, Name: Type},
+		runtimeConfig: loadRuntimeConfigForTest(t, `{
+			"image": "ctgbot-whispercpp:custom",
+			"dockerfile": "whisper.custom.Dockerfile"
+		}`),
+	}
+
+	targets, err := component.RuntimeImageTargets(context.Background())
+	if err != nil {
+		t.Fatalf("RuntimeImageTargets() error = %v", err)
+	}
+	if got, want := len(targets), 1; got != want {
+		t.Fatalf("targets = %d, want %d", got, want)
+	}
+	target := targets[0]
+	if target.Name != Type || target.Image != "ctgbot-whispercpp:custom" || target.Dockerfile != "whisper.custom.Dockerfile" {
+		t.Fatalf("target = %#v", target)
+	}
+}
+
+func loadRuntimeConfigForTest(t *testing.T, content string) runtimepkg.BindConfig {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "runtime.json"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config, err := loadRuntimeConfig(dir)
+	if err != nil {
+		t.Fatalf("loadRuntimeConfig() error = %v", err)
+	}
+	return config
 }
 
 func envValue(env []string, key string) string {
