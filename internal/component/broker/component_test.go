@@ -27,7 +27,8 @@ func (f *fakeActions) RunHostbridgeCommand(ctx context.Context, req commandengin
 	return commandengine.Result{}, nil
 }
 
-func (f *fakeActions) MessageHelp(ctx context.Context, chatID modeluuid.UUID) (string, error) {
+func (f *fakeActions) MessageHelp(ctx context.Context, chatID modeluuid.UUID, actor commandengine.Actor) (string, error) {
+	_ = actor
 	_, _ = ctx, chatID
 	return "", nil
 }

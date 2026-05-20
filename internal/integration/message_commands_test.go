@@ -781,7 +781,7 @@ func TestHelpListsActiveMessageCommands(t *testing.T) {
 			t.Fatalf("relay payload count = %d, want %d", got, want)
 		}
 		text := messengerState.relayPayloads[0].Text.Text
-		for _, want := range []string{"/help", "/agentctl ping", "/config get <key>", "/config list", "/config set <key> <value>", "/install", "/process install", "/quit"} {
+		for _, want := range []string{"Available commands:", "/agentctl", "/config", "/process", "/status - Show current thread status", "/thread", "/version - Show ctgbot version"} {
 			if !strings.Contains(text, want) {
 				t.Fatalf("help text = %q, missing %q", text, want)
 			}

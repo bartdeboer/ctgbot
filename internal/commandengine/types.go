@@ -42,10 +42,11 @@ type RouteMatch struct {
 	Exact      bool
 }
 
-// HelpRequest is commandengine's wrapper around clir's trailing help convention.
+// HelpRequest is commandengine's wrapper around clir's trailing help token
+// convention. ctgbot decides how to handle help requests explicitly; clir only
+// provides the token detection and scope stripping.
 type HelpRequest struct {
 	Scope []string
-	All   bool
 }
 
 type Result struct {
@@ -135,15 +136,13 @@ func (d Definition) InstructionVisibilityOrDefault() InstructionVisibility {
 	return d.InstructionVisibility
 }
 
-// ParseHelpRequest parses clir's built-in trailing "help" / "help all" convention.
+// ParseHelpRequest parses clir's trailing help token convention.
 func ParseHelpRequest(args []string) (HelpRequest, bool) {
-	req, ok := clir.ParseHelpRequest(args)
-	if !ok {
+	if !clir.IsHelpRequest(args) {
 		return HelpRequest{}, false
 	}
 	return HelpRequest{
-		Scope: append([]string{}, req.Scope...),
-		All:   req.All,
+		Scope: clir.StripHelpToken(args),
 	}, true
 }
 

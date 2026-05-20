@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"bytes"
 	"context"
 	"strings"
 
@@ -25,19 +26,38 @@ func (b *Broker) tryHandleMessageCommand(
 
 	result := commandengine.Result{Text: "command error: unknown command"}
 	if runtime != nil && runtime.MessageCommands != nil {
-		runResult, runErr := runtime.MessageCommands.Run(
-			ctx,
-			commandengine.Request{
-				Context: commandengine.Context{
-					Source:   commandengine.SourceMessage,
-					Actor:    messageCommandActor(inbound.Payload),
-					ChatID:   chat.ID,
-					ThreadID: thread.ID,
-				},
+		base := commandengine.Request{
+			Context: commandengine.Context{
+				Source:   commandengine.SourceMessage,
+				Actor:    messageCommandActor(inbound.Payload),
+				ChatID:   chat.ID,
+				ThreadID: thread.ID,
 			},
-			argv,
-		)
-		if runErr != nil {
+		}
+		if helpReq, ok := commandengine.ParseHelpRequest(argv); ok {
+			var buf bytes.Buffer
+			helpArgs := []string(nil)
+			helpOptions := []commandengine.HelpOption{commandengine.HelpLitDepth(1)}
+			if len(helpReq.Scope) > 0 {
+				helpArgs = append([]string{}, helpReq.Scope...)
+				helpOptions = []commandengine.HelpOption{commandengine.HelpLitDepth(2)}
+			}
+			var err error
+			if len(helpReq.Scope) == 0 {
+				err = runtime.MessageCommands.Router.FPrintHelpIndex(ctx, &buf, base.Context.Actor)
+			} else {
+				err = runtime.MessageCommands.Router.FPrintHelpWithOptions(ctx, &buf, helpArgs, helpOptions, base.Context.Actor)
+			}
+			if err != nil {
+				result = commandengine.Result{Text: "command error: " + strings.TrimSpace(err.Error())}
+			} else {
+				text := strings.TrimSpace(buf.String())
+				if len(helpReq.Scope) == 0 && text != "" {
+					text = "Available commands:\n" + text
+				}
+				result = commandengine.Result{Text: text}
+			}
+		} else if runResult, runErr := runtime.MessageCommands.Run(ctx, base, argv); runErr != nil {
 			result = commandengine.Result{
 				Text: "command error: " + strings.TrimSpace(runErr.Error()),
 			}

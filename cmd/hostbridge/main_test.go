@@ -159,8 +159,8 @@ func TestHostbridgeScopedHelpHidesHiddenCodexAliases(t *testing.T) {
 		name string
 		argv []string
 	}{
-		{name: "scoped", argv: []string{"codex", "help"}},
-		{name: "all", argv: []string{"help", "all"}},
+		{name: "scoped", argv: []string{"codex"}},
+		{name: "root", argv: nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
@@ -197,6 +197,15 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 		notContains []string
 		occursOnce  []string
 	}{
+		{
+			name: "root help is navigation index",
+			argv: []string{"help"},
+			contains: []string{
+				"codex help - Codex commands",
+				"thread help - Thread commands",
+				"status - Show current thread status",
+			},
+		},
 		{
 			name: "config group",
 			argv: []string{"codex", "config", "help"},
