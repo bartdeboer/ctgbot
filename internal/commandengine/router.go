@@ -149,13 +149,56 @@ func (r *Router) Match(ctx context.Context, argv []string) (RouteMatch, error) {
 }
 
 func (r *Router) FPrintHelp(ctx context.Context, w io.Writer, argv []string, actors ...Actor) error {
+	return r.FPrintHelpWithOptions(ctx, w, argv, nil, actors...)
+}
+
+type HelpOption = clir.HelpOption
+
+func HelpDepth(n int) HelpOption {
+	return clir.Depth(n)
+}
+
+func HelpLitDepth(n int) HelpOption {
+	return clir.LitDepth(n)
+}
+
+func HelpIncludeTags(tags ...string) HelpOption {
+	return clir.IncludeTags(tags...)
+}
+
+func (r *Router) FPrintHelpWithOptions(ctx context.Context, w io.Writer, argv []string, opts []HelpOption, actors ...Actor) error {
 	if r == nil || r.clir == nil {
 		return fmt.Errorf("missing command router")
 	}
-	if len(actors) == 0 {
-		return r.clir.FPrintHelp(ctx, w, argv)
+	helpOptions := r.helpOptionsForActor(opts, actors...)
+	return r.clir.FPrintHelp(ctx, w, argv, helpOptions...)
+}
+
+func (r *Router) FPrintHelpIndex(ctx context.Context, w io.Writer, actors ...Actor) error {
+	_ = ctx
+	if r == nil || r.clir == nil {
+		return fmt.Errorf("missing command router")
 	}
-	return r.clir.FPrintHelp(ctx, w, argv, clir.FilterHelp(r.helpAllowedForActor(actors[0])))
+	routes := r.HelpRoutes(nil, []HelpOption{HelpLitDepth(1)}, actors...)
+	routes = append(routes, r.HelpRoutes(nil, []HelpOption{HelpIncludeTags(string(InstructionEssential), string(InstructionImportant))}, actors...)...)
+	writeHelpLines(w, rootHelpRoutes(routes), r.source)
+	return nil
+}
+
+func (r *Router) HelpRoutes(scope []string, opts []HelpOption, actors ...Actor) []clir.RouteInfo {
+	if r == nil || r.clir == nil {
+		return nil
+	}
+	return r.clir.HelpRoutes(scope, r.helpOptionsForActor(opts, actors...)...)
+}
+
+func (r *Router) helpOptionsForActor(opts []HelpOption, actors ...Actor) []clir.FilterOption {
+	helpOptions := append([]clir.FilterOption(nil), opts...)
+	if len(actors) == 0 {
+		return helpOptions
+	}
+	helpOptions = append(helpOptions, clir.FilterHelp(r.helpAllowedForActor(actors[0])))
+	return helpOptions
 }
 
 func (r *Router) helpAllowedForActor(actor Actor) func(clir.RouteInfo) bool {
@@ -205,6 +248,79 @@ func writeHelpLines(w io.Writer, routes []clir.RouteInfo, source Source) {
 			line += " - " + description
 		}
 		fmt.Fprintln(w, line)
+	}
+}
+
+func rootHelpRoutes(routes []clir.RouteInfo) []clir.RouteInfo {
+	type entry struct {
+		route     clir.RouteInfo
+		generated bool
+	}
+	byPattern := map[string]entry{}
+	for _, route := range routes {
+		route.Pattern = NormalizePattern(route.Pattern)
+		if route.Pattern == "" {
+			continue
+		}
+		generated := false
+		if strings.TrimSpace(route.Description) == "" {
+			route.Pattern = NormalizePattern(route.Pattern + " help")
+			route.Description = groupHelpDescription(route.Pattern)
+			generated = true
+		}
+		current, exists := byPattern[route.Pattern]
+		if exists && !(current.generated && !generated) {
+			continue
+		}
+		byPattern[route.Pattern] = entry{route: route, generated: generated}
+	}
+	keys := make([]string, 0, len(byPattern))
+	for key := range byPattern {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	out := make([]clir.RouteInfo, 0, len(keys))
+	for _, key := range keys {
+		out = append(out, byPattern[key].route)
+	}
+	return out
+}
+
+func groupHelpDescription(pattern string) string {
+	parts := strings.Fields(NormalizePattern(pattern))
+	if len(parts) == 0 {
+		return "Commands"
+	}
+	group := parts[0]
+	if strings.Contains(group, "/") {
+		group = strings.TrimSpace(group)
+		return group + " commands"
+	}
+	switch group {
+	case "codex":
+		return "Codex commands"
+	case "claude":
+		return "Claude commands"
+	case "config":
+		return "Global config commands"
+	case "component":
+		return "Component commands"
+	case "dropped":
+		return "Dropped-message commands"
+	case "llamacpp":
+		return "llama.cpp commands"
+	case "model":
+		return "AI model commands"
+	case "process":
+		return "Process commands"
+	case "semantic":
+		return "Semantic search commands"
+	case "thread":
+		return "Thread commands"
+	case "turn":
+		return "Current turn commands"
+	default:
+		return group + " commands"
 	}
 }
 

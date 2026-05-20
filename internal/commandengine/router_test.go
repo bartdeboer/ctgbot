@@ -94,7 +94,7 @@ func TestRouterHelpHidesHiddenRoutes(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := router.FPrintHelp(context.Background(), &buf, []string{"help", "all"}); err != nil {
+	if err := router.FPrintHelp(context.Background(), &buf, nil); err != nil {
 		t.Fatalf("FPrintHelp() error = %v", err)
 	}
 
@@ -148,15 +148,12 @@ func TestRouterMatchUsesResolveWithoutBuildingCommand(t *testing.T) {
 }
 
 func TestParseHelpRequestUsesClirConvention(t *testing.T) {
-	req, ok := ParseHelpRequest([]string{"codex", "model", "help", "all"})
+	req, ok := ParseHelpRequest([]string{"codex", "model", "--help"})
 	if !ok {
 		t.Fatal("ParseHelpRequest() ok = false, want true")
 	}
 	if got, want := strings.Join(req.Scope, " "), "codex model"; got != want {
 		t.Fatalf("Scope = %q, want %q", got, want)
-	}
-	if !req.All {
-		t.Fatal("All = false, want true")
 	}
 
 	if _, ok := ParseHelpRequest([]string{"codex", "model"}); ok {
@@ -198,7 +195,7 @@ func TestRouterFPrintHelpFiltersByActorPolicy(t *testing.T) {
 
 	var buf bytes.Buffer
 	actor := Actor{Roles: []simplerbac.Role{simplerbac.RoleUser}}
-	if err := router.FPrintHelp(context.Background(), &buf, []string{"help", "all"}, actor); err != nil {
+	if err := router.FPrintHelp(context.Background(), &buf, nil, actor); err != nil {
 		t.Fatalf("FPrintHelp() error = %v", err)
 	}
 	out := buf.String()

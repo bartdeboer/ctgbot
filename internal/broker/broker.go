@@ -436,7 +436,7 @@ func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID, actor c
 		return componentbroker.FormatHelp(nil), nil
 	}
 	var buf bytes.Buffer
-	if err := runtime.MessageCommands.Router.FPrintHelp(ctx, &buf, nil, actor); err != nil {
+	if err := runtime.MessageCommands.Router.FPrintHelpIndex(ctx, &buf, actor); err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(buf.String()), nil

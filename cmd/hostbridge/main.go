@@ -72,11 +72,19 @@ func parseOrRenderHelp(
 			return commandengine.Request{}, false, err
 		}
 		if !match.Matched || !match.Executable || !match.Exact {
-			helpArgs := args
-			if len(helpReq.Scope) > 0 && !helpReq.All {
-				helpArgs = append(append([]string{}, helpReq.Scope...), "help", "all")
+			helpArgs := []string(nil)
+			helpOptions := []commandengine.HelpOption{commandengine.HelpLitDepth(1)}
+			if len(helpReq.Scope) > 0 {
+				helpArgs = append([]string{}, helpReq.Scope...)
+				helpOptions = []commandengine.HelpOption{commandengine.HelpLitDepth(2)}
 			}
-			if err := router.FPrintHelp(ctx, helpWriter, helpArgs, base.Context.Actor); err != nil {
+			var err error
+			if len(helpReq.Scope) == 0 {
+				err = router.FPrintHelpIndex(ctx, helpWriter, base.Context.Actor)
+			} else {
+				err = router.FPrintHelpWithOptions(ctx, helpWriter, helpArgs, helpOptions, base.Context.Actor)
+			}
+			if err != nil {
 				return commandengine.Request{}, false, err
 			}
 			return commandengine.Request{}, true, nil
@@ -214,7 +222,7 @@ func printHelp(actor commandengine.Actor) {
 	router, err := hostbridgeRouter()
 	if err != nil {
 		fmt.Fprintln(os.Stdout, "help unavailable:", err)
-	} else if err := router.FPrintHelp(context.Background(), os.Stdout, nil, actor); err != nil {
+	} else if err := router.FPrintHelpIndex(context.Background(), os.Stdout, actor); err != nil {
 		fmt.Fprintln(os.Stdout, "help unavailable:", err)
 	}
 	fmt.Fprintln(os.Stdout, "")
