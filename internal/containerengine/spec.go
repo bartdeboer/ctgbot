@@ -29,6 +29,7 @@ type ContainerSpec struct {
 	Name         string
 	Hostname     string
 	Image        string
+	Entrypoint   string
 	Workdir      string
 	User         string
 	UserMode     string

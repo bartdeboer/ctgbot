@@ -51,6 +51,28 @@ func TestBuildCreateArgsIncludesGPUs(t *testing.T) {
 	}
 }
 
+func TestBuildCreateArgsIncludesEntrypoint(t *testing.T) {
+	t.Parallel()
+
+	args := buildCreateArgs(ContainerSpec{
+		Name:       "ctgbot-test",
+		Image:      "ctgbot:latest",
+		Entrypoint: "tail",
+		Cmd:        []string{"-f", "/dev/null"},
+	})
+
+	found := false
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "--entrypoint" && args[i+1] == "tail" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected --entrypoint tail in args: %#v", args)
+	}
+}
+
 func TestBuildCreateArgsIncludesPorts(t *testing.T) {
 	t.Parallel()
 

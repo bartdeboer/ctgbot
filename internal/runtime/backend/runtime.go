@@ -173,6 +173,7 @@ func (r *Runtime) containerSpec() (containerengine.ContainerSpec, error) {
 	return containerengine.ContainerSpec{
 		Name:         r.containerName(),
 		Image:        strings.TrimSpace(r.config.Image),
+		Entrypoint:   strings.TrimSpace(r.config.Entrypoint),
 		GPUs:         strings.TrimSpace(r.config.GPUs),
 		Ports:        append([]string{}, r.service.Ports...),
 		Env:          env,

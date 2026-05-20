@@ -217,6 +217,7 @@ func (c *Component) sandboxSpec(modelDir string) (sandboxengine.SandboxSpec, err
 	name := sandboxengine.SafeName("ctgbot-"+c.registration.Ref()+"-"+workspaceKey(modelDir), "ctgbot-runtime")
 	return *sandboxengine.NewBuilder(name).
 		Image(firstNonEmpty(c.runtimeConfig.Image, DefaultImage)).
+		Entrypoint(c.runtimeConfig.Entrypoint).
 		Workdir(workspaceRuntimePath).
 		UserMode("host").
 		GPUs(c.runtimeConfig.GPUs).

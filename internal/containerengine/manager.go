@@ -87,6 +87,9 @@ func buildCreateArgs(spec ContainerSpec) []string {
 	if strings.TrimSpace(spec.Name) != "" {
 		args = append(args, "--name", spec.Name)
 	}
+	if entrypoint := strings.TrimSpace(spec.Entrypoint); entrypoint != "" {
+		args = append(args, "--entrypoint", entrypoint)
+	}
 	hostname := strings.TrimSpace(spec.Hostname)
 	if hostname != "" {
 		args = append(args, "--hostname", hostname)

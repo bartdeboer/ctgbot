@@ -24,7 +24,10 @@ func TestLoadRuntimeConfigDefaults(t *testing.T) {
 	if config.Image != DefaultImage {
 		t.Fatalf("image = %q", config.Image)
 	}
-	if len(config.Cmd) != 3 || config.Cmd[0] != "tail" {
+	if config.Entrypoint != "tail" {
+		t.Fatalf("entrypoint = %q", config.Entrypoint)
+	}
+	if len(config.Cmd) != 2 || config.Cmd[0] != "-f" {
 		t.Fatalf("cmd = %#v", config.Cmd)
 	}
 	if config.IdleTimeout != "30s" {

@@ -16,6 +16,7 @@ type Home struct {
 
 type BindConfig struct {
 	Image       string   `json:"image"`
+	Entrypoint  string   `json:"entrypoint,omitempty"`
 	Env         []string `json:"env"`
 	GPUs        string   `json:"gpus"`
 	Seccomp     string   `json:"seccomp"`

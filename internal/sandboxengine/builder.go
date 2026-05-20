@@ -48,6 +48,11 @@ func (b Builder) Image(v string) Builder {
 	return b
 }
 
+func (b Builder) Entrypoint(v string) Builder {
+	b.spec.Entrypoint = v
+	return b
+}
+
 func (b Builder) Workdir(v string) Builder {
 	b.spec.Workdir = v
 	return b

@@ -42,7 +42,8 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 		config.Env,
 	)
 	if len(config.Cmd) == 0 {
-		config.Cmd = []string{"tail", "-f", "/dev/null"}
+		config.Entrypoint = firstNonEmpty(config.Entrypoint, "tail")
+		config.Cmd = []string{"-f", "/dev/null"}
 	}
 	return config.Clean(), nil
 }

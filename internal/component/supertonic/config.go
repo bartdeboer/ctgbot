@@ -34,7 +34,8 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 	config.Image = firstNonEmpty(config.Image, DefaultImage)
 	config.IdleTimeout = firstNonEmpty(config.IdleTimeout, "30s")
 	if len(config.Cmd) == 0 {
-		config.Cmd = []string{"tail", "-f", "/dev/null"}
+		config.Entrypoint = firstNonEmpty(config.Entrypoint, "tail")
+		config.Cmd = []string{"-f", "/dev/null"}
 	}
 	return config.Clean(), nil
 }

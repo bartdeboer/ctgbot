@@ -21,7 +21,10 @@ func TestLoadRuntimeConfigUsesWhisperCppImageAndLibraryPath(t *testing.T) {
 	if got := envValue(config.Env, "LD_LIBRARY_PATH"); got != DefaultLDLibraryPath {
 		t.Fatalf("LD_LIBRARY_PATH = %q, want %q in %#v", got, DefaultLDLibraryPath, config.Env)
 	}
-	if len(config.Cmd) != 3 || config.Cmd[0] != "tail" || config.Cmd[1] != "-f" || config.Cmd[2] != "/dev/null" {
+	if config.Entrypoint != "tail" {
+		t.Fatalf("Entrypoint = %q, want tail", config.Entrypoint)
+	}
+	if len(config.Cmd) != 2 || config.Cmd[0] != "-f" || config.Cmd[1] != "/dev/null" {
 		t.Fatalf("Cmd = %#v, want whisper.cpp idle command", config.Cmd)
 	}
 	if config.IdleTimeout != "30s" {

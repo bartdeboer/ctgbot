@@ -91,6 +91,7 @@ func (f *Factory) Bind(
 		registration: registration,
 		home:         home,
 		image:        resolveImage(config.Image),
+		entrypoint:   strings.TrimSpace(config.Entrypoint),
 		env:          append([]string{}, config.Env...),
 		gpus:         strings.TrimSpace(config.GPUs),
 		seccomp:      strings.TrimSpace(config.Seccomp),
@@ -105,6 +106,7 @@ type Runtime struct {
 	registration coremodel.Component
 	home         runtimepkg.Home
 	image        string
+	entrypoint   string
 	env          []string
 	gpus         string
 	seccomp      string
@@ -310,6 +312,7 @@ func (r *Runtime) sandbox(
 		runtimeHomePath := r.RuntimeComponentHomePath()
 		spec := sandboxengine.NewBuilder(authSandboxName(r.registration)).
 			Image(r.image).
+			Entrypoint(r.entrypoint).
 			Workdir(runtimeHomePath).
 			// Keep mounted profile files writable by the host ctgbot process.
 			UserMode("host").
@@ -352,6 +355,7 @@ func (r *Runtime) sandbox(
 		ContainerHome(runtimeHomePath).
 		Hostname(name).
 		Image(r.image).
+		Entrypoint(r.entrypoint).
 		Workdir(workspaceRuntime).
 		// Keep mounted profile/workspace files writable by the host ctgbot process.
 		UserMode("host").
