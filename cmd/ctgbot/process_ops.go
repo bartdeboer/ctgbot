@@ -47,8 +47,12 @@ func (p *projectProcessActions) Install(ctx context.Context) error {
 	return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge")
 }
 
-func (p *projectProcessActions) Upgrade(ctx context.Context) error {
-	p.logf("running ctgbot upgrade")
+func (p *projectProcessActions) Upgrade(ctx context.Context, all bool) error {
+	if all {
+		p.logf("running ctgbot upgrade all")
+	} else {
+		p.logf("running ctgbot upgrade")
+	}
 	projectDir, err := requireProjectDir(p.globalStore)
 	if err != nil {
 		return err
@@ -70,8 +74,14 @@ func (p *projectProcessActions) Upgrade(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	return runUpgradeStep(ctx, "ctgbot image build", func(ctx context.Context) error {
-		return runInstalledCtgbotCommand(ctx, "image", "build")
+	imageBuildArgs := []string{"image", "build"}
+	imageBuildLabel := "ctgbot image build"
+	if all {
+		imageBuildArgs = append(imageBuildArgs, "--no-cache")
+		imageBuildLabel = "ctgbot image build --no-cache"
+	}
+	return runUpgradeStep(ctx, imageBuildLabel, func(ctx context.Context) error {
+		return runInstalledCtgbotCommand(ctx, imageBuildArgs...)
 	})
 }
 

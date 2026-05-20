@@ -24,10 +24,16 @@ func registerMaintenanceRoutes(r *clir.Router, globalStore *clistate.Store) {
 		})
 
 		b.Handle("process upgrade", "Update ctgbot from project_dir and rebuild runtime images", func(req *clir.Request) error {
-			return actions.Upgrade(req.Context())
+			return actions.Upgrade(req.Context(), false)
 		})
 		b.Handle("upgrade", "Alias for process upgrade", func(req *clir.Request) error {
-			return actions.Upgrade(req.Context())
+			return actions.Upgrade(req.Context(), false)
+		})
+		b.Handle("process upgrade all", "Update ctgbot and rebuild runtime images without cache", func(req *clir.Request) error {
+			return actions.Upgrade(req.Context(), true)
+		})
+		b.Handle("upgrade all", "Alias for process upgrade all", func(req *clir.Request) error {
+			return actions.Upgrade(req.Context(), true)
 		})
 
 		b.Handle("process quit", "Stop the running ctgbot process", func(req *clir.Request) error {

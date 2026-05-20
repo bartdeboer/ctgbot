@@ -15,7 +15,7 @@ const Type = "process"
 
 type Actions interface {
 	Install(ctx context.Context) error
-	Upgrade(ctx context.Context) error
+	Upgrade(ctx context.Context, all bool) error
 	Quit(ctx context.Context) error
 }
 
@@ -29,6 +29,7 @@ var _ component.LocalCommandSurface = (*Component)(nil)
 
 type installCommand struct{}
 type upgradeCommand struct{}
+type upgradeAllCommand struct{}
 type quitCommand struct{}
 type versionCommand struct{}
 
@@ -54,6 +55,13 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		"Upgrade ctgbot",
 		buildUpgradeCommand,
 		[]commandengine.Route{{Pattern: "upgrade", Absolute: true}},
+		simplerbac.Any(simplerbac.RoleRoot),
+	)...)
+	definitions = append(definitions, processCommandDefinitions(
+		"upgrade all",
+		"Upgrade ctgbot and rebuild runtime images without cache",
+		buildUpgradeAllCommand,
+		[]commandengine.Route{{Pattern: "upgrade all", Absolute: true}},
 		simplerbac.Any(simplerbac.RoleRoot),
 	)...)
 	definitions = append(definitions, processCommandDefinitions(
@@ -88,10 +96,18 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := registerProcessPattern[upgradeCommand](registry, "upgrade", func(ctx context.Context) (commandengine.Result, error) {
-		if err := c.upgrade(ctx); err != nil {
+		if err := c.upgrade(ctx, false); err != nil {
 			return commandengine.Result{}, err
 		}
 		return commandengine.Result{Text: "upgrade completed\ntype /quit to restart"}, nil
+	}); err != nil {
+		return err
+	}
+	if err := registerProcessPattern[upgradeAllCommand](registry, "upgrade all", func(ctx context.Context) (commandengine.Result, error) {
+		if err := c.upgrade(ctx, true); err != nil {
+			return commandengine.Result{}, err
+		}
+		return commandengine.Result{Text: "upgrade all completed\ntype /quit to restart"}, nil
 	}); err != nil {
 		return err
 	}
@@ -116,11 +132,11 @@ func (c *Component) install(ctx context.Context) error {
 	return c.Actions.Install(ctx)
 }
 
-func (c *Component) upgrade(ctx context.Context) error {
+func (c *Component) upgrade(ctx context.Context, all bool) error {
 	if c == nil || c.Actions == nil {
 		return fmt.Errorf("missing process actions")
 	}
-	return c.Actions.Upgrade(ctx)
+	return c.Actions.Upgrade(ctx, all)
 }
 
 func (c *Component) quit(ctx context.Context) error {
@@ -173,6 +189,11 @@ func buildInstallCommand(req *clir.Request) (any, error) {
 func buildUpgradeCommand(req *clir.Request) (any, error) {
 	_ = req
 	return upgradeCommand{}, nil
+}
+
+func buildUpgradeAllCommand(req *clir.Request) (any, error) {
+	_ = req
+	return upgradeAllCommand{}, nil
 }
 
 func buildQuitCommand(req *clir.Request) (any, error) {
