@@ -16,6 +16,7 @@ const Type = "process"
 type Actions interface {
 	Install(ctx context.Context) error
 	Upgrade(ctx context.Context, all bool) error
+	ImageList(ctx context.Context) (string, error)
 	Quit(ctx context.Context) error
 }
 
@@ -30,6 +31,7 @@ var _ component.LocalCommandSurface = (*Component)(nil)
 type installCommand struct{}
 type upgradeCommand struct{}
 type upgradeAllCommand struct{}
+type imageListCommand struct{}
 type quitCommand struct{}
 type versionCommand struct{}
 
@@ -62,6 +64,13 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		"Upgrade ctgbot and rebuild runtime images without cache",
 		buildUpgradeAllCommand,
 		[]commandengine.Route{{Pattern: "upgrade all", Absolute: true}},
+		simplerbac.Any(simplerbac.RoleRoot),
+	)...)
+	definitions = append(definitions, processCommandDefinitions(
+		"image list",
+		"List runtime image build targets",
+		buildImageListCommand,
+		[]commandengine.Route{{Pattern: "image list", Absolute: true}},
 		simplerbac.Any(simplerbac.RoleRoot),
 	)...)
 	definitions = append(definitions, processCommandDefinitions(
@@ -111,6 +120,15 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
+	if err := registerProcessPattern[imageListCommand](registry, "image list", func(ctx context.Context) (commandengine.Result, error) {
+		text, err := c.imageList(ctx)
+		if err != nil {
+			return commandengine.Result{}, err
+		}
+		return commandengine.Result{Text: text}, nil
+	}); err != nil {
+		return err
+	}
 	if err := registerProcessPattern[quitCommand](registry, "quit", func(ctx context.Context) (commandengine.Result, error) {
 		if err := c.quit(ctx); err != nil {
 			return commandengine.Result{}, err
@@ -137,6 +155,13 @@ func (c *Component) upgrade(ctx context.Context, all bool) error {
 		return fmt.Errorf("missing process actions")
 	}
 	return c.Actions.Upgrade(ctx, all)
+}
+
+func (c *Component) imageList(ctx context.Context) (string, error) {
+	if c == nil || c.Actions == nil {
+		return "", fmt.Errorf("missing process actions")
+	}
+	return c.Actions.ImageList(ctx)
 }
 
 func (c *Component) quit(ctx context.Context) error {
@@ -194,6 +219,11 @@ func buildUpgradeCommand(req *clir.Request) (any, error) {
 func buildUpgradeAllCommand(req *clir.Request) (any, error) {
 	_ = req
 	return upgradeAllCommand{}, nil
+}
+
+func buildImageListCommand(req *clir.Request) (any, error) {
+	_ = req
+	return imageListCommand{}, nil
 }
 
 func buildQuitCommand(req *clir.Request) (any, error) {

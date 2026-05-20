@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -85,6 +86,11 @@ func (p *projectProcessActions) Upgrade(ctx context.Context, all bool) error {
 	})
 }
 
+func (p *projectProcessActions) ImageList(ctx context.Context) (string, error) {
+	p.logf("listing ctgbot runtime images")
+	return runInstalledCtgbotCommandOutput(ctx, "image", "list")
+}
+
 func (p *projectProcessActions) Quit(ctx context.Context) error {
 	_ = ctx
 	p.logf("shutting down ctgbot")
@@ -130,14 +136,29 @@ func runInstalledCtgbotCommand(ctx context.Context, args ...string) error {
 	return runInstalledCtgbotCommandInDir(ctx, "", args...)
 }
 
-func runInstalledCtgbotCommandInDir(ctx context.Context, dir string, args ...string) error {
-	binPath, err := exec.LookPath("ctgbot")
+func runInstalledCtgbotCommandOutput(ctx context.Context, args ...string) (string, error) {
+	binPath, err := resolveInstalledCtgbotPath()
 	if err != nil {
-		exePath, exeErr := os.Executable()
-		if exeErr != nil {
-			return fmt.Errorf("resolve ctgbot executable: %w", err)
+		return "", err
+	}
+	cmd := exec.CommandContext(ctx, binPath, args...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 		}
-		binPath = exePath
+		return "", err
+	}
+	return stdout.String(), nil
+}
+
+func runInstalledCtgbotCommandInDir(ctx context.Context, dir string, args ...string) error {
+	binPath, err := resolveInstalledCtgbotPath()
+	if err != nil {
+		return err
 	}
 	cmd := exec.CommandContext(ctx, binPath, args...)
 	if strings.TrimSpace(dir) != "" {
@@ -146,6 +167,18 @@ func runInstalledCtgbotCommandInDir(ctx context.Context, dir string, args ...str
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func resolveInstalledCtgbotPath() (string, error) {
+	binPath, err := exec.LookPath("ctgbot")
+	if err != nil {
+		exePath, exeErr := os.Executable()
+		if exeErr != nil {
+			return "", fmt.Errorf("resolve ctgbot executable: %w", err)
+		}
+		binPath = exePath
+	}
+	return binPath, nil
 }
 
 func runProjectCommand(ctx context.Context, projectDir string, env []string, name string, args ...string) error {

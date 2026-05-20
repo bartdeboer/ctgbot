@@ -49,6 +49,16 @@ func TestProcessCommandDefinitions(t *testing.T) {
 			visibleRoutes: []string{"upgrade all"},
 		},
 		{
+			pattern:       "image list",
+			source:        commandengine.SourceMessage,
+			visibleRoutes: []string{"image list", "image list"},
+		},
+		{
+			pattern:       "image list",
+			source:        commandengine.SourceCLI,
+			visibleRoutes: []string{"image list"},
+		},
+		{
 			pattern:       "quit",
 			source:        commandengine.SourceMessage,
 			visibleRoutes: []string{"quit", "quit"},

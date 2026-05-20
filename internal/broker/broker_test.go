@@ -2218,6 +2218,11 @@ func (f *fakeProcessActions) Upgrade(ctx context.Context, all bool) error {
 	return nil
 }
 
+func (f *fakeProcessActions) ImageList(ctx context.Context) (string, error) {
+	_ = ctx
+	return "images", nil
+}
+
 func (f *fakeProcessActions) Quit(ctx context.Context) error {
 	_ = ctx
 	return nil
