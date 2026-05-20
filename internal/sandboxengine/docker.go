@@ -149,6 +149,20 @@ func (s *Sandbox) ensureReady(ctx context.Context) (EnsureAction, error) {
 	case StateRunning:
 		return EnsureNoop, nil
 	case StateCreated, StateExited:
+		if s.RecreateStopped {
+			if err := s.manager.containerManager().Remove(ctx, s.Name); err != nil {
+				return EnsureNoop, err
+			}
+			container, err := s.manager.containerManager().Create(ctx, s.ContainerSpec())
+			if err != nil {
+				return EnsureNoop, err
+			}
+			s.setContainer(container)
+			if err := container.Start(ctx); err != nil {
+				return EnsureNoop, err
+			}
+			return EnsureCreated, nil
+		}
 		return EnsureStarted, container.Start(ctx)
 	case StateMissing:
 		container, err := s.manager.containerManager().Create(ctx, s.ContainerSpec())

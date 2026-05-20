@@ -93,6 +93,11 @@ func (b Builder) Cmd(v []string) Builder {
 	return b
 }
 
+func (b Builder) RecreateStopped(v bool) Builder {
+	b.spec.RecreateStopped = v
+	return b
+}
+
 func (b Builder) Build() *SandboxSpec {
 	return b.spec
 }

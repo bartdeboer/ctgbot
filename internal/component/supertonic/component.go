@@ -227,6 +227,7 @@ func (c *Component) sandboxSpec(modelDir string) (sandboxengine.SandboxSpec, err
 		}).
 		SecurityOpts(securityOpts).
 		Cmd(idleCmd(c.runtimeConfig.Cmd)).
+		RecreateStopped(true).
 		Build(), nil
 }
 
