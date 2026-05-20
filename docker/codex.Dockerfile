@@ -1,9 +1,7 @@
-FROM golang:1.24-alpine AS hostbridge-build
+FROM ctgbot-codex-base:latest AS hostbridge-build
 
 WORKDIR /src
 ARG TARGETARCH
-COPY go.mod go.sum ./
-RUN go mod download
 COPY cmd/hostbridge ./cmd/hostbridge
 COPY internal ./internal
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} go build -o /out/hostbridge ./cmd/hostbridge

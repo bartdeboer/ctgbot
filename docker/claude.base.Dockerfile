@@ -16,5 +16,9 @@ COPY --from=go-runtime /usr/local/go /usr/local/go
 RUN ln -s /usr/local/go/bin/go /usr/local/bin/go \
     && ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]

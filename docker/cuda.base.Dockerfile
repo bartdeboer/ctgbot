@@ -31,5 +31,9 @@ RUN apt-get update \
 
 COPY --from=go-runtime /usr/local/go /usr/local/go
 
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]

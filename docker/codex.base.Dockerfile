@@ -21,5 +21,9 @@ RUN apk add --no-cache ca-certificates git curl libc6-compat \
     && chmod 755 /usr/local/bin/codex \
     && codex --version
 
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]
