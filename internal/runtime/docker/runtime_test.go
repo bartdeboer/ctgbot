@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"context"
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
@@ -216,6 +217,10 @@ func (m fakeSandboxManager) CreateRuntime(spec sandboxengine.RuntimeSpec) *sandb
 	return &sandboxengine.SandboxRuntime{
 		// Not used in this test path.
 	}
+}
+
+func (m fakeSandboxManager) BeginSession(ctx context.Context, spec sandboxengine.SandboxSpec, options sandboxengine.SessionOptions) (*sandboxengine.Session, error) {
+	return &sandboxengine.Session{}, nil
 }
 
 func findEnv(env []string, key string) string {

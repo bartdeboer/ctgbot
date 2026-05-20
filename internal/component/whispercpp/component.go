@@ -2,20 +2,26 @@ package whispercpp
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/durationparse"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 	"github.com/bartdeboer/ctgbot/internal/workgate"
 )
 
@@ -26,8 +32,10 @@ type ComponentResolver interface {
 
 type Component struct {
 	registration   coremodel.Component
-	runtime        runtimepkg.Runtime
+	sandboxes      sandboxengine.RuntimeManager
 	home           runtimepkg.Home
+	runtimeConfig  runtimepkg.BindConfig
+	runtimeHome    string
 	config         ComponentConfig
 	resolver       ComponentResolver
 	transcribeGate *workgate.Gate
@@ -45,14 +53,20 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if err != nil {
 		return nil, err
 	}
+	provider, ok := runtime.(sandboxengine.Provider)
+	if !ok || provider.SandboxManager() == nil {
+		return nil, fmt.Errorf("whispercpp requires a sandbox-capable runtime")
+	}
 	config, err := loadComponentConfig(home.Path)
 	if err != nil {
 		return nil, err
 	}
 	return &Component{
 		registration:   registration,
-		runtime:        runtime.Bind(registration, home, runtimeConfig),
+		sandboxes:      provider.SandboxManager(),
 		home:           home,
+		runtimeConfig:  runtimeConfig,
+		runtimeHome:    runtime.RuntimeComponentHomePath(registration, home),
 		config:         config,
 		resolver:       resolver,
 		transcribeGate: workgate.New(),
@@ -69,7 +83,7 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 }
 
 func (c *Component) Transcribe(ctx context.Context, req component.TranscriptionRequest) (component.TranscriptionResult, error) {
-	if c == nil || c.runtime == nil {
+	if c == nil || c.sandboxes == nil {
 		return component.TranscriptionResult{}, fmt.Errorf("missing whispercpp runtime")
 	}
 	model, err := c.resolveModel(ctx, firstNonEmpty(req.Model, c.config.DefaultModel))
@@ -104,19 +118,29 @@ func (c *Component) Transcribe(ctx context.Context, req component.TranscriptionR
 	}
 
 	modelDir := filepath.Dir(model.Path)
-	modelRuntime := filepath.Join(c.runtime.RuntimeWorkspacePath(modelDir), filepath.Base(model.Path))
+	modelRuntime := filepath.Join(workspaceRuntimePath, filepath.Base(model.Path))
 	values := map[string]string{
 		"input":         filepath.Join(work.runtime, filepath.Base(inputHost)),
 		"wav":           filepath.Join(work.runtime, filepath.Base(wavHost)),
 		"model":         modelRuntime,
 		"output_prefix": filepath.Join(work.runtime, "transcript"),
 	}
-	if err := c.run(ctx, req.ThreadID, modelDir, c.config.FFMpegCommand, renderArgs(defaultFFMpegArgs(), values)); err != nil {
+	spec, err := c.sandboxSpec(modelDir)
+	if err != nil {
+		return component.TranscriptionResult{}, err
+	}
+	session, err := c.sandboxes.BeginSession(ctx, spec, c.sessionOptions())
+	if err != nil {
+		return component.TranscriptionResult{}, err
+	}
+	defer session.Close()
+
+	if err := c.run(ctx, session, c.config.FFMpegCommand, renderArgs(defaultFFMpegArgs(), values)); err != nil {
 		return component.TranscriptionResult{}, err
 	}
 	requestedLanguage := firstNonEmpty(req.Language, c.config.Language)
 	args := c.whisperArgs(values, requestedLanguage)
-	out, err := c.runtime.CombinedOutput(ctx, modelDir, req.ThreadID, nil, c.config.WhisperCommand, args...)
+	out, err := session.CombinedOutput(ctx, c.config.WhisperCommand, args...)
 	if err != nil {
 		return component.TranscriptionResult{}, fmt.Errorf("whispercpp command: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
@@ -142,8 +166,34 @@ func (c *Component) acquireTranscription(ctx context.Context, modelName string) 
 	return c.transcribeGate.Acquire(ctx, strings.TrimSpace(modelName), c.config.MaxConcurrent)
 }
 
-func (c *Component) run(ctx context.Context, threadID modeluuid.UUID, workspacePath string, name string, args []string) error {
-	out, err := c.runtime.CombinedOutput(ctx, workspacePath, threadID, nil, name, args...)
+func (c *Component) sandboxSpec(modelDir string) (sandboxengine.SandboxSpec, error) {
+	securityOpts, err := containerengine.SeccompSecurityOpts(c.runtimeConfig.Seccomp)
+	if err != nil {
+		return sandboxengine.SandboxSpec{}, err
+	}
+	name := sandboxengine.SafeName("ctgbot-"+c.registration.Ref()+"-"+workspaceKey(modelDir), "ctgbot-runtime")
+	return *sandboxengine.NewBuilder(name).
+		Image(firstNonEmpty(c.runtimeConfig.Image, DefaultImage)).
+		Workdir(workspaceRuntimePath).
+		UserMode("host").
+		GPUs(c.runtimeConfig.GPUs).
+		Env(c.runtimeConfig.Env).
+		Mounts([]sandboxengine.Mount{
+			{Source: c.home.Path, Target: c.runtimeHome},
+			{Source: modelDir, Target: workspaceRuntimePath, ReadOnly: true},
+		}).
+		SecurityOpts(securityOpts).
+		Cmd(idleCmd(c.runtimeConfig.Cmd)).
+		Build(), nil
+}
+
+func (c *Component) sessionOptions() sandboxengine.SessionOptions {
+	timeout, _ := durationparse.Parse(c.runtimeConfig.IdleTimeout, time.Second)
+	return sandboxengine.SessionOptions{IdleTimeout: timeout}
+}
+
+func (c *Component) run(ctx context.Context, session *sandboxengine.Session, name string, args []string) error {
+	out, err := session.CombinedOutput(ctx, name, args...)
 	if err != nil {
 		return fmt.Errorf("%s: %w\n%s", name, err, strings.TrimSpace(string(out)))
 	}
@@ -193,7 +243,7 @@ func (c *Component) prepareWorkdir(pattern string) (workdir, func(), error) {
 	if err != nil {
 		return workdir{}, func() {}, err
 	}
-	runtime := filepath.Join(c.runtime.RuntimeComponentHomePath(), filepath.Base(host))
+	runtime := filepath.Join(c.runtimeHome, filepath.Base(host))
 	return workdir{host: host, runtime: runtime}, func() { _ = os.RemoveAll(host) }, nil
 }
 
@@ -226,6 +276,20 @@ func hasArg(args []string, names ...string) bool {
 		}
 	}
 	return false
+}
+
+const workspaceRuntimePath = "/workspace"
+
+func idleCmd(cmd []string) []string {
+	if len(cmd) > 0 {
+		return append([]string{}, cmd...)
+	}
+	return []string{"tail", "-f", "/dev/null"}
+}
+
+func workspaceKey(value string) string {
+	sum := sha1.Sum([]byte(strings.TrimSpace(value)))
+	return hex.EncodeToString(sum[:])[:12]
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }

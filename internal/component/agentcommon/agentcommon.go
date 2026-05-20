@@ -80,7 +80,7 @@ func BindProviderThreadID(componentID modeluuid.UUID, turnRuntime component.Turn
 	return turnRuntime.BindComponentThreadID(componentID, providerThreadID)
 }
 
-func RuntimeNotices(ctx context.Context, runtime runtimepkg.Runtime, workspacePath string, threadID modeluuid.UUID, logf func(string, ...any)) []string {
+func RuntimeNotices(ctx context.Context, runtime runtimepkg.ThreadRuntime, workspacePath string, threadID modeluuid.UUID, logf func(string, ...any)) []string {
 	if runtime == nil {
 		return nil
 	}
@@ -94,7 +94,7 @@ func RuntimeNotices(ctx context.Context, runtime runtimepkg.Runtime, workspacePa
 	return append([]string(nil), status.RuntimeNotices...)
 }
 
-func StopAfterTurn(runtime runtimepkg.Runtime, workspacePath string, threadID modeluuid.UUID, timeout time.Duration, logf func(string, ...any)) {
+func StopAfterTurn(runtime runtimepkg.ThreadRuntime, workspacePath string, threadID modeluuid.UUID, timeout time.Duration, logf func(string, ...any)) {
 	if runtime == nil {
 		return
 	}

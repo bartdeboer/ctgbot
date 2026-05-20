@@ -35,13 +35,14 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 		return runtimepkg.BindConfig{}, err
 	}
 	config.Image = firstNonEmpty(config.Image, DefaultImage)
+	config.IdleTimeout = firstNonEmpty(config.IdleTimeout, "30s")
 	config.GPUs = firstNonEmpty(config.GPUs, "all")
 	config.Env = runtimepkg.MergeEnv(
 		[]string{"LD_LIBRARY_PATH=" + DefaultLDLibraryPath},
 		config.Env,
 	)
 	if len(config.Cmd) == 0 {
-		config.Cmd = []string{"tail -f /dev/null"}
+		config.Cmd = []string{"tail", "-f", "/dev/null"}
 	}
 	return config.Clean(), nil
 }

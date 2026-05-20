@@ -40,6 +40,13 @@ func New(rootDir string, componentsRoot string, sandboxes sandboxengine.RuntimeM
 	}
 }
 
+func (f *Factory) SandboxManager() sandboxengine.RuntimeManager {
+	if f == nil {
+		return nil
+	}
+	return f.sandboxes
+}
+
 func (f *Factory) WithEnv(env ...string) *Factory {
 	if f == nil {
 		return nil
@@ -75,7 +82,7 @@ func (f *Factory) Bind(
 	registration coremodel.Component,
 	home runtimepkg.Home,
 	config runtimepkg.BindConfig,
-) runtimepkg.Runtime {
+) runtimepkg.ThreadRuntime {
 	config = config.WithEnvOverride(f.env...)
 	return &Runtime{
 		rootDir:      f.rootDir,
@@ -337,12 +344,13 @@ func (r *Runtime) sandbox(
 		mounts = append(mounts, bridgeMount)
 		cleanup = unregister
 	}
-	spec := sandboxengine.NewBuilder(turnSandboxName(r.registration, threadID)).
+	name := turnSandboxName(r.registration, threadID)
+	spec := sandboxengine.NewBuilder(name).
 		WorkspaceDir(workspaceHost).
 		ProfileDir(r.home.Path).
 		ContainerWorkspace(workspaceRuntime).
 		ContainerHome(runtimeHomePath).
-		Hostname(turnSandboxName(r.registration, threadID)).
+		Hostname(name).
 		Image(r.image).
 		Workdir(workspaceRuntime).
 		// Keep mounted profile/workspace files writable by the host ctgbot process.

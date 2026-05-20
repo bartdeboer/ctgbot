@@ -58,7 +58,7 @@ func TestGmailSourceRelaysOutboundElsewhere(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {

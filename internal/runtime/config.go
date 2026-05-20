@@ -32,6 +32,7 @@ func (c BindConfig) Clean() BindConfig {
 	c.Seccomp = strings.ToLower(strings.TrimSpace(c.Seccomp))
 	c.Env = cleanEnv(c.Env)
 	c.Cmd = cleanArgs(c.Cmd)
+	c.IdleTimeout = strings.TrimSpace(c.IdleTimeout)
 	return c
 }
 

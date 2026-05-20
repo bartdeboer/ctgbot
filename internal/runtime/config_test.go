@@ -51,3 +51,11 @@ func countEnv(env []string, key string) int {
 	}
 	return count
 }
+
+func TestBindConfigCleanNormalizesIdleTimeout(t *testing.T) {
+	config := BindConfig{IdleTimeout: " 45s "}.Clean()
+
+	if config.IdleTimeout != "45s" {
+		t.Fatalf("IdleTimeout = %q, want 45s", config.IdleTimeout)
+	}
+}

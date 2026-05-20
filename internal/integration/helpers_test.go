@@ -93,7 +93,7 @@ func (f fakeRuntimeFactory) RuntimeWorkspacePath(workspacePath string) string {
 	return strings.TrimSpace(workspacePath)
 }
 
-func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.Runtime {
+func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
 	_, _, _ = registration, home, config
 	return &fakeRuntime{
 		rootDir: f.rootDir,

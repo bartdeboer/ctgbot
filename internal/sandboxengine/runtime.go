@@ -12,6 +12,11 @@ type CommandExecutor = commandengine.CommandExecutor
 type RuntimeManager interface {
 	Manager
 	CreateRuntime(spec RuntimeSpec) *SandboxRuntime
+	BeginSession(ctx context.Context, spec SandboxSpec, options SessionOptions) (*Session, error)
+}
+
+type Provider interface {
+	SandboxManager() RuntimeManager
 }
 
 type RuntimeSpec struct {

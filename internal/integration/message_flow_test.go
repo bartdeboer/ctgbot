@@ -54,7 +54,7 @@ func TestMockComponentsEndToEnd(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -203,7 +203,7 @@ func TestInboundAttachmentsMaterializeIntoWorkspaceInboxAndInjectPrompt(t *testi
 			_, _, _ = ctx, home, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -340,7 +340,7 @@ func TestAttachmentOnlyInboundReturnsUploadSavedMessage(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -454,7 +454,7 @@ func TestConversationErrorIsReportedToChatAndDoesNotStopSource(t *testing.T) {
 			_, _, _ = ctx, home, storage
 			return &failingAgent{
 				componentID: registration.ID,
-				runtime:     runtime.Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -523,13 +523,13 @@ func TestConversationErrorIsReportedToChatAndDoesNotStopSource(t *testing.T) {
 
 type mockAgent struct {
 	componentID modeluuid.UUID
-	runtime     runtimepkg.Runtime
+	runtime     runtimepkg.ThreadRuntime
 	state       *agentState
 }
 
 type failingAgent struct {
 	componentID modeluuid.UUID
-	runtime     runtimepkg.Runtime
+	runtime     runtimepkg.ThreadRuntime
 	state       *agentState
 }
 

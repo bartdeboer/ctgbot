@@ -27,6 +27,9 @@ func TestLoadRuntimeConfigDefaults(t *testing.T) {
 	if len(config.Cmd) != 3 || config.Cmd[0] != "tail" {
 		t.Fatalf("cmd = %#v", config.Cmd)
 	}
+	if config.IdleTimeout != "30s" {
+		t.Fatalf("idle timeout = %q", config.IdleTimeout)
+	}
 }
 
 func TestLoadComponentConfigOverrides(t *testing.T) {
