@@ -24,25 +24,7 @@ func registerImageRoutes(r *clir.Router, store *clistate.Store) {
 			if err != nil {
 				return err
 			}
-			if len(targets) == 0 {
-				os.Stdout.WriteString("no runtime image targets\n")
-				return nil
-			}
-			for _, target := range targets {
-				fields := []string{
-					target.Ref,
-					"name=" + target.Name,
-					"image=" + target.Image,
-					"dockerfile=" + target.Dockerfile,
-				}
-				if len(target.DependsOn) > 0 {
-					fields = append(fields, "depends_on="+strings.Join(target.DependsOn, ","))
-				}
-				if target.NoCache {
-					fields = append(fields, "no_cache=true")
-				}
-				os.Stdout.WriteString(strings.Join(fields, "\t") + "\n")
-			}
+			os.Stdout.WriteString(formatRuntimeImageTargets(targets))
 			return nil
 		})
 
@@ -102,4 +84,28 @@ func openImageAppService(req *clir.Request, store *clistate.Store) (app.Service,
 	appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logger.Printf)
 	builder := &runtimeimage.Builder{Logger: logger, SourceDir: rtSystem.RootDir}
 	return appService, builder, nil
+}
+
+func formatRuntimeImageTargets(targets []runtimeimage.Target) string {
+	if len(targets) == 0 {
+		return "no runtime image targets\n"
+	}
+	var out strings.Builder
+	for _, target := range targets {
+		fields := []string{
+			target.Ref,
+			"name=" + target.Name,
+			"image=" + target.Image,
+			"dockerfile=" + target.Dockerfile,
+		}
+		if len(target.DependsOn) > 0 {
+			fields = append(fields, "depends_on="+strings.Join(target.DependsOn, ","))
+		}
+		if target.NoCache {
+			fields = append(fields, "no_cache=true")
+		}
+		out.WriteString(strings.Join(fields, "\t"))
+		out.WriteByte('\n')
+	}
+	return out.String()
 }

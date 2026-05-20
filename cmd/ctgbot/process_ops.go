@@ -1,15 +1,17 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/app"
+	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -88,7 +90,24 @@ func (p *projectProcessActions) Upgrade(ctx context.Context, all bool) error {
 
 func (p *projectProcessActions) ImageList(ctx context.Context) (string, error) {
 	p.logf("listing ctgbot runtime images")
-	return runInstalledCtgbotCommandOutput(ctx, "image", "list")
+	logger := p.logger
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+	rtSystem, err := systempkg.Open(ctx, "", "", p.globalStore, logger)
+	if err != nil {
+		return "", err
+	}
+	rtSystem.Registry, err = newRuntimeRegistry(rtSystem, p)
+	if err != nil {
+		return "", err
+	}
+	appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logger.Printf)
+	targets, err := appService.RuntimeImageTargets(ctx)
+	if err != nil {
+		return "", err
+	}
+	return formatRuntimeImageTargets(targets), nil
 }
 
 func (p *projectProcessActions) Quit(ctx context.Context) error {
@@ -134,25 +153,6 @@ func runUpgradeStep(ctx context.Context, label string, fn func(context.Context) 
 
 func runInstalledCtgbotCommand(ctx context.Context, args ...string) error {
 	return runInstalledCtgbotCommandInDir(ctx, "", args...)
-}
-
-func runInstalledCtgbotCommandOutput(ctx context.Context, args ...string) (string, error) {
-	binPath, err := resolveInstalledCtgbotPath()
-	if err != nil {
-		return "", err
-	}
-	cmd := exec.CommandContext(ctx, binPath, args...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
-		}
-		return "", err
-	}
-	return stdout.String(), nil
 }
 
 func runInstalledCtgbotCommandInDir(ctx context.Context, dir string, args ...string) error {
