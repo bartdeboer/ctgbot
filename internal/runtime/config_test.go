@@ -1,6 +1,10 @@
 package runtime
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestBindConfigWithEnvOverrideUpserts(t *testing.T) {
 	config := BindConfig{
@@ -57,5 +61,32 @@ func TestBindConfigCleanNormalizesIdleTimeout(t *testing.T) {
 
 	if config.IdleTimeout != "45s" {
 		t.Fatalf("IdleTimeout = %q, want 45s", config.IdleTimeout)
+	}
+}
+
+func TestLoadBindConfigReadsRuntimeImageUses(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, ConfigFilename), []byte(`{
+		"image": "ctgbot-codex:gpu",
+		"dockerfile": "cuda.Dockerfile",
+		"no_cache": true,
+		"uses": {
+			"name": "codex-cuda-base",
+			"image": "ctgbot-codex-cuda-base:latest",
+			"dockerfile": "cuda.base.Dockerfile"
+		}
+	}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	config, err := LoadBindConfig(home)
+	if err != nil {
+		t.Fatalf("LoadBindConfig() error = %v", err)
+	}
+	if config.Image != "ctgbot-codex:gpu" || config.Dockerfile != "cuda.Dockerfile" || !config.NoCache {
+		t.Fatalf("config = %#v", config)
+	}
+	if config.Uses == nil || config.Uses.Name != "codex-cuda-base" || config.Uses.Image != "ctgbot-codex-cuda-base:latest" || config.Uses.Dockerfile != "cuda.base.Dockerfile" {
+		t.Fatalf("uses = %#v", config.Uses)
 	}
 }

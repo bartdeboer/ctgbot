@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/bartdeboer/ctgbot/internal/app"
+	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -47,8 +50,12 @@ func (p *projectProcessActions) Install(ctx context.Context) error {
 	return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge")
 }
 
-func (p *projectProcessActions) Upgrade(ctx context.Context) error {
-	p.logf("running ctgbot upgrade")
+func (p *projectProcessActions) Upgrade(ctx context.Context, all bool) error {
+	if all {
+		p.logf("running ctgbot upgrade all")
+	} else {
+		p.logf("running ctgbot upgrade")
+	}
 	projectDir, err := requireProjectDir(p.globalStore)
 	if err != nil {
 		return err
@@ -70,9 +77,37 @@ func (p *projectProcessActions) Upgrade(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	return runUpgradeStep(ctx, "ctgbot image build --no-cache", func(ctx context.Context) error {
-		return runInstalledCtgbotCommand(ctx, "image", "build", "--no-cache")
+	imageBuildArgs := []string{"image", "build"}
+	imageBuildLabel := "ctgbot image build"
+	if all {
+		imageBuildArgs = append(imageBuildArgs, "--no-cache")
+		imageBuildLabel = "ctgbot image build --no-cache"
+	}
+	return runUpgradeStep(ctx, imageBuildLabel, func(ctx context.Context) error {
+		return runInstalledCtgbotCommand(ctx, imageBuildArgs...)
 	})
+}
+
+func (p *projectProcessActions) ImageList(ctx context.Context) (string, error) {
+	p.logf("listing ctgbot runtime images")
+	logger := p.logger
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+	rtSystem, err := systempkg.Open(ctx, "", "", p.globalStore, logger)
+	if err != nil {
+		return "", err
+	}
+	rtSystem.Registry, err = newRuntimeRegistry(rtSystem, p)
+	if err != nil {
+		return "", err
+	}
+	appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logger.Printf)
+	targets, err := appService.RuntimeImageTargets(ctx)
+	if err != nil {
+		return "", err
+	}
+	return formatRuntimeImageTargets(targets), nil
 }
 
 func (p *projectProcessActions) Quit(ctx context.Context) error {
@@ -121,13 +156,9 @@ func runInstalledCtgbotCommand(ctx context.Context, args ...string) error {
 }
 
 func runInstalledCtgbotCommandInDir(ctx context.Context, dir string, args ...string) error {
-	binPath, err := exec.LookPath("ctgbot")
+	binPath, err := resolveInstalledCtgbotPath()
 	if err != nil {
-		exePath, exeErr := os.Executable()
-		if exeErr != nil {
-			return fmt.Errorf("resolve ctgbot executable: %w", err)
-		}
-		binPath = exePath
+		return err
 	}
 	cmd := exec.CommandContext(ctx, binPath, args...)
 	if strings.TrimSpace(dir) != "" {
@@ -136,6 +167,18 @@ func runInstalledCtgbotCommandInDir(ctx context.Context, dir string, args ...str
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func resolveInstalledCtgbotPath() (string, error) {
+	binPath, err := exec.LookPath("ctgbot")
+	if err != nil {
+		exePath, exeErr := os.Executable()
+		if exeErr != nil {
+			return "", fmt.Errorf("resolve ctgbot executable: %w", err)
+		}
+		binPath = exePath
+	}
+	return binPath, nil
 }
 
 func runProjectCommand(ctx context.Context, projectDir string, env []string, name string, args ...string) error {

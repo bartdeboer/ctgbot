@@ -29,14 +29,26 @@ type Builder struct {
 
 // Target describes one ctgbot runtime image build target.
 //
-// It is not a generic Docker build target. Name and Ref are ctgbot ownership
-// metadata used for discovery/status output. Image and Dockerfile are the
-// Docker build fields consumed by the standard runtime image builder.
+// Image is the Docker image tag ctgbot will use for this target. Uses is an
+// optional build dependency that should be built first; the Dockerfile must
+// still explicitly FROM that dependency image when it needs it.
 type Target struct {
 	Name       string
-	Ref        string
 	Image      string
 	Dockerfile string
+	NoCache    bool
+	Uses       *Target
+}
+
+func (t Target) Clean() Target {
+	t.Name = strings.TrimSpace(t.Name)
+	t.Image = strings.TrimSpace(t.Image)
+	t.Dockerfile = strings.TrimSpace(t.Dockerfile)
+	if t.Uses != nil {
+		uses := t.Uses.Clean()
+		t.Uses = &uses
+	}
+	return t
 }
 
 func (b *Builder) BuildTarget(ctx context.Context, target Target, noCache bool) error {
@@ -50,14 +62,14 @@ func (b *Builder) BuildTarget(ctx context.Context, target Target, noCache bool) 
 	}
 	defer buildContext.Close()
 
-	args := dockerBuildArgs(target, noCache, b.buildLabels(ctx, target))
+	args := dockerBuildArgs(target, noCache || target.NoCache, b.buildLabels(ctx, target))
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdin = buildContext
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	b.logf("building docker image target=%s ref=%s image=%s dockerfile=%s build_context=embedded_tar", target.Name, target.Ref, target.Image, target.Dockerfile)
+	b.logf("building docker image target=%s image=%s dockerfile=%s build_context=embedded_tar", target.Name, target.Image, target.Dockerfile)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("docker build: %w", err)
 	}
@@ -92,11 +104,14 @@ func dockerBuildArgs(target Target, noCache bool, labels map[string]string) []st
 
 func normalizeTarget(target Target) (Target, error) {
 	target.Name = strings.TrimSpace(target.Name)
-	target.Ref = strings.TrimSpace(target.Ref)
 	target.Image = strings.TrimSpace(target.Image)
 	target.Dockerfile = strings.TrimSpace(target.Dockerfile)
-	if target.Name == "" {
-		target.Name = target.Ref
+	if target.Uses != nil {
+		uses, err := normalizeTarget(*target.Uses)
+		if err != nil {
+			return Target{}, fmt.Errorf("normalize used runtime image target: %w", err)
+		}
+		target.Uses = &uses
 	}
 	if target.Name == "" {
 		target.Name = target.Image
@@ -112,7 +127,7 @@ func normalizeTarget(target Target) (Target, error) {
 
 func (b *Builder) buildLabels(ctx context.Context, target Target) map[string]string {
 	labels := map[string]string{
-		LabelBuildTarget: firstNonEmpty(target.Ref, target.Name, target.Image),
+		LabelBuildTarget: firstNonEmpty(target.Name, target.Image),
 		LabelBuiltAt:     time.Now().UTC().Format(time.RFC3339Nano),
 		LabelHostbridge:  "embedded",
 		LabelVersion:     buildassets.Version(),

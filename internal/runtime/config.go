@@ -28,12 +28,17 @@ func LoadBindConfig(homePath string) (BindConfig, error) {
 
 func (c BindConfig) Clean() BindConfig {
 	c.Image = strings.TrimSpace(c.Image)
+	c.Dockerfile = strings.TrimSpace(c.Dockerfile)
 	c.Entrypoint = strings.TrimSpace(c.Entrypoint)
 	c.GPUs = strings.TrimSpace(c.GPUs)
 	c.Seccomp = strings.ToLower(strings.TrimSpace(c.Seccomp))
 	c.Env = cleanEnv(c.Env)
 	c.Cmd = cleanArgs(c.Cmd)
 	c.IdleTimeout = strings.TrimSpace(c.IdleTimeout)
+	if c.Uses != nil {
+		cleaned := c.Uses.Clean()
+		c.Uses = &cleaned
+	}
 	return c
 }
 

@@ -406,8 +406,33 @@ func TestRuntimeImageTargetsUseConfiguredImage(t *testing.T) {
 			t.Fatalf("targets = %d, want %d", got, want)
 		}
 		target := targets[0]
-		if target.Ref != "codex/work" || target.Image != "ctgbot-codex:gpu" || target.Dockerfile != "cuda.Dockerfile" {
+		if target.Name != "codex" || target.Image != "ctgbot-codex:gpu" || target.Dockerfile != "cuda.Dockerfile" {
 			t.Fatalf("target = %#v", target)
+		}
+	})
+}
+
+func TestRuntimeImageTargetsSplitDefaultCodexImage(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		cfg := newTestConfig(t, root)
+		c := &Component{
+			registration: coremodel.Component{Type: Type, Name: "work"},
+			config:       cfg,
+		}
+
+		targets, err := c.RuntimeImageTargets(context.Background())
+		if err != nil {
+			t.Fatalf("RuntimeImageTargets() error = %v", err)
+		}
+		if got, want := len(targets), 1; got != want {
+			t.Fatalf("targets = %d, want %d: %#v", got, want, targets)
+		}
+		target := targets[0]
+		if target.Name != "codex" || target.Image != DefaultImage || target.Dockerfile != "codex.Dockerfile" || !target.NoCache {
+			t.Fatalf("component target = %#v", target)
+		}
+		if target.Uses == nil || target.Uses.Name != "codex-base" || target.Uses.Image != DefaultBaseImage || target.Uses.Dockerfile != "codex.base.Dockerfile" {
+			t.Fatalf("component uses = %#v", target.Uses)
 		}
 	})
 }

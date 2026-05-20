@@ -13,7 +13,8 @@ import (
 const (
 	Type                    = "whispercpp"
 	ComponentConfigFilename = "component.json"
-	DefaultImage            = "ghcr.io/ggml-org/whisper.cpp:main-cuda"
+	DefaultImage            = "ctgbot-whispercpp:latest"
+	DefaultDockerfile       = "whispercpp.Dockerfile"
 	DefaultWhisperCommand   = "/app/build/bin/whisper-cli"
 	DefaultLDLibraryPath    = "/usr/local/cuda/lib64:/app/build/src:/app/build/ggml/src:/app/build/ggml/src/ggml-cuda"
 )
@@ -35,6 +36,7 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 		return runtimepkg.BindConfig{}, err
 	}
 	config.Image = firstNonEmpty(config.Image, DefaultImage)
+	config.Dockerfile = firstNonEmpty(config.Dockerfile, DefaultDockerfile)
 	config.IdleTimeout = firstNonEmpty(config.IdleTimeout, "30s")
 	config.GPUs = firstNonEmpty(config.GPUs, "all")
 	config.Env = runtimepkg.MergeEnv(

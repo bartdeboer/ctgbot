@@ -619,6 +619,10 @@ func TestProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 			{text: "/process install", wantText: "install completed\ntype /quit to restart", wantField: "install"},
 			{text: "/upgrade", wantText: "upgrade completed\ntype /quit to restart", wantField: "upgrade"},
 			{text: "/process upgrade", wantText: "upgrade completed\ntype /quit to restart", wantField: "upgrade"},
+			{text: "/upgrade all", wantText: "upgrade all completed\ntype /quit to restart", wantField: "upgrade all"},
+			{text: "/process upgrade all", wantText: "upgrade all completed\ntype /quit to restart", wantField: "upgrade all"},
+			{text: "/image list", wantText: "images", wantField: "image list"},
+			{text: "/process image list", wantText: "images", wantField: "image list"},
 		}
 		for _, tc := range cases {
 			actions := &recordingProcessActions{}
@@ -693,11 +697,19 @@ func TestProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 			}
 			switch tc.wantField {
 			case "install":
-				if actions.installCalls != 1 || actions.upgradeCalls != 0 || actions.quitCalls != 0 {
+				if actions.installCalls != 1 || actions.upgradeCalls != 0 || actions.upgradeAllCalls != 0 || actions.imageListCalls != 0 || actions.quitCalls != 0 {
 					t.Fatalf("process actions for %q = %+v", tc.text, actions)
 				}
 			case "upgrade":
-				if actions.installCalls != 0 || actions.upgradeCalls != 1 || actions.quitCalls != 0 {
+				if actions.installCalls != 0 || actions.upgradeCalls != 1 || actions.upgradeAllCalls != 0 || actions.imageListCalls != 0 || actions.quitCalls != 0 {
+					t.Fatalf("process actions for %q = %+v", tc.text, actions)
+				}
+			case "upgrade all":
+				if actions.installCalls != 0 || actions.upgradeCalls != 0 || actions.upgradeAllCalls != 1 || actions.imageListCalls != 0 || actions.quitCalls != 0 {
+					t.Fatalf("process actions for %q = %+v", tc.text, actions)
+				}
+			case "image list":
+				if actions.installCalls != 0 || actions.upgradeCalls != 0 || actions.upgradeAllCalls != 0 || actions.imageListCalls != 1 || actions.quitCalls != 0 {
 					t.Fatalf("process actions for %q = %+v", tc.text, actions)
 				}
 			}
@@ -1040,9 +1052,14 @@ func (n *noopProcessActions) Install(ctx context.Context) error {
 	return nil
 }
 
-func (n *noopProcessActions) Upgrade(ctx context.Context) error {
-	_ = ctx
+func (n *noopProcessActions) Upgrade(ctx context.Context, all bool) error {
+	_, _ = ctx, all
 	return nil
+}
+
+func (n *noopProcessActions) ImageList(ctx context.Context) (string, error) {
+	_ = ctx
+	return "images", nil
 }
 
 func (n *noopProcessActions) Quit(ctx context.Context) error {
@@ -1051,9 +1068,11 @@ func (n *noopProcessActions) Quit(ctx context.Context) error {
 }
 
 type recordingProcessActions struct {
-	installCalls int
-	upgradeCalls int
-	quitCalls    int
+	installCalls    int
+	upgradeCalls    int
+	upgradeAllCalls int
+	imageListCalls  int
+	quitCalls       int
 }
 
 func (r *recordingProcessActions) Install(ctx context.Context) error {
@@ -1062,10 +1081,20 @@ func (r *recordingProcessActions) Install(ctx context.Context) error {
 	return nil
 }
 
-func (r *recordingProcessActions) Upgrade(ctx context.Context) error {
+func (r *recordingProcessActions) Upgrade(ctx context.Context, all bool) error {
 	_ = ctx
-	r.upgradeCalls++
+	if all {
+		r.upgradeAllCalls++
+	} else {
+		r.upgradeCalls++
+	}
 	return nil
+}
+
+func (r *recordingProcessActions) ImageList(ctx context.Context) (string, error) {
+	_ = ctx
+	r.imageListCalls++
+	return "images", nil
 }
 
 func (r *recordingProcessActions) Quit(ctx context.Context) error {
