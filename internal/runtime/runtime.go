@@ -8,6 +8,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 )
 
 type Home struct {
@@ -15,13 +16,16 @@ type Home struct {
 }
 
 type BindConfig struct {
-	Image       string   `json:"image"`
-	Entrypoint  string   `json:"entrypoint,omitempty"`
-	Env         []string `json:"env"`
-	GPUs        string   `json:"gpus"`
-	Seccomp     string   `json:"seccomp"`
-	Cmd         []string `json:"cmd,omitempty"`
-	IdleTimeout string   `json:"idle_timeout,omitempty"`
+	Image       string               `json:"image"`
+	Dockerfile  string               `json:"dockerfile,omitempty"`
+	Entrypoint  string               `json:"entrypoint,omitempty"`
+	Env         []string             `json:"env"`
+	GPUs        string               `json:"gpus"`
+	Seccomp     string               `json:"seccomp"`
+	Cmd         []string             `json:"cmd,omitempty"`
+	IdleTimeout string               `json:"idle_timeout,omitempty"`
+	NoCache     bool                 `json:"no_cache,omitempty"`
+	Uses        *runtimeimage.Target `json:"uses,omitempty"`
 }
 
 type Status struct {

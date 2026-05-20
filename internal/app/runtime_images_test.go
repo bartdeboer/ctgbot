@@ -8,8 +8,7 @@ import (
 
 func TestDedupeRuntimeImageTargetsOrdersDependencies(t *testing.T) {
 	targets, err := dedupeRuntimeImageTargets([]runtimeimage.Target{
-		{Name: "app", Ref: "app", Image: "ctgbot-app:latest", Dockerfile: "app.Dockerfile", DependsOn: []string{"base"}},
-		{Name: "base", Ref: "base", Image: "ctgbot-base:latest", Dockerfile: "base.Dockerfile"},
+		{Name: "app", Image: "ctgbot-app:latest", Dockerfile: "app.Dockerfile", Uses: &runtimeimage.Target{Name: "base", Image: "ctgbot-base:latest", Dockerfile: "base.Dockerfile"}},
 	})
 	if err != nil {
 		t.Fatalf("dedupeRuntimeImageTargets() error = %v", err)

@@ -103,7 +103,6 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 	}
 	return []runtimeimage.Target{{
 		Name:       Type,
-		Ref:        c.registration.Ref(),
 		Image:      firstNonEmpty(c.runtimeImage, DefaultImage),
 		Dockerfile: firstNonEmpty(c.runtimeDockerfile, DefaultDockerfile),
 	}}, nil

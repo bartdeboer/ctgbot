@@ -93,13 +93,18 @@ func formatRuntimeImageTargets(targets []runtimeimage.Target) string {
 	var out strings.Builder
 	for _, target := range targets {
 		fields := []string{
-			target.Ref,
 			"name=" + target.Name,
 			"image=" + target.Image,
 			"dockerfile=" + target.Dockerfile,
 		}
-		if len(target.DependsOn) > 0 {
-			fields = append(fields, "depends_on="+strings.Join(target.DependsOn, ","))
+		if target.Uses != nil {
+			uses := strings.TrimSpace(target.Uses.Name)
+			if uses == "" {
+				uses = strings.TrimSpace(target.Uses.Image)
+			}
+			if uses != "" {
+				fields = append(fields, "uses="+uses)
+			}
 		}
 		if target.NoCache {
 			fields = append(fields, "no_cache=true")

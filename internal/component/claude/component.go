@@ -40,15 +40,17 @@ type TurnRunner interface {
 }
 
 type Component struct {
-	registration      coremodel.Component
-	runtime           runtimepkg.ThreadRuntime
-	storage           repository.Storage
-	resolveWorkspace  func(context.Context, coremodel.Chat) (string, error)
-	componentConfig   ComponentConfig
-	runner            TurnRunner
-	logger            *log.Logger
-	runtimeImage      string
-	runtimeDockerfile string
+	registration        coremodel.Component
+	runtime             runtimepkg.ThreadRuntime
+	storage             repository.Storage
+	resolveWorkspace    func(context.Context, coremodel.Chat) (string, error)
+	componentConfig     ComponentConfig
+	runner              TurnRunner
+	logger              *log.Logger
+	runtimeImage        string
+	runtimeDockerfile   string
+	runtimeImageUses    *runtimeimage.Target
+	runtimeImageNoCache bool
 }
 
 func New(ctx context.Context, registration coremodel.Component, runtimeFactory runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolveWorkspace func(context.Context, coremodel.Chat) (string, error), logger *log.Logger) (component.Component, error) {
@@ -78,15 +80,17 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 	}
 	runtime := threadFactory.Bind(registration, home, bindConfig)
 	return &Component{
-		registration:      registration,
-		runtime:           runtime,
-		storage:           storage,
-		resolveWorkspace:  resolveWorkspace,
-		componentConfig:   componentConfig,
-		runner:            NewRunner(logger),
-		logger:            logger,
-		runtimeImage:      bindConfig.Image,
-		runtimeDockerfile: firstNonEmpty(componentConfig.Dockerfile, DefaultDockerfile),
+		registration:        registration,
+		runtime:             runtime,
+		storage:             storage,
+		resolveWorkspace:    resolveWorkspace,
+		componentConfig:     componentConfig,
+		runner:              NewRunner(logger),
+		logger:              logger,
+		runtimeImage:        bindConfig.Image,
+		runtimeDockerfile:   firstNonEmpty(bindConfig.Dockerfile, componentConfig.Dockerfile, DefaultDockerfile),
+		runtimeImageUses:    bindConfig.Uses,
+		runtimeImageNoCache: bindConfig.NoCache,
 	}, nil
 }
 
@@ -99,22 +103,28 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 	}
 	target := runtimeimage.Target{
 		Name:       Type,
-		Ref:        c.registration.Ref(),
 		Image:      firstNonEmpty(c.runtimeImage, DefaultImage),
 		Dockerfile: firstNonEmpty(c.runtimeDockerfile, DefaultDockerfile),
+		NoCache:    c.runtimeImageNoCache,
+		Uses:       c.runtimeImageUses,
+	}
+	if target.Uses != nil {
+		if !target.NoCache {
+			target.NoCache = true
+		}
+		return []runtimeimage.Target{target}, nil
 	}
 	if target.Dockerfile != DefaultDockerfile {
 		return []runtimeimage.Target{target}, nil
 	}
 	base := runtimeimage.Target{
 		Name:       Type + "-base",
-		Ref:        Type + "/base",
 		Image:      DefaultBaseImage,
 		Dockerfile: "claude.base.Dockerfile",
 	}
-	target.DependsOn = []string{base.Name}
+	target.Uses = &base
 	target.NoCache = true
-	return []runtimeimage.Target{base, target}, nil
+	return []runtimeimage.Target{target}, nil
 }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {

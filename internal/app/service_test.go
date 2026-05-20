@@ -202,8 +202,7 @@ func (f fakeImageProvider) Type() string { return "image" }
 func (f fakeImageProvider) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error) {
 	_ = ctx
 	return []runtimeimage.Target{{
-		Name:       "fake",
-		Ref:        f.ref,
+		Name:       f.ref,
 		Image:      "ctgbot-fake:latest",
 		Dockerfile: "fake.Dockerfile",
 	}}, nil
@@ -712,7 +711,7 @@ func TestServiceRuntimeImageTargetsDiscoversProviders(t *testing.T) {
 		t.Fatalf("targets = %d, want %d: %#v", got, want, targets)
 	}
 	target := targets[0]
-	if target.Ref != "image/runner" || target.Image != "ctgbot-fake:latest" || target.Dockerfile != "fake.Dockerfile" {
+	if target.Name != "image/runner" || target.Image != "ctgbot-fake:latest" || target.Dockerfile != "fake.Dockerfile" {
 		t.Fatalf("target = %#v", target)
 	}
 }
