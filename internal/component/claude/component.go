@@ -24,6 +24,7 @@ import (
 const (
 	Type                 = "claude"
 	DefaultCallbackPort  = 1455
+	DefaultBaseImage     = "ctgbot-claude-base:latest"
 	DefaultDockerfile    = "claude.Dockerfile"
 	stopAfterTurnTimeout = 5 * time.Second
 )
@@ -96,12 +97,24 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 	if c == nil || (c.runtime != nil && c.runtime.Kind() != "docker") {
 		return nil, nil
 	}
-	return []runtimeimage.Target{{
+	target := runtimeimage.Target{
 		Name:       Type,
 		Ref:        c.registration.Ref(),
 		Image:      firstNonEmpty(c.runtimeImage, DefaultImage),
 		Dockerfile: firstNonEmpty(c.runtimeDockerfile, DefaultDockerfile),
-	}}, nil
+	}
+	if target.Dockerfile != DefaultDockerfile {
+		return []runtimeimage.Target{target}, nil
+	}
+	base := runtimeimage.Target{
+		Name:       Type + "-base",
+		Ref:        Type + "/base",
+		Image:      DefaultBaseImage,
+		Dockerfile: "claude.base.Dockerfile",
+	}
+	target.DependsOn = []string{base.Name}
+	target.NoCache = true
+	return []runtimeimage.Target{base, target}, nil
 }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {

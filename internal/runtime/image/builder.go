@@ -37,6 +37,8 @@ type Target struct {
 	Ref        string
 	Image      string
 	Dockerfile string
+	DependsOn  []string
+	NoCache    bool
 }
 
 func (b *Builder) BuildTarget(ctx context.Context, target Target, noCache bool) error {
@@ -50,7 +52,7 @@ func (b *Builder) BuildTarget(ctx context.Context, target Target, noCache bool) 
 	}
 	defer buildContext.Close()
 
-	args := dockerBuildArgs(target, noCache, b.buildLabels(ctx, target))
+	args := dockerBuildArgs(target, noCache || target.NoCache, b.buildLabels(ctx, target))
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdin = buildContext
@@ -95,6 +97,7 @@ func normalizeTarget(target Target) (Target, error) {
 	target.Ref = strings.TrimSpace(target.Ref)
 	target.Image = strings.TrimSpace(target.Image)
 	target.Dockerfile = strings.TrimSpace(target.Dockerfile)
+	target.DependsOn = cleanStrings(target.DependsOn)
 	if target.Name == "" {
 		target.Name = target.Ref
 	}
@@ -108,6 +111,29 @@ func normalizeTarget(target Target) (Target, error) {
 		target.Dockerfile = "Dockerfile"
 	}
 	return target, nil
+}
+
+func cleanStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (b *Builder) buildLabels(ctx context.Context, target Target) map[string]string {

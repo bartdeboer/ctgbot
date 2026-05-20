@@ -411,3 +411,30 @@ func TestRuntimeImageTargetsUseConfiguredImage(t *testing.T) {
 		}
 	})
 }
+
+func TestRuntimeImageTargetsSplitDefaultCodexImage(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		cfg := newTestConfig(t, root)
+		c := &Component{
+			registration: coremodel.Component{Type: Type, Name: "work"},
+			config:       cfg,
+		}
+
+		targets, err := c.RuntimeImageTargets(context.Background())
+		if err != nil {
+			t.Fatalf("RuntimeImageTargets() error = %v", err)
+		}
+		if got, want := len(targets), 2; got != want {
+			t.Fatalf("targets = %d, want %d: %#v", got, want, targets)
+		}
+		if targets[0].Name != "codex-base" || targets[0].Image != DefaultBaseImage || targets[0].Dockerfile != "codex.base.Dockerfile" {
+			t.Fatalf("base target = %#v", targets[0])
+		}
+		if targets[1].Name != "codex" || targets[1].Image != DefaultImage || targets[1].Dockerfile != "codex.Dockerfile" || !targets[1].NoCache {
+			t.Fatalf("component target = %#v", targets[1])
+		}
+		if len(targets[1].DependsOn) != 1 || targets[1].DependsOn[0] != "codex-base" {
+			t.Fatalf("component dependencies = %#v", targets[1].DependsOn)
+		}
+	})
+}

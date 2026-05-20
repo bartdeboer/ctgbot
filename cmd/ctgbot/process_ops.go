@@ -70,8 +70,8 @@ func (p *projectProcessActions) Upgrade(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	return runUpgradeStep(ctx, "ctgbot image build --no-cache", func(ctx context.Context) error {
-		return runInstalledCtgbotCommand(ctx, "image", "build", "--no-cache")
+	return runUpgradeStep(ctx, "ctgbot image build", func(ctx context.Context) error {
+		return runInstalledCtgbotCommand(ctx, "image", "build")
 	})
 }
 

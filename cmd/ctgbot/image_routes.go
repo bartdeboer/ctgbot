@@ -29,12 +29,19 @@ func registerImageRoutes(r *clir.Router, store *clistate.Store) {
 				return nil
 			}
 			for _, target := range targets {
-				os.Stdout.WriteString(strings.Join([]string{
+				fields := []string{
 					target.Ref,
 					"name=" + target.Name,
 					"image=" + target.Image,
 					"dockerfile=" + target.Dockerfile,
-				}, "\t") + "\n")
+				}
+				if len(target.DependsOn) > 0 {
+					fields = append(fields, "depends_on="+strings.Join(target.DependsOn, ","))
+				}
+				if target.NoCache {
+					fields = append(fields, "no_cache=true")
+				}
+				os.Stdout.WriteString(strings.Join(fields, "\t") + "\n")
 			}
 			return nil
 		})

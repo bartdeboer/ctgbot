@@ -28,6 +28,7 @@ const (
 	// switch implementations by changing only the import path.
 	Type                 = "codex"
 	DefaultImage         = "ctgbot-codex:latest"
+	DefaultBaseImage     = "ctgbot-codex-base:latest"
 	DefaultCallbackPort  = 1455
 	stopAfterTurnTimeout = 5 * time.Second
 )
@@ -132,12 +133,24 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 	if dockerfile == "" {
 		dockerfile = "codex.Dockerfile"
 	}
-	return []runtimeimage.Target{{
+	target := runtimeimage.Target{
 		Name:       Type,
 		Ref:        c.registration.Ref(),
 		Image:      image,
 		Dockerfile: dockerfile,
-	}}, nil
+	}
+	if dockerfile != "codex.Dockerfile" {
+		return []runtimeimage.Target{target}, nil
+	}
+	base := runtimeimage.Target{
+		Name:       Type + "-base",
+		Ref:        Type + "/base",
+		Image:      DefaultBaseImage,
+		Dockerfile: "codex.base.Dockerfile",
+	}
+	target.DependsOn = []string{base.Name}
+	target.NoCache = true
+	return []runtimeimage.Target{base, target}, nil
 }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {

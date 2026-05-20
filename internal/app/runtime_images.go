@@ -43,10 +43,10 @@ func (s *service) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Targe
 		}
 	}
 
-	return dedupeRuntimeImageTargets(targets), nil
+	return dedupeRuntimeImageTargets(targets)
 }
 
-func dedupeRuntimeImageTargets(targets []runtimeimage.Target) []runtimeimage.Target {
+func dedupeRuntimeImageTargets(targets []runtimeimage.Target) ([]runtimeimage.Target, error) {
 	out := make([]runtimeimage.Target, 0, len(targets))
 	seen := map[string]struct{}{}
 	for _, target := range targets {
@@ -64,7 +64,7 @@ func dedupeRuntimeImageTargets(targets []runtimeimage.Target) []runtimeimage.Tar
 	sort.SliceStable(out, func(i, j int) bool {
 		return runtimeImageTargetSortKey(out[i]) < runtimeImageTargetSortKey(out[j])
 	})
-	return out
+	return orderRuntimeImageTargets(out)
 }
 
 func cleanRuntimeImageTarget(target runtimeimage.Target) runtimeimage.Target {
@@ -72,6 +72,7 @@ func cleanRuntimeImageTarget(target runtimeimage.Target) runtimeimage.Target {
 	target.Ref = strings.TrimSpace(target.Ref)
 	target.Image = strings.TrimSpace(target.Image)
 	target.Dockerfile = strings.TrimSpace(target.Dockerfile)
+	target.DependsOn = cleanStringList(target.DependsOn)
 	if target.Name == "" {
 		target.Name = target.Ref
 	}
@@ -86,6 +87,93 @@ func cleanRuntimeImageTarget(target runtimeimage.Target) runtimeimage.Target {
 
 func runtimeImageTargetSortKey(target runtimeimage.Target) string {
 	return strings.Join([]string{target.Ref, target.Name, target.Image, target.Dockerfile}, "\x00")
+}
+
+func orderRuntimeImageTargets(targets []runtimeimage.Target) ([]runtimeimage.Target, error) {
+	if len(targets) == 0 {
+		return nil, nil
+	}
+	index := map[string]int{}
+	for i, target := range targets {
+		for _, key := range runtimeImageTargetDependencyKeys(target) {
+			if _, exists := index[key]; !exists {
+				index[key] = i
+			}
+		}
+	}
+	visiting := map[int]bool{}
+	visited := map[int]bool{}
+	var out []runtimeimage.Target
+	var visit func(int) error
+	visit = func(i int) error {
+		if visited[i] {
+			return nil
+		}
+		if visiting[i] {
+			return fmt.Errorf("runtime image target dependency cycle at %s", targets[i].Name)
+		}
+		visiting[i] = true
+		for _, dep := range targets[i].DependsOn {
+			j, ok := index[dep]
+			if !ok {
+				return fmt.Errorf("runtime image target %s depends on unknown target %s", targets[i].Name, dep)
+			}
+			if err := visit(j); err != nil {
+				return err
+			}
+		}
+		visiting[i] = false
+		visited[i] = true
+		out = append(out, targets[i])
+		return nil
+	}
+	for i := range targets {
+		if err := visit(i); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+func runtimeImageTargetDependencyKeys(target runtimeimage.Target) []string {
+	keys := []string{target.Name, target.Ref, target.Image}
+	out := make([]string, 0, len(keys))
+	seen := map[string]struct{}{}
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+	return out
+}
+
+func cleanStringList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (s *service) logf(format string, args ...any) {
