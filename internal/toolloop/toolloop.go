@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -153,6 +154,12 @@ func (r Runner) chat(ctx context.Context, client *http.Client, req Request, mess
 func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
 	name := strings.TrimSpace(call.Function.Name)
 	switch name {
+	case "shell":
+		var args shellArgs
+		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+			return "invalid shell arguments: " + err.Error(), true
+		}
+		return r.runShell(ctx, args)
 	case "hostbridge":
 		var args hostbridgeArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
@@ -173,6 +180,46 @@ func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
 type hostbridgeArgs struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args,omitempty"`
+}
+
+type shellArgs struct {
+	Command   string `json:"command"`
+	Workdir   string `json:"workdir,omitempty"`
+	TimeoutMS int    `json:"timeout_ms,omitempty"`
+}
+
+func (r Runner) runShell(ctx context.Context, args shellArgs) (string, bool) {
+	command := strings.TrimSpace(args.Command)
+	if command == "" {
+		return "missing shell command", true
+	}
+	workspace := firstNonEmpty(r.Workspace, getenv("TOOLLOOP_WORKSPACE"), "/workspace")
+	workdir, err := resolveWorkdir(workspace, args.Workdir)
+	if err != nil {
+		return err.Error(), true
+	}
+	timeout := r.CommandTimeout
+	if args.TimeoutMS > 0 {
+		timeout = time.Duration(args.TimeoutMS) * time.Millisecond
+	}
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	toolCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	cmd := exec.CommandContext(toolCtx, "/bin/bash", "-lc", command)
+	cmd.Dir = workdir
+	out, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		if text == "" {
+			text = err.Error()
+		} else {
+			text = err.Error() + "\n" + text
+		}
+		return text, true
+	}
+	return text, false
 }
 
 type applyPatchArgs struct {
@@ -236,6 +283,31 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+func resolveWorkdir(workspace string, requested string) (string, error) {
+	workspace = strings.TrimSpace(workspace)
+	if workspace == "" {
+		workspace = "/workspace"
+	}
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return workspace, nil
+	}
+	if strings.HasPrefix(requested, "/") {
+		if requested == workspace || strings.HasPrefix(requested, strings.TrimRight(workspace, "/")+"/") {
+			return requested, nil
+		}
+		return "", fmt.Errorf("workdir outside workspace: %s", requested)
+	}
+	cleaned := path.Clean(requested)
+	if cleaned == "." {
+		return workspace, nil
+	}
+	if strings.HasPrefix(cleaned, "../") || cleaned == ".." {
+		return "", fmt.Errorf("workdir escapes workspace: %s", requested)
+	}
+	return strings.TrimRight(workspace, "/") + "/" + cleaned, nil
+}
+
 type chatRequest struct {
 	Model       string        `json:"model"`
 	Messages    []chatMessage `json:"messages"`
@@ -285,6 +357,22 @@ type toolFunction struct {
 
 func hostbridgeTools() []toolDef {
 	return []toolDef{
+		{
+			Type: "function",
+			Function: toolFunction{
+				Name:        "shell",
+				Description: "Run a bash command inside the sandbox workspace. Prefer rg, sed, nl, and other read-only inspection commands before editing. Use apply_patch for file edits.",
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"command":    map[string]any{"type": "string", "description": "Bash command to run, for example rg -n \"functionName\" path or nl -ba file | sed -n '120,180p'."},
+						"workdir":    map[string]any{"type": "string", "description": "Workspace-relative directory. Defaults to /workspace."},
+						"timeout_ms": map[string]any{"type": "integer", "description": "Optional timeout in milliseconds."},
+					},
+					"required": []string{"command"},
+				},
+			},
+		},
 		{
 			Type: "function",
 			Function: toolFunction{

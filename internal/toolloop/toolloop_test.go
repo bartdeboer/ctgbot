@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -53,5 +55,36 @@ func TestRunnerExecutesApplyPatchTool(t *testing.T) {
 	}
 	if !strings.Contains(text, "add hello.txt") {
 		t.Fatalf("tool output = %q", text)
+	}
+}
+
+func TestRunnerExecutesShellToolInWorkspace(t *testing.T) {
+	t.Parallel()
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "hello.txt"), []byte("hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	args, _ := json.Marshal(shellArgs{Command: "sed -n '1,1p' hello.txt"})
+	text, isErr := (Runner{Workspace: workspace}).executeTool(context.Background(), toolCall{Function: struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	}{Name: "shell", Arguments: string(args)}})
+	if isErr {
+		t.Fatalf("shell failed: %s", text)
+	}
+	if text != "hello" {
+		t.Fatalf("shell output = %q", text)
+	}
+}
+
+func TestRunnerRejectsShellWorkdirOutsideWorkspace(t *testing.T) {
+	t.Parallel()
+	args, _ := json.Marshal(shellArgs{Command: "pwd", Workdir: "/tmp"})
+	text, isErr := (Runner{Workspace: "/workspace"}).executeTool(context.Background(), toolCall{Function: struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	}{Name: "shell", Arguments: string(args)}})
+	if !isErr || !strings.Contains(text, "outside workspace") {
+		t.Fatalf("text=%q isErr=%t, want outside workspace error", text, isErr)
 	}
 }

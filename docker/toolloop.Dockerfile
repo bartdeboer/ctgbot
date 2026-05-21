@@ -15,7 +15,7 @@ FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates bash curl git jq \
+    && apt-get install -y --no-install-recommends ca-certificates bash curl git jq ripgrep coreutils sed \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /out/hostbridge /usr/bin/hostbridge
