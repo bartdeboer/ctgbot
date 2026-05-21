@@ -198,17 +198,16 @@ func (c *Component) writeRequest(turn component.Turn, session component.OpenAICh
 	outputHost := filepath.Join(hostDir, "result.json")
 	messages := toolloopMessages(turn.History, turn.Inbound)
 	req := toolloop.Request{
-		BaseURL:        firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
-		APIKey:         firstNonEmpty(c.config.APIKey, session.APIKey()),
-		Model:          session.Model(),
-		System:         c.systemPrompt(turn),
-		Messages:       messages,
-		Prompt:         textPromptFromMessages(messages, prompt),
-		Workspace:      c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()),
-		MaxIterations:  c.config.MaxIterations,
-		MaxTokens:      c.config.MaxTokens,
-		Temperature:    c.config.Temperature,
-		EnableThinking: boolPtr(c.config.EnableThinking),
+		BaseURL:       firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
+		APIKey:        firstNonEmpty(c.config.APIKey, session.APIKey()),
+		Model:         session.Model(),
+		System:        c.systemPrompt(turn),
+		Messages:      messages,
+		Prompt:        textPromptFromMessages(messages, prompt),
+		Workspace:     c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()),
+		MaxIterations: c.config.MaxIterations,
+		MaxTokens:     c.config.MaxTokens,
+		Temperature:   c.config.Temperature,
 	}
 	data, err := json.MarshalIndent(req, "", "  ")
 	if err != nil {
@@ -333,5 +332,3 @@ func (c *Component) logf(format string, args ...any) {
 		c.logger.Printf(format, args...)
 	}
 }
-
-func boolPtr(value bool) *bool { return &value }
