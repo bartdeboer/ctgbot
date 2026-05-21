@@ -77,7 +77,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		modelCommand("<name> card", nil, "Show model card", buildModelCardCommand),
 		modelCommand("<name> card set <text>", nil, "Update model card text", buildModelCardSetCommand),
 		modelCommand("<name> config list", nil, "List model config keys and options", buildModelConfigListCommand),
-		modelCommand("<name> config set <key> <json>", nil, "Set model config key metadata from JSON", buildModelConfigSetCommand),
+		modelCommand("<name> config set <key> <json>", nil, "Set model config key schema (type/options/default) from JSON", buildModelConfigSetCommand),
 		modelCommand("<name> config unset <key>", nil, "Remove model config key metadata", buildModelConfigUnsetCommand),
 	}
 }

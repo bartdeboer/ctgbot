@@ -210,6 +210,10 @@ func (r *agentTurnRuntime) turnConfigSchema(ctx context.Context) configsurface.C
 }
 
 func withModelFieldMetadata(schema configsurface.ConfigSchema, modelSchema configsurface.ConfigSchema, key string) configsurface.ConfigSchema {
+	// Model config metadata is keyed by the existing turn config keys, e.g.
+	// voice.language and voice.name. Keep this coupling explicit and narrow:
+	// model cards describe valid values for turn output controls; they do not
+	// define new turn config fields.
 	modelField, ok := modelSchema.Field(key)
 	if !ok {
 		return schema

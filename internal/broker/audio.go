@@ -42,7 +42,7 @@ func materializeVoiceInputFile(workspacePath string, runtimeWorkspacePath string
 	}
 	filename := safeVoiceInputFilename(media)
 	hostPath := filepath.Join(hostDir, filename)
-	if err := os.WriteFile(hostPath, media.Content, 0o644); err != nil {
+	if err := os.WriteFile(hostPath, media.Content, 0o600); err != nil {
 		_ = os.RemoveAll(hostDir)
 		return turnInputFile{}, nil, err
 	}
