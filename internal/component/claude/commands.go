@@ -195,7 +195,7 @@ func (c *Component) threadWorkspace(ctx context.Context, req commandengine.Reque
 }
 
 func claudeCommand(pattern string, command any, help string) commandengine.Definition {
-	return commandengine.Definition{Pattern: pattern, Help: help, Build: func(req *clir.Request) (any, error) { _ = req; return command, nil }, Sources: claudeCommandSources(), Policy: claudeCommandPolicy(), InstructionVisibility: claudeInstructionVisibility(pattern)}
+	return commandengine.Definition{Pattern: pattern, Help: help, Build: func(req *clir.Request) (any, error) { _ = req; return command, nil }, Sources: claudeCommandSourcesFor(pattern), Policy: claudeCommandPolicy(), InstructionVisibility: claudeInstructionVisibility(pattern)}
 }
 
 func claudeInstructionVisibility(pattern string) commandengine.InstructionVisibility {
@@ -204,6 +204,15 @@ func claudeInstructionVisibility(pattern string) commandengine.InstructionVisibi
 		return commandengine.InstructionImportant
 	default:
 		return commandengine.InstructionDiscoverable
+	}
+}
+
+func claudeCommandSourcesFor(pattern string) []commandengine.Source {
+	switch commandengine.NormalizePattern(pattern) {
+	case "container refresh":
+		return []commandengine.Source{commandengine.SourceMessage}
+	default:
+		return claudeCommandSources()
 	}
 }
 

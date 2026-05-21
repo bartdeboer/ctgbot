@@ -49,7 +49,6 @@ func llamacppAgentCommand(pattern string, command any, help string) commandengin
 		Build:   func(req *clir.Request) (any, error) { _ = req; return command, nil },
 		Sources: []commandengine.Source{
 			commandengine.SourceMessage,
-			commandengine.SourceHostbridge,
 		},
 		Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
 		InstructionVisibility: commandengine.InstructionImportant,

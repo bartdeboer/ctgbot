@@ -75,7 +75,6 @@ func TestHostbridgeRouterUsesCodexDefinitions(t *testing.T) {
 		want string
 	}{
 		{argv: normalizedArgs([]string{"status"}, "codex"), want: "status"},
-		{argv: normalizedArgs([]string{"refresh"}, "codex"), want: "codex container refresh"},
 		{argv: normalizedArgs([]string{"interrupt"}, "codex"), want: "codex interrupt"},
 		{argv: normalizedArgs([]string{"codex", "config", "get", "model"}, "codex"), want: "codex config get <key>"},
 		{argv: normalizedArgs([]string{"sql", "SELECT 1"}, "codex"), want: "sql"},
@@ -220,7 +219,6 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			name: "container group",
 			argv: []string{"codex", "container", "help"},
 			contains: []string{
-				"codex container refresh",
 				"codex container start",
 				"codex container stop",
 			},
