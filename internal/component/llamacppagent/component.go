@@ -201,7 +201,7 @@ func (c *Component) writeRequest(turn component.Turn, session component.OpenAICh
 		BaseURL:       firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
 		APIKey:        firstNonEmpty(c.config.APIKey, session.APIKey()),
 		Model:         session.Model(),
-		System:        c.systemPrompt(turn),
+		System:        c.systemPrompt(turn, session.Model()),
 		Messages:      messages,
 		Prompt:        textPromptFromMessages(messages, prompt),
 		Workspace:     c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()),
@@ -290,12 +290,18 @@ func toolloopRole(message coremodel.ThreadMessage) (string, bool) {
 	}
 }
 
-func (c *Component) systemPrompt(turn component.Turn) string {
+func (c *Component) systemPrompt(turn component.Turn, model string) string {
 	if strings.TrimSpace(c.config.SystemPrompt) != "" {
 		return c.config.SystemPrompt
 	}
 	instructions := turn.Runtime.Instructions()
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = "unknown"
+	}
 	return fmt.Sprintf(`You are a coding agent running inside ctgbot.
+
+You are ctgbot's llama.cpp toolloop agent powered by configured backend model %q. If asked about your model or version, report this configured backend model name and do not infer another product identity.
 
 Use shell for workspace inspection and normal coding commands. Useful patterns include rg -n "name" path, nl -ba path | sed -n '120,180p', and sed -n '120,180p' path.
 
@@ -306,7 +312,7 @@ Use apply_patch to edit workspace files. Read files before editing them. Keep pa
 Be concise. Start every final response with %q.
 
 Current date: %s
-Workspace: %s`, instructions.MessagePrefix, time.Now().Format("2006-01-02"), c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()))
+Workspace: %s`, model, instructions.MessagePrefix, time.Now().Format("2006-01-02"), c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()))
 }
 
 func sandboxBaseURL(raw string) string {
