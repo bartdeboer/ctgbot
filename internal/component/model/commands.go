@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -45,12 +46,25 @@ type modelConfigListCommand struct {
 	Name string
 }
 
+type modelConfigSetCommand struct {
+	Name string
+	Key  string
+	JSON string
+}
+
+type modelConfigUnsetCommand struct {
+	Name string
+	Key  string
+}
+
 func RegisterGobTypes(register func(any)) {
 	register(listCommand{})
 	register(installCommand{})
 	register(modelCardCommand{})
 	register(modelCardSetCommand{})
 	register(modelConfigListCommand{})
+	register(modelConfigSetCommand{})
+	register(modelConfigUnsetCommand{})
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
@@ -63,6 +77,8 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		modelCommand("<name> card", nil, "Show model card", buildModelCardCommand),
 		modelCommand("<name> card set <text>", nil, "Update model card text", buildModelCardSetCommand),
 		modelCommand("<name> config list", nil, "List model config keys and options", buildModelConfigListCommand),
+		modelCommand("<name> config set <key> <json>", nil, "Set model config key metadata from JSON", buildModelConfigSetCommand),
+		modelCommand("<name> config unset <key>", nil, "Remove model config key metadata", buildModelConfigUnsetCommand),
 	}
 }
 
@@ -100,9 +116,21 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	return commandengine.RegisterPattern[modelConfigListCommand](registry, "<name> config list", func(ctx context.Context, req commandengine.Request, cmd modelConfigListCommand) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[modelConfigListCommand](registry, "<name> config list", func(ctx context.Context, req commandengine.Request, cmd modelConfigListCommand) (commandengine.Result, error) {
 		_ = req
 		return c.handleConfigList(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[modelConfigSetCommand](registry, "<name> config set <key> <json>", func(ctx context.Context, req commandengine.Request, cmd modelConfigSetCommand) (commandengine.Result, error) {
+		_ = req
+		return c.handleConfigSet(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+	return commandengine.RegisterPattern[modelConfigUnsetCommand](registry, "<name> config unset <key>", func(ctx context.Context, req commandengine.Request, cmd modelConfigUnsetCommand) (commandengine.Result, error) {
+		_ = req
+		return c.handleConfigUnset(ctx, cmd)
 	})
 }
 
@@ -198,6 +226,34 @@ func buildModelConfigListCommand(req *clir.Request) (any, error) {
 		return nil, fmt.Errorf("missing model name")
 	}
 	return modelConfigListCommand{Name: name}, nil
+}
+
+func buildModelConfigSetCommand(req *clir.Request) (any, error) {
+	name := cleanModelName(req.Params["name"])
+	if name == "" {
+		return nil, fmt.Errorf("missing model name")
+	}
+	key := configsurface.NormalizeKey(req.Params["key"])
+	if key == "" {
+		return nil, fmt.Errorf("missing model config key")
+	}
+	raw := strings.TrimSpace(req.Params["json"])
+	if raw == "" {
+		return nil, fmt.Errorf("missing model config json")
+	}
+	return modelConfigSetCommand{Name: name, Key: key, JSON: raw}, nil
+}
+
+func buildModelConfigUnsetCommand(req *clir.Request) (any, error) {
+	name := cleanModelName(req.Params["name"])
+	if name == "" {
+		return nil, fmt.Errorf("missing model name")
+	}
+	key := configsurface.NormalizeKey(req.Params["key"])
+	if key == "" {
+		return nil, fmt.Errorf("missing model config key")
+	}
+	return modelConfigUnsetCommand{Name: name, Key: key}, nil
 }
 
 func parseModelMode(mode string) component.ModelMode {
@@ -312,6 +368,24 @@ func (c *Component) handleConfigList(ctx context.Context, cmd modelConfigListCom
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
 
+func (c *Component) handleConfigSet(ctx context.Context, cmd modelConfigSetCommand) (commandengine.Result, error) {
+	var record ModelConfigKeyRecord
+	if err := json.Unmarshal([]byte(cmd.JSON), &record); err != nil {
+		return commandengine.Result{}, fmt.Errorf("parse model config json: %w", err)
+	}
+	if err := c.SetModelConfigKey(ctx, cmd.Name, cmd.Key, record); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("model config updated: %s %s", cmd.Name, cmd.Key)}, nil
+}
+
+func (c *Component) handleConfigUnset(ctx context.Context, cmd modelConfigUnsetCommand) (commandengine.Result, error) {
+	if err := c.UnsetModelConfigKey(ctx, cmd.Name, cmd.Key); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("model config removed: %s %s", cmd.Name, cmd.Key)}, nil
+}
+
 func formatModelConfigField(field configsurface.FieldSchema) string {
 	line := field.Key
 	var parts []string
@@ -368,7 +442,11 @@ func modelCommand(pattern string, command any, help string, build func(req *clir
 
 func modelCommandPolicy(pattern string) simplerbac.Rule {
 	normalized := commandengine.NormalizePattern(pattern)
-	if normalized == "install <name> <url>" || normalized == "register <name> <path>" || normalized == "<name> card set <text>" {
+	if normalized == "install <name> <url>" ||
+		normalized == "register <name> <path>" ||
+		normalized == "<name> card set <text>" ||
+		normalized == "<name> config set <key> <json>" ||
+		normalized == "<name> config unset <key>" {
 		return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent)
 	}
 	return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser)

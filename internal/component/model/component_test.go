@@ -186,12 +186,14 @@ func TestLegacyInstalledModelPathStillResolvesAgainstProfileHome(t *testing.T) {
 func TestModelCommandDefinitions(t *testing.T) {
 	definitions := (&Component{}).CommandDefinitions()
 	want := map[string]bool{
-		"list":                   true,
-		"install <name> <url>":   true,
-		"register <name> <path>": true,
-		"<name> card":            true,
-		"<name> card set <text>": true,
-		"<name> config list":     true,
+		"list":                           true,
+		"install <name> <url>":           true,
+		"register <name> <path>":         true,
+		"<name> card":                    true,
+		"<name> card set <text>":         true,
+		"<name> config list":             true,
+		"<name> config set <key> <json>": true,
+		"<name> config unset <key>":      true,
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("len(CommandDefinitions)=%d want %d", len(definitions), len(want))
@@ -248,6 +250,46 @@ func TestModelCardAndConfigSchema(t *testing.T) {
 	}
 	if field.Default != "F5" || field.Help != "Voice style" || len(field.Options) != 2 || field.Options[0] != "F1" || field.Options[1] != "F5" {
 		t.Fatalf("field = %#v", field)
+	}
+}
+
+func TestSetAndUnsetModelConfigKey(t *testing.T) {
+	home := t.TempDir()
+	registry := Registry{Models: map[string]ModelRecord{
+		"supertonic": {Path: "supertonic3", Mode: string(component.ModelModeTTS)},
+	}}
+	if err := saveRegistry(home, registry); err != nil {
+		t.Fatalf("saveRegistry() error = %v", err)
+	}
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: home}, nil)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	models := created.(*Component)
+	if err := models.SetModelConfigKey(context.Background(), "supertonic", "voice.name", ModelConfigKeyRecord{
+		Type:    "enum",
+		Help:    "Voice style",
+		Default: "F5",
+		Options: []string{"F1", "F5"},
+	}); err != nil {
+		t.Fatalf("SetModelConfigKey() error = %v", err)
+	}
+	schema, err := models.ModelConfigSchema(context.Background(), "supertonic")
+	if err != nil {
+		t.Fatalf("ModelConfigSchema() error = %v", err)
+	}
+	if _, ok := schema.Field("voice.name"); !ok {
+		t.Fatalf("voice.name not stored: %#v", schema.Fields)
+	}
+	if err := models.UnsetModelConfigKey(context.Background(), "supertonic", "voice.name"); err != nil {
+		t.Fatalf("UnsetModelConfigKey() error = %v", err)
+	}
+	schema, err = models.ModelConfigSchema(context.Background(), "supertonic")
+	if err != nil {
+		t.Fatalf("ModelConfigSchema() after unset error = %v", err)
+	}
+	if _, ok := schema.Field("voice.name"); ok {
+		t.Fatalf("voice.name still present after unset: %#v", schema.Fields)
 	}
 }
 

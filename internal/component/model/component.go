@@ -153,6 +153,48 @@ func (c *Component) ModelConfigSchema(ctx context.Context, name string) (configs
 	return configsurface.ConfigSchema{Fields: fields}, nil
 }
 
+func (c *Component) SetModelConfigKey(ctx context.Context, name string, key string, record ModelConfigKeyRecord) error {
+	_ = ctx
+	if c == nil {
+		return fmt.Errorf("missing model component")
+	}
+	name, model, err := c.lookupRecord(name)
+	if err != nil {
+		return err
+	}
+	key = configsurface.NormalizeKey(key)
+	if key == "" {
+		return fmt.Errorf("missing model config key")
+	}
+	if model.ConfigKeys == nil {
+		model.ConfigKeys = map[string]ModelConfigKeyRecord{}
+	}
+	model.ConfigKeys[key] = cleanModelConfigKeyRecord(record)
+	c.registry.Models[name] = cleanModelRecord(model)
+	return saveRegistry(c.home.Path, c.registry)
+}
+
+func (c *Component) UnsetModelConfigKey(ctx context.Context, name string, key string) error {
+	_ = ctx
+	if c == nil {
+		return fmt.Errorf("missing model component")
+	}
+	name, model, err := c.lookupRecord(name)
+	if err != nil {
+		return err
+	}
+	key = configsurface.NormalizeKey(key)
+	if key == "" {
+		return fmt.Errorf("missing model config key")
+	}
+	delete(model.ConfigKeys, key)
+	if len(model.ConfigKeys) == 0 {
+		model.ConfigKeys = nil
+	}
+	c.registry.Models[name] = cleanModelRecord(model)
+	return saveRegistry(c.home.Path, c.registry)
+}
+
 func (c *Component) InstallModel(ctx context.Context, req component.ModelInstallRequest) (component.Model, error) {
 	_ = ctx
 	if c == nil {

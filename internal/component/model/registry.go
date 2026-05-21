@@ -160,16 +160,20 @@ func cleanModelConfigKeys(keys map[string]ModelConfigKeyRecord) map[string]Model
 		if key == "" {
 			continue
 		}
-		record.Type = strings.TrimSpace(strings.ToLower(record.Type))
-		record.Help = strings.TrimSpace(record.Help)
-		record.Default = strings.TrimSpace(record.Default)
-		record.Options = cleanStringList(record.Options)
-		out[key] = record
+		out[key] = cleanModelConfigKeyRecord(record)
 	}
 	if len(out) == 0 {
 		return nil
 	}
 	return out
+}
+
+func cleanModelConfigKeyRecord(record ModelConfigKeyRecord) ModelConfigKeyRecord {
+	record.Type = strings.TrimSpace(strings.ToLower(record.Type))
+	record.Help = strings.TrimSpace(record.Help)
+	record.Default = strings.TrimSpace(record.Default)
+	record.Options = cleanStringList(record.Options)
+	return record
 }
 
 func cleanStringList(values []string) []string {
