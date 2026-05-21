@@ -16,7 +16,9 @@ const (
 	Type                    = "llamacppagent"
 	ComponentConfigFilename = "component.json"
 	DefaultImage            = "ctgbot-toolloop:latest"
+	DefaultBaseImage        = "ctgbot-toolloop-base:latest"
 	DefaultDockerfile       = "toolloop.Dockerfile"
+	DefaultBaseDockerfile   = "toolloop.base.Dockerfile"
 )
 
 type ComponentConfig struct {

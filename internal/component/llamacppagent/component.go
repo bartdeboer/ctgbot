@@ -89,13 +89,29 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 	if c == nil {
 		return nil, nil
 	}
-	return []runtimeimage.Target{{
+	target := runtimeimage.Target{
 		Name:       Type,
 		Image:      firstNonEmpty(c.runtimeConfig.Image, DefaultImage),
 		Dockerfile: firstNonEmpty(c.runtimeConfig.Dockerfile, DefaultDockerfile),
 		NoCache:    c.runtimeConfig.NoCache,
 		Uses:       c.runtimeConfig.Uses,
-	}}, nil
+	}
+	if target.Uses != nil {
+		if !target.NoCache {
+			target.NoCache = true
+		}
+		return []runtimeimage.Target{target}, nil
+	}
+	if target.Dockerfile != DefaultDockerfile {
+		return []runtimeimage.Target{target}, nil
+	}
+	target.Uses = &runtimeimage.Target{
+		Name:       Type + "-base",
+		Image:      DefaultBaseImage,
+		Dockerfile: DefaultBaseDockerfile,
+	}
+	target.NoCache = true
+	return []runtimeimage.Target{target}, nil
 }
 
 func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {

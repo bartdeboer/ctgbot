@@ -1,9 +1,8 @@
-FROM golang:1.24-bookworm AS build
+FROM ctgbot-toolloop-base:latest AS build
 
 WORKDIR /src
 ARG TARGETARCH
 COPY go.mod go.sum ./
-RUN go mod download
 COPY cmd/hostbridge ./cmd/hostbridge
 COPY cmd/toolloop ./cmd/toolloop
 COPY internal ./internal
@@ -11,15 +10,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/hostbridge ./cmd/hostbridge \
     && go build -trimpath -ldflags="-s -w" -o /out/toolloop ./cmd/toolloop
 
-FROM debian:bookworm-slim
-
-COPY --from=build /usr/local/go /usr/local/go
-ENV PATH="/usr/local/go/bin:$PATH"
-
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates bash curl git jq ripgrep coreutils sed \
-    && rm -rf /var/lib/apt/lists/*
+FROM ctgbot-toolloop-base:latest
 
 COPY --from=build /out/hostbridge /usr/bin/hostbridge
 COPY --from=build /out/toolloop /usr/bin/toolloop
