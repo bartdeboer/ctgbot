@@ -98,3 +98,54 @@ func TestChatMessageAlwaysIncludesContent(t *testing.T) {
 		t.Fatalf("marshaled tool message should include content field: %s", data)
 	}
 }
+
+func TestRunnerNudgesToolUseForRunRequests(t *testing.T) {
+	t.Parallel()
+	workspace := t.TempDir()
+	calls := 0
+	var sawNudge bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		calls++
+		var body chatRequest
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch calls {
+		case 1:
+			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": "go is not installed"}}}})
+		case 2:
+			for _, message := range body.Messages {
+				if strings.Contains(message.Content, "answered without using a tool") {
+					sawNudge = true
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"tool_calls": []any{map[string]any{"id": "call_1", "type": "function", "function": map[string]any{"name": "shell", "arguments": `{"command":"printf go1.24"}`}}}}}}})
+		default:
+			_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": "go1.24"}}}})
+		}
+	}))
+	defer server.Close()
+
+	result, err := (Runner{Workspace: workspace}).Run(context.Background(), Request{BaseURL: server.URL, Model: "qwen", Prompt: "Run go version and give raw output", MaxIterations: 4})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.Text != "go1.24" || result.Iterations != 3 {
+		t.Fatalf("result = %#v", result)
+	}
+	if !sawNudge {
+		t.Fatal("second request did not include tool-use nudge")
+	}
+}
+
+func TestShouldUseToolForRequestUsesLastUserMessage(t *testing.T) {
+	messages := []chatMessage{
+		{Role: "user", Content: "Run go version"},
+		{Role: "assistant", Content: "ok"},
+		{Role: "user", Content: "Thanks"},
+	}
+	if shouldUseToolForRequest(messages, "Run go version") {
+		t.Fatal("should use last user message, not stale fallback/history")
+	}
+}
