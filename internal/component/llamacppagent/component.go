@@ -27,21 +27,29 @@ type ComponentResolver interface {
 }
 
 type Component struct {
-	registration  coremodel.Component
-	runtime       runtimepkg.ThreadRuntime
-	runtimeConfig runtimepkg.BindConfig
-	home          runtimepkg.Home
-	config        ComponentConfig
-	resolver      ComponentResolver
-	logger        *log.Logger
+	registration     coremodel.Component
+	runtime          runtimepkg.ThreadRuntime
+	runtimeConfig    runtimepkg.BindConfig
+	home             runtimepkg.Home
+	storage          repository.Storage
+	resolveWorkspace func(context.Context, coremodel.Chat) (string, error)
+	config           ComponentConfig
+	resolver         ComponentResolver
+	logger           *log.Logger
 }
 
 var _ component.Agent = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
 
-func New(ctx context.Context, registration coremodel.Component, runtimeFactory runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver, logger *log.Logger) (component.Component, error) {
-	_, _ = ctx, storage
+func New(ctx context.Context, registration coremodel.Component, runtimeFactory runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver, resolveWorkspace func(context.Context, coremodel.Chat) (string, error), logger *log.Logger) (component.Component, error) {
+	_ = ctx
+	if storage == nil {
+		return nil, fmt.Errorf("missing storage")
+	}
+	if resolveWorkspace == nil {
+		return nil, fmt.Errorf("missing workspace resolver")
+	}
 	threadFactory, ok := runtimeFactory.(runtimepkg.ThreadRuntimeFactory)
 	if !ok {
 		return nil, fmt.Errorf("llamacppagent requires thread runtime, got %T", runtimeFactory)
@@ -55,13 +63,15 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 		return nil, err
 	}
 	return &Component{
-		registration:  registration,
-		runtime:       threadFactory.Bind(registration, home, runtimeConfig),
-		runtimeConfig: runtimeConfig,
-		home:          home,
-		config:        config,
-		resolver:      resolver,
-		logger:        logger,
+		registration:     registration,
+		runtime:          threadFactory.Bind(registration, home, runtimeConfig),
+		runtimeConfig:    runtimeConfig,
+		home:             home,
+		storage:          storage,
+		resolveWorkspace: resolveWorkspace,
+		config:           config,
+		resolver:         resolver,
+		logger:           logger,
 	}, nil
 }
 

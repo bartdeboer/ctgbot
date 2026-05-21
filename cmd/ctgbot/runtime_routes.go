@@ -713,7 +713,7 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 		return nil, err
 	}
 	if err := registry.Add(llamacppagentcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return llamacppagentcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger)
+		return llamacppagentcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.ResolveChatWorkspace, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}
