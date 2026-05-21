@@ -80,7 +80,7 @@ func (c *Component) refresh(ctx context.Context, req commandengine.Request) (com
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
+	if err := c.RefreshThreadRuntime(ctx, component.ThreadRuntimeControlRequest{Thread: *thread, WorkspacePath: workspacePath}); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "claude runtime refreshed"}, nil

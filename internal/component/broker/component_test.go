@@ -33,6 +33,11 @@ func (f *fakeActions) MessageHelp(ctx context.Context, chatID modeluuid.UUID, ac
 	return "", nil
 }
 
+func (f *fakeActions) RefreshThreadRuntime(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	_, _ = ctx, threadID
+	return "runtime refreshed", nil
+}
+
 func (f *fakeActions) DroppedList(ctx context.Context, limit int) (string, error) {
 	_, _ = ctx, limit
 	return "dropped messages", nil

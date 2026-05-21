@@ -21,6 +21,7 @@ type Actions interface {
 	SendPayload(ctx context.Context, threadID modeluuid.UUID, payload message.OutboundPayload) error
 	RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error)
 	MessageHelp(ctx context.Context, chatID modeluuid.UUID, actor commandengine.Actor) (string, error)
+	RefreshThreadRuntime(ctx context.Context, threadID modeluuid.UUID) (string, error)
 	DroppedList(ctx context.Context, limit int) (string, error)
 	DroppedView(ctx context.Context, ref string) (string, error)
 	DroppedAllow(ctx context.Context, ref string) (string, error)
@@ -34,6 +35,7 @@ var _ component.Component = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
 
 type helpCommand struct{}
+type refreshCommand struct{}
 
 type droppedListCommand struct {
 	Limit int
@@ -52,6 +54,7 @@ func New(actions Actions) *Component {
 }
 
 func RegisterGobTypes(register func(any)) {
+	register(refreshCommand{})
 	register(droppedListCommand{})
 	register(droppedViewCommand{})
 	register(droppedAllowCommand{})
@@ -64,6 +67,20 @@ func (c *Component) Type() string {
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	definitions := schemacommands.HostbridgeCommands()
 	out := []commandengine.Definition{
+		{
+			Pattern: "refresh",
+			Help:    "Refresh the current thread runtime container",
+			Build: func(req *clir.Request) (any, error) {
+				_ = req
+				return refreshCommand{}, nil
+			},
+			Sources:               []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+			InstructionVisibility: commandengine.InstructionImportant,
+			Aliases: []commandengine.Route{
+				{Pattern: "container refresh", Hidden: true},
+			},
+		},
 		{
 			Pattern: "help",
 			Help:    "Show available commands",
@@ -135,6 +152,26 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 				return commandengine.Result{}, fmt.Errorf("missing broker actions")
 			}
 			text, err := c.Actions.MessageHelp(ctx, req.Context.ChatID, req.Context.Actor)
+			if err != nil {
+				return commandengine.Result{}, err
+			}
+			return commandengine.Result{Text: text}, nil
+		},
+	); err != nil {
+		return err
+	}
+	if err := commandengine.Register[refreshCommand](
+		registry,
+		func(ctx context.Context, req commandengine.Request, cmd refreshCommand) (commandengine.Result, error) {
+			_ = cmd
+			if c == nil || c.Actions == nil {
+				return commandengine.Result{}, fmt.Errorf("missing broker actions")
+			}
+			threadID := req.Context.ThreadID
+			if threadID.IsNull() {
+				threadID = req.Context.SandboxID
+			}
+			text, err := c.Actions.RefreshThreadRuntime(ctx, threadID)
 			if err != nil {
 				return commandengine.Result{}, err
 			}

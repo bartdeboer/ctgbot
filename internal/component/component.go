@@ -519,6 +519,21 @@ type RuntimeImageProvider interface {
 	RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error)
 }
 
+// ThreadRuntimeController lets a component expose lifecycle controls for the
+// runtime it uses for a specific ctgbot thread. Broker-level shortcuts can use
+// this without knowing whether the component is Codex, Claude, or a local
+// tool-loop agent.
+type ThreadRuntimeController interface {
+	Component
+	RefreshThreadRuntime(ctx context.Context, request ThreadRuntimeControlRequest) error
+}
+
+type ThreadRuntimeControlRequest struct {
+	Chat          coremodel.Chat
+	Thread        coremodel.Thread
+	WorkspacePath string
+}
+
 type TurnInstructions struct {
 	ChatProvider              string
 	MessagePrefix             string
