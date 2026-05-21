@@ -9,28 +9,28 @@ import (
 )
 
 func (c *Component) resolveModel(ctx context.Context, name string) (component.Model, error) {
-	store, err := c.modelStore(ctx)
+	registry, err := c.modelRegistry(ctx)
 	if err != nil {
 		return component.Model{}, err
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
-		name, err = store.DefaultModelForMode(ctx, component.ModelModeASR)
+		name, err = registry.DefaultModelForMode(ctx, component.ModelModeASR)
 		if err != nil {
 			return component.Model{}, err
 		}
 	}
-	return store.GetModel(ctx, strings.TrimSpace(name))
+	return registry.GetModel(ctx, strings.TrimSpace(name))
 }
 
-func (c *Component) modelStore(ctx context.Context) (component.ModelStore, error) {
+func (c *Component) modelRegistry(ctx context.Context) (component.ModelRegistry, error) {
 	if c == nil {
 		return nil, fmt.Errorf("missing whispercpp component")
 	}
 	if c.resolver == nil {
 		return nil, fmt.Errorf("missing component resolver")
 	}
-	ref := strings.TrimSpace(c.config.ModelStore)
+	ref := strings.TrimSpace(c.config.ModelRegistry)
 	if ref == "" {
 		ref = "model"
 	}
@@ -43,11 +43,11 @@ func (c *Component) modelStore(ctx context.Context) (component.ModelStore, error
 		return nil, err
 	}
 	if loaded == nil {
-		return nil, fmt.Errorf("model store not found: %s", ref)
+		return nil, fmt.Errorf("model registry not found: %s", ref)
 	}
-	store, ok := loaded.Component.(component.ModelStore)
+	registry, ok := loaded.Component.(component.ModelRegistry)
 	if !ok {
-		return nil, fmt.Errorf("component %s does not implement model store", loaded.Registration.Ref())
+		return nil, fmt.Errorf("component %s does not implement model registry", loaded.Registration.Ref())
 	}
-	return store, nil
+	return registry, nil
 }

@@ -20,6 +20,7 @@ const (
 )
 
 type ComponentConfig struct {
+	ModelRegistry  string   `json:"model_registry,omitempty"`
 	ModelStore     string   `json:"model_store,omitempty"`
 	DefaultModel   string   `json:"default_model,omitempty"`
 	Language       string   `json:"language,omitempty"`
@@ -70,7 +71,8 @@ func loadComponentConfig(homePath string) (ComponentConfig, error) {
 }
 
 func (c ComponentConfig) withDefaults() ComponentConfig {
-	c.ModelStore = firstNonEmpty(c.ModelStore, "model")
+	c.ModelRegistry = firstNonEmpty(c.ModelRegistry, c.ModelStore, "model")
+	c.ModelStore = strings.TrimSpace(c.ModelStore)
 	c.DefaultModel = strings.TrimSpace(c.DefaultModel)
 	c.Language = strings.TrimSpace(c.Language)
 	if c.MaxConcurrent == 0 {
