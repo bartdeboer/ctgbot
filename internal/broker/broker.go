@@ -13,37 +13,10 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	"github.com/bartdeboer/ctgbot/internal/inbound"
-	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
-
-type App interface {
-	AdmitInbound(ctx context.Context, event component.InboundEvent) (inbound.Admission, error)
-	Chat(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
-	Thread(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
-	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
-	ForEachMessage(ctx context.Context, scope component.MessageScope, visit component.MessageVisitor) error
-	EnabledChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
-	EnabledInboundSources(ctx context.Context) ([]component.InboundSource, error)
-	CommandSurfaces(ctx context.Context, chat coremodel.Chat, inbound component.ResolvedInboundQueuer, actions componentbroker.Actions) ([]component.CommandSurface, error)
-	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
-	ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error)
-	BindComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) error
-	RelayTarget(ctx context.Context, threadID modeluuid.UUID, binding coremodel.ChatComponent) (*message.ChatTarget, bool, error)
-	StoreInboundMessage(ctx context.Context, inbound component.ResolvedInbound) (*coremodel.ThreadMessage, error)
-	StoreOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []message.Media) error
-	DropEvent(ctx context.Context, rejection *inbound.Rejection) (*coremodel.DroppedEvent, error)
-	DropNoticeID(ctx context.Context, drop *coremodel.DroppedEvent) string
-	ResolveDroppedEventID(ctx context.Context, ref string) (modeluuid.UUID, error)
-	DroppedEvent(ctx context.Context, id modeluuid.UUID) (*coremodel.DroppedEvent, error)
-	ListDroppedEvents(ctx context.Context, limit int) ([]coremodel.DroppedEvent, error)
-	SaveDroppedEvent(ctx context.Context, drop *coremodel.DroppedEvent) error
-	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
-	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
-	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
-}
 
 type Broker struct {
 	App   App
