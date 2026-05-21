@@ -210,7 +210,7 @@ func (r Runner) runShell(ctx context.Context, args shellArgs) (string, bool) {
 	}
 	toolCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(toolCtx, "/bin/bash", "-lc", command)
+	cmd := exec.CommandContext(toolCtx, "/bin/bash", "-c", command)
 	cmd.Dir = workdir
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
