@@ -121,7 +121,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionEssential,
 			Aliases: []commandengine.Route{
 				{Pattern: "thread status", Absolute: true},
-				{Pattern: "thread current status", Absolute: true},
+				{Pattern: "thread current status", Absolute: true, Hidden: true},
 			},
 		},
 		{

@@ -316,35 +316,17 @@ func TestHelpRequestKeepsExactExecutableRoutes(t *testing.T) {
 	}
 }
 
-func TestHelpRequestUsesClirLiteralScopeBehavior(t *testing.T) {
+func TestHiddenThreadCurrentStatusAliasStillParses(t *testing.T) {
 	router, err := hostbridgeRouter()
 	if err != nil {
 		t.Fatalf("hostbridgeRouter() error = %v", err)
 	}
-
-	var buf bytes.Buffer
-	_, handled, err := parseOrRenderHelp(
-		context.Background(),
-		router,
-		testHostbridgeRequest(),
-		[]string{"thread", "current", "help"},
-		&buf,
-	)
+	req, err := router.Parse(context.Background(), testHostbridgeRequest(), []string{"thread", "current", "status"})
 	if err != nil {
-		t.Fatalf("parseOrRenderHelp(thread current help) error = %v", err)
+		t.Fatalf("Parse(thread current status) error = %v", err)
 	}
-	if !handled {
-		t.Fatal("parseOrRenderHelp(thread current help) handled = false, want contextual help")
-	}
-
-	out := buf.String()
-	if !strings.Contains(out, "thread current status") {
-		t.Fatalf("thread current help missing current status in %q", out)
-	}
-	for _, notWant := range []string{"thread <thread>", "thread <thread> label", "thread <thread> message", "thread <thread> status"} {
-		if strings.Contains(out, notWant) {
-			t.Fatalf("thread current help unexpectedly contains parameterized sibling %q in %q", notWant, out)
-		}
+	if req.CanonicalPattern != "status" {
+		t.Fatalf("canonical pattern = %q, want status", req.CanonicalPattern)
 	}
 }
 

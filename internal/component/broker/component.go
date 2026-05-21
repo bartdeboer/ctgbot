@@ -118,15 +118,9 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
 			Policy:  simplerbac.Any(simplerbac.RoleRoot),
-		},
-		{
-			Pattern: "dropped <dropID> allow",
-			Help:    "Replay a dropped inbound message, bypassing event filters",
-			Build: func(req *clir.Request) (any, error) {
-				return droppedAllowCommand{DropRef: strings.TrimSpace(req.Params["dropID"])}, nil
+			Aliases: []commandengine.Route{
+				{Pattern: "dropped <dropID> allow", Hidden: true},
 			},
-			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot),
 		},
 	}
 	for _, definition := range definitions {
