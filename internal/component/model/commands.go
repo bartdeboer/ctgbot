@@ -9,6 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
@@ -31,9 +32,25 @@ type installCommand struct {
 	Default     bool
 }
 
+type modelCardCommand struct {
+	Name string
+}
+
+type modelCardSetCommand struct {
+	Name string
+	Text string
+}
+
+type modelConfigListCommand struct {
+	Name string
+}
+
 func RegisterGobTypes(register func(any)) {
 	register(listCommand{})
 	register(installCommand{})
+	register(modelCardCommand{})
+	register(modelCardSetCommand{})
+	register(modelConfigListCommand{})
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
@@ -43,6 +60,9 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		modelCommand("list", listCommand{}, "List installed AI models", nil),
 		modelCommand("install <name> <url>", nil, "Download and register an AI model", buildInstallCommand),
 		modelCommand("register <name> <path>", nil, "Register an existing local AI model", buildRegisterCommand),
+		modelCommand("<name> card", nil, "Show model card", buildModelCardCommand),
+		modelCommand("<name> card set <text>", nil, "Update model card text", buildModelCardSetCommand),
+		modelCommand("<name> config list", nil, "List model config keys and options", buildModelConfigListCommand),
 	}
 }
 
@@ -62,9 +82,27 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	return commandengine.RegisterPattern[installCommand](registry, "register <name> <path>", func(ctx context.Context, req commandengine.Request, cmd installCommand) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[installCommand](registry, "register <name> <path>", func(ctx context.Context, req commandengine.Request, cmd installCommand) (commandengine.Result, error) {
 		_, _ = req, cmd
 		return c.handleRegister(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[modelCardCommand](registry, "<name> card", func(ctx context.Context, req commandengine.Request, cmd modelCardCommand) (commandengine.Result, error) {
+		_ = req
+		return c.handleCard(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[modelCardSetCommand](registry, "<name> card set <text>", func(ctx context.Context, req commandengine.Request, cmd modelCardSetCommand) (commandengine.Result, error) {
+		_ = req
+		return c.handleCardSet(ctx, cmd)
+	}); err != nil {
+		return err
+	}
+	return commandengine.RegisterPattern[modelConfigListCommand](registry, "<name> config list", func(ctx context.Context, req commandengine.Request, cmd modelConfigListCommand) (commandengine.Result, error) {
+		_ = req
+		return c.handleConfigList(ctx, cmd)
 	})
 }
 
@@ -135,6 +173,31 @@ func buildModelCommand(req *clir.Request, name string) (installCommand, error) {
 		mode = parsed
 	}
 	return installCommand{Name: modelName, Mode: mode, Filename: *filename, SHA256: *sha, HostPort: *hostPort, ContextSize: *ctxSize, UBatchSize: *ubatch, GPULayers: *gpuLayers, Pooling: *pooling, Normalize: *normalize, Default: *makeDefault}, nil
+}
+
+func buildModelCardCommand(req *clir.Request) (any, error) {
+	name := cleanModelName(req.Params["name"])
+	if name == "" {
+		return nil, fmt.Errorf("missing model name")
+	}
+	return modelCardCommand{Name: name}, nil
+}
+
+func buildModelCardSetCommand(req *clir.Request) (any, error) {
+	name := cleanModelName(req.Params["name"])
+	if name == "" {
+		return nil, fmt.Errorf("missing model name")
+	}
+	text := strings.TrimSpace(req.Params["text"])
+	return modelCardSetCommand{Name: name, Text: text}, nil
+}
+
+func buildModelConfigListCommand(req *clir.Request) (any, error) {
+	name := cleanModelName(req.Params["name"])
+	if name == "" {
+		return nil, fmt.Errorf("missing model name")
+	}
+	return modelConfigListCommand{Name: name}, nil
 }
 
 func parseModelMode(mode string) component.ModelMode {
@@ -216,6 +279,60 @@ func (c *Component) handleRegister(ctx context.Context, cmd installCommand) (com
 	return commandengine.Result{Text: fmt.Sprintf("model registered: %s\npath: %s", model.Name, model.Path)}, nil
 }
 
+func (c *Component) handleCard(ctx context.Context, cmd modelCardCommand) (commandengine.Result, error) {
+	text, err := c.ModelCard(ctx, cmd.Name)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if strings.TrimSpace(text) == "" {
+		text = fmt.Sprintf("no model card for %s", cmd.Name)
+	}
+	return commandengine.Result{Text: text}, nil
+}
+
+func (c *Component) handleCardSet(ctx context.Context, cmd modelCardSetCommand) (commandengine.Result, error) {
+	if err := c.SetModelCard(ctx, cmd.Name, cmd.Text); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("model card updated: %s", cmd.Name)}, nil
+}
+
+func (c *Component) handleConfigList(ctx context.Context, cmd modelConfigListCommand) (commandengine.Result, error) {
+	schema, err := c.ModelConfigSchema(ctx, cmd.Name)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if len(schema.Fields) == 0 {
+		return commandengine.Result{Text: fmt.Sprintf("no model config keys for %s", cmd.Name)}, nil
+	}
+	lines := []string{"model config: " + cmd.Name}
+	for _, field := range schema.Fields {
+		lines = append(lines, formatModelConfigField(field))
+	}
+	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
+}
+
+func formatModelConfigField(field configsurface.FieldSchema) string {
+	line := field.Key
+	var parts []string
+	if help := strings.TrimSpace(field.Help); help != "" {
+		parts = append(parts, help)
+	}
+	if field.Type != "" {
+		parts = append(parts, "type: "+string(field.Type))
+	}
+	if def := strings.TrimSpace(field.Default); def != "" {
+		parts = append(parts, "default: "+def)
+	}
+	if len(field.Options) > 0 {
+		parts = append(parts, "options: "+strings.Join(field.Options, ", "))
+	}
+	if len(parts) > 0 {
+		line += " - " + strings.Join(parts, ". ")
+	}
+	return line
+}
+
 func installRequest(cmd installCommand) component.ModelInstallRequest {
 	return component.ModelInstallRequest{
 		Model: component.Model{
@@ -251,7 +368,7 @@ func modelCommand(pattern string, command any, help string, build func(req *clir
 
 func modelCommandPolicy(pattern string) simplerbac.Rule {
 	normalized := commandengine.NormalizePattern(pattern)
-	if normalized == "install <name> <url>" || normalized == "register <name> <path>" {
+	if normalized == "install <name> <url>" || normalized == "register <name> <path>" || normalized == "<name> card set <text>" {
 		return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent)
 	}
 	return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser)

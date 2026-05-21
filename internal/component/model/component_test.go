@@ -189,6 +189,9 @@ func TestModelCommandDefinitions(t *testing.T) {
 		"list":                   true,
 		"install <name> <url>":   true,
 		"register <name> <path>": true,
+		"<name> card":            true,
+		"<name> card set <text>": true,
+		"<name> config list":     true,
 	}
 	if len(definitions) != len(want) {
 		t.Fatalf("len(CommandDefinitions)=%d want %d", len(definitions), len(want))
@@ -200,6 +203,51 @@ func TestModelCommandDefinitions(t *testing.T) {
 		if !want[definition.CanonicalPattern()] {
 			t.Fatalf("unexpected pattern %q", definition.CanonicalPattern())
 		}
+	}
+}
+
+func TestModelCardAndConfigSchema(t *testing.T) {
+	home := t.TempDir()
+	registry := Registry{Models: map[string]ModelRecord{
+		"supertonic": {
+			Path: "supertonic3",
+			Mode: string(component.ModelModeTTS),
+			Card: "Supertonic model card",
+			ConfigKeys: map[string]ModelConfigKeyRecord{
+				"voice.name": {
+					Type:    "enum",
+					Help:    "Voice style",
+					Default: "F5",
+					Options: []string{"F1", "F5", "F5", ""},
+				},
+			},
+		},
+	}}
+	if err := saveRegistry(home, registry); err != nil {
+		t.Fatalf("saveRegistry() error = %v", err)
+	}
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: home}, nil)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	models := created.(*Component)
+	card, err := models.ModelCard(context.Background(), "supertonic")
+	if err != nil {
+		t.Fatalf("ModelCard() error = %v", err)
+	}
+	if card != "Supertonic model card" {
+		t.Fatalf("card = %q", card)
+	}
+	schema, err := models.ModelConfigSchema(context.Background(), "supertonic")
+	if err != nil {
+		t.Fatalf("ModelConfigSchema() error = %v", err)
+	}
+	field, ok := schema.Field("voice.name")
+	if !ok {
+		t.Fatalf("missing voice.name field in %#v", schema.Fields)
+	}
+	if field.Default != "F5" || field.Help != "Voice style" || len(field.Options) != 2 || field.Options[0] != "F1" || field.Options[1] != "F5" {
+		t.Fatalf("field = %#v", field)
 	}
 }
 

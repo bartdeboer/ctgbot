@@ -39,6 +39,7 @@ func RegisterGobTypes(register func(any)) {
 	register(SendPayload{})
 	register(SendMedia{})
 	register(TurnConfigList{})
+	register(TurnInfo{})
 	register(TurnConfigGet{})
 	register(TurnConfigSet{})
 	register(TurnConfigUnset{})

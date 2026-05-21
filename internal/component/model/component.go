@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -104,6 +105,54 @@ func (c *Component) DefaultModelForMode(ctx context.Context, mode component.Mode
 	return c.defaultModelForMode(mode), nil
 }
 
+func (c *Component) ModelCard(ctx context.Context, name string) (string, error) {
+	_ = ctx
+	if c == nil {
+		return "", fmt.Errorf("missing model component")
+	}
+	_, record, err := c.lookupRecord(name)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(record.Card), nil
+}
+
+func (c *Component) SetModelCard(ctx context.Context, name string, text string) error {
+	_ = ctx
+	if c == nil {
+		return fmt.Errorf("missing model component")
+	}
+	name, record, err := c.lookupRecord(name)
+	if err != nil {
+		return err
+	}
+	record.Card = strings.TrimSpace(text)
+	c.registry.Models[name] = cleanModelRecord(record)
+	return saveRegistry(c.home.Path, c.registry)
+}
+
+func (c *Component) ModelConfigSchema(ctx context.Context, name string) (configsurface.ConfigSchema, error) {
+	_ = ctx
+	if c == nil {
+		return configsurface.ConfigSchema{}, fmt.Errorf("missing model component")
+	}
+	_, record, err := c.lookupRecord(name)
+	if err != nil {
+		return configsurface.ConfigSchema{}, err
+	}
+	keys := make([]string, 0, len(record.ConfigKeys))
+	for key := range record.ConfigKeys {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	fields := make([]configsurface.FieldSchema, 0, len(keys))
+	for _, key := range keys {
+		field := fieldSchemaFromRecord(key, record.ConfigKeys[key])
+		fields = append(fields, field)
+	}
+	return configsurface.ConfigSchema{Fields: fields}, nil
+}
+
 func (c *Component) InstallModel(ctx context.Context, req component.ModelInstallRequest) (component.Model, error) {
 	_ = ctx
 	if c == nil {
@@ -165,6 +214,41 @@ func (c *Component) saveModel(name string, record ModelRecord, makeDefault bool)
 		return component.Model{}, err
 	}
 	return c.resolve(name, c.registry.Models[name]), nil
+}
+
+func (c *Component) lookupRecord(name string) (string, ModelRecord, error) {
+	name = cleanModelName(name)
+	if name == "" {
+		name = strings.TrimSpace(c.registry.DefaultModel)
+	}
+	if name == "" && len(c.registry.Models) == 1 {
+		for only := range c.registry.Models {
+			name = only
+		}
+	}
+	if name == "" {
+		return "", ModelRecord{}, fmt.Errorf("missing model name")
+	}
+	record, ok := c.registry.Models[name]
+	if !ok {
+		return "", ModelRecord{}, fmt.Errorf("model not found: %s", name)
+	}
+	return name, record, nil
+}
+
+func fieldSchemaFromRecord(key string, record ModelConfigKeyRecord) configsurface.FieldSchema {
+	fieldType := configsurface.FieldType(strings.TrimSpace(record.Type))
+	if fieldType == "" && len(record.Options) > 0 {
+		fieldType = configsurface.FieldTypeEnum
+	}
+	return configsurface.FieldSchema{
+		Key:      configsurface.NormalizeKey(key),
+		Help:     strings.TrimSpace(record.Help),
+		Type:     fieldType,
+		Writable: true,
+		Default:  strings.TrimSpace(record.Default),
+		Options:  append([]string(nil), record.Options...),
+	}
 }
 
 func (c *Component) defaultModelForMode(mode component.ModelMode) string {

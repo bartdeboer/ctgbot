@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"mime"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -23,6 +24,69 @@ func voiceInputAttachment(text string, attachments []message.Media) (message.Med
 		return message.Media{}, false
 	}
 	return media, true
+}
+
+func materializeVoiceInputFile(workspacePath string, runtimeWorkspacePath string, media message.Media) (turnInputFile, func(), error) {
+	workspacePath = strings.TrimSpace(workspacePath)
+	if workspacePath == "" {
+		return turnInputFile{}, nil, fmt.Errorf("missing workspace path")
+	}
+	runtimeWorkspacePath = strings.TrimSpace(runtimeWorkspacePath)
+	if runtimeWorkspacePath == "" {
+		runtimeWorkspacePath = workspacePath
+	}
+	dirName := modeluuid.New().String()
+	hostDir := filepath.Join(workspacePath, "turn-input", dirName)
+	if err := os.MkdirAll(hostDir, 0o755); err != nil {
+		return turnInputFile{}, nil, err
+	}
+	filename := safeVoiceInputFilename(media)
+	hostPath := filepath.Join(hostDir, filename)
+	if err := os.WriteFile(hostPath, media.Content, 0o644); err != nil {
+		_ = os.RemoveAll(hostDir)
+		return turnInputFile{}, nil, err
+	}
+	runtimePath := filepath.ToSlash(filepath.Join(runtimeWorkspacePath, "turn-input", dirName, filename))
+	cleanup := func() {
+		_ = os.RemoveAll(hostDir)
+	}
+	return turnInputFile{
+		Path:        runtimePath,
+		Kind:        "voice",
+		Filename:    filename,
+		ContentType: strings.TrimSpace(media.ContentType),
+		Temporary:   true,
+	}, cleanup, nil
+}
+
+func safeVoiceInputFilename(media message.Media) string {
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(media.Filename)))
+	if ext == "" {
+		ext = extensionForContentType(media.ContentType)
+	}
+	if ext == "" {
+		ext = ".ogg"
+	}
+	return "voice-input" + ext
+}
+
+func extensionForContentType(contentType string) string {
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	if mediaType, _, err := mime.ParseMediaType(contentType); err == nil {
+		contentType = mediaType
+	}
+	switch contentType {
+	case "audio/ogg", "audio/opus":
+		return ".ogg"
+	case "audio/mpeg":
+		return ".mp3"
+	case "audio/mp4", "audio/x-m4a":
+		return ".m4a"
+	case "audio/wav", "audio/wave", "audio/x-wav":
+		return ".wav"
+	default:
+		return ""
+	}
 }
 
 func isAudioMedia(media message.Media) bool {

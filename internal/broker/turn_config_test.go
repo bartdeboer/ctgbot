@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
@@ -79,6 +81,58 @@ func TestTurnCommandExecutorPreservesActiveComponents(t *testing.T) {
 	}
 }
 
+func TestTurnConfigListUsesModelRegistryMetadata(t *testing.T) {
+	turn := &agentTurnRuntime{
+		runtime: &ChatRuntime{Components: []*component.Loaded{
+			{Component: fakeModelRegistry{}},
+		}},
+	}
+	executor := turnCommandExecutor{turn: turn}
+
+	result, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigList{}})
+	if err != nil {
+		t.Fatalf("turn config list error = %v", err)
+	}
+	for _, want := range []string{
+		"voice.model=supertonic",
+		"options: supertonic, kyutai",
+		"voice.name=",
+		"options: F1, F5",
+		"default: F5",
+	} {
+		if !strings.Contains(result.Text, want) {
+			t.Fatalf("turn config list text = %q, want %q", result.Text, want)
+		}
+	}
+}
+
+func TestTurnInfoShowsInputMetadataAndFiles(t *testing.T) {
+	turn := &agentTurnRuntime{
+		voiceInput:            true,
+		detectedInputLanguage: "nl",
+		inputFiles: []turnInputFile{
+			{Path: "/workspace/turn-input/abc/voice-input.ogg", Kind: "voice", Filename: "voice-input.ogg", ContentType: "audio/ogg", Temporary: true},
+		},
+	}
+	executor := turnCommandExecutor{turn: turn}
+
+	result, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnInfo{}})
+	if err != nil {
+		t.Fatalf("turn info error = %v", err)
+	}
+	for _, want := range []string{
+		"voice: true",
+		"detected_language: nl",
+		"/workspace/turn-input/abc/voice-input.ogg",
+		"temporary=true",
+		"hostbridge turn config list",
+	} {
+		if !strings.Contains(result.Text, want) {
+			t.Fatalf("turn info text = %q, want %q", result.Text, want)
+		}
+	}
+}
+
 func TestTurnCommandExecutorRejectsUnknownAndReadOnlySettings(t *testing.T) {
 	turn := &agentTurnRuntime{}
 	executor := turnCommandExecutor{turn: turn}
@@ -143,4 +197,57 @@ func TestSpeechRequestForTurnFallsBackToInputVoiceLanguage(t *testing.T) {
 	if req.Language != "nl" {
 		t.Fatalf("language = %q, want nl", req.Language)
 	}
+}
+
+type fakeModelRegistry struct{}
+
+func (fakeModelRegistry) Type() string { return "model" }
+
+func (fakeModelRegistry) ListModels(ctx context.Context) ([]component.Model, error) {
+	_ = ctx
+	return []component.Model{
+		{Name: "supertonic", Mode: component.ModelModeTTS},
+		{Name: "kyutai", Mode: component.ModelModeTTS},
+		{Name: "qwen", Mode: component.ModelModeCompletion},
+	}, nil
+}
+
+func (fakeModelRegistry) GetModel(ctx context.Context, name string) (component.Model, error) {
+	_ = ctx
+	return component.Model{Name: name, Mode: component.ModelModeTTS}, nil
+}
+
+func (fakeModelRegistry) InstallModel(ctx context.Context, req component.ModelInstallRequest) (component.Model, error) {
+	_ = ctx
+	return req.Model, nil
+}
+
+func (fakeModelRegistry) RegisterModel(ctx context.Context, req component.ModelInstallRequest) (component.Model, error) {
+	_ = ctx
+	return req.Model, nil
+}
+
+func (fakeModelRegistry) DefaultModel(ctx context.Context) (string, error) {
+	_ = ctx
+	return "qwen", nil
+}
+
+func (fakeModelRegistry) DefaultModelForMode(ctx context.Context, mode component.ModelMode) (string, error) {
+	_ = ctx
+	if mode == component.ModelModeTTS {
+		return "supertonic", nil
+	}
+	return "", nil
+}
+
+func (fakeModelRegistry) ModelCard(ctx context.Context, name string) (string, error) {
+	_, _ = ctx, name
+	return "", nil
+}
+
+func (fakeModelRegistry) ModelConfigSchema(ctx context.Context, name string) (configsurface.ConfigSchema, error) {
+	_, _ = ctx, name
+	return configsurface.ConfigSchema{Fields: []configsurface.FieldSchema{
+		{Key: turnConfigVoiceName, Help: "Voice style", Type: configsurface.FieldTypeEnum, Default: "F5", Options: []string{"F1", "F5"}},
+	}}, nil
 }
