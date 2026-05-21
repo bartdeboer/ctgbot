@@ -91,6 +91,9 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 		messages = append(messages, chatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
 		for _, call := range resp.ToolCalls {
 			toolText, isErr := r.executeTool(ctx, call)
+			if strings.TrimSpace(toolText) == "" {
+				toolText = "(no output)"
+			}
 			messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: toolText})
 			if isErr && r.Stderr != nil {
 				fmt.Fprintf(r.Stderr, "tool %s failed: %s\n", call.Function.Name, strings.TrimSpace(toolText))
@@ -318,7 +321,7 @@ type chatRequest struct {
 
 type chatMessage struct {
 	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
+	Content    string     `json:"content"`
 	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 	Name       string     `json:"name,omitempty"`

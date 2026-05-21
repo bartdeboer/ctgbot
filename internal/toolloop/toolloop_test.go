@@ -88,3 +88,13 @@ func TestRunnerRejectsShellWorkdirOutsideWorkspace(t *testing.T) {
 		t.Fatalf("text=%q isErr=%t, want outside workspace error", text, isErr)
 	}
 }
+
+func TestChatMessageAlwaysIncludesContent(t *testing.T) {
+	data, err := json.Marshal(chatMessage{Role: "tool", ToolCallID: "call_1", Name: "shell", Content: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"content"`) {
+		t.Fatalf("marshaled tool message should include content field: %s", data)
+	}
+}
