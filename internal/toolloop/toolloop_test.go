@@ -98,3 +98,27 @@ func TestChatMessageAlwaysIncludesContent(t *testing.T) {
 		t.Fatalf("marshaled tool message should include content field: %s", data)
 	}
 }
+
+func TestRunnerCanDisableThinking(t *testing.T) {
+	t.Parallel()
+	thinking := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		var body chatRequest
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body.EnableThinking == nil || *body.EnableThinking {
+			t.Fatalf("EnableThinking = %#v, want false", body.EnableThinking)
+		}
+		if got, ok := body.ChatTemplateKwargs["enable_thinking"].(bool); !ok || got {
+			t.Fatalf("chat_template_kwargs enable_thinking = %#v, want false", body.ChatTemplateKwargs)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": "ok"}}}})
+	}))
+	defer server.Close()
+
+	if _, err := (Runner{}).Run(context.Background(), Request{BaseURL: server.URL, Model: "qwen", Prompt: "hi", EnableThinking: &thinking}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+}

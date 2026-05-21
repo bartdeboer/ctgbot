@@ -29,6 +29,7 @@ type ComponentConfig struct {
 	MaxIterations      int     `json:"max_iterations,omitempty"`
 	MaxTokens          int     `json:"max_tokens,omitempty"`
 	Temperature        float64 `json:"temperature,omitempty"`
+	EnableThinking     bool    `json:"enable_thinking,omitempty"`
 	BackendIdleTimeout string  `json:"backend_idle_timeout,omitempty"`
 	SystemPrompt       string  `json:"system_prompt,omitempty"`
 }

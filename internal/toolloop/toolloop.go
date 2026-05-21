@@ -19,16 +19,17 @@ import (
 )
 
 type Request struct {
-	BaseURL       string    `json:"base_url"`
-	APIKey        string    `json:"api_key,omitempty"`
-	Model         string    `json:"model"`
-	System        string    `json:"system,omitempty"`
-	Messages      []Message `json:"messages,omitempty"`
-	Prompt        string    `json:"prompt"`
-	Workspace     string    `json:"workspace,omitempty"`
-	MaxIterations int       `json:"max_iterations,omitempty"`
-	MaxTokens     int       `json:"max_tokens,omitempty"`
-	Temperature   float64   `json:"temperature,omitempty"`
+	BaseURL        string    `json:"base_url"`
+	APIKey         string    `json:"api_key,omitempty"`
+	Model          string    `json:"model"`
+	System         string    `json:"system,omitempty"`
+	Messages       []Message `json:"messages,omitempty"`
+	Prompt         string    `json:"prompt"`
+	Workspace      string    `json:"workspace,omitempty"`
+	MaxIterations  int       `json:"max_iterations,omitempty"`
+	MaxTokens      int       `json:"max_tokens,omitempty"`
+	Temperature    float64   `json:"temperature,omitempty"`
+	EnableThinking *bool     `json:"enable_thinking,omitempty"`
 }
 
 type Message struct {
@@ -120,6 +121,10 @@ func cleanRequest(req Request) Request {
 
 func (r Runner) chat(ctx context.Context, client *http.Client, req Request, messages []chatMessage) (assistantMessage, error) {
 	body := chatRequest{Model: req.Model, Messages: messages, Tools: hostbridgeTools(), MaxTokens: req.MaxTokens, Temperature: req.Temperature}
+	if req.EnableThinking != nil {
+		body.EnableThinking = req.EnableThinking
+		body.ChatTemplateKwargs = map[string]any{"enable_thinking": *req.EnableThinking}
+	}
 	data, err := json.Marshal(body)
 	if err != nil {
 		return assistantMessage{}, err
@@ -312,11 +317,13 @@ func resolveWorkdir(workspace string, requested string) (string, error) {
 }
 
 type chatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	Tools       []toolDef     `json:"tools,omitempty"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature float64       `json:"temperature,omitempty"`
+	Model              string         `json:"model"`
+	Messages           []chatMessage  `json:"messages"`
+	Tools              []toolDef      `json:"tools,omitempty"`
+	MaxTokens          int            `json:"max_tokens,omitempty"`
+	Temperature        float64        `json:"temperature,omitempty"`
+	EnableThinking     *bool          `json:"enable_thinking,omitempty"`
+	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
 }
 
 type chatMessage struct {
@@ -412,16 +419,22 @@ func RequestFromEnv(prompt string) Request {
 	maxIterations, _ := strconv.Atoi(strings.TrimSpace(getenv("TOOLLOOP_MAX_ITERATIONS")))
 	maxTokens, _ := strconv.Atoi(strings.TrimSpace(getenv("TOOLLOOP_MAX_TOKENS")))
 	temperature, _ := strconv.ParseFloat(strings.TrimSpace(getenv("TOOLLOOP_TEMPERATURE")), 64)
+	var enableThinking *bool
+	if raw := strings.TrimSpace(getenv("TOOLLOOP_ENABLE_THINKING")); raw != "" {
+		parsed, _ := strconv.ParseBool(raw)
+		enableThinking = &parsed
+	}
 	return Request{
-		BaseURL:       getenv("TOOLLOOP_BASE_URL"),
-		APIKey:        getenv("TOOLLOOP_API_KEY"),
-		Model:         getenv("TOOLLOOP_MODEL"),
-		System:        getenv("TOOLLOOP_SYSTEM"),
-		Prompt:        prompt,
-		Workspace:     getenv("TOOLLOOP_WORKSPACE"),
-		MaxIterations: maxIterations,
-		MaxTokens:     maxTokens,
-		Temperature:   temperature,
+		BaseURL:        getenv("TOOLLOOP_BASE_URL"),
+		APIKey:         getenv("TOOLLOOP_API_KEY"),
+		Model:          getenv("TOOLLOOP_MODEL"),
+		System:         getenv("TOOLLOOP_SYSTEM"),
+		Prompt:         prompt,
+		Workspace:      getenv("TOOLLOOP_WORKSPACE"),
+		MaxIterations:  maxIterations,
+		MaxTokens:      maxTokens,
+		Temperature:    temperature,
+		EnableThinking: enableThinking,
 	}
 }
 
