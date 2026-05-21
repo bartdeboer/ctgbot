@@ -50,3 +50,19 @@ func TestServiceSpecUsesComponentConfig(t *testing.T) {
 		t.Fatalf("Cmd missing /mmproj/mmproj.gguf: %#v", spec.Cmd)
 	}
 }
+
+func TestServiceSpecCanExposePortToSandboxes(t *testing.T) {
+	t.Parallel()
+
+	spec := serviceSpec(resolvedModel{
+		Name:              "qwen",
+		ModelPath:         "/srv/models/qwen/model.gguf",
+		HostPort:          18080,
+		ContextSize:       4096,
+		GPULayers:         48,
+		ExposeToSandboxes: true,
+	})
+	if !slices.Equal(spec.Ports, []string{"18080:8080"}) {
+		t.Fatalf("Ports = %#v", spec.Ports)
+	}
+}

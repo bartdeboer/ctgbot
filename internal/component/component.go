@@ -416,6 +416,20 @@ type CompletionSessionProvider interface {
 	BeginCompletionSession(ctx context.Context, options CompletionSessionOptions) (CompletionSession, error)
 }
 
+// OpenAIChatSession exposes an OpenAI-compatible chat-completions endpoint for
+// sandbox-side agent loops.
+type OpenAIChatSession interface {
+	CompletionSession
+	BaseURL() string
+	Model() string
+	APIKey() string
+}
+
+type OpenAIChatSessionProvider interface {
+	Component
+	BeginOpenAIChatSession(ctx context.Context, options CompletionSessionOptions) (OpenAIChatSession, error)
+}
+
 type CommandSurface interface {
 	Component
 	CommandDefinitions() []commandengine.Definition

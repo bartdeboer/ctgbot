@@ -30,6 +30,10 @@ type ComponentConfig struct {
 	Temperature    float64 `json:"temperature"`
 	KeepRunning    bool    `json:"keep_running"`
 	StripReasoning bool    `json:"strip_reasoning"`
+	// ExposeToSandboxes binds the llama.cpp host port on all host interfaces so
+	// sandboxed agent containers can reach it through host.docker.internal.
+	// Leave false for normal host-only completion/embedding use.
+	ExposeToSandboxes bool `json:"expose_to_sandboxes,omitempty"`
 }
 
 func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {

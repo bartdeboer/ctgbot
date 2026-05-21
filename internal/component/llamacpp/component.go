@@ -52,6 +52,7 @@ type modelRuntimeState struct {
 var _ component.Component = (*Component)(nil)
 var _ component.CompletionProvider = (*Component)(nil)
 var _ component.CompletionSessionProvider = (*Component)(nil)
+var _ component.OpenAIChatSessionProvider = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 
 func New(
@@ -124,15 +125,36 @@ func (c *Component) completeWithManagedBackend(ctx context.Context, modelName st
 }
 
 func (c *Component) BeginCompletionSession(ctx context.Context, options component.CompletionSessionOptions) (component.CompletionSession, error) {
-	if c == nil {
-		return nil, fmt.Errorf("missing llamacpp component")
-	}
-	runtime, model, err := c.runtimeForModel(options.Model)
+	return c.beginSession(ctx, options)
+}
+
+func (c *Component) BeginOpenAIChatSession(ctx context.Context, options component.CompletionSessionOptions) (component.OpenAIChatSession, error) {
+	session, runtime, model, err := c.beginSessionWithRuntime(ctx, options)
 	if err != nil {
 		return nil, err
 	}
+	return openAIChatSession{
+		CompletionSession: session,
+		baseURL:           strings.TrimRight(runtime.BaseURL(), "/") + "/v1",
+		model:             model.Name,
+	}, nil
+}
+
+func (c *Component) beginSession(ctx context.Context, options component.CompletionSessionOptions) (component.CompletionSession, error) {
+	session, _, _, err := c.beginSessionWithRuntime(ctx, options)
+	return session, err
+}
+
+func (c *Component) beginSessionWithRuntime(ctx context.Context, options component.CompletionSessionOptions) (component.CompletionSession, *backendruntime.Runtime, resolvedModel, error) {
+	if c == nil {
+		return nil, nil, resolvedModel{}, fmt.Errorf("missing llamacpp component")
+	}
+	runtime, model, err := c.runtimeForModel(options.Model)
+	if err != nil {
+		return nil, nil, resolvedModel{}, err
+	}
 	if runtime == nil {
-		return nil, fmt.Errorf("missing llamacpp backend runtime")
+		return nil, nil, resolvedModel{}, fmt.Errorf("missing llamacpp backend runtime")
 	}
 	c.runtimeMu.Lock()
 	defer c.runtimeMu.Unlock()
@@ -140,10 +162,10 @@ func (c *Component) BeginCompletionSession(ctx context.Context, options componen
 	c.cancelIdleStopLocked(state)
 	wasRunning, err := isRunning(ctx, runtime)
 	if err != nil {
-		return nil, err
+		return nil, nil, resolvedModel{}, err
 	}
 	if _, err := runtime.Start(ctx); err != nil {
-		return nil, err
+		return nil, nil, resolvedModel{}, err
 	}
 	if !wasRunning {
 		state.autoManaged = true
@@ -154,7 +176,7 @@ func (c *Component) BeginCompletionSession(ctx context.Context, options componen
 		close: func() error {
 			return c.releaseCompletionSession(modelName, options.IdleTimeout)
 		},
-	}, nil
+	}, runtime, model, nil
 }
 
 func (c *Component) isRunning(ctx context.Context) (bool, error) {
@@ -210,10 +232,14 @@ func serviceSpec(config resolvedModel) backendruntime.ServiceSpec {
 		}
 	}
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", config.HostPort)
+	portBinding := fmt.Sprintf("127.0.0.1:%d:8080", config.HostPort)
+	if config.ExposeToSandboxes {
+		portBinding = fmt.Sprintf("%d:8080", config.HostPort)
+	}
 	return backendruntime.ServiceSpec{
 		BaseURL:   baseURL,
 		HealthURL: baseURL + "/health",
-		Ports:     []string{fmt.Sprintf("127.0.0.1:%d:8080", config.HostPort)},
+		Ports:     []string{portBinding},
 		Mounts:    mounts,
 		Cmd:       cmd,
 	}
@@ -425,3 +451,14 @@ type completionResponse struct {
 		} `json:"message"`
 	} `json:"choices"`
 }
+
+type openAIChatSession struct {
+	component.CompletionSession
+	baseURL string
+	model   string
+	apiKey  string
+}
+
+func (s openAIChatSession) BaseURL() string { return strings.TrimSpace(s.baseURL) }
+func (s openAIChatSession) Model() string   { return strings.TrimSpace(s.model) }
+func (s openAIChatSession) APIKey() string  { return strings.TrimSpace(s.apiKey) }
