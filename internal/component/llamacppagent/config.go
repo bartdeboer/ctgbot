@@ -58,7 +58,7 @@ func (c ComponentConfig) withDefaults() ComponentConfig {
 		c.MaxIterations = 20
 	}
 	if c.MaxTokens <= 0 {
-		c.MaxTokens = 1024
+		c.MaxTokens = 4096
 	}
 	if c.Temperature == 0 {
 		c.Temperature = 0.2
