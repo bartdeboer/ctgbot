@@ -96,6 +96,8 @@ func TestTurnConfigListUsesModelRegistryMetadata(t *testing.T) {
 	for _, want := range []string{
 		"voice.model=supertonic",
 		"options: supertonic, kyutai",
+		"voice.language=",
+		"options: en, nl, ru",
 		"voice.name=",
 		"options: F1, F5",
 		"default: F5",
@@ -248,6 +250,7 @@ func (fakeModelRegistry) ModelCard(ctx context.Context, name string) (string, er
 func (fakeModelRegistry) ModelConfigSchema(ctx context.Context, name string) (configsurface.ConfigSchema, error) {
 	_, _ = ctx, name
 	return configsurface.ConfigSchema{Fields: []configsurface.FieldSchema{
+		{Key: turnConfigVoiceLanguage, Help: "Voice language", Type: configsurface.FieldTypeEnum, Options: []string{"en", "nl", "ru"}},
 		{Key: turnConfigVoiceName, Help: "Voice style", Type: configsurface.FieldTypeEnum, Default: "F5", Options: []string{"F1", "F5"}},
 	}}, nil
 }

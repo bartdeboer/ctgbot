@@ -204,24 +204,31 @@ func (r *agentTurnRuntime) turnConfigSchema(ctx context.Context) configsurface.C
 	if err != nil {
 		return schema
 	}
-	if voiceName, ok := modelSchema.Field(turnConfigVoiceName); ok {
-		schema = withFieldSchema(schema, turnConfigVoiceName, func(field configsurface.FieldSchema) configsurface.FieldSchema {
-			if voiceName.Help != "" {
-				field.Help = voiceName.Help
-			}
-			if voiceName.Type != "" {
-				field.Type = voiceName.Type
-			}
-			if voiceName.Default != "" {
-				field.Default = voiceName.Default
-			}
-			if len(voiceName.Options) > 0 {
-				field.Options = append([]string(nil), voiceName.Options...)
-			}
-			return field
-		})
-	}
+	schema = withModelFieldMetadata(schema, modelSchema, turnConfigVoiceLanguage)
+	schema = withModelFieldMetadata(schema, modelSchema, turnConfigVoiceName)
 	return schema
+}
+
+func withModelFieldMetadata(schema configsurface.ConfigSchema, modelSchema configsurface.ConfigSchema, key string) configsurface.ConfigSchema {
+	modelField, ok := modelSchema.Field(key)
+	if !ok {
+		return schema
+	}
+	return withFieldSchema(schema, key, func(field configsurface.FieldSchema) configsurface.FieldSchema {
+		if modelField.Help != "" {
+			field.Help = modelField.Help
+		}
+		if modelField.Type != "" {
+			field.Type = modelField.Type
+		}
+		if modelField.Default != "" {
+			field.Default = modelField.Default
+		}
+		if len(modelField.Options) > 0 {
+			field.Options = append([]string(nil), modelField.Options...)
+		}
+		return field
+	})
 }
 
 func modelRegistryForRuntime(runtime *ChatRuntime) (component.ModelRegistry, bool) {
