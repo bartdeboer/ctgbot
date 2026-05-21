@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 func (s *Service) ListThreads(ctx context.Context, actor coremodel.Actor, req ListThreadsRequest) ([]ThreadSummary, error) {
@@ -109,6 +110,42 @@ func (s *Service) ListMessages(ctx context.Context, actor coremodel.Actor, threa
 		page.NextCursor = page.Messages[len(page.Messages)-1].ID.String()
 	}
 	return page, nil
+}
+
+func (s *Service) PurgeThread(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID) (PurgeThreadResult, error) {
+	if err := s.ensureStorage(); err != nil {
+		return PurgeThreadResult{}, err
+	}
+	if err := requireActor(actor); err != nil {
+		return PurgeThreadResult{}, err
+	}
+	if !actor.HasRole(simplerbac.RoleRoot) && !actor.HasRole(simplerbac.RoleUser) {
+		return PurgeThreadResult{}, fmt.Errorf("purge thread denied: missing role")
+	}
+	thread, chat, err := s.loadThreadAndChat(ctx, threadID)
+	if err != nil {
+		return PurgeThreadResult{}, err
+	}
+	if !chat.Enabled {
+		return PurgeThreadResult{}, fmt.Errorf("thread chat is disabled: %s", chat.ID)
+	}
+	result := PurgeThreadResult{ThreadID: thread.ID}
+	if err := s.Storage.Transaction(ctx, func(tx repository.Storage) error {
+		artifactsDeleted, err := tx.Artifacts().DeleteByThreadID(ctx, thread.ID)
+		if err != nil {
+			return err
+		}
+		messagesDeleted, err := tx.Messages().DeleteByThreadID(ctx, thread.ID)
+		if err != nil {
+			return err
+		}
+		result.MessagesDeleted = messagesDeleted
+		result.ArtifactsDeleted = artifactsDeleted
+		return nil
+	}); err != nil {
+		return PurgeThreadResult{}, err
+	}
+	return result, nil
 }
 
 func (s *Service) ThreadStatus(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID) (ThreadStatus, error) {

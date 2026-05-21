@@ -688,6 +688,11 @@ func (r *gormMessages) ListByThreadID(ctx context.Context, threadID modeluuid.UU
 	return out, err
 }
 
+func (r *gormMessages) DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error) {
+	result := r.db.WithContext(ctx).Where("thread_id = ?", threadID).Delete(&coremodel.ThreadMessage{})
+	return result.RowsAffected, result.Error
+}
+
 type gormArtifacts struct {
 	db          *gorm.DB
 	artifactDir string
@@ -717,6 +722,21 @@ func (r *gormArtifacts) ListByMessageID(ctx context.Context, messageID modeluuid
 		}
 	}
 	return out, nil
+}
+
+func (r *gormArtifacts) DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error) {
+	var artifacts []coremodel.Artifact
+	if err := r.db.WithContext(ctx).Where("thread_id = ?", threadID).Find(&artifacts).Error; err != nil {
+		return 0, err
+	}
+	result := r.db.WithContext(ctx).Where("thread_id = ?", threadID).Delete(&coremodel.Artifact{})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	for i := range artifacts {
+		r.removePreparedFile(&artifacts[i])
+	}
+	return result.RowsAffected, nil
 }
 
 func (r *gormArtifacts) prepareArtifactForStorage(artifact *coremodel.Artifact) error {

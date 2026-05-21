@@ -54,6 +54,12 @@ type MessagePage struct {
 	NextCursor string                    `json:"next_cursor,omitempty"`
 }
 
+type PurgeThreadResult struct {
+	ThreadID         modeluuid.UUID `json:"thread_id"`
+	MessagesDeleted  int64          `json:"messages_deleted"`
+	ArtifactsDeleted int64          `json:"artifacts_deleted"`
+}
+
 type ThreadComponentBindRequest struct {
 	ComponentRef     string `json:"component_ref"`
 	ProviderThreadID string `json:"provider_thread_id"`

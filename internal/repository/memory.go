@@ -970,6 +970,20 @@ func (r memoryMessages) ListByThreadID(ctx context.Context, threadID modeluuid.U
 	return out, nil
 }
 
+func (r memoryMessages) DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var count int64
+	for id, message := range r.s.messages {
+		if message.ThreadID == threadID {
+			delete(r.s.messages, id)
+			count++
+		}
+	}
+	return count, nil
+}
+
 type memoryArtifacts struct{ s *MemoryStorage }
 
 func (r memoryArtifacts) Append(ctx context.Context, artifact *coremodel.Artifact) error {
@@ -1003,4 +1017,18 @@ func (r memoryArtifacts) ListByMessageID(ctx context.Context, messageID modeluui
 		}
 	}
 	return out, nil
+}
+
+func (r memoryArtifacts) DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var count int64
+	for id, artifact := range r.s.artifacts {
+		if artifact.ThreadID == threadID {
+			delete(r.s.artifacts, id)
+			count++
+		}
+	}
+	return count, nil
 }
