@@ -74,7 +74,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 				_ = req
 				return refreshCommand{}, nil
 			},
-			Sources:               []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Sources:               []commandengine.Source{commandengine.SourceMessage},
 			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
 			InstructionVisibility: commandengine.InstructionImportant,
 			Aliases: []commandengine.Route{
