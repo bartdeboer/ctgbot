@@ -175,6 +175,7 @@ func (c *Component) writeRequest(turn component.Turn, session component.OpenAICh
 		APIKey:        firstNonEmpty(c.config.APIKey, session.APIKey()),
 		Model:         session.Model(),
 		System:        c.systemPrompt(turn),
+		Messages:      toolloopMessages(turn.History, turn.Inbound),
 		Prompt:        prompt,
 		MaxIterations: c.config.MaxIterations,
 		MaxTokens:     c.config.MaxTokens,
@@ -190,6 +191,47 @@ func (c *Component) writeRequest(turn component.Turn, session component.OpenAICh
 		return "", "", nil, err
 	}
 	return requestHost, outputHost, cleanup, nil
+}
+
+func toolloopMessages(history []coremodel.ThreadMessage, inbound coremodel.ThreadMessage) []toolloop.Message {
+	if len(history) == 0 {
+		return nil
+	}
+	out := make([]toolloop.Message, 0, len(history))
+	for _, message := range history {
+		if !inbound.ID.IsNull() && message.ID == inbound.ID {
+			message = inbound
+		}
+		content := strings.TrimSpace(message.Text)
+		if content == "" {
+			continue
+		}
+		role, ok := toolloopRole(message)
+		if !ok {
+			continue
+		}
+		out = append(out, toolloop.Message{Role: role, Content: content})
+	}
+	return out
+}
+
+func toolloopRole(message coremodel.ThreadMessage) (string, bool) {
+	switch message.Kind {
+	case coremodel.MessageKindSystem:
+		return "system", true
+	case coremodel.MessageKindAgent:
+		return "assistant", true
+	case coremodel.MessageKindUser:
+		return "user", true
+	}
+	switch message.Direction {
+	case coremodel.MessageDirectionInbound:
+		return "user", true
+	case coremodel.MessageDirectionOutbound:
+		return "assistant", true
+	default:
+		return "", false
+	}
 }
 
 func (c *Component) systemPrompt(turn component.Turn) string {

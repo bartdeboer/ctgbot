@@ -456,6 +456,7 @@ type Turn struct {
 	Chat    coremodel.Chat
 	Thread  coremodel.Thread
 	Inbound coremodel.ThreadMessage
+	History []coremodel.ThreadMessage
 	Runtime TurnRuntime
 }
 

@@ -16,14 +16,20 @@ import (
 )
 
 type Request struct {
-	BaseURL       string  `json:"base_url"`
-	APIKey        string  `json:"api_key,omitempty"`
-	Model         string  `json:"model"`
-	System        string  `json:"system,omitempty"`
-	Prompt        string  `json:"prompt"`
-	MaxIterations int     `json:"max_iterations,omitempty"`
-	MaxTokens     int     `json:"max_tokens,omitempty"`
-	Temperature   float64 `json:"temperature,omitempty"`
+	BaseURL       string    `json:"base_url"`
+	APIKey        string    `json:"api_key,omitempty"`
+	Model         string    `json:"model"`
+	System        string    `json:"system,omitempty"`
+	Messages      []Message `json:"messages,omitempty"`
+	Prompt        string    `json:"prompt"`
+	MaxIterations int       `json:"max_iterations,omitempty"`
+	MaxTokens     int       `json:"max_tokens,omitempty"`
+	Temperature   float64   `json:"temperature,omitempty"`
+}
+
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 type Result struct {
@@ -46,7 +52,7 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 	if req.Model == "" {
 		return Result{}, errors.New("missing model")
 	}
-	if req.Prompt == "" {
+	if req.Prompt == "" && len(req.Messages) == 0 {
 		return Result{}, errors.New("missing prompt")
 	}
 	client := r.Client
@@ -57,7 +63,18 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 	if req.System != "" {
 		messages = append(messages, chatMessage{Role: "system", Content: req.System})
 	}
-	messages = append(messages, chatMessage{Role: "user", Content: req.Prompt})
+	if len(req.Messages) > 0 {
+		for _, message := range req.Messages {
+			role := strings.TrimSpace(message.Role)
+			content := strings.TrimSpace(message.Content)
+			if role == "" || content == "" {
+				continue
+			}
+			messages = append(messages, chatMessage{Role: role, Content: content})
+		}
+	} else {
+		messages = append(messages, chatMessage{Role: "user", Content: req.Prompt})
+	}
 	for i := 0; i < req.MaxIterations; i++ {
 		resp, err := r.chat(ctx, client, req, messages)
 		if err != nil {
