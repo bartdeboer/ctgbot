@@ -416,6 +416,20 @@ type CompletionSessionProvider interface {
 	BeginCompletionSession(ctx context.Context, options CompletionSessionOptions) (CompletionSession, error)
 }
 
+// OpenAIChatSession exposes an OpenAI-compatible chat-completions endpoint for
+// sandbox-side agent loops.
+type OpenAIChatSession interface {
+	CompletionSession
+	BaseURL() string
+	Model() string
+	APIKey() string
+}
+
+type OpenAIChatSessionProvider interface {
+	Component
+	BeginOpenAIChatSession(ctx context.Context, options CompletionSessionOptions) (OpenAIChatSession, error)
+}
+
 type CommandSurface interface {
 	Component
 	CommandDefinitions() []commandengine.Definition
@@ -442,6 +456,7 @@ type Turn struct {
 	Chat    coremodel.Chat
 	Thread  coremodel.Thread
 	Inbound coremodel.ThreadMessage
+	History []coremodel.ThreadMessage
 	Runtime TurnRuntime
 }
 
@@ -502,6 +517,21 @@ type CompletionResult struct {
 type RuntimeImageProvider interface {
 	Component
 	RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error)
+}
+
+// ThreadRuntimeController lets a component expose lifecycle controls for the
+// runtime it uses for a specific ctgbot thread. Broker-level shortcuts can use
+// this without knowing whether the component is Codex, Claude, or a local
+// tool-loop agent.
+type ThreadRuntimeController interface {
+	Component
+	RefreshThreadRuntime(ctx context.Context, request ThreadRuntimeControlRequest) error
+}
+
+type ThreadRuntimeControlRequest struct {
+	Chat          coremodel.Chat
+	Thread        coremodel.Thread
+	WorkspacePath string
 }
 
 type TurnInstructions struct {

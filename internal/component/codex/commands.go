@@ -99,7 +99,7 @@ func (c *Component) refresh(ctx context.Context, req commandengine.Request) (com
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
+	if err := c.RefreshThreadRuntime(ctx, component.ThreadRuntimeControlRequest{Thread: *thread, WorkspacePath: workspacePath}); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "conversation runtime refreshed"}, nil
@@ -238,7 +238,7 @@ func codexCommand(pattern string, command any, help string, aliases ...commanden
 		Pattern:               pattern,
 		Help:                  help,
 		Build:                 func(req *clir.Request) (any, error) { _ = req; return command, nil },
-		Sources:               codexCommandSources(),
+		Sources:               codexCommandSourcesFor(pattern),
 		Policy:                codexCommandPolicy(),
 		Aliases:               commandAliases,
 		InstructionVisibility: codexInstructionVisibility(pattern),
@@ -256,6 +256,15 @@ func codexInstructionVisibility(pattern string) commandengine.InstructionVisibil
 
 func hiddenAlias(pattern string) commandengine.Route {
 	return commandengine.Route{Pattern: pattern, Hidden: true}
+}
+
+func codexCommandSourcesFor(pattern string) []commandengine.Source {
+	switch commandengine.NormalizePattern(pattern) {
+	case "container refresh":
+		return []commandengine.Source{commandengine.SourceMessage}
+	default:
+		return codexCommandSources()
+	}
 }
 
 func codexCommandSources() []commandengine.Source {

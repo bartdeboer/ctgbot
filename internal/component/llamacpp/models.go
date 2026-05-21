@@ -9,18 +9,19 @@ import (
 )
 
 type resolvedModel struct {
-	Name        string
-	ModelPath   string
-	MMProjPath  string
-	Mode        string
-	HostPort    int
-	ContextSize int
-	UBatchSize  int
-	GPULayers   int
-	MaxTokens   int
-	Temperature float64
-	Pooling     string
-	Normalize   bool
+	Name              string
+	ModelPath         string
+	MMProjPath        string
+	Mode              string
+	HostPort          int
+	ContextSize       int
+	UBatchSize        int
+	GPULayers         int
+	MaxTokens         int
+	Temperature       float64
+	Pooling           string
+	Normalize         bool
+	ExposeToSandboxes bool
 }
 
 func (c *Component) resolveModel(name string) (resolvedModel, error) {
@@ -82,32 +83,34 @@ func (c *Component) modelRegistry(ctx context.Context) (component.ModelRegistry,
 
 func (c *Component) resolveStoredModel(model component.Model) resolvedModel {
 	return resolvedModel{
-		Name:        cleanModelName(model.Name),
-		ModelPath:   strings.TrimSpace(model.Path),
-		MMProjPath:  firstNonEmpty(model.MMProjPath, c.componentConfig.MMProjPath),
-		Mode:        cleanModelMode(string(model.Mode)),
-		HostPort:    firstPositive(model.HostPort, c.componentConfig.HostPort),
-		ContextSize: firstPositive(model.ContextSize, c.componentConfig.ContextSize),
-		UBatchSize:  model.UBatchSize,
-		GPULayers:   firstPositive(model.GPULayers, c.componentConfig.GPULayers),
-		MaxTokens:   firstPositive(model.MaxTokens, c.componentConfig.MaxTokens),
-		Temperature: firstPositiveFloat(model.Temperature, c.componentConfig.Temperature),
-		Pooling:     strings.TrimSpace(model.Pooling),
-		Normalize:   model.Normalize,
+		Name:              cleanModelName(model.Name),
+		ModelPath:         strings.TrimSpace(model.Path),
+		MMProjPath:        firstNonEmpty(model.MMProjPath, c.componentConfig.MMProjPath),
+		Mode:              cleanModelMode(string(model.Mode)),
+		HostPort:          firstPositive(model.HostPort, c.componentConfig.HostPort),
+		ContextSize:       firstPositive(model.ContextSize, c.componentConfig.ContextSize),
+		UBatchSize:        model.UBatchSize,
+		GPULayers:         firstPositive(model.GPULayers, c.componentConfig.GPULayers),
+		MaxTokens:         firstPositive(model.MaxTokens, c.componentConfig.MaxTokens),
+		Temperature:       firstPositiveFloat(model.Temperature, c.componentConfig.Temperature),
+		Pooling:           strings.TrimSpace(model.Pooling),
+		Normalize:         model.Normalize,
+		ExposeToSandboxes: c.componentConfig.ExposeToSandboxes,
 	}
 }
 
 func (c *Component) resolveLegacyModel() resolvedModel {
 	return resolvedModel{
-		Name:        "default",
-		ModelPath:   c.componentConfig.ModelPath,
-		MMProjPath:  c.componentConfig.MMProjPath,
-		Mode:        "completion",
-		HostPort:    c.componentConfig.HostPort,
-		ContextSize: c.componentConfig.ContextSize,
-		GPULayers:   c.componentConfig.GPULayers,
-		MaxTokens:   c.componentConfig.MaxTokens,
-		Temperature: c.componentConfig.Temperature,
+		Name:              "default",
+		ModelPath:         c.componentConfig.ModelPath,
+		MMProjPath:        c.componentConfig.MMProjPath,
+		Mode:              "completion",
+		HostPort:          c.componentConfig.HostPort,
+		ContextSize:       c.componentConfig.ContextSize,
+		GPULayers:         c.componentConfig.GPULayers,
+		MaxTokens:         c.componentConfig.MaxTokens,
+		Temperature:       c.componentConfig.Temperature,
+		ExposeToSandboxes: c.componentConfig.ExposeToSandboxes,
 	}
 }
 
