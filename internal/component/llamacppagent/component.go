@@ -297,7 +297,7 @@ func (c *Component) systemPrompt(turn component.Turn) string {
 	instructions := turn.Runtime.Instructions()
 	return fmt.Sprintf(`You are a coding agent running inside ctgbot.
 
-Use shell for workspace inspection and normal coding commands. Useful patterns include rg -n "name" path, nl -ba path | sed -n '120,180p', and sed -n '120,180p' path.
+You have tools named shell, hostbridge, and apply_patch. Use shell for workspace inspection and normal coding commands. If you are about to tell the user to run a command, run it yourself with shell instead. Useful patterns include rg -n "name" path, nl -ba path | sed -n '120,180p', and sed -n '120,180p' path.
 
 Use the hostbridge tool when you need ctgbot commands or hostbridge-specific actions. Before using hostbridge commands, call hostbridge help if you are unsure which commands are available.
 
