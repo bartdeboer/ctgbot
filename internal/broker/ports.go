@@ -20,15 +20,15 @@ import (
 // without changing the concrete app service implementation.
 type App interface {
 	InboundAdmitter
-	ChatThreadDirectory
+	ChatThreadRegistry
 	MessageLog
-	ChatComponentDirectory
-	InboundSourceDirectory
-	CommandSurfaceResolver
-	RelayDirectory
-	ComponentThreadMapper
+	ChatComponentRegistry
+	InboundSourceRegistry
+	CommandSurfaceRegistry
+	RelayResolver
+	ComponentThreadRegistry
 	DroppedEventStore
-	ComponentLoader
+	ComponentResolver
 	WorkspacePolicy
 }
 
@@ -37,9 +37,9 @@ type InboundAdmitter interface {
 	AdmitInbound(ctx context.Context, event component.InboundEvent) (inbound.Admission, error)
 }
 
-// ChatThreadDirectory resolves chat/thread identity and creates provider-backed
+// ChatThreadRegistry resolves chat/thread identity and creates provider-backed
 // threads when a source binding first appears.
-type ChatThreadDirectory interface {
+type ChatThreadRegistry interface {
 	Chat(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
 	Thread(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
 	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
@@ -53,28 +53,28 @@ type MessageLog interface {
 	StoreOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []message.Media) error
 }
 
-// ChatComponentDirectory lists components enabled for a specific chat runtime.
-type ChatComponentDirectory interface {
+// ChatComponentRegistry lists components enabled for a specific chat runtime.
+type ChatComponentRegistry interface {
 	EnabledChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)
 }
 
-// InboundSourceDirectory lists source components that should be polled globally.
-type InboundSourceDirectory interface {
+// InboundSourceRegistry lists source components that should be polled globally.
+type InboundSourceRegistry interface {
 	EnabledInboundSources(ctx context.Context) ([]component.InboundSource, error)
 }
 
-// CommandSurfaceResolver exposes the command authority surface for a chat.
-type CommandSurfaceResolver interface {
+// CommandSurfaceRegistry exposes the command authority surface for a chat.
+type CommandSurfaceRegistry interface {
 	CommandSurfaces(ctx context.Context, chat coremodel.Chat, inbound component.ResolvedInboundQueuer, actions componentbroker.Actions) ([]component.CommandSurface, error)
 }
 
-// RelayDirectory resolves provider-specific outbound targets for a thread.
-type RelayDirectory interface {
+// RelayResolver resolves provider-specific outbound targets for a thread.
+type RelayResolver interface {
 	RelayTarget(ctx context.Context, threadID modeluuid.UUID, binding coremodel.ChatComponent) (*message.ChatTarget, bool, error)
 }
 
-// ComponentThreadMapper owns provider thread ids for each ctgbot thread/component pair.
-type ComponentThreadMapper interface {
+// ComponentThreadRegistry owns provider thread ids for each ctgbot thread/component pair.
+type ComponentThreadRegistry interface {
 	ComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(ctx context.Context, threadID modeluuid.UUID, componentID modeluuid.UUID, componentThreadID string) error
 }
@@ -89,8 +89,8 @@ type DroppedEventStore interface {
 	SaveDroppedEvent(ctx context.Context, drop *coremodel.DroppedEvent) error
 }
 
-// ComponentLoader loads registered component implementations by id.
-type ComponentLoader interface {
+// ComponentResolver loads registered component implementations by id.
+type ComponentResolver interface {
 	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
 }
 
