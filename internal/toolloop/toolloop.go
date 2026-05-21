@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bartdeboer/ctgbot/internal/toolloop/applypatch"
 )
 
 type Request struct {
@@ -22,6 +24,7 @@ type Request struct {
 	System        string    `json:"system,omitempty"`
 	Messages      []Message `json:"messages,omitempty"`
 	Prompt        string    `json:"prompt"`
+	Workspace     string    `json:"workspace,omitempty"`
 	MaxIterations int       `json:"max_iterations,omitempty"`
 	MaxTokens     int       `json:"max_tokens,omitempty"`
 	Temperature   float64   `json:"temperature,omitempty"`
@@ -40,6 +43,7 @@ type Result struct {
 type Runner struct {
 	Client         *http.Client
 	HostbridgePath string
+	Workspace      string
 	Stderr         io.Writer
 	CommandTimeout time.Duration
 }
@@ -155,6 +159,12 @@ func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
 			return "invalid hostbridge arguments: " + err.Error(), true
 		}
 		return r.runHostbridge(ctx, args)
+	case "apply_patch":
+		var args applyPatchArgs
+		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+			return "invalid apply_patch arguments: " + err.Error(), true
+		}
+		return r.applyPatch(ctx, args)
 	default:
 		return "unknown tool: " + name, true
 	}
@@ -163,6 +173,19 @@ func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
 type hostbridgeArgs struct {
 	Command string   `json:"command"`
 	Args    []string `json:"args,omitempty"`
+}
+
+type applyPatchArgs struct {
+	Patch string `json:"patch"`
+}
+
+func (r Runner) applyPatch(ctx context.Context, args applyPatchArgs) (string, bool) {
+	workspace := firstNonEmpty(r.Workspace, getenv("TOOLLOOP_WORKSPACE"), "/workspace")
+	result, err := applypatch.Apply(ctx, applypatch.Request{Workspace: workspace, Patch: args.Patch})
+	if err != nil {
+		return err.Error(), true
+	}
+	return result.Summary, false
 }
 
 func (r Runner) runHostbridge(ctx context.Context, args hostbridgeArgs) (string, bool) {
@@ -201,6 +224,16 @@ func cleanArgs(values []string) []string {
 		out = append(out, strings.TrimSpace(value))
 	}
 	return out
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 type chatRequest struct {
@@ -251,21 +284,37 @@ type toolFunction struct {
 }
 
 func hostbridgeTools() []toolDef {
-	return []toolDef{{
-		Type: "function",
-		Function: toolFunction{
-			Name:        "hostbridge",
-			Description: "Run one allowed hostbridge command inside the current ctgbot sandbox. Use only commands shown by hostbridge help.",
-			Parameters: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"command": map[string]any{"type": "string", "description": "The hostbridge command name, for example status, ls, pwd, or semantic."},
-					"args":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Command arguments."},
+	return []toolDef{
+		{
+			Type: "function",
+			Function: toolFunction{
+				Name:        "hostbridge",
+				Description: "Run one allowed hostbridge command inside the current ctgbot sandbox. Use only commands shown by hostbridge help.",
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"command": map[string]any{"type": "string", "description": "The hostbridge command name, for example status, ls, pwd, or semantic."},
+						"args":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Command arguments."},
+					},
+					"required": []string{"command"},
 				},
-				"required": []string{"command"},
 			},
 		},
-	}}
+		{
+			Type: "function",
+			Function: toolFunction{
+				Name:        "apply_patch",
+				Description: "Apply a Codex-style patch to files in the workspace. The patch must begin with *** Begin Patch and end with *** End Patch.",
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"patch": map[string]any{"type": "string", "description": "Codex-style patch text."},
+					},
+					"required": []string{"patch"},
+				},
+			},
+		},
+	}
 }
 
 func RequestFromEnv(prompt string) Request {
@@ -278,6 +327,7 @@ func RequestFromEnv(prompt string) Request {
 		Model:         getenv("TOOLLOOP_MODEL"),
 		System:        getenv("TOOLLOOP_SYSTEM"),
 		Prompt:        prompt,
+		Workspace:     getenv("TOOLLOOP_WORKSPACE"),
 		MaxIterations: maxIterations,
 		MaxTokens:     maxTokens,
 		Temperature:   temperature,

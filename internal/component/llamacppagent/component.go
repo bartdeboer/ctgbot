@@ -178,6 +178,7 @@ func (c *Component) writeRequest(turn component.Turn, session component.OpenAICh
 		System:        c.systemPrompt(turn),
 		Messages:      messages,
 		Prompt:        textPromptFromMessages(messages, prompt),
+		Workspace:     c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()),
 		MaxIterations: c.config.MaxIterations,
 		MaxTokens:     c.config.MaxTokens,
 		Temperature:   c.config.Temperature,
@@ -271,6 +272,8 @@ func (c *Component) systemPrompt(turn component.Turn) string {
 	return fmt.Sprintf(`You are a coding agent running inside ctgbot.
 
 Use the hostbridge tool when you need current information, need to inspect the workspace, or need to call ctgbot commands. Before using commands, call hostbridge help if you are unsure which commands are available.
+
+Use apply_patch to edit workspace files. Read files before editing them. Keep patches small and focused.
 
 Be concise. Start every final response with %q.
 

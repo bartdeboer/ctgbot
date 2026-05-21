@@ -75,6 +75,9 @@ func mergeEnv(req toolloop.Request) toolloop.Request {
 	if strings.TrimSpace(req.System) == "" {
 		req.System = env.System
 	}
+	if strings.TrimSpace(req.Workspace) == "" {
+		req.Workspace = env.Workspace
+	}
 	if req.MaxIterations <= 0 {
 		req.MaxIterations = env.MaxIterations
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -32,5 +33,25 @@ func TestRunnerExecutesHostbridgeToolAndReturnsFinal(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("calls = %d, want 2", calls)
+	}
+}
+
+func TestRunnerExecutesApplyPatchTool(t *testing.T) {
+	t.Parallel()
+	workspace := t.TempDir()
+	patch := `*** Begin Patch
+*** Add File: hello.txt
++hello
+*** End Patch`
+	args, _ := json.Marshal(applyPatchArgs{Patch: patch})
+	text, isErr := (Runner{Workspace: workspace}).executeTool(context.Background(), toolCall{Function: struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	}{Name: "apply_patch", Arguments: string(args)}})
+	if isErr {
+		t.Fatalf("apply_patch failed: %s", text)
+	}
+	if !strings.Contains(text, "add hello.txt") {
+		t.Fatalf("tool output = %q", text)
 	}
 }
