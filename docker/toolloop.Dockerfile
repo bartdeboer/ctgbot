@@ -13,6 +13,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
 
 FROM debian:bookworm-slim
 
+COPY --from=build /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:$PATH"
+
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates bash curl git jq ripgrep coreutils sed \
