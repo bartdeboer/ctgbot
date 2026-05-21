@@ -220,6 +220,15 @@ func (b *Broker) handleResolvedInboundTurn(
 	}
 
 	var savedPaths []string
+	var turnInputFiles []turnInputFile
+	var turnInputCleanups []func()
+	defer func() {
+		for i := len(turnInputCleanups) - 1; i >= 0; i-- {
+			if turnInputCleanups[i] != nil {
+				turnInputCleanups[i]()
+			}
+		}
+	}()
 	voiceMedia, voiceInput := voiceInputAttachment(rawText, inbound.Payload.Attachments)
 	if len(inbound.Payload.Attachments) > 0 && !voiceInput {
 		if runtime == nil {
@@ -236,6 +245,9 @@ func (b *Broker) handleResolvedInboundTurn(
 		if err != nil {
 			return failConversation(nil, nil, err)
 		}
+		for _, path := range savedPaths {
+			turnInputFiles = append(turnInputFiles, turnInputFile{Path: path, Kind: "attachment"})
+		}
 	}
 
 	detectedInputLanguage := ""
@@ -247,6 +259,16 @@ func (b *Broker) handleResolvedInboundTurn(
 				return failConversation(nil, nil, err)
 			}
 		}
+		workspacePath, resolveErr := b.App.ResolveChatWorkspace(ctx, chat)
+		if resolveErr != nil {
+			return failConversation(nil, nil, resolveErr)
+		}
+		file, cleanup, fileErr := materializeVoiceInputFile(workspacePath, runtime.RuntimeWorkspace, voiceMedia)
+		if fileErr != nil {
+			return failConversation(nil, nil, fileErr)
+		}
+		turnInputFiles = append(turnInputFiles, file)
+		turnInputCleanups = append(turnInputCleanups, cleanup)
 		transcription, audioErr := transcribeInboundAudio(ctx, runtime, thread.ID, voiceMedia)
 		if audioErr != nil {
 			return failConversation(nil, nil, audioErr)
@@ -290,7 +312,7 @@ func (b *Broker) handleResolvedInboundTurn(
 			return failConversation(storedInbound, nil, err)
 		}
 	}
-	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound, voiceInput, detectedInputLanguage)
+	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound, voiceInput, detectedInputLanguage, turnInputFiles)
 	if err != nil {
 		return failConversation(storedInbound, outbound, err)
 	}

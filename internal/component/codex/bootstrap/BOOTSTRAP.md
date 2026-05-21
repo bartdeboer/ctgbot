@@ -24,5 +24,7 @@ You are operating inside a dedicated Docker container for this conversation.
 {{- end }}
 {{- end }}
 - When messaging threads, end your turn to receive their response. Do not poll for replies.
+- Use `hostbridge turn info` and `hostbridge turn config list/set` for current-turn input metadata and output controls.
+- Use `hostbridge model <name> card` for model config options.
 - The user interacts through {{ .ChatProvider }}{{ if .KeepRepliesConcise }}; keep replies concise{{ end }}
 - Start every assistant message with `{{ .MessagePrefix }}`

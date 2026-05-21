@@ -7,6 +7,7 @@ import (
 
 	turnconfig "github.com/bartdeboer/ctgbot/internal/app/config/turn"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
@@ -37,6 +38,9 @@ func (e turnCommandExecutor) ActiveComponents() []string {
 
 func (e turnCommandExecutor) Execute(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	switch cmd := req.Command.(type) {
+	case schemacommands.TurnInfo:
+		_ = cmd
+		return e.turn.turnInfo(ctx, req)
 	case schemacommands.TurnConfigSet:
 		return e.turn.setTurnConfig(ctx, req, cmd.Key, cmd.Value)
 	case schemacommands.TurnConfigUnset:
@@ -51,6 +55,50 @@ func (e turnCommandExecutor) Execute(ctx context.Context, req commandengine.Requ
 		}
 		return e.next.Execute(ctx, req)
 	}
+}
+
+func (r *agentTurnRuntime) turnInfo(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
+	_, _ = ctx, req
+	if r == nil {
+		return commandengine.Result{Text: "Turn info\ninput_files: none"}, nil
+	}
+	values := r.effectiveTurnConfigValues(ctx)
+	lines := []string{"Turn info"}
+	lines = append(lines, "Input:")
+	lines = append(lines, fmt.Sprintf("voice: %t", values.InputVoice))
+	if language := strings.TrimSpace(values.InputLanguage); language != "" {
+		lines = append(lines, "detected_language: "+language)
+	}
+	if len(r.inputFiles) == 0 {
+		lines = append(lines, "input_files: none")
+	} else {
+		lines = append(lines, "Input files:")
+		for _, file := range r.inputFiles {
+			if strings.TrimSpace(file.Path) == "" {
+				continue
+			}
+			lines = append(lines, "- "+formatTurnInputFile(file))
+		}
+	}
+	lines = append(lines, "Use `hostbridge turn config list` for current-turn output options.")
+	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
+}
+
+func formatTurnInputFile(file turnInputFile) string {
+	parts := []string{strings.TrimSpace(file.Path)}
+	if kind := strings.TrimSpace(file.Kind); kind != "" {
+		parts = append(parts, "kind="+kind)
+	}
+	if contentType := strings.TrimSpace(file.ContentType); contentType != "" {
+		parts = append(parts, "type="+contentType)
+	}
+	if filename := strings.TrimSpace(file.Filename); filename != "" {
+		parts = append(parts, "filename="+filename)
+	}
+	if file.Temporary {
+		parts = append(parts, "temporary=true")
+	}
+	return strings.Join(parts, " ")
 }
 
 func (r *agentTurnRuntime) setTurnConfig(ctx context.Context, req commandengine.Request, key string, value string) (commandengine.Result, error) {
@@ -84,10 +132,11 @@ func (r *agentTurnRuntime) unsetTurnConfig(ctx context.Context, req commandengin
 }
 
 func (r *agentTurnRuntime) getTurnConfig(ctx context.Context, req commandengine.Request, key string) (commandengine.Result, error) {
-	values := r.turnConfigValues()
+	values := r.effectiveTurnConfigValues(ctx)
 	surface := turnconfig.NewSurface(&values)
 	key = turnconfig.NormalizeKey(key)
-	field, ok := turnconfig.Schema().Field(key)
+	schema := r.turnConfigSchema(ctx)
+	field, ok := schema.Field(key)
 	if !ok {
 		return commandengine.Result{}, turnconfig.UnknownKey(key)
 	}
@@ -99,9 +148,9 @@ func (r *agentTurnRuntime) getTurnConfig(ctx context.Context, req commandengine.
 }
 
 func (r *agentTurnRuntime) listTurnConfig(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	values := r.turnConfigValues()
+	values := r.effectiveTurnConfigValues(ctx)
 	surface := turnconfig.NewSurface(&values)
-	return commandengine.Result{Text: configsurface.FormatList(ctx, req, surface, turnconfig.Schema())}, nil
+	return commandengine.Result{Text: configsurface.FormatList(ctx, req, surface, r.turnConfigSchema(ctx))}, nil
 }
 
 func (r *agentTurnRuntime) turnConfigValues() turnconfig.Values {
@@ -117,6 +166,115 @@ func (r *agentTurnRuntime) turnConfigValues() turnconfig.Values {
 		VoiceModel:        r.voiceModel,
 		VoiceDeviceTarget: r.voiceDeviceTarget,
 	}
+}
+
+func (r *agentTurnRuntime) effectiveTurnConfigValues(ctx context.Context) turnconfig.Values {
+	values := r.turnConfigValues()
+	if strings.TrimSpace(values.VoiceModel) == "" {
+		if registry, ok := modelRegistryForRuntime(r.runtime); ok {
+			if name, err := registry.DefaultModelForMode(ctx, component.ModelModeTTS); err == nil {
+				values.VoiceModel = strings.TrimSpace(name)
+			}
+		}
+	}
+	return values
+}
+
+func (r *agentTurnRuntime) turnConfigSchema(ctx context.Context) configsurface.ConfigSchema {
+	schema := turnconfig.Schema()
+	registry, ok := modelRegistryForRuntime(r.runtime)
+	if !ok {
+		return schema
+	}
+	ttsModels, defaultModel := modelOptionsForMode(ctx, registry, component.ModelModeTTS)
+	schema = withFieldSchema(schema, turnConfigVoiceModel, func(field configsurface.FieldSchema) configsurface.FieldSchema {
+		field.Type = configsurface.FieldTypeEnum
+		field.Options = ttsModels
+		field.Default = defaultModel
+		return field
+	})
+	selectedModel := strings.TrimSpace(r.voiceModel)
+	if selectedModel == "" {
+		selectedModel = defaultModel
+	}
+	if selectedModel == "" {
+		return schema
+	}
+	modelSchema, err := registry.ModelConfigSchema(ctx, selectedModel)
+	if err != nil {
+		return schema
+	}
+	schema = withModelFieldMetadata(schema, modelSchema, turnConfigVoiceLanguage)
+	schema = withModelFieldMetadata(schema, modelSchema, turnConfigVoiceName)
+	return schema
+}
+
+func withModelFieldMetadata(schema configsurface.ConfigSchema, modelSchema configsurface.ConfigSchema, key string) configsurface.ConfigSchema {
+	// Model config metadata is keyed by the existing turn config keys, e.g.
+	// voice.language and voice.name. Keep this coupling explicit and narrow:
+	// model cards describe valid values for turn output controls; they do not
+	// define new turn config fields.
+	modelField, ok := modelSchema.Field(key)
+	if !ok {
+		return schema
+	}
+	return withFieldSchema(schema, key, func(field configsurface.FieldSchema) configsurface.FieldSchema {
+		if modelField.Help != "" {
+			field.Help = modelField.Help
+		}
+		if modelField.Type != "" {
+			field.Type = modelField.Type
+		}
+		if modelField.Default != "" {
+			field.Default = modelField.Default
+		}
+		if len(modelField.Options) > 0 {
+			field.Options = append([]string(nil), modelField.Options...)
+		}
+		return field
+	})
+}
+
+func modelRegistryForRuntime(runtime *ChatRuntime) (component.ModelRegistry, bool) {
+	for _, loaded := range runtimeComponents(runtime) {
+		if loaded == nil {
+			continue
+		}
+		registry, ok := loaded.Component.(component.ModelRegistry)
+		if ok {
+			return registry, true
+		}
+	}
+	return nil, false
+}
+
+func modelOptionsForMode(ctx context.Context, registry component.ModelRegistry, mode component.ModelMode) ([]string, string) {
+	if registry == nil {
+		return nil, ""
+	}
+	models, err := registry.ListModels(ctx)
+	if err != nil {
+		return nil, ""
+	}
+	var options []string
+	for _, model := range models {
+		if model.Mode == mode && strings.TrimSpace(model.Name) != "" {
+			options = append(options, strings.TrimSpace(model.Name))
+		}
+	}
+	defaultModel, _ := registry.DefaultModelForMode(ctx, mode)
+	return options, strings.TrimSpace(defaultModel)
+}
+
+func withFieldSchema(schema configsurface.ConfigSchema, key string, update func(configsurface.FieldSchema) configsurface.FieldSchema) configsurface.ConfigSchema {
+	key = configsurface.NormalizeKey(key)
+	for i, field := range schema.Fields {
+		if configsurface.NormalizeKey(field.Key) == key {
+			schema.Fields[i] = update(field)
+			return schema
+		}
+	}
+	return schema
 }
 
 func (r *agentTurnRuntime) applyTurnConfigValues(values turnconfig.Values) {

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 )
 
 const RegistryFilename = "models.json"
@@ -23,20 +24,29 @@ type Registry struct {
 }
 
 type ModelRecord struct {
-	URL         string  `json:"url,omitempty"`
-	Filename    string  `json:"filename,omitempty"`
-	Path        string  `json:"path,omitempty"`
-	Mode        string  `json:"mode,omitempty"`
-	SHA256      string  `json:"sha256,omitempty"`
-	MMProjPath  string  `json:"mmproj_path,omitempty"`
-	HostPort    int     `json:"host_port,omitempty"`
-	ContextSize int     `json:"ctx_size,omitempty"`
-	UBatchSize  int     `json:"ubatch_size,omitempty"`
-	GPULayers   int     `json:"gpu_layers,omitempty"`
-	MaxTokens   int     `json:"max_tokens,omitempty"`
-	Temperature float64 `json:"temperature,omitempty"`
-	Pooling     string  `json:"pooling,omitempty"`
-	Normalize   *bool   `json:"normalize,omitempty"`
+	URL         string                          `json:"url,omitempty"`
+	Filename    string                          `json:"filename,omitempty"`
+	Path        string                          `json:"path,omitempty"`
+	Mode        string                          `json:"mode,omitempty"`
+	Card        string                          `json:"card,omitempty"`
+	SHA256      string                          `json:"sha256,omitempty"`
+	MMProjPath  string                          `json:"mmproj_path,omitempty"`
+	HostPort    int                             `json:"host_port,omitempty"`
+	ContextSize int                             `json:"ctx_size,omitempty"`
+	UBatchSize  int                             `json:"ubatch_size,omitempty"`
+	GPULayers   int                             `json:"gpu_layers,omitempty"`
+	MaxTokens   int                             `json:"max_tokens,omitempty"`
+	Temperature float64                         `json:"temperature,omitempty"`
+	Pooling     string                          `json:"pooling,omitempty"`
+	Normalize   *bool                           `json:"normalize,omitempty"`
+	ConfigKeys  map[string]ModelConfigKeyRecord `json:"config_keys,omitempty"`
+}
+
+type ModelConfigKeyRecord struct {
+	Type    string   `json:"type,omitempty"`
+	Help    string   `json:"help,omitempty"`
+	Default string   `json:"default,omitempty"`
+	Options []string `json:"options,omitempty"`
 }
 
 func loadRegistry(homePath string) (Registry, error) {
@@ -109,9 +119,11 @@ func cleanModelRecord(record ModelRecord) ModelRecord {
 	record.Filename = strings.TrimSpace(record.Filename)
 	record.Path = strings.TrimSpace(record.Path)
 	record.Mode = cleanModelMode(record.Mode)
+	record.Card = strings.TrimSpace(record.Card)
 	record.SHA256 = strings.TrimSpace(record.SHA256)
 	record.MMProjPath = strings.TrimSpace(record.MMProjPath)
 	record.Pooling = strings.TrimSpace(record.Pooling)
+	record.ConfigKeys = cleanModelConfigKeys(record.ConfigKeys)
 	return record
 }
 
@@ -136,6 +148,49 @@ func modelRecordFromComponent(model component.Model) ModelRecord {
 		Pooling:     model.Pooling,
 		Normalize:   normalize,
 	}
+}
+
+func cleanModelConfigKeys(keys map[string]ModelConfigKeyRecord) map[string]ModelConfigKeyRecord {
+	if len(keys) == 0 {
+		return nil
+	}
+	out := make(map[string]ModelConfigKeyRecord, len(keys))
+	for key, record := range keys {
+		key = configsurface.NormalizeKey(key)
+		if key == "" {
+			continue
+		}
+		out[key] = cleanModelConfigKeyRecord(record)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func cleanModelConfigKeyRecord(record ModelConfigKeyRecord) ModelConfigKeyRecord {
+	record.Type = strings.TrimSpace(strings.ToLower(record.Type))
+	record.Help = strings.TrimSpace(record.Help)
+	record.Default = strings.TrimSpace(record.Default)
+	record.Options = cleanStringList(record.Options)
+	return record
+}
+
+func cleanStringList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
 }
 
 func cleanModelName(name string) string {

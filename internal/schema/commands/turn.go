@@ -10,6 +10,8 @@ import (
 
 type TurnConfigList struct{}
 
+type TurnInfo struct{}
+
 type TurnConfigGet struct {
 	Key string
 }
@@ -25,6 +27,17 @@ type TurnConfigUnset struct {
 
 func TurnCommands() []commandengine.Definition {
 	return []commandengine.Definition{
+		{
+			Pattern: "turn info",
+			Help:    "Show current-turn input metadata and files",
+			Build: func(req *clir.Request) (any, error) {
+				_ = req
+				return TurnInfo{}, nil
+			},
+			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:                agentPolicy(),
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
 		{
 			Pattern: "turn config list",
 			Help:    "List current turn config keys, values, defaults, and options",

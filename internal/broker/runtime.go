@@ -175,6 +175,15 @@ type agentTurnRuntime struct {
 	voiceName             string
 	voiceModel            string
 	voiceDeviceTarget     string
+	inputFiles            []turnInputFile
+}
+
+type turnInputFile struct {
+	Path        string
+	Kind        string
+	Filename    string
+	ContentType string
+	Temporary   bool
 }
 
 func (r *agentTurnRuntime) Commands() commandengine.CommandExecutor {

@@ -15,6 +15,7 @@ func (b *Broker) runStoredThreadTurn(
 	turnInbound coremodel.ThreadMessage,
 	voiceInput bool,
 	detectedInputLanguage string,
+	inputFiles []turnInputFile,
 ) ([]coremodel.ThreadMessage, error) {
 	turnRuntime := &agentTurnRuntime{
 		ctx:                   ctx,
@@ -24,6 +25,7 @@ func (b *Broker) runStoredThreadTurn(
 		thread:                thread,
 		voiceInput:            voiceInput,
 		detectedInputLanguage: cleanLanguageCode(detectedInputLanguage),
+		inputFiles:            append([]turnInputFile(nil), inputFiles...),
 	}
 	turnRuntime.applyThreadVoiceConfig(thread)
 

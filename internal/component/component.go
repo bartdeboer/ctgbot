@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -203,6 +204,8 @@ type ModelRegistry interface {
 	RegisterModel(ctx context.Context, req ModelInstallRequest) (Model, error)
 	DefaultModel(ctx context.Context) (string, error)
 	DefaultModelForMode(ctx context.Context, mode ModelMode) (string, error)
+	ModelCard(ctx context.Context, name string) (string, error)
+	ModelConfigSchema(ctx context.Context, name string) (configsurface.ConfigSchema, error)
 }
 
 type Constructor func(

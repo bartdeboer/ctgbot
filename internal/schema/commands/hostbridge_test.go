@@ -337,6 +337,14 @@ func TestHostbridgeTurnCommandsParse(t *testing.T) {
 	}
 	base := commandengine.Request{Context: commandengine.Context{Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}
 
+	infoReq, err := router.Parse(context.Background(), base, []string{"turn", "info"})
+	if err != nil {
+		t.Fatalf("Parse(turn info) error = %v", err)
+	}
+	if got, want := infoReq.Command, (TurnInfo{}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("turn info command = %#v, want %#v", got, want)
+	}
+
 	setReq, err := router.Parse(context.Background(), base, []string{"turn", "config", "set", "voice.language", "nl"})
 	if err != nil {
 		t.Fatalf("Parse(turn config set) error = %v", err)
