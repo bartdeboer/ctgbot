@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/toolloop"
 )
 
@@ -43,5 +44,32 @@ func TestTextPromptFromMessagesIncludesHistory(t *testing.T) {
 	}
 	if strings.Contains(prompt, "fallback") {
 		t.Fatalf("prompt should prefer messages over fallback: %q", prompt)
+	}
+}
+
+func TestComponentBindConfigSetsWritableGoEnvironment(t *testing.T) {
+	t.Parallel()
+	config := componentBindConfig(runtimepkg.BindConfig{
+		Env: []string{"HOME=/custom", "PATH=/usr/local/go/bin:/usr/bin"},
+	}, "/profile/components/llamacppagent/llamacppagent")
+	env := map[string]string{}
+	for _, value := range config.Env {
+		key, val, ok := strings.Cut(value, "=")
+		if ok {
+			env[key] = val
+		}
+	}
+	for key, want := range map[string]string{
+		"HOME":       "/profile/components/llamacppagent/llamacppagent",
+		"GOCACHE":    "/profile/components/llamacppagent/llamacppagent/.cache/go-build",
+		"GOPATH":     "/profile/components/llamacppagent/llamacppagent/go",
+		"GOMODCACHE": "/profile/components/llamacppagent/llamacppagent/go/pkg/mod",
+	} {
+		if got := env[key]; got != want {
+			t.Fatalf("env[%s] = %q, want %q", key, got, want)
+		}
+	}
+	if got := env["PATH"]; got == "" {
+		t.Fatalf("PATH should be preserved")
 	}
 }
