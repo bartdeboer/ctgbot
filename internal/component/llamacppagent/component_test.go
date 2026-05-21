@@ -1,9 +1,11 @@
 package llamacppagent
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/toolloop"
 )
 
 func TestSandboxBaseURLRewritesLocalhost(t *testing.T) {
@@ -30,5 +32,16 @@ func TestToolloopMessagesIncludesConversationHistory(t *testing.T) {
 	}
 	if messages[1].Role != "assistant" || messages[1].Content != "Hi there" {
 		t.Fatalf("messages[1] = %#v", messages[1])
+	}
+}
+
+func TestTextPromptFromMessagesIncludesHistory(t *testing.T) {
+	t.Parallel()
+	prompt := textPromptFromMessages([]toolloop.Message{{Role: "user", Content: "Hello"}, {Role: "assistant", Content: "Hi"}}, "fallback")
+	if !strings.Contains(prompt, "User: Hello") || !strings.Contains(prompt, "Assistant: Hi") {
+		t.Fatalf("prompt = %q", prompt)
+	}
+	if strings.Contains(prompt, "fallback") {
+		t.Fatalf("prompt should prefer messages over fallback: %q", prompt)
 	}
 }

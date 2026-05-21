@@ -170,13 +170,14 @@ func (c *Component) writeRequest(turn component.Turn, session component.OpenAICh
 	cleanup := func() { _ = os.RemoveAll(hostDir) }
 	requestHost := filepath.Join(hostDir, "request.json")
 	outputHost := filepath.Join(hostDir, "result.json")
+	messages := toolloopMessages(turn.History, turn.Inbound)
 	req := toolloop.Request{
 		BaseURL:       firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
 		APIKey:        firstNonEmpty(c.config.APIKey, session.APIKey()),
 		Model:         session.Model(),
 		System:        c.systemPrompt(turn),
-		Messages:      toolloopMessages(turn.History, turn.Inbound),
-		Prompt:        prompt,
+		Messages:      messages,
+		Prompt:        textPromptFromMessages(messages, prompt),
 		MaxIterations: c.config.MaxIterations,
 		MaxTokens:     c.config.MaxTokens,
 		Temperature:   c.config.Temperature,
@@ -191,6 +192,34 @@ func (c *Component) writeRequest(turn component.Turn, session component.OpenAICh
 		return "", "", nil, err
 	}
 	return requestHost, outputHost, cleanup, nil
+}
+
+func textPromptFromMessages(messages []toolloop.Message, fallback string) string {
+	if len(messages) == 0 {
+		return strings.TrimSpace(fallback)
+	}
+	var b strings.Builder
+	b.WriteString("Conversation history:\n")
+	for _, message := range messages {
+		role := strings.TrimSpace(message.Role)
+		content := strings.TrimSpace(message.Content)
+		if role == "" || content == "" {
+			continue
+		}
+		switch role {
+		case "assistant":
+			role = "Assistant"
+		case "user":
+			role = "User"
+		case "system":
+			role = "System"
+		}
+		b.WriteString(role)
+		b.WriteString(": ")
+		b.WriteString(content)
+		b.WriteString("\n")
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func toolloopMessages(history []coremodel.ThreadMessage, inbound coremodel.ThreadMessage) []toolloop.Message {
