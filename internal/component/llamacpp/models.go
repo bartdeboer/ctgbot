@@ -34,31 +34,31 @@ func (c *Component) resolveModel(name string) (resolvedModel, error) {
 	if name == "" && strings.TrimSpace(c.componentConfig.ModelPath) != "" {
 		return c.resolveLegacyModel(), nil
 	}
-	store, err := c.modelStore(context.Background())
+	registry, err := c.modelRegistry(context.Background())
 	if err != nil {
 		return resolvedModel{}, err
 	}
 	if name == "" {
-		name, err = store.DefaultModelForMode(context.Background(), component.ModelModeCompletion)
+		name, err = registry.DefaultModelForMode(context.Background(), component.ModelModeCompletion)
 		if err != nil {
 			return resolvedModel{}, err
 		}
 	}
-	model, err := store.GetModel(context.Background(), name)
+	model, err := registry.GetModel(context.Background(), name)
 	if err != nil {
 		return resolvedModel{}, err
 	}
 	return c.resolveStoredModel(model), nil
 }
 
-func (c *Component) modelStore(ctx context.Context) (component.ModelStore, error) {
+func (c *Component) modelRegistry(ctx context.Context) (component.ModelRegistry, error) {
 	if c == nil {
 		return nil, fmt.Errorf("missing llama.cpp component")
 	}
 	if c.resolver == nil {
 		return nil, fmt.Errorf("missing component resolver")
 	}
-	ref := strings.TrimSpace(c.componentConfig.ModelStore)
+	ref := strings.TrimSpace(c.componentConfig.ModelRegistry)
 	if ref == "" {
 		ref = "model"
 	}
@@ -71,13 +71,13 @@ func (c *Component) modelStore(ctx context.Context) (component.ModelStore, error
 		return nil, err
 	}
 	if loaded == nil {
-		return nil, fmt.Errorf("model store not found: %s", ref)
+		return nil, fmt.Errorf("model registry not found: %s", ref)
 	}
-	store, ok := loaded.Component.(component.ModelStore)
+	registry, ok := loaded.Component.(component.ModelRegistry)
 	if !ok {
-		return nil, fmt.Errorf("component %s does not implement model store", loaded.Registration.Ref())
+		return nil, fmt.Errorf("component %s does not implement model registry", loaded.Registration.Ref())
 	}
-	return store, nil
+	return registry, nil
 }
 
 func (c *Component) resolveStoredModel(model component.Model) resolvedModel {

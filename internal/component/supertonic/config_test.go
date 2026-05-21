@@ -11,7 +11,7 @@ func TestLoadComponentConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadComponentConfig() error = %v", err)
 	}
-	if config.ModelStore != "model" || config.DefaultVoice != "F5" || config.Language != "en" || config.PythonCommand != "python" || config.MaxConcurrent != 1 {
+	if config.ModelRegistry != "model" || config.DefaultVoice != "F5" || config.Language != "en" || config.PythonCommand != "python" || config.MaxConcurrent != 1 {
 		t.Fatalf("config = %#v", config)
 	}
 }
@@ -45,7 +45,7 @@ func TestLoadComponentConfigOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadComponentConfig() error = %v", err)
 	}
-	if config.ModelStore != "models" || config.DefaultModel != "supertonic3-f1" || config.DefaultVoice != "M1" || config.Language != "nl" || config.PythonCommand != "python3" || config.MaxConcurrent != 2 {
+	if config.ModelRegistry != "models" || config.DefaultModel != "supertonic3-f1" || config.DefaultVoice != "M1" || config.Language != "nl" || config.PythonCommand != "python3" || config.MaxConcurrent != 2 {
 		t.Fatalf("config = %#v", config)
 	}
 }

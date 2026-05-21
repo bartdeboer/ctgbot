@@ -195,7 +195,7 @@ type ModelInstallRequest struct {
 	Default bool
 }
 
-type ModelStore interface {
+type ModelRegistry interface {
 	Component
 	ListModels(ctx context.Context) ([]Model, error)
 	GetModel(ctx context.Context, name string) (Model, error)

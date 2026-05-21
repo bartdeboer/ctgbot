@@ -13,7 +13,7 @@ import (
 	"github.com/bartdeboer/go-clir"
 )
 
-func TestRegisterModelStoresAndResolvesModel(t *testing.T) {
+func TestRegisterModelRegistryStoresAndResolvesModel(t *testing.T) {
 	dir := t.TempDir()
 	modelPath := filepath.Join(dir, "qwen.gguf")
 	if err := os.WriteFile(modelPath, []byte("model"), 0o644); err != nil {

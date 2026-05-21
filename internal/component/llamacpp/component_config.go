@@ -17,6 +17,7 @@ const (
 )
 
 type ComponentConfig struct {
+	ModelRegistry  string  `json:"model_registry,omitempty"`
 	ModelStore     string  `json:"model_store,omitempty"`
 	DefaultModel   string  `json:"default_model,omitempty"`
 	ModelPath      string  `json:"model_path"`
@@ -59,10 +60,8 @@ func loadComponentConfig(homePath string, name string) (ComponentConfig, error) 
 }
 
 func (c ComponentConfig) withDefaults() ComponentConfig {
+	c.ModelRegistry = firstNonEmpty(c.ModelRegistry, c.ModelStore, "model")
 	c.ModelStore = strings.TrimSpace(c.ModelStore)
-	if c.ModelStore == "" {
-		c.ModelStore = "model"
-	}
 	c.DefaultModel = strings.TrimSpace(c.DefaultModel)
 	c.ModelPath = strings.TrimSpace(c.ModelPath)
 	c.MMProjPath = strings.TrimSpace(c.MMProjPath)

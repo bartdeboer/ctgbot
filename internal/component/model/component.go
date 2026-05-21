@@ -27,7 +27,7 @@ var _ component.Component = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
-var _ component.ModelStore = (*Component)(nil)
+var _ component.ModelRegistry = (*Component)(nil)
 
 func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 	_, _, _ = ctx, runtime, storage
