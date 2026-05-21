@@ -35,7 +35,7 @@ var _ component.Authenticator = (*Component)(nil)
 var _ component.AuthStatusReporter = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
 
-type TurnRunner interface {
+type turnRunner interface {
 	RunTurn(ctx context.Context, runtime ExecRuntime, request TurnRequest) (TurnResult, error)
 }
 
@@ -45,7 +45,7 @@ type Component struct {
 	storage             repository.Storage
 	resolveWorkspace    func(context.Context, coremodel.Chat) (string, error)
 	componentConfig     ComponentConfig
-	runner              TurnRunner
+	runner              turnRunner
 	logger              *log.Logger
 	runtimeImage        string
 	runtimeDockerfile   string

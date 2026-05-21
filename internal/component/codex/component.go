@@ -33,9 +33,10 @@ const (
 	stopAfterTurnTimeout = 5 * time.Second
 )
 
+var _ component.Agent = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
 
-type TurnRunner interface {
+type turnRunner interface {
 	RunTurn(ctx context.Context, runtime ExecRuntime, output OutputHandler, request TurnRequest) (TurnResult, error)
 }
 
@@ -46,7 +47,7 @@ type Component struct {
 	resolveWorkspace    func(context.Context, coremodel.Chat) (string, error)
 	config              *appstate.Config
 	componentConfig     ComponentConfig
-	runner              TurnRunner
+	runner              turnRunner
 	logger              *log.Logger
 	runtimeImage        string
 	runtimeDockerfile   string
