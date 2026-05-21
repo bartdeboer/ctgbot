@@ -80,20 +80,12 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 	} else {
 		messages = append(messages, chatMessage{Role: "user", Content: req.Prompt})
 	}
-	shouldNudgeToolUse := shouldUseToolForRequest(messages, req.Prompt)
-	nudgedToolUse := false
 	for i := 0; i < req.MaxIterations; i++ {
 		resp, err := r.chat(ctx, client, req, messages)
 		if err != nil {
 			return Result{}, err
 		}
 		if len(resp.ToolCalls) == 0 {
-			if shouldNudgeToolUse && !nudgedToolUse {
-				nudgedToolUse = true
-				messages = append(messages, chatMessage{Role: "assistant", Content: resp.Content})
-				messages = append(messages, chatMessage{Role: "user", Content: toolUseNudge})
-				continue
-			}
 			return Result{Text: strings.TrimSpace(resp.Content), Iterations: i + 1}, nil
 		}
 		messages = append(messages, chatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
@@ -434,30 +426,3 @@ func RequestFromEnv(prompt string) Request {
 }
 
 var getenv = os.Getenv
-
-const toolUseNudge = "You answered without using a tool. The user asked you to run, inspect, read, create, edit, or test something. Call the appropriate tool now. Do not answer from memory or assumptions. If a command fails, return the exact raw tool output."
-
-func shouldUseToolForRequest(messages []chatMessage, fallback string) bool {
-	text := strings.TrimSpace(fallback)
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" && strings.TrimSpace(messages[i].Content) != "" {
-			text = messages[i].Content
-			break
-		}
-	}
-	text = strings.ToLower(strings.TrimSpace(text))
-	if text == "" {
-		return false
-	}
-	needles := []string{
-		"run ", "execute ", "create ", "write ", "edit ", "modify ", "patch ",
-		"test ", "check ", "inspect ", "read ", "list ", "show me the output",
-		"raw output", "go version", "which ",
-	}
-	for _, needle := range needles {
-		if strings.Contains(text, needle) {
-			return true
-		}
-	}
-	return false
-}
