@@ -26,6 +26,7 @@ func TestBuildContextTarContainsDockerfiles(t *testing.T) {
 		"claude.Dockerfile",
 		"LICENSE",
 		"cmd/hostbridge/main.go",
+		"cmd/toolloop/main.go",
 		"internal/commandset/commandset.go",
 	} {
 		if !found[name] {
