@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,23 +40,35 @@ func TestRunnerExecutesHostbridgeToolAndReturnsFinal(t *testing.T) {
 }
 
 func TestRunnerExecutesApplyPatchTool(t *testing.T) {
-	t.Parallel()
 	workspace := t.TempDir()
+	applyPatchPath := buildApplyPatchBinary(t)
 	patch := `*** Begin Patch
 *** Add File: hello.txt
 +hello
 *** End Patch`
 	args, _ := json.Marshal(applyPatchArgs{Patch: patch})
-	text, isErr := (Runner{Workspace: workspace}).executeTool(context.Background(), toolCall{Function: struct {
+	text, isErr := (Runner{Workspace: workspace, ApplyPatchPath: applyPatchPath}).executeTool(context.Background(), toolCall{Function: struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
 	}{Name: "apply_patch", Arguments: string(args)}})
 	if isErr {
 		t.Fatalf("apply_patch failed: %s", text)
 	}
-	if !strings.Contains(text, "add hello.txt") {
+	if !strings.Contains(text, "A hello.txt") {
 		t.Fatalf("tool output = %q", text)
 	}
+}
+
+func buildApplyPatchBinary(t *testing.T) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "apply_patch")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", bin, "./cmd/apply_patch")
+	cmd.Dir = filepath.Join("..", "..")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("build apply_patch: %v\n%s", err, strings.TrimSpace(string(out)))
+	}
+	return bin
 }
 
 func TestRunnerExecutesShellToolInWorkspace(t *testing.T) {

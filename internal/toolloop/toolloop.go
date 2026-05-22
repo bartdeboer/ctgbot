@@ -14,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/bartdeboer/ctgbot/internal/toolloop/applypatch"
 )
 
 type Request struct {
@@ -44,6 +42,7 @@ type Result struct {
 type Runner struct {
 	Client         *http.Client
 	HostbridgePath string
+	ApplyPatchPath string
 	Workspace      string
 	Stderr         io.Writer
 	CommandTimeout time.Duration
@@ -230,12 +229,32 @@ type applyPatchArgs struct {
 }
 
 func (r Runner) applyPatch(ctx context.Context, args applyPatchArgs) (string, bool) {
-	workspace := firstNonEmpty(r.Workspace, getenv("TOOLLOOP_WORKSPACE"), "/workspace")
-	result, err := applypatch.Apply(ctx, applypatch.Request{Workspace: workspace, Patch: args.Patch})
-	if err != nil {
-		return err.Error(), true
+	patch := strings.TrimSpace(args.Patch)
+	if patch == "" {
+		return "missing patch", true
 	}
-	return result.Summary, false
+	workspace := firstNonEmpty(r.Workspace, getenv("TOOLLOOP_WORKSPACE"), "/workspace")
+	timeout := r.CommandTimeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	toolCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	binary := firstNonEmpty(r.ApplyPatchPath, getenv("TOOLLOOP_APPLY_PATCH_PATH"), "apply_patch")
+	cmd := exec.CommandContext(toolCtx, binary)
+	cmd.Dir = workspace
+	cmd.Stdin = strings.NewReader(args.Patch)
+	out, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		if text == "" {
+			text = err.Error()
+		} else {
+			text = err.Error() + "\n" + text
+		}
+		return text, true
+	}
+	return text, false
 }
 
 func (r Runner) runHostbridge(ctx context.Context, args hostbridgeArgs) (string, bool) {

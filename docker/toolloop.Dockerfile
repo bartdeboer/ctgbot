@@ -1,4 +1,4 @@
-FROM ctgbot-toolloop-base:latest AS build
+FROM ctgbot-go-node-python-base:latest AS build
 
 WORKDIR /src
 ARG TARGETARCH
@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} \
     && go build -trimpath -ldflags="-s -w" -o /out/apply_patch ./cmd/apply_patch \
     && go build -trimpath -ldflags="-s -w" -o /out/toolloop ./cmd/toolloop
 
-FROM ctgbot-toolloop-base:latest
+FROM ctgbot-go-node-python-base:latest
 
 COPY --from=build /out/hostbridge /usr/bin/hostbridge
 COPY --from=build /out/apply_patch /usr/bin/apply_patch

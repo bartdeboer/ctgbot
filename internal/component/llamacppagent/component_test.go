@@ -73,3 +73,27 @@ func TestComponentBindConfigSetsWritableGoEnvironment(t *testing.T) {
 		t.Fatalf("PATH should be preserved")
 	}
 }
+
+func TestRuntimeImageTargetsUseSharedGoNodePythonBase(t *testing.T) {
+	t.Parallel()
+	targets, err := (&Component{}).RuntimeImageTargets(t.Context())
+	if err != nil {
+		t.Fatalf("RuntimeImageTargets() error = %v", err)
+	}
+	if len(targets) != 1 {
+		t.Fatalf("len(targets) = %d, want 1", len(targets))
+	}
+	target := targets[0]
+	if target.Image != DefaultImage || target.Dockerfile != DefaultDockerfile || !target.NoCache {
+		t.Fatalf("target = %#v", target)
+	}
+	if target.Uses == nil {
+		t.Fatalf("target.Uses is nil")
+	}
+	if target.Uses.Name != "go-node-python-base" || target.Uses.Image != DefaultBaseImage || target.Uses.Dockerfile != DefaultBaseDockerfile {
+		t.Fatalf("target.Uses = %#v", target.Uses)
+	}
+	if target.Uses.Uses != nil {
+		t.Fatalf("target.Uses.Uses = %#v, want nil", target.Uses.Uses)
+	}
+}
