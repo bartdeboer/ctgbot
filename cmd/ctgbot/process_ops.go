@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/app"
+	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -77,15 +78,45 @@ func (p *projectProcessActions) Upgrade(ctx context.Context, all bool) error {
 	}); err != nil {
 		return err
 	}
-	imageBuildArgs := []string{"image", "build"}
-	imageBuildLabel := "ctgbot image build"
+	imageBuildLabel := "runtime image build"
 	if all {
-		imageBuildArgs = append(imageBuildArgs, "--no-cache")
-		imageBuildLabel = "ctgbot image build --no-cache"
+		imageBuildLabel = "runtime image build --no-cache"
 	}
 	return runUpgradeStep(ctx, imageBuildLabel, func(ctx context.Context) error {
-		return runInstalledCtgbotCommand(ctx, imageBuildArgs...)
+		return p.BuildRuntimeImages(ctx, all)
 	})
+}
+
+func (p *projectProcessActions) BuildRuntimeImages(ctx context.Context, noCache bool) error {
+	p.logf("building ctgbot runtime images")
+	logger := p.logger
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+	rtSystem, err := systempkg.Open(ctx, "", "", p.globalStore, logger)
+	if err != nil {
+		return err
+	}
+	rtSystem.Registry, err = newRuntimeRegistry(rtSystem, p)
+	if err != nil {
+		return err
+	}
+	appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logger.Printf)
+	targets, err := appService.RuntimeImageTargets(ctx)
+	if err != nil {
+		return err
+	}
+	if len(targets) == 0 {
+		p.logf("no runtime image targets")
+		return nil
+	}
+	builder := &runtimeimage.Builder{Logger: logger, SourceDir: rtSystem.RootDir}
+	for _, target := range targets {
+		if err := builder.BuildTarget(ctx, target, noCache); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *projectProcessActions) ImageList(ctx context.Context) (string, error) {
@@ -220,4 +251,33 @@ func upsertEnv(env []string, key string, value string) []string {
 		}
 	}
 	return append(env, prefix+value)
+}
+
+func formatRuntimeImageTargets(targets []runtimeimage.Target) string {
+	if len(targets) == 0 {
+		return "no runtime image targets\n"
+	}
+	var out strings.Builder
+	for _, target := range targets {
+		fields := []string{
+			"name=" + target.Name,
+			"image=" + target.Image,
+			"dockerfile=" + target.Dockerfile,
+		}
+		if target.Uses != nil {
+			uses := strings.TrimSpace(target.Uses.Name)
+			if uses == "" {
+				uses = strings.TrimSpace(target.Uses.Image)
+			}
+			if uses != "" {
+				fields = append(fields, "uses="+uses)
+			}
+		}
+		if target.NoCache {
+			fields = append(fields, "no_cache=true")
+		}
+		out.WriteString(strings.Join(fields, "\t"))
+		out.WriteByte('\n')
+	}
+	return out.String()
 }

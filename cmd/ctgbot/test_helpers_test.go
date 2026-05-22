@@ -1,38 +1,30 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"testing"
 )
 
-func withTempCwd(t *testing.T, fn func(root string)) {
+func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
-
-	root := t.TempDir()
-	prev, err := os.Getwd()
+	old := os.Stdout
+	r, w, err := os.Pipe()
 	if err != nil {
-		t.Fatalf("get cwd: %v", err)
+		t.Fatal(err)
 	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir temp: %v", err)
-	}
-	defer func() {
-		if err := os.Chdir(prev); err != nil {
-			t.Fatalf("restore cwd: %v", err)
-		}
-	}()
+	os.Stdout = w
+	defer func() { os.Stdout = old }()
 
-	fn(root)
-}
+	fn()
 
-func assertDirExists(t *testing.T, path string) {
-	t.Helper()
-
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("expected directory %s: %v", path, err)
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
 	}
-	if !info.IsDir() {
-		t.Fatalf("expected directory %s", path)
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatal(err)
 	}
+	return buf.String()
 }

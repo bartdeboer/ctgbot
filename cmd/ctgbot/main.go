@@ -21,12 +21,7 @@ func main() {
 	}
 
 	r := clir.New()
-
 	registerVersionRoutes(r)
-	registerMaintenanceRoutes(r, globalStore)
-	registerConfigRoutes(r, store, globalStore)
-	registerImageRoutes(r, store)
-	registerHostbridgeRoutes(r, store)
 	registerRuntimeRoutes(r, store, globalStore)
 
 	if err := r.Run(context.Background(), os.Args[1:]); err != nil {
