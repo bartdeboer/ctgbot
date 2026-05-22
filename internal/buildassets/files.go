@@ -13,6 +13,7 @@ func SelectedFiles() []FileSpec {
 		{Source: "LICENSE", Target: "LICENSE"},
 		{Source: "go.mod", Target: "go.mod"},
 		{Source: "go.sum", Target: "go.sum"},
+		{Source: "cmd/apply_patch", Target: "cmd/apply_patch"},
 		{Source: "cmd/hostbridge", Target: "cmd/hostbridge"},
 		{Source: "cmd/toolloop", Target: "cmd/toolloop"},
 		{Source: "internal", Target: "internal"},

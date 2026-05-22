@@ -26,6 +26,7 @@ func TestBuildContextTarContainsDockerfiles(t *testing.T) {
 		"claude.base.Dockerfile",
 		"claude.Dockerfile",
 		"LICENSE",
+		"cmd/apply_patch/main.go",
 		"cmd/hostbridge/main.go",
 		"cmd/toolloop/main.go",
 		"internal/commandset/commandset.go",
