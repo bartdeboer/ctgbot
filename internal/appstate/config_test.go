@@ -35,11 +35,11 @@ func TestDockerfileConfigDefaultsAndValidation(t *testing.T) {
 	if got := cfg.Docker().Dockerfile(); got != "codex.Dockerfile" {
 		t.Fatalf("Dockerfile() = %q, want Dockerfile", got)
 	}
-	if err := cfg.Docker().SetDockerfile("slim.Dockerfile"); err != nil {
+	if err := cfg.Docker().SetDockerfile("cuda.Dockerfile"); err != nil {
 		t.Fatalf("SetDockerfile() error = %v", err)
 	}
-	if got := cfg.Docker().Dockerfile(); got != "slim.Dockerfile" {
-		t.Fatalf("Dockerfile() = %q, want slim.Dockerfile", got)
+	if got := cfg.Docker().Dockerfile(); got != "cuda.Dockerfile" {
+		t.Fatalf("Dockerfile() = %q, want cuda.Dockerfile", got)
 	}
 	if err := cfg.Docker().SetDockerfile("../Dockerfile"); err == nil {
 		t.Fatalf("expected path traversal error")

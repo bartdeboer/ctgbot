@@ -191,7 +191,7 @@ func printConfigSummary(cfg *appstate.Config, store *clistate.Store, globalStore
 	fmt.Println("    list root items with: ctgbot config list")
 	fmt.Println("    get a root value with: ctgbot config get docker.image")
 	fmt.Println("    set a root value with: ctgbot config set docker.image <image>")
-	fmt.Println("    set image Dockerfile with: ctgbot config set docker.dockerfile slim.Dockerfile")
+	fmt.Println("    set image Dockerfile with: ctgbot config set docker.dockerfile codex.Dockerfile")
 	fmt.Println("    list chat-aware items with: ctgbot config chat <chat-id> list")
 	fmt.Println("    enable a chat with: ctgbot config chat <chat-id> set chat.enabled true")
 	fmt.Println("    set chat process tools with: ctgbot config chat <chat-id> set chat.process-tools-enabled true")

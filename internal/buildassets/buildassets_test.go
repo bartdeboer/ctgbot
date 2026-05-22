@@ -22,7 +22,6 @@ func TestBuildContextTarContainsDockerfiles(t *testing.T) {
 		"codex.Dockerfile",
 		"go-node-python.base.Dockerfile",
 		"go-node-python-cuda.base.Dockerfile",
-		"slim.Dockerfile",
 		"cuda.Dockerfile",
 		"claude.base.Dockerfile",
 		"claude.Dockerfile",
