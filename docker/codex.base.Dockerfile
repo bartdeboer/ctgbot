@@ -1,11 +1,8 @@
-FROM node:22-alpine
+FROM ctgbot-go-node-python-base:latest
 
 ARG CODEX_VERSION=latest
 
-RUN apk add --no-cache ca-certificates git curl libc6-compat \
-        bash make tar zip unzip jq go \
-    && apk add --no-cache --no-scripts bubblewrap \
-    && curl -fsSL https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
+RUN curl -fsSL https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
     && chmod +x /tmp/install-codex.sh \
     && if [ -n "${CODEX_VERSION}" ] && [ "${CODEX_VERSION}" != "latest" ]; then \
         CODEX_INSTALL_DIR=/usr/local/bin /tmp/install-codex.sh --release "${CODEX_VERSION}"; \
@@ -20,10 +17,6 @@ RUN apk add --no-cache ca-certificates git curl libc6-compat \
     && chmod -R a+rX /opt/codex \
     && chmod 755 /usr/local/bin/codex \
     && codex --version
-
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
 
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]

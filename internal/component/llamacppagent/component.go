@@ -121,6 +121,11 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		Name:       Type + "-base",
 		Image:      DefaultBaseImage,
 		Dockerfile: DefaultBaseDockerfile,
+		Uses: &runtimeimage.Target{
+			Name:       "go-node-python-base",
+			Image:      DefaultDevBaseImage,
+			Dockerfile: DefaultDevBaseDockerfile,
+		},
 	}
 	target.NoCache = true
 	return []runtimeimage.Target{target}, nil

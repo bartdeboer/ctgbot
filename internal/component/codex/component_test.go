@@ -409,6 +409,12 @@ func TestRuntimeImageTargetsUseConfiguredImage(t *testing.T) {
 		if target.Name != "codex" || target.Image != "ctgbot-codex:gpu" || target.Dockerfile != "cuda.Dockerfile" {
 			t.Fatalf("target = %#v", target)
 		}
+		if target.Uses == nil || target.Uses.Name != "codex-cuda-base" || target.Uses.Image != DefaultCudaBaseImage || target.Uses.Dockerfile != "cuda.base.Dockerfile" {
+			t.Fatalf("component uses = %#v", target.Uses)
+		}
+		if target.Uses.Uses == nil || target.Uses.Uses.Name != "go-node-python-cuda-base" || target.Uses.Uses.Image != DefaultCudaDevBase || target.Uses.Uses.Dockerfile != "go-node-python-cuda.base.Dockerfile" {
+			t.Fatalf("component nested uses = %#v", target.Uses.Uses)
+		}
 	})
 }
 
@@ -433,6 +439,9 @@ func TestRuntimeImageTargetsSplitDefaultCodexImage(t *testing.T) {
 		}
 		if target.Uses == nil || target.Uses.Name != "codex-base" || target.Uses.Image != DefaultBaseImage || target.Uses.Dockerfile != "codex.base.Dockerfile" {
 			t.Fatalf("component uses = %#v", target.Uses)
+		}
+		if target.Uses.Uses == nil || target.Uses.Uses.Name != "go-node-python-base" || target.Uses.Uses.Image != DefaultDevBaseImage || target.Uses.Uses.Dockerfile != "go-node-python.base.Dockerfile" {
+			t.Fatalf("component nested uses = %#v", target.Uses.Uses)
 		}
 	})
 }

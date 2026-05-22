@@ -25,6 +25,7 @@ const (
 	Type                 = "claude"
 	DefaultCallbackPort  = 1455
 	DefaultBaseImage     = "ctgbot-claude-base:latest"
+	DefaultDevBaseImage  = "ctgbot-go-node-python-base:latest"
 	DefaultDockerfile    = "claude.Dockerfile"
 	stopAfterTurnTimeout = 5 * time.Second
 )
@@ -121,6 +122,11 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		Name:       Type + "-base",
 		Image:      DefaultBaseImage,
 		Dockerfile: "claude.base.Dockerfile",
+		Uses: &runtimeimage.Target{
+			Name:       "go-node-python-base",
+			Image:      DefaultDevBaseImage,
+			Dockerfile: "go-node-python.base.Dockerfile",
+		},
 	}
 	target.Uses = &base
 	target.NoCache = true

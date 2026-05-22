@@ -20,6 +20,8 @@ func TestBuildContextTarContainsDockerfiles(t *testing.T) {
 	for _, name := range []string{
 		"codex.base.Dockerfile",
 		"codex.Dockerfile",
+		"go-node-python.base.Dockerfile",
+		"go-node-python-cuda.base.Dockerfile",
 		"slim.Dockerfile",
 		"cuda.Dockerfile",
 		"claude.base.Dockerfile",
