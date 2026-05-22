@@ -48,7 +48,7 @@ func (p *projectProcessActions) Install(ctx context.Context) error {
 	if err := runProjectCommand(ctx, projectDir, env, "go", "generate", "./internal/buildassets"); err != nil {
 		return err
 	}
-	return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge", "./cmd/apply_patch")
+	return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge", "./cmd/apply_patch", "./cmd/tools")
 }
 
 func (p *projectProcessActions) Upgrade(ctx context.Context, all bool) error {
@@ -74,7 +74,7 @@ func (p *projectProcessActions) Upgrade(ctx context.Context, all bool) error {
 		return err
 	}
 	if err := runUpgradeStep(ctx, "go install", func(ctx context.Context) error {
-		return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge", "./cmd/apply_patch")
+		return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge", "./cmd/apply_patch", "./cmd/tools")
 	}); err != nil {
 		return err
 	}
