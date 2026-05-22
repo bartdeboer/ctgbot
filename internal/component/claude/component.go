@@ -110,8 +110,6 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		Uses:       c.runtimeImageUses,
 	}
 	if target.Uses != nil {
-		uses := claudeBaseTargetWithToolchain(*target.Uses)
-		target.Uses = &uses
 		if !target.NoCache {
 			target.NoCache = true
 		}
@@ -120,27 +118,19 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 	if target.Dockerfile != DefaultDockerfile {
 		return []runtimeimage.Target{target}, nil
 	}
-	base := claudeBaseTargetWithToolchain(runtimeimage.Target{
+	base := runtimeimage.Target{
 		Name:       Type + "-base",
 		Image:      DefaultBaseImage,
 		Dockerfile: "claude.base.Dockerfile",
-	})
+		Uses: &runtimeimage.Target{
+			Name:       "go-node-python-base",
+			Image:      DefaultDevBaseImage,
+			Dockerfile: "go-node-python.base.Dockerfile",
+		},
+	}
 	target.Uses = &base
 	target.NoCache = true
 	return []runtimeimage.Target{target}, nil
-}
-
-func claudeBaseTargetWithToolchain(target runtimeimage.Target) runtimeimage.Target {
-	target = target.Clean()
-	if target.Uses != nil || target.Dockerfile != "claude.base.Dockerfile" {
-		return target
-	}
-	target.Uses = &runtimeimage.Target{
-		Name:       "go-node-python-base",
-		Image:      DefaultDevBaseImage,
-		Dockerfile: "go-node-python.base.Dockerfile",
-	}
-	return target
 }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {
