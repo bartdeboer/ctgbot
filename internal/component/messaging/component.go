@@ -80,6 +80,10 @@ type messageListCommand struct {
 	Limit     int
 }
 
+type threadPurgeCommand struct {
+	ThreadRef string
+}
+
 type messageSendCommand struct {
 	ThreadRef string
 	Text      string
@@ -96,6 +100,7 @@ func RegisterGobTypes(register func(any)) {
 	register(threadConfigSetCommand{})
 	register(threadConfigUnsetCommand{})
 	register(messageListCommand{})
+	register(threadPurgeCommand{})
 	register(messageSendCommand{})
 }
 
@@ -209,6 +214,16 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 		},
 		{
+			Pattern: "thread <thread> purge",
+			Help:    "Purge thread messages",
+			Build:   buildThreadPurgeCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleUser),
+			Aliases: []commandengine.Route{
+				{Pattern: "thread purge", Absolute: true},
+			},
+		},
+		{
 			Pattern:               "thread <thread> message send",
 			Help:                  "Send a message into another thread",
 			Build:                 buildMessageSendCommand,
@@ -251,6 +266,9 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.Register[messageListCommand](registry, c.handleMessageList); err != nil {
+		return err
+	}
+	if err := commandengine.Register[threadPurgeCommand](registry, c.handleThreadPurge); err != nil {
 		return err
 	}
 	return commandengine.Register[messageSendCommand](registry, c.handleMessageSend)
@@ -410,6 +428,25 @@ func (c *Component) handleMessageList(ctx context.Context, req commandengine.Req
 	}, nil
 }
 
+func (c *Component) handleThreadPurge(ctx context.Context, req commandengine.Request, cmd threadPurgeCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	currentThreadID := requestThreadID(req)
+	if !req.Context.Actor.HasRole(simplerbac.RoleRoot) && (currentThreadID.IsNull() || threadID != currentThreadID) {
+		return commandengine.Result{}, fmt.Errorf("purge referenced thread denied: missing role")
+	}
+	result, err := c.Service.PurgeThread(ctx, req.Context.Actor, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: formatThreadPurge(result)}, nil
+}
+
 func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Request, cmd messageSendCommand) (commandengine.Result, error) {
 	if c == nil || c.Service == nil {
 		return commandengine.Result{}, fmt.Errorf("missing messaging service")
@@ -530,6 +567,17 @@ func buildMessageSendCommand(req *clir.Request) (any, error) {
 		ThreadRef: threadRef,
 		Text:      text,
 	}, nil
+}
+
+func buildThreadPurgeCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected thread purge arguments: %s", extra)
+	}
+	return threadPurgeCommand{ThreadRef: threadRef}, nil
 }
 
 func buildStatusCommand(req *clir.Request) (any, error) {
@@ -742,6 +790,15 @@ func formatMessagePage(threadID modeluuid.UUID, page messagingdomain.MessagePage
 		lines = append(lines, "next cursor: "+page.NextCursor)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatThreadPurge(result messagingdomain.PurgeThreadResult) string {
+	return strings.Join([]string{
+		"thread purged",
+		"thread_id: " + result.ThreadID.String(),
+		fmt.Sprintf("messages_deleted: %d", result.MessagesDeleted),
+		fmt.Sprintf("artifacts_deleted: %d", result.ArtifactsDeleted),
+	}, "\n")
 }
 
 func formatMessageActor(msg coremodel.ThreadMessage) string {

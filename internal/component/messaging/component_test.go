@@ -191,6 +191,90 @@ func TestThreadConfigCommandsDenyUserSet(t *testing.T) {
 	}
 }
 
+func TestThreadPurgeDeletesCurrentThreadMessagesAndArtifacts(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	engine := testMessagingEngine(t, storage)
+	message := &coremodel.ThreadMessage{
+		ChatID:    thread.ChatID,
+		ThreadID:  thread.ID,
+		Direction: coremodel.MessageDirectionInbound,
+		Kind:      coremodel.MessageKindUser,
+		ActorID:   "bart",
+		Text:      "hello",
+	}
+	if err := storage.Messages().Append(ctx, message); err != nil {
+		t.Fatalf("Append(message) error = %v", err)
+	}
+	if err := storage.Artifacts().Append(ctx, &coremodel.Artifact{
+		ChatID:      thread.ChatID,
+		ThreadID:    thread.ID,
+		MessageID:   message.ID,
+		Filename:    "hello.txt",
+		ContentType: "text/plain",
+		Content:     []byte("hello"),
+	}); err != nil {
+		t.Fatalf("Append(artifact) error = %v", err)
+	}
+
+	result, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleUser), []string{"thread", "purge"})
+	if err != nil {
+		t.Fatalf("Run(thread purge) error = %v", err)
+	}
+	for _, want := range []string{
+		"thread purged",
+		"messages_deleted: 1",
+		"artifacts_deleted: 1",
+	} {
+		if !strings.Contains(result.Text, want) {
+			t.Fatalf("purge result missing %q:\n%s", want, result.Text)
+		}
+	}
+	messages, err := storage.Messages().ListByThreadID(ctx, thread.ID)
+	if err != nil {
+		t.Fatalf("ListByThreadID() error = %v", err)
+	}
+	if len(messages) != 0 {
+		t.Fatalf("messages after purge = %d, want 0", len(messages))
+	}
+	artifacts, err := storage.Artifacts().ListByMessageID(ctx, message.ID)
+	if err != nil {
+		t.Fatalf("ListByMessageID() error = %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("artifacts after purge = %d, want 0", len(artifacts))
+	}
+}
+
+func TestThreadPurgeReferencedThreadDeniesUser(t *testing.T) {
+	ctx := context.Background()
+	storage, currentThread := testMessagingStorage(t, ctx)
+	otherThread := &coremodel.Thread{ChatID: currentThread.ChatID, Label: "other"}
+	if err := storage.Threads().Save(ctx, otherThread); err != nil {
+		t.Fatalf("Save(other thread) error = %v", err)
+	}
+	engine := testMessagingEngine(t, storage)
+
+	_, err := engine.Run(ctx, testMessagingRequest(currentThread.ID, simplerbac.RoleUser), []string{"thread", otherThread.ID.String(), "purge"})
+	if err == nil || !strings.Contains(err.Error(), "denied") {
+		t.Fatalf("Run(thread <thread> purge) error = %v, want denied", err)
+	}
+}
+
+func TestThreadPurgeIsMessageOnly(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	engine, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, New(messagingdomain.New(storage), nil))
+	if err != nil {
+		t.Fatalf("NewEngineForSource(hostbridge) error = %v", err)
+	}
+
+	_, err = engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleRoot), []string{"thread", "purge"})
+	if err == nil {
+		t.Fatalf("Run(hostbridge thread purge) error = nil, want no matching command")
+	}
+}
+
 func TestThreadComponentBindInfersProviderThreadIDFromSourceBinding(t *testing.T) {
 	ctx := context.Background()
 	storage, thread := testMessagingStorage(t, ctx)

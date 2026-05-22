@@ -62,10 +62,12 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 	if err != nil {
 		return nil, err
 	}
+	runtimeHomePath := runtimeFactory.RuntimeComponentHomePath(registration, home)
+	bindConfig := componentBindConfig(runtimeConfig, runtimeHomePath)
 	return &Component{
 		registration:     registration,
-		runtime:          threadFactory.Bind(registration, home, runtimeConfig),
-		runtimeConfig:    runtimeConfig,
+		runtime:          threadFactory.Bind(registration, home, bindConfig),
+		runtimeConfig:    bindConfig,
 		home:             home,
 		storage:          storage,
 		resolveWorkspace: resolveWorkspace,
@@ -73,6 +75,16 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 		resolver:         resolver,
 		logger:           logger,
 	}, nil
+}
+
+func componentBindConfig(config runtimepkg.BindConfig, runtimeHomePath string) runtimepkg.BindConfig {
+	runtimeHomePath = strings.TrimSpace(runtimeHomePath)
+	return config.Clean().WithEnvOverride(
+		"HOME="+runtimeHomePath,
+		"GOCACHE="+runtimeHomePath+"/.cache/go-build",
+		"GOPATH="+runtimeHomePath+"/go",
+		"GOMODCACHE="+runtimeHomePath+"/go/pkg/mod",
+	)
 }
 
 func (c *Component) Type() string { return Type }

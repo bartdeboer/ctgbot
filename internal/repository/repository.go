@@ -108,9 +108,11 @@ type ThreadComponentStateRepository interface {
 type MessageRepository interface {
 	Append(ctx context.Context, message *coremodel.ThreadMessage) error
 	ListByThreadID(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
+	DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error)
 }
 
 type ArtifactRepository interface {
 	Append(ctx context.Context, artifact *coremodel.Artifact) error
 	ListByMessageID(ctx context.Context, messageID modeluuid.UUID) ([]coremodel.Artifact, error)
+	DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error)
 }
