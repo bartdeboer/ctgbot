@@ -16,6 +16,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 )
 
 type stubExecutor struct {
@@ -409,6 +410,12 @@ func TestRuntimeImageTargetsUseConfiguredImage(t *testing.T) {
 		if target.Name != "codex" || target.Image != "ctgbot-codex:gpu" || target.Dockerfile != "cuda.Dockerfile" {
 			t.Fatalf("target = %#v", target)
 		}
+		if target.Uses == nil || target.Uses.Name != "codex-cuda-base" || target.Uses.Image != DefaultCudaBaseImage || target.Uses.Dockerfile != "cuda.base.Dockerfile" {
+			t.Fatalf("component uses = %#v", target.Uses)
+		}
+		if target.Uses.Uses == nil || target.Uses.Uses.Name != "go-node-python-cuda-base" || target.Uses.Uses.Image != DefaultCudaDevBase || target.Uses.Uses.Dockerfile != "go-node-python-cuda.base.Dockerfile" {
+			t.Fatalf("component nested uses = %#v", target.Uses.Uses)
+		}
 	})
 }
 
@@ -434,5 +441,36 @@ func TestRuntimeImageTargetsSplitDefaultCodexImage(t *testing.T) {
 		if target.Uses == nil || target.Uses.Name != "codex-base" || target.Uses.Image != DefaultBaseImage || target.Uses.Dockerfile != "codex.base.Dockerfile" {
 			t.Fatalf("component uses = %#v", target.Uses)
 		}
+		if target.Uses.Uses == nil || target.Uses.Uses.Name != "go-node-python-base" || target.Uses.Uses.Image != DefaultDevBaseImage || target.Uses.Uses.Dockerfile != "go-node-python.base.Dockerfile" {
+			t.Fatalf("component nested uses = %#v", target.Uses.Uses)
+		}
 	})
+}
+
+func TestRuntimeImageTargetsAugmentsConfiguredCudaBaseImage(t *testing.T) {
+	c := &Component{
+		registration:      coremodel.Component{Type: Type, Name: "work"},
+		runtimeImage:      "ctgbot-codex:gpu",
+		runtimeDockerfile: "cuda.Dockerfile",
+		runtimeImageUses: &runtimeimage.Target{
+			Name:       "codex-cuda-base",
+			Image:      DefaultCudaBaseImage,
+			Dockerfile: "cuda.base.Dockerfile",
+		},
+	}
+
+	targets, err := c.RuntimeImageTargets(context.Background())
+	if err != nil {
+		t.Fatalf("RuntimeImageTargets() error = %v", err)
+	}
+	if got, want := len(targets), 1; got != want {
+		t.Fatalf("targets = %d, want %d", got, want)
+	}
+	target := targets[0]
+	if target.Uses == nil || target.Uses.Name != "codex-cuda-base" {
+		t.Fatalf("component uses = %#v", target.Uses)
+	}
+	if target.Uses.Uses == nil || target.Uses.Uses.Name != "go-node-python-cuda-base" || target.Uses.Uses.Image != DefaultCudaDevBase || target.Uses.Uses.Dockerfile != "go-node-python-cuda.base.Dockerfile" {
+		t.Fatalf("component nested uses = %#v", target.Uses.Uses)
+	}
 }

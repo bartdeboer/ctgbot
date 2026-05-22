@@ -29,6 +29,9 @@ const (
 	Type                 = "codex"
 	DefaultImage         = "ctgbot-codex:latest"
 	DefaultBaseImage     = "ctgbot-codex-base:latest"
+	DefaultDevBaseImage  = "ctgbot-go-node-python-base:latest"
+	DefaultCudaBaseImage = "ctgbot-codex-cuda-base:latest"
+	DefaultCudaDevBase   = "ctgbot-go-node-python-cuda-base:latest"
 	DefaultCallbackPort  = 1455
 	stopAfterTurnTimeout = 5 * time.Second
 )
@@ -146,22 +149,57 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		Uses:       c.runtimeImageUses,
 	}
 	if target.Uses != nil {
+		uses := codexBaseTargetWithToolchain(*target.Uses)
+		target.Uses = &uses
 		if !target.NoCache {
 			target.NoCache = true
 		}
 		return []runtimeimage.Target{target}, nil
 	}
-	if dockerfile != "codex.Dockerfile" {
+	switch dockerfile {
+	case "codex.Dockerfile":
+		base := codexBaseTargetWithToolchain(runtimeimage.Target{
+			Name:       Type + "-base",
+			Image:      DefaultBaseImage,
+			Dockerfile: "codex.base.Dockerfile",
+		})
+		target.Uses = &base
+		target.NoCache = true
+		return []runtimeimage.Target{target}, nil
+	case "cuda.Dockerfile":
+		base := codexBaseTargetWithToolchain(runtimeimage.Target{
+			Name:       Type + "-cuda-base",
+			Image:      DefaultCudaBaseImage,
+			Dockerfile: "cuda.base.Dockerfile",
+		})
+		target.Uses = &base
+		target.NoCache = true
+		return []runtimeimage.Target{target}, nil
+	default:
 		return []runtimeimage.Target{target}, nil
 	}
-	base := runtimeimage.Target{
-		Name:       Type + "-base",
-		Image:      DefaultBaseImage,
-		Dockerfile: "codex.base.Dockerfile",
+}
+
+func codexBaseTargetWithToolchain(target runtimeimage.Target) runtimeimage.Target {
+	target = target.Clean()
+	if target.Uses != nil {
+		return target
 	}
-	target.Uses = &base
-	target.NoCache = true
-	return []runtimeimage.Target{target}, nil
+	switch target.Dockerfile {
+	case "codex.base.Dockerfile":
+		target.Uses = &runtimeimage.Target{
+			Name:       "go-node-python-base",
+			Image:      DefaultDevBaseImage,
+			Dockerfile: "go-node-python.base.Dockerfile",
+		}
+	case "cuda.base.Dockerfile":
+		target.Uses = &runtimeimage.Target{
+			Name:       "go-node-python-cuda-base",
+			Image:      DefaultCudaDevBase,
+			Dockerfile: "go-node-python-cuda.base.Dockerfile",
+		}
+	}
+	return target
 }
 
 func (c *Component) ManagedFiles() []component.ManagedFile {

@@ -13,12 +13,14 @@ import (
 )
 
 const (
-	Type                    = "llamacppagent"
-	ComponentConfigFilename = "component.json"
-	DefaultImage            = "ctgbot-toolloop:latest"
-	DefaultBaseImage        = "ctgbot-toolloop-base:latest"
-	DefaultDockerfile       = "toolloop.Dockerfile"
-	DefaultBaseDockerfile   = "toolloop.base.Dockerfile"
+	Type                     = "llamacppagent"
+	ComponentConfigFilename  = "component.json"
+	DefaultImage             = "ctgbot-toolloop:latest"
+	DefaultBaseImage         = "ctgbot-toolloop-base:latest"
+	DefaultDevBaseImage      = "ctgbot-go-node-python-base:latest"
+	DefaultDockerfile        = "toolloop.Dockerfile"
+	DefaultBaseDockerfile    = "toolloop.base.Dockerfile"
+	DefaultDevBaseDockerfile = "go-node-python.base.Dockerfile"
 )
 
 type ComponentConfig struct {

@@ -1,19 +1,8 @@
-FROM golang:1.24-bookworm AS go-runtime
-
-FROM nvidia/cuda:12.8.0-base-ubuntu22.04
+FROM ctgbot-go-node-python-cuda-base:latest
 
 ARG CODEX_VERSION=latest
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PATH="/usr/local/go/bin:${PATH}"
-ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ca-certificates git curl bash make tar zip unzip jq \
-        bubblewrap gcc g++ libc6-dev ffmpeg \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
+RUN curl -fsSL https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
     && chmod +x /tmp/install-codex.sh \
     && if [ -n "${CODEX_VERSION}" ] && [ "${CODEX_VERSION}" != "latest" ]; then \
         CODEX_INSTALL_DIR=/usr/local/bin /tmp/install-codex.sh --release "${CODEX_VERSION}"; \
@@ -28,12 +17,6 @@ RUN apt-get update \
     && chmod -R a+rX /opt/codex \
     && chmod 755 /usr/local/bin/codex \
     && codex --version
-
-COPY --from=go-runtime /usr/local/go /usr/local/go
-
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
 
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]

@@ -109,6 +109,8 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		Uses:       c.runtimeConfig.Uses,
 	}
 	if target.Uses != nil {
+		uses := toolloopBaseTargetWithToolchain(*target.Uses)
+		target.Uses = &uses
 		if !target.NoCache {
 			target.NoCache = true
 		}
@@ -117,13 +119,27 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 	if target.Dockerfile != DefaultDockerfile {
 		return []runtimeimage.Target{target}, nil
 	}
-	target.Uses = &runtimeimage.Target{
+	uses := toolloopBaseTargetWithToolchain(runtimeimage.Target{
 		Name:       Type + "-base",
 		Image:      DefaultBaseImage,
 		Dockerfile: DefaultBaseDockerfile,
-	}
+	})
+	target.Uses = &uses
 	target.NoCache = true
 	return []runtimeimage.Target{target}, nil
+}
+
+func toolloopBaseTargetWithToolchain(target runtimeimage.Target) runtimeimage.Target {
+	target = target.Clean()
+	if target.Uses != nil || target.Dockerfile != DefaultBaseDockerfile {
+		return target
+	}
+	target.Uses = &runtimeimage.Target{
+		Name:       "go-node-python-base",
+		Image:      DefaultDevBaseImage,
+		Dockerfile: DefaultDevBaseDockerfile,
+	}
+	return target
 }
 
 func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
