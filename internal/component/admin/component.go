@@ -102,7 +102,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 }
 
 func componentReadSources() []commandengine.Source {
-	return []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge}
+	return []commandengine.Source{commandengine.SourceCLI, commandengine.SourceMessage, commandengine.SourceHostbridge}
 }
 
 func componentCommand(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source, visibility commandengine.InstructionVisibility) commandengine.Definition {

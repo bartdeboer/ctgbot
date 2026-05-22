@@ -20,15 +20,17 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Warning: cannot open global config: %v\n", err)
 	}
 
-	r := clir.New()
-	registerVersionRoutes(r)
-	registerRuntimeRoutes(r, store, globalStore)
-
-	if err := r.Run(context.Background(), os.Args[1:]); err != nil {
-		fmt.Println("error:", err)
-		fmt.Println("usage: ctgbot <command>... [args]")
-		fmt.Println("available commands:")
-		r.PrintHelp(os.Stdout)
-		os.Exit(1)
+	ctx := context.Background()
+	argv := os.Args[1:]
+	if len(argv) > 0 && argv[0] == "run" {
+		r := clir.New()
+		registerRuntimeRoutes(r, store, globalStore)
+		if err := r.Run(ctx, argv); err != nil {
+			fmt.Println("error:", err)
+			fmt.Println("usage: ctgbot run [args]")
+			os.Exit(1)
+		}
+		return
 	}
+	runCLIOrExit(ctx, argv, store, globalStore)
 }

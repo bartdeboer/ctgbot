@@ -50,7 +50,7 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			rtSystem, err := openSystemForRoutes(req, store, newRuntimeProcessActions(globalStore, stop, nil))
+			rtSystem, err := openSystem(req.Context(), store, newRuntimeProcessActions(globalStore, stop, nil), nil)
 			if err != nil {
 				return err
 			}
@@ -73,9 +73,11 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 	})
 }
 
-func openSystemForRoutes(req *clir.Request, store *clistate.Store, processActions processcomponent.Actions) (*systempkg.System, error) {
-	logger := log.New(os.Stdout, "", log.LstdFlags)
-	rtSystem, err := systempkg.Open(req.Context(), "", "", store, logger)
+func openSystem(ctx context.Context, store *clistate.Store, processActions processcomponent.Actions, logger *log.Logger) (*systempkg.System, error) {
+	if logger == nil {
+		logger = log.New(os.Stdout, "", log.LstdFlags)
+	}
+	rtSystem, err := systempkg.Open(ctx, "", "", store, logger)
 	if err != nil {
 		return nil, err
 	}
