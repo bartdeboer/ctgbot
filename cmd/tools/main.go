@@ -169,6 +169,9 @@ func runWrite(args []string, stdin io.Reader, stdout io.Writer) error {
 	if err := os.WriteFile(path, body, 0o644); err != nil {
 		return err
 	}
+	if err := markRead(path); err != nil {
+		return err
+	}
 	fmt.Fprintf(stdout, "wrote: %s\n", path)
 	return nil
 }

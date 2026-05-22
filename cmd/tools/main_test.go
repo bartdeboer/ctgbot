@@ -90,6 +90,24 @@ func TestWriteCreatesNewFileWithoutReadButRequiresParent(t *testing.T) {
 	assertContains(t, stderr, "parent directory does not exist")
 }
 
+func TestWriteMarksFileReadForImmediateEdit(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CTGBOT_TOOLS_STATE", filepath.Join(dir, "state.json"))
+	path := filepath.Join(dir, "new.txt")
+
+	_, stderr, code := runTools(t, []string{"write", "--file", path, "--content", "hello"}, "")
+	if code != 0 {
+		t.Fatalf("write failed: %s", stderr)
+	}
+	_, stderr, code = runTools(t, []string{"edit", "--file", path, "--old", "hello", "--new", "world"}, "")
+	if code != 0 {
+		t.Fatalf("edit after write failed: %s", stderr)
+	}
+	if got := readTestFile(t, path); got != "world" {
+		t.Fatalf("file = %q", got)
+	}
+}
+
 func TestWriteExistingRequiresRead(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CTGBOT_TOOLS_STATE", filepath.Join(dir, "state.json"))
