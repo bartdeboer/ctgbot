@@ -23,6 +23,22 @@ func TestRunAppliesAddFileFromArgument(t *testing.T) {
 	assertContains(t, stdout, "A hello.txt")
 }
 
+func TestAddFileOverwritesExistingFileLikeCodex(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "existing.txt", "original\n")
+	patch := wrapPatch(`*** Add File: existing.txt
++new
++content`)
+
+	stdout, stderr, code := runPatch(t, dir, []string{patch}, "")
+
+	if code != 0 {
+		t.Fatalf("run exit = %d, stderr = %s", code, stderr)
+	}
+	assertFile(t, dir, "existing.txt", "new\ncontent\n")
+	assertContains(t, stdout, "A existing.txt")
+}
+
 func TestRunReadsPatchFromStdin(t *testing.T) {
 	dir := t.TempDir()
 	patch := wrapPatch(`*** Add File: stdin.txt
@@ -92,6 +108,29 @@ func TestApplyMoveFile(t *testing.T) {
 		t.Fatalf("old/name.txt exists after move, stat err = %v", err)
 	}
 	assertContains(t, stdout, "M old/name.txt")
+}
+
+func TestMoveOverwritesExistingDestinationLikeCodex(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "source.txt", "one\ntwo\n")
+	writeFile(t, dir, "dest.txt", "existing destination\n")
+	patch := wrapPatch(`*** Update File: source.txt
+*** Move to: dest.txt
+@@
+ one
+-two
++updated`)
+
+	stdout, stderr, code := runPatch(t, dir, []string{patch}, "")
+
+	if code != 0 {
+		t.Fatalf("run exit = %d, stderr = %s", code, stderr)
+	}
+	assertFile(t, dir, "dest.txt", "one\nupdated\n")
+	if _, err := os.Stat(filepath.Join(dir, "source.txt")); !os.IsNotExist(err) {
+		t.Fatalf("source.txt exists after move, stat err = %v", err)
+	}
+	assertContains(t, stdout, "M source.txt")
 }
 
 func TestApplyMultipleHunks(t *testing.T) {
