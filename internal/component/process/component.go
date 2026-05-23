@@ -70,19 +70,21 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		[]commandengine.Route{{Pattern: "upgrade all", Absolute: true}},
 		simplerbac.Any(simplerbac.RoleRoot),
 	)...)
-	definitions = append(definitions, processCommandDefinitions(
+	definitions = append(definitions, processCommandDefinitionsWithVisibility(
 		"image list",
 		"List runtime image build targets",
 		buildImageListCommand,
 		[]commandengine.Route{{Pattern: "image list", Absolute: true}},
 		simplerbac.Any(simplerbac.RoleRoot),
+		commandengine.InstructionImportant,
 	)...)
-	definitions = append(definitions, processCommandDefinitions(
+	definitions = append(definitions, processCommandDefinitionsWithVisibility(
 		"image build",
 		"Build runtime image targets",
 		buildImageBuildCommand,
 		[]commandengine.Route{{Pattern: "image build", Absolute: true}},
 		simplerbac.Any(simplerbac.RoleRoot),
+		commandengine.InstructionImportant,
 	)...)
 	definitions = append(definitions, processCommandDefinitions(
 		"quit",
@@ -199,20 +201,25 @@ func (c *Component) quit(ctx context.Context) error {
 }
 
 func processCommandDefinitions(localPattern string, help string, build commandengine.BuildFunc, aliases []commandengine.Route, policy simplerbac.Rule) []commandengine.Definition {
+	return processCommandDefinitionsWithVisibility(localPattern, help, build, aliases, policy, commandengine.InstructionDiscoverable)
+}
+
+func processCommandDefinitionsWithVisibility(localPattern string, help string, build commandengine.BuildFunc, aliases []commandengine.Route, policy simplerbac.Rule, visibility commandengine.InstructionVisibility) []commandengine.Definition {
 	return []commandengine.Definition{
-		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceMessage}, aliases, policy),
-		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceCLI}, nil, policy),
+		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceMessage}, aliases, policy, visibility),
+		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceCLI}, nil, policy, visibility),
 	}
 }
 
-func processCommandDefinition(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source, aliases []commandengine.Route, policy simplerbac.Rule) commandengine.Definition {
+func processCommandDefinition(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source, aliases []commandengine.Route, policy simplerbac.Rule, visibility commandengine.InstructionVisibility) commandengine.Definition {
 	return commandengine.Definition{
-		Pattern: pattern,
-		Help:    help,
-		Build:   build,
-		Sources: sources,
-		Policy:  policy,
-		Aliases: aliases,
+		Pattern:               pattern,
+		Help:                  help,
+		Build:                 build,
+		Sources:               sources,
+		Policy:                policy,
+		Aliases:               aliases,
+		InstructionVisibility: visibility,
 	}
 }
 

@@ -40,11 +40,12 @@ func (s *workspaceCLISurface) Type() string { return "workspace" }
 func (s *workspaceCLISurface) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
 		{
-			Pattern: "workspace set <workspace>",
-			Help:    "Configure a workspace",
-			Build:   buildWorkspaceSetCommand,
-			Sources: []commandengine.Source{commandengine.SourceCLI},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+			Pattern:               "workspace set <workspace>",
+			Help:                  "Configure a workspace",
+			Build:                 buildWorkspaceSetCommand,
+			Sources:               []commandengine.Source{commandengine.SourceCLI},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot),
+			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
 			Pattern: "workspace list",
@@ -53,8 +54,9 @@ func (s *workspaceCLISurface) CommandDefinitions() []commandengine.Definition {
 				_ = req
 				return workspaceListCommand{}, nil
 			},
-			Sources: []commandengine.Source{commandengine.SourceCLI},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+			Sources:               []commandengine.Source{commandengine.SourceCLI},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot),
+			InstructionVisibility: commandengine.InstructionImportant,
 		},
 	}
 }

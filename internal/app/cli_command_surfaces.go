@@ -70,11 +70,12 @@ func (s *cliCommandSurface) Type() string { return cliSurfaceType }
 func (s *cliCommandSurface) CommandDefinitions() []commandengine.Definition {
 	definitions := []commandengine.Definition{
 		{
-			Pattern: "component register <component>",
-			Help:    "Register a component instance",
-			Build:   buildComponentRegisterCommand,
-			Sources: []commandengine.Source{commandengine.SourceCLI},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+			Pattern:               "component register <component>",
+			Help:                  "Register a component instance",
+			Build:                 buildComponentRegisterCommand,
+			Sources:               []commandengine.Source{commandengine.SourceCLI},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot),
+			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
 			Pattern: "component unregister <component>",

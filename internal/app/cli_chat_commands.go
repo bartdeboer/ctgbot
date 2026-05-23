@@ -83,15 +83,15 @@ type chatComponentFilterListCommand struct {
 
 func chatCLICommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
-		cliRootDefinition("chat create <label>", "Create a chat", buildChatCreateCommand),
-		cliRootDefinition("chat list", "List chats", func(req *clir.Request) (any, error) { _ = req; return chatListCommand{}, nil }),
-		cliRootDefinition("chat dropped", "List unresolved dropped inbound chats", func(req *clir.Request) (any, error) { _ = req; return chatDroppedCommand{}, nil }),
-		cliRootDefinition("chat bind <component> <externalChannelID>", "Create an enabled chat for a dropped inbound external channel and bind the inbound component", buildChatBindCommand),
-		cliRootDefinition("chat <chatID> workspace set <workspace>", "Assign a named workspace to a chat", buildChatWorkspaceSetCommand),
+		cliImportantDefinition("chat create <label>", "Create a chat", buildChatCreateCommand),
+		cliImportantDefinition("chat list", "List chats", func(req *clir.Request) (any, error) { _ = req; return chatListCommand{}, nil }),
+		cliImportantDefinition("chat dropped", "List unresolved dropped inbound chats", func(req *clir.Request) (any, error) { _ = req; return chatDroppedCommand{}, nil }),
+		cliImportantDefinition("chat bind <component> <externalChannelID>", "Create an enabled chat for a dropped inbound external channel and bind the inbound component", buildChatBindCommand),
+		cliImportantDefinition("chat <chatID> workspace set <workspace>", "Assign a named workspace to a chat", buildChatWorkspaceSetCommand),
 		cliRootDefinition("chat <chatID> workspace clear", "Clear the named workspace from a chat", buildChatWorkspaceClearCommand),
-		cliRootDefinition("chat <chatID> component add <role> <component>", "Bind a registered component to a chat by role", buildChatComponentAddCommand),
+		cliImportantDefinition("chat <chatID> component add <role> <component>", "Bind a registered component to a chat by role", buildChatComponentAddCommand),
 		cliRootDefinition("chat <chatID> component remove <role> <component>", "Remove a component binding from a chat by role", buildChatComponentRemoveCommand),
-		cliRootDefinition("chat <chatID> component list", "List component bindings for a chat", buildChatComponentListCommand),
+		cliImportantDefinition("chat <chatID> component list", "List component bindings for a chat", buildChatComponentListCommand),
 		cliRootDefinition("chat <chatID> component <source> filter add <filter>", "Add an inbound event filter for a chat source binding", buildChatComponentFilterAddCommand),
 		cliRootDefinition("chat <chatID> component <source> filter remove <filter>", "Remove an inbound event filter from a chat source binding", buildChatComponentFilterRemoveCommand),
 		cliRootDefinition("chat <chatID> component <source> filter clear", "Clear inbound event filters for a chat source binding", buildChatComponentFilterClearCommand),
@@ -142,12 +142,21 @@ func registerChatCLICommandHandlers(registry *commandengine.Registry, surface *c
 }
 
 func cliRootDefinition(pattern string, help string, build commandengine.BuildFunc) commandengine.Definition {
+	return cliDefinition(pattern, help, build, commandengine.InstructionDiscoverable)
+}
+
+func cliImportantDefinition(pattern string, help string, build commandengine.BuildFunc) commandengine.Definition {
+	return cliDefinition(pattern, help, build, commandengine.InstructionImportant)
+}
+
+func cliDefinition(pattern string, help string, build commandengine.BuildFunc, visibility commandengine.InstructionVisibility) commandengine.Definition {
 	return commandengine.Definition{
-		Pattern: pattern,
-		Help:    help,
-		Build:   build,
-		Sources: []commandengine.Source{commandengine.SourceCLI},
-		Policy:  simplerbac.Any(simplerbac.RoleRoot),
+		Pattern:               pattern,
+		Help:                  help,
+		Build:                 build,
+		Sources:               []commandengine.Source{commandengine.SourceCLI},
+		Policy:                simplerbac.Any(simplerbac.RoleRoot),
+		InstructionVisibility: visibility,
 	}
 }
 
