@@ -43,6 +43,7 @@ type Runner struct {
 	Client         *http.Client
 	HostbridgePath string
 	ApplyPatchPath string
+	ToolsPath      string
 	Workspace      string
 	Stderr         io.Writer
 	CommandTimeout time.Duration
@@ -118,7 +119,7 @@ func cleanRequest(req Request) Request {
 }
 
 func (r Runner) chat(ctx context.Context, client *http.Client, req Request, messages []chatMessage) (assistantMessage, error) {
-	body := chatRequest{Model: req.Model, Messages: messages, Tools: hostbridgeTools(), MaxTokens: req.MaxTokens, Temperature: req.Temperature}
+	body := chatRequest{Model: req.Model, Messages: messages, Tools: toolDefinitions(), MaxTokens: req.MaxTokens, Temperature: req.Temperature}
 	data, err := json.Marshal(body)
 	if err != nil {
 		return assistantMessage{}, err
@@ -174,6 +175,24 @@ func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
 			return "invalid apply_patch arguments: " + err.Error(), true
 		}
 		return r.applyPatch(ctx, args)
+	case "read_file":
+		var args readFileArgs
+		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+			return "invalid read_file arguments: " + err.Error(), true
+		}
+		return r.readFile(ctx, args)
+	case "write_file":
+		var args writeFileArgs
+		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+			return "invalid write_file arguments: " + err.Error(), true
+		}
+		return r.writeFile(ctx, args)
+	case "edit_file":
+		var args editFileArgs
+		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+			return "invalid edit_file arguments: " + err.Error(), true
+		}
+		return r.editFile(ctx, args)
 	default:
 		return "unknown tool: " + name, true
 	}
@@ -188,6 +207,25 @@ type shellArgs struct {
 	Command   string `json:"command"`
 	Workdir   string `json:"workdir,omitempty"`
 	TimeoutMS int    `json:"timeout_ms,omitempty"`
+}
+
+type readFileArgs struct {
+	File   string `json:"file"`
+	Offset int    `json:"offset,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
+	Pages  string `json:"pages,omitempty"`
+}
+
+type writeFileArgs struct {
+	File    string `json:"file"`
+	Content string `json:"content"`
+}
+
+type editFileArgs struct {
+	File       string `json:"file"`
+	OldString  string `json:"old_string"`
+	NewString  string `json:"new_string"`
+	ReplaceAll bool   `json:"replace_all,omitempty"`
 }
 
 func (r Runner) runShell(ctx context.Context, args shellArgs) (string, bool) {
@@ -222,6 +260,90 @@ func (r Runner) runShell(ctx context.Context, args shellArgs) (string, bool) {
 		return text, true
 	}
 	return text, false
+}
+
+func (r Runner) readFile(ctx context.Context, args readFileArgs) (string, bool) {
+	file, err := r.resolveWorkspaceFile(args.File)
+	if err != nil {
+		return err.Error(), true
+	}
+	argv := []string{"read", "--file", file}
+	if args.Offset > 0 {
+		argv = append(argv, "--offset", strconv.Itoa(args.Offset))
+	}
+	if args.Limit > 0 {
+		argv = append(argv, "--limit", strconv.Itoa(args.Limit))
+	}
+	if strings.TrimSpace(args.Pages) != "" {
+		argv = append(argv, "--pages", strings.TrimSpace(args.Pages))
+	}
+	return r.runTools(ctx, argv, "")
+}
+
+func (r Runner) writeFile(ctx context.Context, args writeFileArgs) (string, bool) {
+	file, err := r.resolveWorkspaceFile(args.File)
+	if err != nil {
+		return err.Error(), true
+	}
+	return r.runTools(ctx, []string{"write", "--file", file}, args.Content)
+}
+
+func (r Runner) editFile(ctx context.Context, args editFileArgs) (string, bool) {
+	file, err := r.resolveWorkspaceFile(args.File)
+	if err != nil {
+		return err.Error(), true
+	}
+	argv := []string{"edit", "--file", file, "--old", args.OldString, "--new", args.NewString}
+	if args.ReplaceAll {
+		argv = append(argv, "--replace-all")
+	}
+	return r.runTools(ctx, argv, "")
+}
+
+func (r Runner) runTools(ctx context.Context, argv []string, stdin string) (string, bool) {
+	timeout := r.CommandTimeout
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	toolCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	binary := firstNonEmpty(r.ToolsPath, getenv("TOOLLOOP_TOOLS_PATH"), "tools")
+	cmd := exec.CommandContext(toolCtx, binary, argv...)
+	cmd.Stdin = strings.NewReader(stdin)
+	out, err := cmd.CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		if text == "" {
+			text = err.Error()
+		} else {
+			text = err.Error() + "\n" + text
+		}
+		return text, true
+	}
+	return text, false
+}
+
+func (r Runner) resolveWorkspaceFile(requested string) (string, error) {
+	workspace := firstNonEmpty(r.Workspace, getenv("TOOLLOOP_WORKSPACE"), "/workspace")
+	workspace = path.Clean(workspace)
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return "", errors.New("missing file")
+	}
+	var file string
+	if strings.HasPrefix(requested, "/") {
+		file = path.Clean(requested)
+	} else {
+		cleaned := path.Clean(requested)
+		if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+			return "", fmt.Errorf("file escapes workspace: %s", requested)
+		}
+		file = path.Join(workspace, cleaned)
+	}
+	if file == workspace || !strings.HasPrefix(file, strings.TrimRight(workspace, "/")+"/") {
+		return "", fmt.Errorf("file outside workspace: %s", requested)
+	}
+	return file, nil
 }
 
 type applyPatchArgs struct {
@@ -377,13 +499,15 @@ type toolFunction struct {
 	Parameters  map[string]any `json:"parameters"`
 }
 
-func hostbridgeTools() []toolDef {
+func toolDefinitions() []toolDef {
 	return []toolDef{
 		{
 			Type: "function",
 			Function: toolFunction{
-				Name:        "shell",
-				Description: "Run a bash command inside the sandbox workspace. Prefer rg, sed, nl, and other read-only inspection commands before editing. Use apply_patch for file edits.",
+				Name: "shell",
+				Description: `Run a bash command inside the sandbox workspace.
+Use shell for normal commands such as go test, go run, rg, find, ls, sed, and nl.
+Prefer read-only inspection before editing. For file edits, prefer edit_file/write_file or apply_patch instead of shell redirection.`,
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -413,8 +537,88 @@ func hostbridgeTools() []toolDef {
 		{
 			Type: "function",
 			Function: toolFunction{
-				Name:        "apply_patch",
-				Description: "Apply a Codex-style patch to files in the workspace. The patch must begin with *** Begin Patch and end with *** End Patch.",
+				Name: "read_file",
+				Description: `Read a workspace file using Claude-style file-tool semantics.
+Use this before edit_file or before overwriting an existing file with write_file.
+The file may be absolute under /workspace or workspace-relative. Text output is line-numbered; use offset/limit for large files. PDFs require pages.`,
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"file":   map[string]any{"type": "string", "description": "File path under the workspace, for example /workspace/main.go or main.go."},
+						"offset": map[string]any{"type": "integer", "description": "Optional 0-based line offset."},
+						"limit":  map[string]any{"type": "integer", "description": "Optional maximum number of lines to read."},
+						"pages":  map[string]any{"type": "string", "description": "Required page range for PDF files, for example 1-3."},
+					},
+					"required": []string{"file"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFunction{
+				Name: "write_file",
+				Description: `Create or fully rewrite a workspace file using Claude-style file-tool semantics.
+Use write_file for new files or deliberate full-file rewrites. Existing files must be read first with read_file.
+For localized changes to existing files, prefer edit_file. The file may be absolute under /workspace or workspace-relative.`,
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"file":    map[string]any{"type": "string", "description": "File path under the workspace, for example /workspace/main.go or main.go."},
+						"content": map[string]any{"type": "string", "description": "Full replacement file content."},
+					},
+					"required": []string{"file", "content"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFunction{
+				Name: "edit_file",
+				Description: `Edit an existing workspace file by exact string replacement using Claude-style file-tool semantics.
+The file must be read first with read_file. old_string must exactly match existing text.
+By default old_string must occur exactly once; if it appears multiple times, include more context or intentionally set replace_all=true.`,
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"file":        map[string]any{"type": "string", "description": "File path under the workspace, for example /workspace/main.go or main.go."},
+						"old_string":  map[string]any{"type": "string", "description": "Exact existing text to replace. Include enough context to make it unique."},
+						"new_string":  map[string]any{"type": "string", "description": "Replacement text."},
+						"replace_all": map[string]any{"type": "boolean", "description": "Replace every occurrence. Use only when all matches should change."},
+					},
+					"required": []string{"file", "old_string", "new_string"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFunction{
+				Name: "apply_patch",
+				Description: `Apply a Codex-style patch to workspace files.
+This is Codex apply_patch grammar, not unified diff. File paths in the patch must be relative, never absolute.
+Patch envelope:
+*** Begin Patch
+... file operations ...
+*** End Patch
+Add file:
+*** Add File: path
++line
++line
+Delete file:
+*** Delete File: path
+Update file:
+*** Update File: path
+@@ optional context/header
+ context line
+-old line
++new line
+Optional rename after update header:
+*** Move to: new/path
+Do not emit --- /dev/null, +++ b/file, or @@ -0,0 unified-diff headers.
+Minimal valid example:
+*** Begin Patch
+*** Add File: hello.txt
++hello
+*** End Patch`,
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
