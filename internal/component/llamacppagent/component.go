@@ -267,6 +267,9 @@ func toolloopMessages(history []coremodel.ThreadMessage, inbound coremodel.Threa
 	}
 	out := make([]toolloop.Message, 0, len(history))
 	for _, message := range history {
+		if message.Kind == coremodel.MessageKindSystem {
+			continue
+		}
 		if !inbound.ID.IsNull() && message.ID == inbound.ID {
 			message = inbound
 		}

@@ -36,6 +36,21 @@ func TestToolloopMessagesIncludesConversationHistory(t *testing.T) {
 	}
 }
 
+func TestToolloopMessagesSkipsSystemHistory(t *testing.T) {
+	t.Parallel()
+	history := []coremodel.ThreadMessage{
+		{Kind: coremodel.MessageKindSystem, Text: "system context"},
+		{Kind: coremodel.MessageKindUser, Text: "Hello"},
+	}
+	messages := toolloopMessages(history, coremodel.ThreadMessage{})
+	if len(messages) != 1 {
+		t.Fatalf("len(messages) = %d", len(messages))
+	}
+	if messages[0].Role != "user" || messages[0].Content != "Hello" {
+		t.Fatalf("messages[0] = %#v", messages[0])
+	}
+}
+
 func TestTextPromptFromMessagesIncludesHistory(t *testing.T) {
 	t.Parallel()
 	prompt := textPromptFromMessages([]toolloop.Message{{Role: "user", Content: "Hello"}, {Role: "assistant", Content: "Hi"}}, "fallback")
