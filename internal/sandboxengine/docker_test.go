@@ -72,6 +72,7 @@ func TestSandboxContainerSpecMapsFields(t *testing.T) {
 		Image:        "ctgbot:latest",
 		Entrypoint:   "tail",
 		Workdir:      "/workspace",
+		User:         "1000:1000",
 		GPUs:         "all",
 		Labels:       map[string]string{"a": "b"},
 		Env:          []string{"HOME=/codex-home"},
@@ -81,7 +82,7 @@ func TestSandboxContainerSpecMapsFields(t *testing.T) {
 		Cmd:          []string{"tail", "-f", "/dev/null"},
 	}}
 	spec := sbx.ContainerSpec()
-	if spec.Name != sbx.Name || spec.Image != sbx.Image || spec.Entrypoint != sbx.Entrypoint || spec.Workdir != sbx.Workdir {
+	if spec.Name != sbx.Name || spec.Image != sbx.Image || spec.Entrypoint != sbx.Entrypoint || spec.Workdir != sbx.Workdir || spec.User != sbx.User {
 		t.Fatalf("unexpected spec: %#v", spec)
 	}
 	if len(spec.Mounts) != 1 || spec.Mounts[0].Source != "/src" || !spec.Mounts[0].ReadOnly {

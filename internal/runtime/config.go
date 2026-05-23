@@ -35,11 +35,44 @@ func (c BindConfig) Clean() BindConfig {
 	c.Env = cleanEnv(c.Env)
 	c.Cmd = cleanArgs(c.Cmd)
 	c.IdleTimeout = strings.TrimSpace(c.IdleTimeout)
+	c.UID = cleanID(c.UID)
+	c.GID = cleanID(c.GID)
 	if c.Uses != nil {
 		cleaned := c.Uses.Clean()
 		c.Uses = &cleaned
 	}
 	return c
+}
+
+const DefaultUID = 1000
+const DefaultGID = 1000
+
+func (c BindConfig) UserString() string {
+	uid, gid := c.UIDGID()
+	return fmt.Sprintf("%d:%d", uid, gid)
+}
+
+func (c BindConfig) UIDGID() (int, int) {
+	c = c.Clean()
+	uid := DefaultUID
+	if c.UID != nil {
+		uid = *c.UID
+	}
+	gid := uid
+	if c.GID != nil {
+		gid = *c.GID
+	} else if c.UID == nil {
+		gid = DefaultGID
+	}
+	return uid, gid
+}
+
+func cleanID(value *int) *int {
+	if value == nil || *value < 0 {
+		return nil
+	}
+	cleaned := *value
+	return &cleaned
 }
 
 func (c BindConfig) WithEnv(extra ...string) BindConfig {

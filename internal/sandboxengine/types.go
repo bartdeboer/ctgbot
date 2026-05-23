@@ -47,6 +47,7 @@ type SandboxSpec struct {
 	Image        string
 	Entrypoint   string
 	Workdir      string
+	User         string
 	UserMode     string
 	GPUs         string
 	Labels       map[string]string
@@ -99,6 +100,7 @@ func (s *Sandbox) ContainerSpec() containerengine.ContainerSpec {
 		Image:        s.Image,
 		Entrypoint:   s.Entrypoint,
 		Workdir:      s.Workdir,
+		User:         s.User,
 		UserMode:     s.UserMode,
 		GPUs:         s.GPUs,
 		Labels:       s.Labels,

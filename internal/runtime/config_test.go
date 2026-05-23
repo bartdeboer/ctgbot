@@ -64,12 +64,41 @@ func TestBindConfigCleanNormalizesIdleTimeout(t *testing.T) {
 	}
 }
 
+func TestBindConfigUIDGIDDefaultsToCtgbotUser(t *testing.T) {
+	uid, gid := (BindConfig{}).UIDGID()
+	if uid != 1000 || gid != 1000 {
+		t.Fatalf("UIDGID() = %d:%d, want 1000:1000", uid, gid)
+	}
+	if got := (BindConfig{}).UserString(); got != "1000:1000" {
+		t.Fatalf("UserString() = %q, want 1000:1000", got)
+	}
+}
+
+func TestBindConfigUIDGIDAllowsRoot(t *testing.T) {
+	uidValue := 0
+	gidValue := 0
+	config := BindConfig{UID: &uidValue, GID: &gidValue}
+	if got := config.UserString(); got != "0:0" {
+		t.Fatalf("UserString() = %q, want 0:0", got)
+	}
+}
+
+func TestBindConfigUIDDefaultsGIDToUID(t *testing.T) {
+	uidValue := 1001
+	config := BindConfig{UID: &uidValue}
+	if got := config.UserString(); got != "1001:1001" {
+		t.Fatalf("UserString() = %q, want 1001:1001", got)
+	}
+}
+
 func TestLoadBindConfigReadsRuntimeImageUses(t *testing.T) {
 	home := t.TempDir()
 	if err := os.WriteFile(filepath.Join(home, ConfigFilename), []byte(`{
 		"image": "ctgbot-codex:gpu",
 		"dockerfile": "cuda.Dockerfile",
 		"no_cache": true,
+		"uid": 0,
+		"gid": 0,
 		"uses": {
 			"name": "codex-cuda-base",
 			"image": "ctgbot-codex-cuda-base:latest",
@@ -85,6 +114,9 @@ func TestLoadBindConfigReadsRuntimeImageUses(t *testing.T) {
 	}
 	if config.Image != "ctgbot-codex:gpu" || config.Dockerfile != "cuda.Dockerfile" || !config.NoCache {
 		t.Fatalf("config = %#v", config)
+	}
+	if got := config.UserString(); got != "0:0" {
+		t.Fatalf("UserString() = %q, want 0:0", got)
 	}
 	if config.Uses == nil || config.Uses.Name != "codex-cuda-base" || config.Uses.Image != "ctgbot-codex-cuda-base:latest" || config.Uses.Dockerfile != "cuda.base.Dockerfile" {
 		t.Fatalf("uses = %#v", config.Uses)

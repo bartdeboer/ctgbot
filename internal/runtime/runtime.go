@@ -24,6 +24,8 @@ type BindConfig struct {
 	Seccomp     string               `json:"seccomp"`
 	Cmd         []string             `json:"cmd,omitempty"`
 	IdleTimeout string               `json:"idle_timeout,omitempty"`
+	UID         *int                 `json:"uid,omitempty"`
+	GID         *int                 `json:"gid,omitempty"`
 	NoCache     bool                 `json:"no_cache,omitempty"`
 	Uses        *runtimeimage.Target `json:"uses,omitempty"`
 }
