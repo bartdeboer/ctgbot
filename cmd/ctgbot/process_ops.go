@@ -141,6 +141,10 @@ func (p *projectProcessActions) ImageList(ctx context.Context) (string, error) {
 	return formatRuntimeImageTargets(targets), nil
 }
 
+func (p *projectProcessActions) ImageBuild(ctx context.Context, noCache bool) error {
+	return p.BuildRuntimeImages(ctx, noCache)
+}
+
 func (p *projectProcessActions) Quit(ctx context.Context) error {
 	_ = ctx
 	p.logf("shutting down ctgbot")

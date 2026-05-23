@@ -68,7 +68,7 @@ func (s *service) CLICommandSurfaces(ctx context.Context) ([]component.CommandSu
 func (s *cliCommandSurface) Type() string { return cliSurfaceType }
 
 func (s *cliCommandSurface) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		{
 			Pattern: "component register <component>",
 			Help:    "Register a component instance",
@@ -97,6 +97,8 @@ func (s *cliCommandSurface) CommandDefinitions() []commandengine.Definition {
 			Policy:  simplerbac.Any(simplerbac.RoleRoot),
 		},
 	}
+	definitions = append(definitions, chatCLICommandDefinitions()...)
+	return definitions
 }
 
 func (s *cliCommandSurface) RegisterCommandHandlers(registry *commandengine.Registry) error {
@@ -109,7 +111,10 @@ func (s *cliCommandSurface) RegisterCommandHandlers(registry *commandengine.Regi
 	if err := commandengine.Register[componentUnregisterCommand](registry, s.handleComponentUnregister); err != nil {
 		return err
 	}
-	return commandengine.Register[componentRunCommand](registry, s.handleComponentRun)
+	if err := commandengine.Register[componentRunCommand](registry, s.handleComponentRun); err != nil {
+		return err
+	}
+	return registerChatCLICommandHandlers(registry, s)
 }
 
 func buildComponentRegisterCommand(req *clir.Request) (any, error) {

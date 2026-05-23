@@ -1062,6 +1062,11 @@ func (n *noopProcessActions) ImageList(ctx context.Context) (string, error) {
 	return "images", nil
 }
 
+func (n *noopProcessActions) ImageBuild(ctx context.Context, noCache bool) error {
+	_, _ = ctx, noCache
+	return nil
+}
+
 func (n *noopProcessActions) Quit(ctx context.Context) error {
 	_ = ctx
 	return nil
@@ -1072,6 +1077,7 @@ type recordingProcessActions struct {
 	upgradeCalls    int
 	upgradeAllCalls int
 	imageListCalls  int
+	imageBuildCalls int
 	quitCalls       int
 }
 
@@ -1095,6 +1101,12 @@ func (r *recordingProcessActions) ImageList(ctx context.Context) (string, error)
 	_ = ctx
 	r.imageListCalls++
 	return "images", nil
+}
+
+func (r *recordingProcessActions) ImageBuild(ctx context.Context, noCache bool) error {
+	_, _ = ctx, noCache
+	r.imageBuildCalls++
+	return nil
 }
 
 func (r *recordingProcessActions) Quit(ctx context.Context) error {

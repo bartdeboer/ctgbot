@@ -33,7 +33,11 @@ func openCLIRuntime(ctx context.Context, store *clistate.Store, globalStore *cli
 	if err != nil {
 		return nil, err
 	}
-	surfaces := append([]component.CommandSurface{processcomponent.New(processActions)}, appSurfaces...)
+	staticSurfaces := []component.CommandSurface{
+		processcomponent.New(processActions),
+		newWorkspaceCLISurface(store),
+	}
+	surfaces := append(staticSurfaces, appSurfaces...)
 	engine, err := commandset.NewEngineForSource(commandengine.SourceCLI, surfaces...)
 	if err != nil {
 		return nil, err

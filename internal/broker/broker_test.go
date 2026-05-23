@@ -2223,6 +2223,11 @@ func (f *fakeProcessActions) ImageList(ctx context.Context) (string, error) {
 	return "images", nil
 }
 
+func (f *fakeProcessActions) ImageBuild(ctx context.Context, noCache bool) error {
+	_, _ = ctx, noCache
+	return nil
+}
+
 func (f *fakeProcessActions) Quit(ctx context.Context) error {
 	_ = ctx
 	return nil
