@@ -1,24 +1,20 @@
-package main
+package app
 
 import (
 	"context"
 	"flag"
 	"fmt"
 	"io"
-	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	"github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
-	"github.com/bartdeboer/go-clistate"
 )
 
 type workspaceCLISurface struct {
-	store *clistate.Store
+	service *service
 }
 
 type workspaceSetCommand struct {
@@ -31,8 +27,8 @@ type workspaceListCommand struct{}
 var _ component.Component = (*workspaceCLISurface)(nil)
 var _ component.CommandSurface = (*workspaceCLISurface)(nil)
 
-func newWorkspaceCLISurface(store *clistate.Store) *workspaceCLISurface {
-	return &workspaceCLISurface{store: store}
+func newWorkspaceCLISurface(service *service) *workspaceCLISurface {
+	return &workspaceCLISurface{service: service}
 }
 
 func (s *workspaceCLISurface) Type() string { return "workspace" }
@@ -89,12 +85,11 @@ func buildWorkspaceSetCommand(req *clir.Request) (any, error) {
 }
 
 func (s *workspaceCLISurface) handleWorkspaceSet(ctx context.Context, req commandengine.Request, cmd workspaceSetCommand) (commandengine.Result, error) {
-	_, _ = ctx, req
-	rootDir, err := filepath.Abs(".")
-	if err != nil {
-		return commandengine.Result{}, err
+	_ = req
+	if s == nil || s.service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing app service")
 	}
-	workspace, err := system.SaveWorkspace(rootDir, s.store, cmd.Name, cmd.Path)
+	workspace, err := s.service.SaveWorkspace(ctx, cmd.Name, cmd.Path)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -106,29 +101,21 @@ func (s *workspaceCLISurface) handleWorkspaceSet(ctx context.Context, req comman
 }
 
 func (s *workspaceCLISurface) handleWorkspaceList(ctx context.Context, req commandengine.Request, cmd workspaceListCommand) (commandengine.Result, error) {
-	_, _, _ = ctx, req, cmd
-	rootDir, err := filepath.Abs(".")
+	_, _ = req, cmd
+	if s == nil || s.service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing app service")
+	}
+	workspaces, err := s.service.ListWorkspaces(ctx)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	workspaces, err := system.LoadWorkspaces(rootDir, s.store)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	configured := system.ConfiguredWorkspaces(s.store)
-	names := make([]string, 0, len(workspaces))
-	for name := range workspaces {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	if len(names) == 0 {
+	if len(workspaces) == 0 {
 		return commandengine.Result{Text: "no workspaces"}, nil
 	}
-	lines := make([]string, 0, len(names))
-	for _, name := range names {
-		workspace := workspaces[name]
-		_, ok := configured[name]
-		lines = append(lines, fmt.Sprintf("%s\tpath=%s\tconfigured=%t", workspace.Name, workspace.Path, ok))
+	lines := make([]string, 0, len(workspaces))
+	for _, info := range workspaces {
+		workspace := info.Workspace
+		lines = append(lines, fmt.Sprintf("%s\tpath=%s\tconfigured=%t", workspace.Name, workspace.Path, info.Configured))
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }

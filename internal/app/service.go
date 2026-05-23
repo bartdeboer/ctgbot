@@ -15,6 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
+	workspacepkg "github.com/bartdeboer/ctgbot/internal/workspace"
 )
 
 type ComponentResolver interface {
@@ -38,6 +39,7 @@ type ChatRuntimeResolver interface {
 
 type Service interface {
 	ChatAdminService
+	WorkspaceAdminService
 	ComponentAdminService
 	BrokerService
 	RuntimeImageService
@@ -106,6 +108,7 @@ type service struct {
 	ComponentManager    ComponentManager
 	ChatRuntimeResolver ChatRuntimeResolver
 	WorkspaceValidator  WorkspaceValidator
+	Workspaces          workspacepkg.Manager
 	Logf                func(format string, args ...any)
 }
 
@@ -123,6 +126,9 @@ func NewServiceWithLogger(storage repository.Storage, resolver ComponentResolver
 	}
 	if validator, ok := resolver.(WorkspaceValidator); ok {
 		service.WorkspaceValidator = validator
+	}
+	if provider, ok := resolver.(WorkspaceManagerProvider); ok {
+		service.Workspaces = provider.WorkspaceManager()
 	}
 	return service
 }

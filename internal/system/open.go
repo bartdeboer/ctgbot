@@ -38,6 +38,7 @@ type System struct {
 	Config    *appstate.Config
 	Logger    *log.Logger
 	DB        *gorm.DB
+	Store     *clistate.Store
 
 	loadedMu sync.RWMutex
 	loaded   map[string]*component.Loaded
@@ -103,6 +104,7 @@ func Open(ctx context.Context, stateRoot string, dbPath string, store *clistate.
 		Config:     cfg,
 		Logger:     logger,
 		DB:         db,
+		Store:      store,
 	}, nil
 }
 

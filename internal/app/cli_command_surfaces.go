@@ -51,6 +51,7 @@ func (s *service) CLICommandSurfaces(ctx context.Context) ([]component.CommandSu
 	}
 	surfaces := []component.CommandSurface{
 		componentadmin.New(s.Repository(), s),
+		newWorkspaceCLISurface(s),
 		&cliCommandSurface{service: s},
 	}
 	if config := s.AppConfig(); config != nil {
