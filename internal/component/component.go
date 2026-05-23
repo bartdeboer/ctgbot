@@ -346,7 +346,6 @@ type OpenAIChatSessionProvider interface {
 }
 
 type CommandSurface interface {
-	Component
 	CommandDefinitions() []commandengine.Definition
 	RegisterCommandHandlers(registry *commandengine.Registry) error
 }

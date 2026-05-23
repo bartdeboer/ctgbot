@@ -15,8 +15,6 @@ import (
 	"github.com/bartdeboer/go-clir"
 )
 
-const cliSurfaceType = "app"
-
 type componentRegisterCommand struct {
 	Component   string
 	RuntimeKind string
@@ -38,7 +36,6 @@ type cliCommandSurface struct {
 	service *service
 }
 
-var _ component.Component = (*cliCommandSurface)(nil)
 var _ component.CommandSurface = (*cliCommandSurface)(nil)
 
 // CLICommandSurfaces returns app-owned command surfaces that can be mounted by
@@ -65,8 +62,6 @@ func (s *service) CLICommandSurfaces(ctx context.Context) ([]component.CommandSu
 	}
 	return surfaces, nil
 }
-
-func (s *cliCommandSurface) Type() string { return cliSurfaceType }
 
 func (s *cliCommandSurface) CommandDefinitions() []commandengine.Definition {
 	definitions := []commandengine.Definition{

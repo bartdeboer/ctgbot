@@ -24,14 +24,11 @@ type workspaceSetCommand struct {
 
 type workspaceListCommand struct{}
 
-var _ component.Component = (*workspaceCLISurface)(nil)
 var _ component.CommandSurface = (*workspaceCLISurface)(nil)
 
 func newWorkspaceCLISurface(service *service) *workspaceCLISurface {
 	return &workspaceCLISurface{service: service}
 }
-
-func (s *workspaceCLISurface) Type() string { return "workspace" }
 
 func (s *workspaceCLISurface) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
