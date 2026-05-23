@@ -453,27 +453,11 @@ func (a Applier) resolvePatchPath(path string) (string, error) {
 		return "", fmt.Errorf("empty patch path")
 	}
 	if strings.ContainsRune(path, '\x00') {
-		return "", fmt.Errorf("unsafe patch path %q: contains NUL", path)
-	}
-	if strings.Contains(path, `\`) {
-		return "", fmt.Errorf("unsafe patch path %q: backslashes are not allowed", path)
-	}
-	if filepath.IsAbs(path) {
-		return "", fmt.Errorf("unsafe patch path %q: absolute paths are not allowed", path)
-	}
-	for _, part := range strings.Split(filepath.ToSlash(path), "/") {
-		if part == ".." {
-			return "", fmt.Errorf("unsafe patch path %q: path traversal is not allowed", path)
-		}
+		return "", fmt.Errorf("invalid patch path %q: contains NUL", path)
 	}
 	clean := filepath.Clean(filepath.FromSlash(path))
-	if clean == "." || clean == string(filepath.Separator) {
-		return "", fmt.Errorf("unsafe patch path %q", path)
-	}
-	for _, part := range strings.Split(clean, string(filepath.Separator)) {
-		if part == ".." {
-			return "", fmt.Errorf("unsafe patch path %q: path traversal is not allowed", path)
-		}
+	if filepath.IsAbs(clean) {
+		return clean, nil
 	}
 	root := a.Root
 	if root == "" {
@@ -487,15 +471,7 @@ func (a Applier) resolvePatchPath(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resolved := filepath.Join(absRoot, clean)
-	rel, err := filepath.Rel(absRoot, resolved)
-	if err != nil {
-		return "", err
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("unsafe patch path %q: path traversal is not allowed", path)
-	}
-	return resolved, nil
+	return filepath.Join(absRoot, clean), nil
 }
 
 func writeFileCreatingParents(path string, content []byte) error {

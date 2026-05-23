@@ -196,25 +196,43 @@ func TestApplyEndOfFileHunk(t *testing.T) {
 	assertFile(t, dir, "eof.txt", "first\nfinal\n")
 }
 
-func TestRejectsUnsafePaths(t *testing.T) {
+func TestAllowsAbsolutePathLikeCodex(t *testing.T) {
 	dir := t.TempDir()
-	cases := []string{
-		wrapPatch(`*** Add File: /tmp/nope
-+bad`),
-		wrapPatch(`*** Add File: ../nope
-+bad`),
-		wrapPatch(`*** Add File: safe/../nope
-+bad`),
-		wrapPatch(`*** Add File: safe/../../nope
-+bad`),
+	path := filepath.Join(dir, "absolute.txt")
+	patch := wrapPatch(`*** Add File: ` + path + `
++absolute`)
+
+	stdout, stderr, code := runPatch(t, dir, []string{patch}, "")
+
+	if code != 0 {
+		t.Fatalf("run exit = %d, stderr = %s", code, stderr)
 	}
-	for _, patch := range cases {
-		_, stderr, code := runPatch(t, dir, []string{patch}, "")
-		if code == 0 {
-			t.Fatalf("expected unsafe path patch to fail: %s", patch)
-		}
-		assertContains(t, stderr, "unsafe patch path")
+	assertFile(t, dir, "absolute.txt", "absolute\n")
+	assertContains(t, stdout, "A "+path)
+}
+
+func TestAllowsParentTraversalLikeCodex(t *testing.T) {
+	parent := t.TempDir()
+	workspace := filepath.Join(parent, "workspace")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
 	}
+	patch := wrapPatch(`*** Add File: ../outside.txt
++outside`)
+
+	stdout, stderr, code := runPatch(t, workspace, []string{patch}, "")
+
+	if code != 0 {
+		t.Fatalf("run exit = %d, stderr = %s", code, stderr)
+	}
+	body, err := os.ReadFile(filepath.Join(parent, "outside.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "outside\n" {
+		t.Fatalf("outside.txt = %q", string(body))
+	}
+	assertContains(t, stdout, "A ../outside.txt")
 }
 
 func TestMalformedPatchFails(t *testing.T) {
