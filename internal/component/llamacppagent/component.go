@@ -313,7 +313,7 @@ Use shell for normal coding commands and workspace inspection. Useful patterns i
 
 Use the hostbridge tool when you need ctgbot commands or hostbridge-specific actions. Before using hostbridge commands, call hostbridge help if you are unsure which commands are available.
 
-Use read_file before editing existing files. Use edit_file for localized exact-string replacements. Use write_file for new files or deliberate full-file rewrites. Existing files must be read before write_file overwrites them.
+Use read before editing existing files. Use edit for localized exact-string replacements. Use write for new files or deliberate full-file rewrites. Existing files must be read before write overwrites them.
 
 Use apply_patch for multi-file or multi-hunk structured edits. apply_patch uses Codex patch grammar, not unified diff:
 *** Begin Patch

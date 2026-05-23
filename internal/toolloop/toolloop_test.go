@@ -68,30 +68,30 @@ func TestRunnerExecutesReadWriteEditFileTools(t *testing.T) {
 	text, isErr := runner.executeTool(context.Background(), toolCall{Function: struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
-	}{Name: "write_file", Arguments: string(writeArgs)}})
+	}{Name: "write", Arguments: string(writeArgs)}})
 	if isErr {
-		t.Fatalf("write_file failed: %s", text)
+		t.Fatalf("write failed: %s", text)
 	}
 
 	readArgs, _ := json.Marshal(readFileArgs{File: filepath.Join(workspace, "hello.txt"), Limit: 1})
 	text, isErr = runner.executeTool(context.Background(), toolCall{Function: struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
-	}{Name: "read_file", Arguments: string(readArgs)}})
+	}{Name: "read", Arguments: string(readArgs)}})
 	if isErr {
-		t.Fatalf("read_file failed: %s", text)
+		t.Fatalf("read failed: %s", text)
 	}
 	if !strings.Contains(text, "hello") {
-		t.Fatalf("read_file output = %q", text)
+		t.Fatalf("read output = %q", text)
 	}
 
 	editArgs, _ := json.Marshal(editFileArgs{File: "hello.txt", OldString: "hello", NewString: "world"})
 	text, isErr = runner.executeTool(context.Background(), toolCall{Function: struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
-	}{Name: "edit_file", Arguments: string(editArgs)}})
+	}{Name: "edit", Arguments: string(editArgs)}})
 	if isErr {
-		t.Fatalf("edit_file failed: %s", text)
+		t.Fatalf("edit failed: %s", text)
 	}
 	body, err := os.ReadFile(filepath.Join(workspace, "hello.txt"))
 	if err != nil {
@@ -108,7 +108,7 @@ func TestRunnerRejectsFileToolOutsideWorkspace(t *testing.T) {
 	text, isErr := (Runner{Workspace: "/workspace", ToolsPath: "/bin/false"}).executeTool(context.Background(), toolCall{Function: struct {
 		Name      string `json:"name"`
 		Arguments string `json:"arguments"`
-	}{Name: "read_file", Arguments: string(args)}})
+	}{Name: "read", Arguments: string(args)}})
 	if !isErr || !strings.Contains(text, "outside workspace") {
 		t.Fatalf("text=%q isErr=%t, want outside workspace error", text, isErr)
 	}

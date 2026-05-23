@@ -175,22 +175,22 @@ func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
 			return "invalid apply_patch arguments: " + err.Error(), true
 		}
 		return r.applyPatch(ctx, args)
-	case "read_file":
+	case "read", "read_file":
 		var args readFileArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-			return "invalid read_file arguments: " + err.Error(), true
+			return "invalid read arguments: " + err.Error(), true
 		}
 		return r.readFile(ctx, args)
-	case "write_file":
+	case "write", "write_file":
 		var args writeFileArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-			return "invalid write_file arguments: " + err.Error(), true
+			return "invalid write arguments: " + err.Error(), true
 		}
 		return r.writeFile(ctx, args)
-	case "edit_file":
+	case "edit", "edit_file":
 		var args editFileArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-			return "invalid edit_file arguments: " + err.Error(), true
+			return "invalid edit arguments: " + err.Error(), true
 		}
 		return r.editFile(ctx, args)
 	default:
@@ -507,7 +507,7 @@ func toolDefinitions() []toolDef {
 				Name: "shell",
 				Description: `Run a bash command inside the sandbox workspace.
 Use shell for normal commands such as go test, go run, rg, find, ls, sed, and nl.
-Prefer read-only inspection before editing. For file edits, prefer edit_file/write_file or apply_patch instead of shell redirection.`,
+Prefer read-only inspection before editing. For file edits, prefer edit/write or apply_patch instead of shell redirection.`,
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -537,9 +537,9 @@ Prefer read-only inspection before editing. For file edits, prefer edit_file/wri
 		{
 			Type: "function",
 			Function: toolFunction{
-				Name: "read_file",
+				Name: "read",
 				Description: `Read a workspace file using Claude-style file-tool semantics.
-Use this before edit_file or before overwriting an existing file with write_file.
+Use this before edit or before overwriting an existing file with write.
 The file may be absolute under /workspace or workspace-relative. Text output is line-numbered; use offset/limit for large files. PDFs require pages.`,
 				Parameters: map[string]any{
 					"type": "object",
@@ -556,10 +556,10 @@ The file may be absolute under /workspace or workspace-relative. Text output is 
 		{
 			Type: "function",
 			Function: toolFunction{
-				Name: "write_file",
+				Name: "write",
 				Description: `Create or fully rewrite a workspace file using Claude-style file-tool semantics.
-Use write_file for new files or deliberate full-file rewrites. Existing files must be read first with read_file.
-For localized changes to existing files, prefer edit_file. The file may be absolute under /workspace or workspace-relative.`,
+Use write for new files or deliberate full-file rewrites. Existing files must be read first with read.
+For localized changes to existing files, prefer edit. The file may be absolute under /workspace or workspace-relative.`,
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -573,9 +573,9 @@ For localized changes to existing files, prefer edit_file. The file may be absol
 		{
 			Type: "function",
 			Function: toolFunction{
-				Name: "edit_file",
+				Name: "edit",
 				Description: `Edit an existing workspace file by exact string replacement using Claude-style file-tool semantics.
-The file must be read first with read_file. old_string must exactly match existing text.
+The file must be read first with read. old_string must exactly match existing text.
 By default old_string must occur exactly once; if it appears multiple times, include more context or intentionally set replace_all=true.`,
 				Parameters: map[string]any{
 					"type": "object",
