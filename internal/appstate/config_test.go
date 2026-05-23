@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	hostbridgepolicy "github.com/bartdeboer/ctgbot/internal/hostbridgepolicy"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -74,7 +74,7 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	if err := store.PersistStruct(cfg.Chat(chatID).key("skills"), []string{`D:\bots\ctgbot-01\skills\human-first-coding`}); err != nil {
 		t.Fatalf("persist skills: %v", err)
 	}
-	if err := store.PersistStruct(cfg.Chat(chatID).Hostbridge().key("allowed_commands"), map[string]hostbridgeserver.AllowedCommand{
+	if err := store.PersistStruct(cfg.Chat(chatID).Hostbridge().key("allowed_commands"), map[string]hostbridgepolicy.AllowedCommand{
 		"git-push-workspace-docs": {
 			Name:  "git",
 			Args:  []string{"push"},
@@ -242,7 +242,7 @@ func TestChatHostbridgeSetters(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 	chatID := modeluuid.New()
 	hostbridge := cfg.Chat(chatID).Hostbridge()
-	if err := hostbridge.SetAllowedCommand("git-push", hostbridgeserver.AllowedCommand{Name: "git", Args: []string{"push"}}); err != nil {
+	if err := hostbridge.SetAllowedCommand("git-push", hostbridgepolicy.AllowedCommand{Name: "git", Args: []string{"push"}}); err != nil {
 		t.Fatalf("set allowed command: %v", err)
 	}
 	commands := hostbridge.AllowedCommands()

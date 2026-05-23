@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	hostbridgepolicy "github.com/bartdeboer/ctgbot/internal/hostbridgepolicy"
 )
 
 func (c ChatConfig) SetProviderType(providerType string) error {
@@ -112,7 +112,7 @@ func (c ChatConfig) RemoveSkill(skillDir string) error {
 	return c.persistStruct("skills", filtered)
 }
 
-func (h ChatHostbridgeConfig) SetAllowedCommand(name string, command hostbridgeserver.AllowedCommand) error {
+func (h ChatHostbridgeConfig) SetAllowedCommand(name string, command hostbridgepolicy.AllowedCommand) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("hostbridge allowed command name is empty")
@@ -123,7 +123,7 @@ func (h ChatHostbridgeConfig) SetAllowedCommand(name string, command hostbridges
 	}
 	commands := h.AllowedCommands()
 	if commands == nil {
-		commands = map[string]hostbridgeserver.AllowedCommand{}
+		commands = map[string]hostbridgepolicy.AllowedCommand{}
 	}
 	commands[name] = normalized
 	return h.chat.cfg.store.PersistStruct(h.key("allowed_commands"), commands)
@@ -134,9 +134,9 @@ func (h ChatHostbridgeConfig) ScaffoldAllowedCommand(name string) error {
 	if name == "" {
 		return fmt.Errorf("hostbridge allowed command name is empty")
 	}
-	commands := map[string]hostbridgeserver.AllowedCommand{}
+	commands := map[string]hostbridgepolicy.AllowedCommand{}
 	_ = h.chat.cfg.structValue(h.key("allowed_commands"), &commands)
-	commands[name] = hostbridgeserver.AllowedCommand{
+	commands[name] = hostbridgepolicy.AllowedCommand{
 		Args: []string{},
 		Env:  map[string]string{},
 	}
@@ -191,12 +191,12 @@ func validateAndNormalizeSkillPaths(skills []string) ([]string, error) {
 	return normalized, nil
 }
 
-func normalizeAllowedCommand(spec hostbridgeserver.AllowedCommand) (hostbridgeserver.AllowedCommand, bool) {
+func normalizeAllowedCommand(spec hostbridgepolicy.AllowedCommand) (hostbridgepolicy.AllowedCommand, bool) {
 	spec.Name = strings.TrimSpace(spec.Name)
 	spec.Dir = strings.TrimSpace(spec.Dir)
 	spec.Delay = strings.TrimSpace(spec.Delay)
 	if spec.Name == "" {
-		return hostbridgeserver.AllowedCommand{}, false
+		return hostbridgepolicy.AllowedCommand{}, false
 	}
 	if len(spec.Args) == 0 {
 		spec.Args = nil

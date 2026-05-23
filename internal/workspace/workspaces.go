@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	hostbridgepolicy "github.com/bartdeboer/ctgbot/internal/hostbridgepolicy"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -17,13 +17,13 @@ type Settings struct {
 }
 
 type HostbridgeSettings struct {
-	AllowedCommands map[string]hostbridgeserver.AllowedCommand `json:"allowed_commands"`
+	AllowedCommands map[string]hostbridgepolicy.AllowedCommand `json:"allowed_commands"`
 }
 
 type Workspace struct {
 	Name                      string
 	Path                      string
-	HostbridgeAllowedCommands map[string]hostbridgeserver.AllowedCommand
+	HostbridgeAllowedCommands map[string]hostbridgepolicy.AllowedCommand
 }
 
 type Info struct {
@@ -158,11 +158,11 @@ func validateName(name string) error {
 	return nil
 }
 
-func normalizeAllowedCommands(raw map[string]hostbridgeserver.AllowedCommand) map[string]hostbridgeserver.AllowedCommand {
+func normalizeAllowedCommands(raw map[string]hostbridgepolicy.AllowedCommand) map[string]hostbridgepolicy.AllowedCommand {
 	if len(raw) == 0 {
 		return nil
 	}
-	out := make(map[string]hostbridgeserver.AllowedCommand, len(raw))
+	out := make(map[string]hostbridgepolicy.AllowedCommand, len(raw))
 	for name, spec := range raw {
 		name = strings.TrimSpace(name)
 		spec.Name = strings.TrimSpace(spec.Name)
