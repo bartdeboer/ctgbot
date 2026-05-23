@@ -175,19 +175,19 @@ func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
 			return "invalid apply_patch arguments: " + err.Error(), true
 		}
 		return r.applyPatch(ctx, args)
-	case "read", "read_file":
+	case "read":
 		var args readFileArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
 			return "invalid read arguments: " + err.Error(), true
 		}
 		return r.readFile(ctx, args)
-	case "write", "write_file":
+	case "write":
 		var args writeFileArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
 			return "invalid write arguments: " + err.Error(), true
 		}
 		return r.writeFile(ctx, args)
-	case "edit", "edit_file":
+	case "edit":
 		var args editFileArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
 			return "invalid edit arguments: " + err.Error(), true
