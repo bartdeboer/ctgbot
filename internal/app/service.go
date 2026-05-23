@@ -41,6 +41,7 @@ type Service interface {
 	ComponentAdminService
 	BrokerService
 	RuntimeImageService
+	CLICommandSurfaces(ctx context.Context) ([]component.CommandSurface, error)
 }
 
 type ChatAdminService interface {

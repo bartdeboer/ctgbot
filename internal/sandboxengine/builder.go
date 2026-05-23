@@ -58,6 +58,11 @@ func (b Builder) Workdir(v string) Builder {
 	return b
 }
 
+func (b Builder) User(v string) Builder {
+	b.spec.User = v
+	return b
+}
+
 func (b Builder) UserMode(v string) Builder {
 	b.spec.UserMode = v
 	return b

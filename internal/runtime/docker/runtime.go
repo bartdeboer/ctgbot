@@ -96,6 +96,7 @@ func (f *Factory) Bind(
 		gpus:         strings.TrimSpace(config.GPUs),
 		seccomp:      strings.TrimSpace(config.Seccomp),
 		cmd:          append([]string{}, config.Cmd...),
+		user:         config.UserString(),
 	}
 }
 
@@ -111,6 +112,7 @@ type Runtime struct {
 	gpus         string
 	seccomp      string
 	cmd          []string
+	user         string
 }
 
 func (r *Runtime) Kind() string {
@@ -314,8 +316,7 @@ func (r *Runtime) sandbox(
 			Image(r.image).
 			Entrypoint(r.entrypoint).
 			Workdir(runtimeHomePath).
-			// Keep mounted profile files writable by the host ctgbot process.
-			UserMode("host").
+			User(r.user).
 			GPUs(r.gpus).
 			Env(append([]string{}, r.env...)).
 			Mounts([]sandboxengine.Mount{{Source: r.home.Path, Target: runtimeHomePath}}).
@@ -357,8 +358,7 @@ func (r *Runtime) sandbox(
 		Image(r.image).
 		Entrypoint(r.entrypoint).
 		Workdir(workspaceRuntime).
-		// Keep mounted profile/workspace files writable by the host ctgbot process.
-		UserMode("host").
+		User(r.user).
 		GPUs(r.gpus).
 		Env(env).
 		Mounts(mounts).

@@ -59,6 +59,16 @@ func TestProcessCommandDefinitions(t *testing.T) {
 			visibleRoutes: []string{"image list"},
 		},
 		{
+			pattern:       "image build",
+			source:        commandengine.SourceMessage,
+			visibleRoutes: []string{"image build", "image build"},
+		},
+		{
+			pattern:       "image build",
+			source:        commandengine.SourceCLI,
+			visibleRoutes: []string{"image build"},
+		},
+		{
 			pattern:       "quit",
 			source:        commandengine.SourceMessage,
 			visibleRoutes: []string{"quit", "quit"},

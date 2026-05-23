@@ -4,6 +4,8 @@ FROM node:22-bookworm-slim AS node-runtime
 FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ARG CTGBOT_UID=1000
+ARG CTGBOT_GID=1000
 ENV PATH="/usr/local/go/bin:${PATH}"
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
@@ -27,11 +29,17 @@ RUN apt-get update \
         python3-pip \
         python3-venv \
         ripgrep \
+        sudo \
         sed \
         tar \
         unzip \
         zip \
     && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid ${CTGBOT_GID} ctgbot \
+    && useradd --uid ${CTGBOT_UID} --gid ${CTGBOT_GID} --create-home --shell /bin/bash ctgbot \
+    && echo 'ctgbot ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ctgbot \
+    && chmod 0440 /etc/sudoers.d/ctgbot
 
 COPY --from=go-runtime /usr/local/go /usr/local/go
 COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node

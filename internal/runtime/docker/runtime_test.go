@@ -45,8 +45,8 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_ADDR"), "host.docker.internal:"; len(got) < len(want) || got[:len(want)] != want {
 		t.Fatalf("HOSTBRIDGE_ADDR = %q, want prefix %q", got, want)
 	}
-	if got, want := sandbox.UserMode, "host"; got != want {
-		t.Fatalf("UserMode = %q, want %q", got, want)
+	if got, want := sandbox.User, "1000:1000"; got != want {
+		t.Fatalf("User = %q, want %q", got, want)
 	}
 	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_TLS_DIR"), "/ctgbot/hostbridge-tls"; got != want {
 		t.Fatalf("HOSTBRIDGE_TLS_DIR = %q, want %q", got, want)
@@ -92,6 +92,26 @@ func TestSandboxDoesNotBindHostbridgeWithoutCommands(t *testing.T) {
 	}
 	if hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
 		t.Fatalf("unexpected hostbridge TLS mount in %#v", sandbox.Mounts)
+	}
+}
+
+func TestSandboxPropagatesConfiguredUser(t *testing.T) {
+	root := t.TempDir()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
+	registration := coremodel.Component{Type: "mockagent", Name: "root", Runtime: "docker"}
+	home := factory.ComponentHome(registration)
+	uid := 0
+	gid := 0
+	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{UID: &uid, GID: &gid}).(*Runtime)
+
+	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+
+	if got, want := sandbox.User, "0:0"; got != want {
+		t.Fatalf("User = %q, want %q", got, want)
 	}
 }
 

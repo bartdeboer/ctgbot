@@ -124,6 +124,21 @@ ctgbot image list
 ctgbot image build --no-cache
 ```
 
+Agent runtime images include a `ctgbot` user with UID/GID `1000:1000` and
+passwordless sudo. Runtime containers default to that user, so agents can install
+temporary sandbox tools with `sudo apt-get ...` while keeping workspace files
+host-writable. Override the runtime user per component profile when needed:
+
+```json
+{
+  "uid": 0,
+  "gid": 0
+}
+```
+
+`uid: 0, gid: 0` runs the sandbox as root. Arbitrary non-root UID/GID values are
+allowed, but only the baked `1000:1000` user is guaranteed to have sudo.
+
 ### 7. Authenticate Codex
 
 ```bash

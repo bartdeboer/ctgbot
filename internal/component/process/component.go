@@ -2,7 +2,9 @@ package process
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"io"
 
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -17,6 +19,7 @@ type Actions interface {
 	Install(ctx context.Context) error
 	Upgrade(ctx context.Context, all bool) error
 	ImageList(ctx context.Context) (string, error)
+	ImageBuild(ctx context.Context, noCache bool) error
 	Quit(ctx context.Context) error
 }
 
@@ -32,6 +35,7 @@ type installCommand struct{}
 type upgradeCommand struct{}
 type upgradeAllCommand struct{}
 type imageListCommand struct{}
+type imageBuildCommand struct{ NoCache bool }
 type quitCommand struct{}
 type versionCommand struct{}
 
@@ -66,12 +70,21 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		[]commandengine.Route{{Pattern: "upgrade all", Absolute: true}},
 		simplerbac.Any(simplerbac.RoleRoot),
 	)...)
-	definitions = append(definitions, processCommandDefinitions(
+	definitions = append(definitions, processCommandDefinitionsWithVisibility(
 		"image list",
 		"List runtime image build targets",
 		buildImageListCommand,
 		[]commandengine.Route{{Pattern: "image list", Absolute: true}},
 		simplerbac.Any(simplerbac.RoleRoot),
+		commandengine.InstructionImportant,
+	)...)
+	definitions = append(definitions, processCommandDefinitionsWithVisibility(
+		"image build",
+		"Build runtime image targets",
+		buildImageBuildCommand,
+		[]commandengine.Route{{Pattern: "image build", Absolute: true}},
+		simplerbac.Any(simplerbac.RoleRoot),
+		commandengine.InstructionImportant,
 	)...)
 	definitions = append(definitions, processCommandDefinitions(
 		"quit",
@@ -129,6 +142,15 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
+	if err := commandengine.RegisterPattern[imageBuildCommand](registry, "image build", func(ctx context.Context, req commandengine.Request, cmd imageBuildCommand) (commandengine.Result, error) {
+		_, _ = req, cmd
+		if err := c.imageBuild(ctx, cmd.NoCache); err != nil {
+			return commandengine.Result{}, err
+		}
+		return commandengine.Result{Text: "runtime image build completed"}, nil
+	}); err != nil {
+		return err
+	}
 	if err := registerProcessPattern[quitCommand](registry, "quit", func(ctx context.Context) (commandengine.Result, error) {
 		if err := c.quit(ctx); err != nil {
 			return commandengine.Result{}, err
@@ -164,6 +186,13 @@ func (c *Component) imageList(ctx context.Context) (string, error) {
 	return c.Actions.ImageList(ctx)
 }
 
+func (c *Component) imageBuild(ctx context.Context, noCache bool) error {
+	if c == nil || c.Actions == nil {
+		return fmt.Errorf("missing process actions")
+	}
+	return c.Actions.ImageBuild(ctx, noCache)
+}
+
 func (c *Component) quit(ctx context.Context) error {
 	if c == nil || c.Actions == nil {
 		return fmt.Errorf("missing process actions")
@@ -172,20 +201,25 @@ func (c *Component) quit(ctx context.Context) error {
 }
 
 func processCommandDefinitions(localPattern string, help string, build commandengine.BuildFunc, aliases []commandengine.Route, policy simplerbac.Rule) []commandengine.Definition {
+	return processCommandDefinitionsWithVisibility(localPattern, help, build, aliases, policy, commandengine.InstructionDiscoverable)
+}
+
+func processCommandDefinitionsWithVisibility(localPattern string, help string, build commandengine.BuildFunc, aliases []commandengine.Route, policy simplerbac.Rule, visibility commandengine.InstructionVisibility) []commandengine.Definition {
 	return []commandengine.Definition{
-		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceMessage}, aliases, policy),
-		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceCLI}, nil, policy),
+		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceMessage}, aliases, policy, visibility),
+		processCommandDefinition(localPattern, help, build, []commandengine.Source{commandengine.SourceCLI}, nil, policy, visibility),
 	}
 }
 
-func processCommandDefinition(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source, aliases []commandengine.Route, policy simplerbac.Rule) commandengine.Definition {
+func processCommandDefinition(pattern string, help string, build commandengine.BuildFunc, sources []commandengine.Source, aliases []commandengine.Route, policy simplerbac.Rule, visibility commandengine.InstructionVisibility) commandengine.Definition {
 	return commandengine.Definition{
-		Pattern: pattern,
-		Help:    help,
-		Build:   build,
-		Sources: sources,
-		Policy:  policy,
-		Aliases: aliases,
+		Pattern:               pattern,
+		Help:                  help,
+		Build:                 build,
+		Sources:               sources,
+		Policy:                policy,
+		Aliases:               aliases,
+		InstructionVisibility: visibility,
 	}
 }
 
@@ -224,6 +258,16 @@ func buildUpgradeAllCommand(req *clir.Request) (any, error) {
 func buildImageListCommand(req *clir.Request) (any, error) {
 	_ = req
 	return imageListCommand{}, nil
+}
+
+func buildImageBuildCommand(req *clir.Request) (any, error) {
+	fs := flag.NewFlagSet("image build", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	noCache := fs.Bool("no-cache", false, "Rebuild runtime images without cache")
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, err
+	}
+	return imageBuildCommand{NoCache: *noCache}, nil
 }
 
 func buildQuitCommand(req *clir.Request) (any, error) {
