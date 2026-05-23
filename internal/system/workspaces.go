@@ -1,153 +1,35 @@
 package system
 
 import (
-	"fmt"
-	"path/filepath"
-	"strings"
-
-	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	workspacepkg "github.com/bartdeboer/ctgbot/internal/workspace"
 	"github.com/bartdeboer/go-clistate"
 )
 
-const workspaceConfigKey = "workspaces"
+type WorkspaceSettings = workspacepkg.Settings
+type WorkspaceHostbridgeSettings = workspacepkg.HostbridgeSettings
+type Workspace = workspacepkg.Workspace
 
-type WorkspaceSettings struct {
-	Path       string                      `json:"path"`
-	Hostbridge WorkspaceHostbridgeSettings `json:"hostbridge"`
-}
+const workspaceConfigKey = workspacepkg.ConfigKey
 
-type WorkspaceHostbridgeSettings struct {
-	AllowedCommands map[string]hostbridgeserver.AllowedCommand `json:"allowed_commands"`
-}
-
-type Workspace struct {
-	Name                      string
-	Path                      string
-	HostbridgeAllowedCommands map[string]hostbridgeserver.AllowedCommand
+type WorkspaceManagerProvider interface {
+	WorkspaceManager() workspacepkg.Manager
 }
 
 func ConfiguredWorkspaces(store *clistate.Store) map[string]WorkspaceSettings {
-	if store == nil {
-		return map[string]WorkspaceSettings{}
-	}
-	var out map[string]WorkspaceSettings
-	store.GetStruct(workspaceConfigKey, &out)
-	if out == nil {
-		return map[string]WorkspaceSettings{}
-	}
-	return out
+	return workspacepkg.Configured(store)
 }
 
 func LoadWorkspaces(rootDir string, store *clistate.Store) (map[string]Workspace, error) {
-	rootDir = strings.TrimSpace(rootDir)
-	if rootDir == "" {
-		return nil, fmt.Errorf("missing root dir")
-	}
-	configured := ConfiguredWorkspaces(store)
-	workspaces := map[string]Workspace{}
-	for name, settings := range configured {
-		workspace, err := resolveWorkspace(rootDir, name, settings)
-		if err != nil {
-			return nil, err
-		}
-		workspaces[name] = workspace
-	}
-	return workspaces, nil
+	return workspacepkg.Load(rootDir, store)
 }
 
 func SaveWorkspace(rootDir string, store *clistate.Store, name string, path string) (Workspace, error) {
-	if store == nil {
-		return Workspace{}, fmt.Errorf("missing workspace store")
-	}
-	name = strings.TrimSpace(name)
-	if err := validateWorkspaceName(name); err != nil {
-		return Workspace{}, err
-	}
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return Workspace{}, fmt.Errorf("missing workspace path")
-	}
-
-	configured := ConfiguredWorkspaces(store)
-	settings := configured[name]
-	settings.Path = path
-	configured[name] = settings
-	if err := store.PersistStruct(workspaceConfigKey, configured); err != nil {
-		return Workspace{}, err
-	}
-	return resolveWorkspace(rootDir, name, configured[name])
+	return workspacepkg.Save(rootDir, store, name, path)
 }
 
-func resolveWorkspace(rootDir string, name string, settings WorkspaceSettings) (Workspace, error) {
-	if err := validateWorkspaceName(name); err != nil {
-		return Workspace{}, err
+func (s *System) WorkspaceManager() workspacepkg.Manager {
+	if s == nil {
+		return workspacepkg.Manager{}
 	}
-	path, err := resolveWorkspacePath(rootDir, strings.TrimSpace(settings.Path))
-	if err != nil {
-		return Workspace{}, err
-	}
-	return Workspace{
-		Name:                      name,
-		Path:                      path,
-		HostbridgeAllowedCommands: normalizeWorkspaceAllowedCommands(settings.Hostbridge.AllowedCommands),
-	}, nil
-}
-
-func resolveWorkspacePath(rootDir string, path string) (string, error) {
-	rootDir = strings.TrimSpace(rootDir)
-	if rootDir == "" {
-		return "", fmt.Errorf("missing root dir")
-	}
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "", fmt.Errorf("missing workspace path")
-	}
-	if filepath.IsAbs(path) {
-		return filepath.Clean(path), nil
-	}
-	return filepath.Clean(filepath.Join(rootDir, path)), nil
-}
-
-func validateWorkspaceName(name string) error {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return fmt.Errorf("missing workspace name")
-	}
-	if name == "." || name == ".." {
-		return fmt.Errorf("invalid workspace name: %q", name)
-	}
-	if strings.ContainsAny(name, `/\\`) {
-		return fmt.Errorf("invalid workspace name: %q", name)
-	}
-	if filepath.Clean(name) != name {
-		return fmt.Errorf("invalid workspace name: %q", name)
-	}
-	return nil
-}
-
-func normalizeWorkspaceAllowedCommands(raw map[string]hostbridgeserver.AllowedCommand) map[string]hostbridgeserver.AllowedCommand {
-	if len(raw) == 0 {
-		return nil
-	}
-	out := make(map[string]hostbridgeserver.AllowedCommand, len(raw))
-	for name, spec := range raw {
-		name = strings.TrimSpace(name)
-		spec.Name = strings.TrimSpace(spec.Name)
-		spec.Dir = strings.TrimSpace(spec.Dir)
-		spec.Delay = strings.TrimSpace(spec.Delay)
-		if name == "" || spec.Name == "" {
-			continue
-		}
-		if len(spec.Args) == 0 {
-			spec.Args = nil
-		}
-		if len(spec.Env) == 0 {
-			spec.Env = nil
-		}
-		out[name] = spec
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return workspacepkg.Manager{RootDir: s.RootDir, Store: s.Store}
 }

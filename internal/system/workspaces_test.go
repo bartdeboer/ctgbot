@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	hostbridgepolicy "github.com/bartdeboer/ctgbot/internal/hostbridgepolicy"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -69,7 +69,7 @@ func TestSaveWorkspacePreservesHostbridgeAllowedCommands(t *testing.T) {
 		"work": {
 			Path: "workspaces/old-root",
 			Hostbridge: WorkspaceHostbridgeSettings{
-				AllowedCommands: map[string]hostbridgeserver.AllowedCommand{
+				AllowedCommands: map[string]hostbridgepolicy.AllowedCommand{
 					"echo-work": {Name: "/bin/echo", Args: []string{"work"}},
 				},
 			},
@@ -112,7 +112,7 @@ func TestConfiguredWorkspacesReadsCurrentKey(t *testing.T) {
 		"work": {
 			Path: "workspaces/work-root",
 			Hostbridge: WorkspaceHostbridgeSettings{
-				AllowedCommands: map[string]hostbridgeserver.AllowedCommand{
+				AllowedCommands: map[string]hostbridgepolicy.AllowedCommand{
 					"echo-work": {Name: "/bin/echo", Args: []string{"work"}},
 				},
 			},
@@ -153,7 +153,7 @@ func TestLoadWorkspacesReadsHostbridgeAllowedCommands(t *testing.T) {
 		"work": {
 			Path: "workspaces/work-root",
 			Hostbridge: WorkspaceHostbridgeSettings{
-				AllowedCommands: map[string]hostbridgeserver.AllowedCommand{
+				AllowedCommands: map[string]hostbridgepolicy.AllowedCommand{
 					"echo-work": {Name: "/bin/echo", Args: []string{"work"}},
 				},
 			},

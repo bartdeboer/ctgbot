@@ -10,17 +10,10 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/durationparse"
+	hostbridgepolicy "github.com/bartdeboer/ctgbot/internal/hostbridgepolicy"
 )
 
-type AllowedCommand struct {
-	Name           string            `json:"name"`
-	Args           []string          `json:"args"`
-	ArgsPattern    string            `json:"args_pattern,omitempty"`
-	Dir            string            `json:"dir"`
-	Delay          string            `json:"delay"`
-	Env            map[string]string `json:"env"`
-	AllowExtraArgs bool              `json:"allow_extra_args"`
-}
+type AllowedCommand = hostbridgepolicy.AllowedCommand
 
 type AllowedCommandResolver func(clientIdentity string) map[string]AllowedCommand
 
