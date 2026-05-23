@@ -59,6 +59,61 @@ func TestRunnerExecutesApplyPatchTool(t *testing.T) {
 	}
 }
 
+func TestRunnerExecutesReadWriteEditFileTools(t *testing.T) {
+	workspace := t.TempDir()
+	toolsPath := buildToolsBinary(t)
+
+	runner := Runner{Workspace: workspace, ToolsPath: toolsPath}
+	writeArgs, _ := json.Marshal(writeFileArgs{File: "hello.txt", Content: "hello\n"})
+	text, isErr := runner.executeTool(context.Background(), toolCall{Function: struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	}{Name: "write", Arguments: string(writeArgs)}})
+	if isErr {
+		t.Fatalf("write failed: %s", text)
+	}
+
+	readArgs, _ := json.Marshal(readFileArgs{File: filepath.Join(workspace, "hello.txt"), Limit: 1})
+	text, isErr = runner.executeTool(context.Background(), toolCall{Function: struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	}{Name: "read", Arguments: string(readArgs)}})
+	if isErr {
+		t.Fatalf("read failed: %s", text)
+	}
+	if !strings.Contains(text, "hello") {
+		t.Fatalf("read output = %q", text)
+	}
+
+	editArgs, _ := json.Marshal(editFileArgs{File: "hello.txt", OldString: "hello", NewString: "world"})
+	text, isErr = runner.executeTool(context.Background(), toolCall{Function: struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	}{Name: "edit", Arguments: string(editArgs)}})
+	if isErr {
+		t.Fatalf("edit failed: %s", text)
+	}
+	body, err := os.ReadFile(filepath.Join(workspace, "hello.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "world\n" {
+		t.Fatalf("file body = %q", string(body))
+	}
+}
+
+func TestRunnerRejectsFileToolOutsideWorkspace(t *testing.T) {
+	t.Parallel()
+	args, _ := json.Marshal(readFileArgs{File: "/tmp/nope.txt"})
+	text, isErr := (Runner{Workspace: "/workspace", ToolsPath: "/bin/false"}).executeTool(context.Background(), toolCall{Function: struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	}{Name: "read", Arguments: string(args)}})
+	if !isErr || !strings.Contains(text, "outside workspace") {
+		t.Fatalf("text=%q isErr=%t, want outside workspace error", text, isErr)
+	}
+}
+
 func buildApplyPatchBinary(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "apply_patch")
@@ -67,6 +122,18 @@ func buildApplyPatchBinary(t *testing.T) string {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("build apply_patch: %v\n%s", err, strings.TrimSpace(string(out)))
+	}
+	return bin
+}
+
+func buildToolsBinary(t *testing.T) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "tools")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", bin, "./cmd/tools")
+	cmd.Dir = filepath.Join("..", "..")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("build tools: %v\n%s", err, strings.TrimSpace(string(out)))
 	}
 	return bin
 }
