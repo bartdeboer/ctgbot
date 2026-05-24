@@ -91,7 +91,7 @@ func (c *Component) start(ctx context.Context, req commandengine.Request) (comma
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	status, err := c.runtime.Start(ctx, workspacePath, thread.ID)
+	status, err := c.Runtime.Start(ctx, workspacePath, thread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -106,7 +106,7 @@ func (c *Component) stop(ctx context.Context, req commandengine.Request) (comman
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.runtime.Stop(ctx, workspacePath, thread.ID); err != nil {
+	if err := c.Runtime.Stop(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
 	if err := c.updateThreadState(ctx, thread, func(state *threadState) { state.KeepRunning = nil }); err != nil {
@@ -120,13 +120,13 @@ func (c *Component) purge(ctx context.Context, req commandengine.Request) (comma
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
+	if err := c.Runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
 	if err := c.updateThreadState(ctx, thread, func(state *threadState) { state.KeepRunning = nil }); err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.storage.ThreadComponentMappings().DeleteByThreadAndComponent(ctx, thread.ID, c.registration.ID); err != nil {
+	if err := c.Storage.ThreadComponentMappings().DeleteByThreadAndComponent(ctx, thread.ID, c.Registration.ID); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "claude conversation purged"}, nil
@@ -137,7 +137,7 @@ func (c *Component) interrupt(ctx context.Context, req commandengine.Request) (c
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	ok, err := c.runtime.Interrupt(ctx, workspacePath, thread.ID)
+	ok, err := c.Runtime.Interrupt(ctx, workspacePath, thread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -152,11 +152,11 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	status, err := c.runtime.Status(ctx, workspacePath, thread.ID)
+	status, err := c.Runtime.Status(ctx, workspacePath, thread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	mapping, err := c.storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, thread.ID, c.registration.ID)
+	mapping, err := c.Storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, thread.ID, c.Registration.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -171,7 +171,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 	lines := []string{
 		"ctgbot_version: " + buildassets.Version(),
 		"chat_id: " + thread.ChatID.String(), "thread_id: " + thread.ID.String(), fmt.Sprintf("keep_running: %t", settings.KeepRunning),
-		"runtime: " + c.runtime.Kind(), "container: " + status.Name, "container_state: " + status.State, "workspace: " + workspacePath,
+		"runtime: " + c.Runtime.Kind(), "container: " + status.Name, "container_state: " + status.State, "workspace: " + workspacePath,
 		"runtime_workspace: " + status.RuntimeWorkspacePath, "runtime_home: " + status.RuntimeHomePath, "provider_session_id: " + providerValue,
 		"claude_model: " + settings.Model, "claude_model_source: " + settings.ModelSource,
 	}
@@ -187,11 +187,11 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 }
 
 func (c *Component) thread(ctx context.Context, req commandengine.Request) (*coremodel.Thread, error) {
-	return agentcommon.Thread(ctx, c.storage, req, Type)
+	return agentcommon.Thread(ctx, c.Storage, req, Type)
 }
 
 func (c *Component) threadWorkspace(ctx context.Context, req commandengine.Request) (*coremodel.Thread, string, error) {
-	return agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, Type)
+	return agentcommon.ThreadWorkspace(ctx, c.Storage, c.ResolveWorkspace, req, Type)
 }
 
 func claudeCommand(pattern string, command any, help string) commandengine.Definition {

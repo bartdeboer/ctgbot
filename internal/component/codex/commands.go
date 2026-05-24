@@ -95,7 +95,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 }
 
 func (c *Component) refresh(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, Type)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.Storage, c.ResolveWorkspace, req, Type)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -106,11 +106,11 @@ func (c *Component) refresh(ctx context.Context, req commandengine.Request) (com
 }
 
 func (c *Component) start(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, Type)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.Storage, c.ResolveWorkspace, req, Type)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	status, err := c.runtime.Start(ctx, workspacePath, thread.ID)
+	status, err := c.Runtime.Start(ctx, workspacePath, thread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -123,11 +123,11 @@ func (c *Component) start(ctx context.Context, req commandengine.Request) (comma
 }
 
 func (c *Component) stop(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, Type)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.Storage, c.ResolveWorkspace, req, Type)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.runtime.Stop(ctx, workspacePath, thread.ID); err != nil {
+	if err := c.Runtime.Stop(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
 	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
@@ -139,11 +139,11 @@ func (c *Component) stop(ctx context.Context, req commandengine.Request) (comman
 }
 
 func (c *Component) purge(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, Type)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.Storage, c.ResolveWorkspace, req, Type)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
+	if err := c.Runtime.Refresh(ctx, workspacePath, thread.ID); err != nil {
 		return commandengine.Result{}, err
 	}
 	if err := c.updateThreadState(ctx, thread, func(state *threadState) {
@@ -151,18 +151,18 @@ func (c *Component) purge(ctx context.Context, req commandengine.Request) (comma
 	}); err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.storage.ThreadComponentMappings().DeleteByThreadAndComponent(ctx, thread.ID, c.registration.ID); err != nil {
+	if err := c.Storage.ThreadComponentMappings().DeleteByThreadAndComponent(ctx, thread.ID, c.Registration.ID); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "conversation purged"}, nil
 }
 
 func (c *Component) interrupt(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, Type)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.Storage, c.ResolveWorkspace, req, Type)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	ok, err := c.runtime.Interrupt(ctx, workspacePath, thread.ID)
+	ok, err := c.Runtime.Interrupt(ctx, workspacePath, thread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -173,15 +173,15 @@ func (c *Component) interrupt(ctx context.Context, req commandengine.Request) (c
 }
 
 func (c *Component) status(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
-	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.storage, c.resolveWorkspace, req, Type)
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.Storage, c.ResolveWorkspace, req, Type)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	status, err := c.runtime.Status(ctx, workspacePath, thread.ID)
+	status, err := c.Runtime.Status(ctx, workspacePath, thread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	providerThreadID, err := c.storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, thread.ID, c.registration.ID)
+	providerThreadID, err := c.Storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, thread.ID, c.Registration.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -201,7 +201,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 		"chat_id: " + thread.ChatID.String(),
 		"thread_id: " + thread.ID.String(),
 		fmt.Sprintf("keep_running: %t", settings.KeepRunning),
-		"runtime: " + c.runtime.Kind(),
+		"runtime: " + c.Runtime.Kind(),
 		"container: " + status.Name,
 		"container_state: " + status.State,
 		"workspace: " + workspacePath,

@@ -17,6 +17,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clistate"
 )
@@ -106,13 +107,16 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 			},
 		}
 		c := &Component{
-			registration: registration,
-			runtime:      runtime,
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
-			},
+				Core: agentcommon.Core{
+		Registration: registration,
+				Runtime:      runtime,
+				Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
+				},
 			config: cfg,
 		}
 
@@ -170,13 +174,16 @@ func TestCodexConfigSurfaceCommands(t *testing.T) {
 		storage := repository.NewMemory()
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
-			registration: registration,
-			runtime:      &testRuntime{},
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
-			},
+				Core: agentcommon.Core{
+		Registration: registration,
+				Runtime:      &testRuntime{},
+				Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
+				},
 			config: cfg,
 		}
 
@@ -275,13 +282,16 @@ func TestCodexCommandModelClearRemovesThreadComponentState(t *testing.T) {
 		storage := repository.NewMemory()
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
-			registration: registration,
-			runtime:      &testRuntime{},
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
-			},
+				Core: agentcommon.Core{
+		Registration: registration,
+				Runtime:      &testRuntime{},
+				Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
+				},
 			config: cfg,
 		}
 
@@ -346,13 +356,16 @@ func TestCodexCommandModelEffortSetUsesThreadComponentState(t *testing.T) {
 		storage := repository.NewMemory()
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
-			registration: registration,
-			runtime:      &testRuntime{},
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
-			},
+				Core: agentcommon.Core{
+		Registration: registration,
+				Runtime:      &testRuntime{},
+				Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
+				},
 			config: cfg,
 		}
 
@@ -401,13 +414,16 @@ func TestCodexCommandStartAndStopToggleKeepRunning(t *testing.T) {
 			},
 		}
 		c := &Component{
-			registration: registration,
-			runtime:      runtime,
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
-			},
+				Core: agentcommon.Core{
+		Registration: registration,
+				Runtime:      runtime,
+				Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
+				},
 			config: cfg,
 		}
 
@@ -461,13 +477,16 @@ func TestCodexCommandPurgeClearsProviderThreadMapping(t *testing.T) {
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		runtime := &testRuntime{}
 		c := &Component{
-			registration: registration,
-			runtime:      runtime,
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
-			},
+				Core: agentcommon.Core{
+		Registration: registration,
+				Runtime:      runtime,
+				Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
+				},
 			config: cfg,
 		}
 
@@ -530,8 +549,8 @@ func newCodexCommandEngine(t *testing.T, c *Component, source commandengine.Sour
 	t.Helper()
 	engine, err := commandset.NewBoundEngineForSource(source, []commandset.BoundSurface{{
 		Surface:       c,
-		ComponentRef:  c.registration.Ref(),
-		ComponentType: c.registration.Type,
+		ComponentRef:  c.Registration.Ref(),
+		ComponentType: c.Registration.Type,
 	}})
 	if err != nil {
 		t.Fatalf("NewBoundEngineForSource() error = %v", err)

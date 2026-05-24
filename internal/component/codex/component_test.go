@@ -11,6 +11,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -82,12 +83,15 @@ func TestHandleTurnStopsRuntimeWhenKeepRunningDisabled(t *testing.T) {
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
-			registration: registration,
-			runtime:      runtime,
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
+			Core: agentcommon.Core{
+	Registration: registration,
+	Runtime:      runtime,
+	Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
 			},
 			config: cfg,
 			runner: executor,
@@ -139,12 +143,15 @@ func TestHandleTurnKeepsRuntimeRunningWhenEnabled(t *testing.T) {
 			t.Fatalf("ThreadComponentStates().Save() error = %v", err)
 		}
 		c := &Component{
-			registration: registration,
-			runtime:      runtime,
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
+			Core: agentcommon.Core{
+	Registration: registration,
+	Runtime:      runtime,
+	Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
 			},
 			config: cfg,
 			runner: executor,
@@ -190,12 +197,15 @@ func TestHandleTurnUsesThreadComponentStateOptions(t *testing.T) {
 			t.Fatalf("ThreadComponentStates().Save() error = %v", err)
 		}
 		c := &Component{
-			registration: registration,
-			runtime:      runtime,
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
+			Core: agentcommon.Core{
+	Registration: registration,
+	Runtime:      runtime,
+	Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
 			},
 			config: cfg,
 			runner: executor,
@@ -237,12 +247,15 @@ func TestHandleTurnInjectsRuntimeNoticesIntoBootstrap(t *testing.T) {
 		executor := &stubExecutor{result: TurnResult{Reply: "done"}}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
-			registration: registration,
-			runtime:      runtime,
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
+			Core: agentcommon.Core{
+	Registration: registration,
+	Runtime:      runtime,
+	Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
 			},
 			config: cfg,
 			runner: executor,
@@ -286,12 +299,15 @@ func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
-			registration: registration,
-			runtime:      runtime,
-			storage:      storage,
-			resolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
-				_ = chat
-				return filepath.Join(root, "workspace"), nil
+			Core: agentcommon.Core{
+	Registration: registration,
+	Runtime:      runtime,
+	Storage:      storage,
+				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
+					_ = chat
+					return filepath.Join(root, "workspace"), nil
+				},
+
 			},
 			config: cfg,
 			runner: executor,
@@ -331,10 +347,12 @@ func TestAuthStatusRunsComponentScopedLoginStatus(t *testing.T) {
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "work"}
 		c := &Component{
-			registration: registration,
-			runtime:      runtime,
-			storage:      storage,
-			config:       cfg,
+			Core: agentcommon.Core{
+				Registration: registration,
+				Runtime:      runtime,
+				Storage:      storage,
+			},
+			config: cfg,
 		}
 
 		if err := c.AuthStatus(ctx, io.Discard, io.Discard); err != nil {
@@ -394,8 +412,8 @@ func TestRuntimeImageTargetsUseConfiguredImage(t *testing.T) {
 			t.Fatalf("SetDockerfile() error = %v", err)
 		}
 		c := &Component{
-			registration: coremodel.Component{Type: Type, Name: "work"},
-			config:       cfg,
+			Core:   agentcommon.Core{Registration: coremodel.Component{Type: Type, Name: "work"}},
+			config: cfg,
 		}
 
 		targets, err := c.RuntimeImageTargets(context.Background())
@@ -422,8 +440,8 @@ func TestRuntimeImageTargetsSplitDefaultCodexImage(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		cfg := newTestConfig(t, root)
 		c := &Component{
-			registration: coremodel.Component{Type: Type, Name: "work"},
-			config:       cfg,
+			Core:   agentcommon.Core{Registration: coremodel.Component{Type: Type, Name: "work"}},
+			config: cfg,
 		}
 
 		targets, err := c.RuntimeImageTargets(context.Background())

@@ -38,8 +38,8 @@ func (s threadState) isZero() bool {
 
 func (c *Component) stateStore() agentcommon.JSONStateStore[threadState] {
 	return agentcommon.JSONStateStore[threadState]{
-		Storage:     c.storage,
-		ComponentID: c.registration.ID,
+		Storage:     c.Storage,
+		ComponentID: c.Registration.ID,
 		Label:       Type,
 		Clean:       func(state threadState) threadState { return state.clean() },
 		IsZero:      func(state threadState) bool { return state.isZero() },

@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	goruntime "runtime"
 	"strings"
 	"time"
+
+	"log"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
@@ -27,7 +28,7 @@ const (
 	DefaultBaseImage     = "ctgbot-claude-base:latest"
 	DefaultDevBaseImage  = "ctgbot-go-node-python-base:latest"
 	DefaultDockerfile    = "claude.Dockerfile"
-	stopAfterTurnTimeout = 5 * time.Second
+	stopAfterTurnTimeout = agentcommon.DefaultStopAfterTurnTimeout
 )
 
 var _ component.Agent = (*Component)(nil)
@@ -35,23 +36,16 @@ var _ component.ProfileOwner = (*Component)(nil)
 var _ component.Authenticator = (*Component)(nil)
 var _ component.AuthStatusReporter = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
+var _ component.ThreadRuntimeController = (*Component)(nil)
 
 type turnRunner interface {
 	RunTurn(ctx context.Context, runtime ExecRuntime, request TurnRequest) (TurnResult, error)
 }
 
 type Component struct {
-	registration        coremodel.Component
-	runtime             runtimepkg.ThreadRuntime
-	storage             repository.Storage
-	resolveWorkspace    func(context.Context, coremodel.Chat) (string, error)
-	componentConfig     ComponentConfig
-	runner              turnRunner
-	logger              *log.Logger
-	runtimeImage        string
-	runtimeDockerfile   string
-	runtimeImageUses    *runtimeimage.Target
-	runtimeImageNoCache bool
+	agentcommon.Core
+	componentConfig ComponentConfig
+	runner          turnRunner
 }
 
 func New(ctx context.Context, registration coremodel.Component, runtimeFactory runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolveWorkspace func(context.Context, coremodel.Chat) (string, error), logger *log.Logger) (component.Component, error) {
@@ -81,17 +75,19 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 	}
 	runtime := threadFactory.Bind(registration, home, bindConfig)
 	return &Component{
-		registration:        registration,
-		runtime:             runtime,
-		storage:             storage,
-		resolveWorkspace:    resolveWorkspace,
-		componentConfig:     componentConfig,
-		runner:              NewRunner(logger),
-		logger:              logger,
-		runtimeImage:        bindConfig.Image,
-		runtimeDockerfile:   firstNonEmpty(bindConfig.Dockerfile, componentConfig.Dockerfile, DefaultDockerfile),
-		runtimeImageUses:    bindConfig.Uses,
-		runtimeImageNoCache: bindConfig.NoCache,
+		Core: agentcommon.Core{
+			Registration:        registration,
+			Runtime:             runtime,
+			Storage:             storage,
+			ResolveWorkspace:    resolveWorkspace,
+			Logger:              logger,
+			RuntimeImage:        bindConfig.Image,
+			RuntimeDockerfile:   agentcommon.FirstNonEmpty(bindConfig.Dockerfile, componentConfig.Dockerfile, DefaultDockerfile),
+			RuntimeImageUses:    bindConfig.Uses,
+			RuntimeImageNoCache: bindConfig.NoCache,
+		},
+		componentConfig: componentConfig,
+		runner:          NewRunner(logger),
 	}, nil
 }
 
@@ -99,15 +95,15 @@ func (c *Component) Type() string { return Type }
 
 func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error) {
 	_ = ctx
-	if c == nil || (c.runtime != nil && c.runtime.Kind() != "docker") {
+	if c == nil || (c.Runtime != nil && c.Runtime.Kind() != "docker") {
 		return nil, nil
 	}
 	target := runtimeimage.Target{
 		Name:       Type,
-		Image:      firstNonEmpty(c.runtimeImage, DefaultImage),
-		Dockerfile: firstNonEmpty(c.runtimeDockerfile, DefaultDockerfile),
-		NoCache:    c.runtimeImageNoCache,
-		Uses:       c.runtimeImageUses,
+		Image:      agentcommon.FirstNonEmpty(c.RuntimeImage, DefaultImage),
+		Dockerfile: agentcommon.FirstNonEmpty(c.RuntimeDockerfile, DefaultDockerfile),
+		NoCache:    c.RuntimeImageNoCache,
+		Uses:       c.RuntimeImageUses,
 	}
 	if target.Uses != nil {
 		if !target.NoCache {
@@ -144,13 +140,13 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 }
 
 func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
-	if c == nil || c.runtime == nil {
+	if c == nil || c.Runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
-	if err := PrepareHome(HomeSpec{HostHome: c.runtime.ComponentHome().Path}); err != nil {
+	if err := PrepareHome(HomeSpec{HostHome: c.Runtime.ComponentHome().Path}); err != nil {
 		return err
 	}
-	closeRelay, err := c.runtime.OpenHTTPRelayPort(
+	closeRelay, err := c.Runtime.OpenHTTPRelayPort(
 		ctx,
 		"",
 		modeluuid.UUID{},
@@ -162,24 +158,24 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 		return err
 	}
 	defer func() { _ = closeRelay(context.Background()) }()
-	return c.runtime.ExecTTY(ctx, "", modeluuid.UUID{}, nil, writerOrDiscard(stdout), writerOrDiscard(stderr), "env", "BROWSER=echo", "claude", "setup-token")
+	return c.Runtime.ExecTTY(ctx, "", modeluuid.UUID{}, nil, agentcommon.WriterOrDiscard(stdout), agentcommon.WriterOrDiscard(stderr), "env", "BROWSER=echo", "claude", "setup-token")
 }
 
 func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.Writer) error {
-	if c == nil || c.runtime == nil {
+	if c == nil || c.Runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
-	if err := PrepareHome(HomeSpec{HostHome: c.runtime.ComponentHome().Path}); err != nil {
+	if err := PrepareHome(HomeSpec{HostHome: c.Runtime.ComponentHome().Path}); err != nil {
 		return err
 	}
-	return c.runtime.Exec(ctx, "", modeluuid.UUID{}, nil, writerOrDiscard(stdout), writerOrDiscard(stderr), "claude", "--version")
+	return c.Runtime.Exec(ctx, "", modeluuid.UUID{}, nil, agentcommon.WriterOrDiscard(stdout), agentcommon.WriterOrDiscard(stderr), "claude", "--version")
 }
 
 func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
 	if c == nil || c.runner == nil {
 		return nil, fmt.Errorf("missing claude runner")
 	}
-	if c.runtime == nil {
+	if c.Runtime == nil {
 		return nil, fmt.Errorf("missing component runtime")
 	}
 	prompt := strings.TrimSpace(turn.Inbound.Text)
@@ -187,18 +183,18 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		return nil, nil
 	}
 	workspacePath := turn.Runtime.WorkspacePath()
-	runtimeWorkspacePath := c.runtime.RuntimeWorkspacePath(workspacePath)
+	runtimeWorkspacePath := c.Runtime.RuntimeWorkspacePath(workspacePath)
 	instructions := turn.Runtime.Instructions()
-	instructions.RuntimeNotices = append(instructions.RuntimeNotices, c.runtimeNotices(ctx, workspacePath, turn.Thread.ID)...)
+	instructions.RuntimeNotices = append(instructions.RuntimeNotices, c.RuntimeNotices(ctx, workspacePath, turn.Thread.ID)...)
 	bootstrapText := claudeBootstrap(runtimeWorkspacePath, instructions)
-	if err := PrepareHome(HomeSpec{HostHome: c.runtime.ComponentHome().Path, BootstrapText: bootstrapText}); err != nil {
+	if err := PrepareHome(HomeSpec{HostHome: c.Runtime.ComponentHome().Path, BootstrapText: bootstrapText}); err != nil {
 		return nil, err
 	}
 	stopTyping, err := turn.Runtime.StartChatAction(ctx, message.ChatActionTyping)
 	if err == nil && stopTyping != nil {
 		defer stopTyping()
 	}
-	providerThreadID, err := c.providerThreadID(turn.Runtime)
+	providerThreadID, err := c.ProviderThreadID(turn.Runtime)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +202,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if err != nil {
 		return nil, err
 	}
-	result, runErr := c.runner.RunTurn(ctx, commandRuntime{runtime: c.runtime, threadID: turn.Thread.ID, workspacePath: workspacePath, commands: turn.Runtime.Commands()}, TurnRequest{
+	result, runErr := c.runner.RunTurn(ctx, commandRuntime{runtime: c.Runtime, threadID: turn.Thread.ID, workspacePath: workspacePath, commands: turn.Runtime.Commands()}, TurnRequest{
 		ProviderThreadID: providerThreadID,
 		Prompt:           prompt,
 		Options: TurnOptions{
@@ -217,9 +213,9 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		},
 	})
 	if !settings.KeepRunning {
-		c.stopAfterTurn(workspacePath, turn.Thread.ID)
+		c.StopAfterTurn(workspacePath, turn.Thread.ID, stopAfterTurnTimeout)
 	}
-	if saveErr := c.bindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && runErr == nil {
+	if saveErr := c.BindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && runErr == nil {
 		runErr = saveErr
 	}
 	if runErr != nil {
@@ -232,28 +228,12 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if reply == "" {
 		return nil, nil
 	}
-	return &component.TurnResult{Final: &coremodel.ThreadMessage{Kind: coremodel.MessageKindAgent, ComponentID: c.registration.ID, ActorID: c.registration.Ref(), ActorLabel: "Claude", Text: reply}}, nil
-}
-
-func (c *Component) providerThreadID(turnRuntime component.TurnRuntime) (string, error) {
-	return agentcommon.ProviderThreadID(c.registration.ID, turnRuntime)
-}
-
-func (c *Component) runtimeNotices(ctx context.Context, workspacePath string, threadID modeluuid.UUID) []string {
-	return agentcommon.RuntimeNotices(ctx, c.runtime, workspacePath, threadID, c.logf)
-}
-
-func (c *Component) bindComponentThreadID(turnRuntime component.TurnRuntime, providerThreadID string) error {
-	return agentcommon.BindProviderThreadID(c.registration.ID, turnRuntime, providerThreadID)
-}
-
-func (c *Component) stopAfterTurn(workspacePath string, threadID modeluuid.UUID) {
-	agentcommon.StopAfterTurn(c.runtime, workspacePath, threadID, stopAfterTurnTimeout, c.logf)
+	return &component.TurnResult{Final: &coremodel.ThreadMessage{Kind: coremodel.MessageKindAgent, ComponentID: c.Registration.ID, ActorID: c.Registration.Ref(), ActorLabel: "Claude", Text: reply}}, nil
 }
 
 func componentBindConfig(config runtimepkg.BindConfig, componentConfig ComponentConfig, runtimeHomePath string) runtimepkg.BindConfig {
 	config = config.Clean()
-	config.Image = firstNonEmpty(componentConfig.Image, config.Image, DefaultImage)
+	config.Image = agentcommon.FirstNonEmpty(componentConfig.Image, config.Image, DefaultImage)
 	return config.WithEnv("HOME="+runtimeHomePath, "CLAUDE_CONFIG_DIR="+runtimeHomePath+"/.claude")
 }
 
@@ -306,13 +286,6 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 	return strings.Join(lines, "\n")
 }
 
-func writerOrDiscard(w io.Writer) io.Writer {
-	if w == nil {
-		return io.Discard
-	}
-	return w
-}
-
 func claudeCallbackPort(port int) int {
 	if port <= 0 {
 		return DefaultCallbackPort
@@ -325,12 +298,6 @@ func claudeCallbackTimeout(timeout time.Duration) time.Duration {
 		return 10 * time.Minute
 	}
 	return timeout
-}
-
-func (c *Component) logf(format string, args ...any) {
-	if c != nil && c.logger != nil {
-		c.logger.Printf(format, args...)
-	}
 }
 
 type commandRuntime struct {

@@ -24,8 +24,6 @@ import (
 )
 
 const (
-	// Type matches the existing Codex component registration name so callers can
-	// switch implementations by changing only the import path.
 	Type                 = "codex"
 	DefaultImage         = "ctgbot-codex:latest"
 	DefaultBaseImage     = "ctgbot-codex-base:latest"
@@ -33,29 +31,22 @@ const (
 	DefaultCudaBaseImage = "ctgbot-codex-cuda-base:latest"
 	DefaultCudaDevBase   = "ctgbot-go-node-python-cuda-base:latest"
 	DefaultCallbackPort  = 1455
-	stopAfterTurnTimeout = 5 * time.Second
+	stopAfterTurnTimeout = agentcommon.DefaultStopAfterTurnTimeout
 )
 
 var _ component.Agent = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
+var _ component.ThreadRuntimeController = (*Component)(nil)
 
 type turnRunner interface {
 	RunTurn(ctx context.Context, runtime ExecRuntime, output OutputHandler, request TurnRequest) (TurnResult, error)
 }
 
 type Component struct {
-	registration        coremodel.Component
-	runtime             runtimepkg.ThreadRuntime
-	storage             repository.Storage
-	resolveWorkspace    func(context.Context, coremodel.Chat) (string, error)
-	config              *appstate.Config
-	componentConfig     ComponentConfig
-	runner              turnRunner
-	logger              *log.Logger
-	runtimeImage        string
-	runtimeDockerfile   string
-	runtimeImageUses    *runtimeimage.Target
-	runtimeImageNoCache bool
+	agentcommon.Core
+	config          *appstate.Config
+	componentConfig ComponentConfig
+	runner          turnRunner
 }
 
 func New(
@@ -96,24 +87,22 @@ func New(
 	if !ok {
 		return nil, fmt.Errorf("codex requires thread runtime, got %T", runtimeFactory)
 	}
-	runtime := threadFactory.Bind(
-		registration,
-		home,
-		bindConfig,
-	)
+	runtime := threadFactory.Bind(registration, home, bindConfig)
 	return &Component{
-		registration:        registration,
-		runtime:             runtime,
-		storage:             storage,
-		resolveWorkspace:    resolveWorkspace,
-		config:              cfg,
-		componentConfig:     componentConfig,
-		runner:              NewRunner(cfg, logger),
-		logger:              logger,
-		runtimeImage:        bindConfig.Image,
-		runtimeDockerfile:   firstNonEmpty(bindConfig.Dockerfile, cfg.Docker().Dockerfile()),
-		runtimeImageUses:    bindConfig.Uses,
-		runtimeImageNoCache: bindConfig.NoCache,
+		Core: agentcommon.Core{
+			Registration:        registration,
+			Runtime:             runtime,
+			Storage:             storage,
+			ResolveWorkspace:    resolveWorkspace,
+			Logger:              logger,
+			RuntimeImage:        bindConfig.Image,
+			RuntimeDockerfile:   agentcommon.FirstNonEmpty(bindConfig.Dockerfile, cfg.Docker().Dockerfile()),
+			RuntimeImageUses:    bindConfig.Uses,
+			RuntimeImageNoCache: bindConfig.NoCache,
+		},
+		config:          cfg,
+		componentConfig: componentConfig,
+		runner:          NewRunner(cfg, logger),
 	}, nil
 }
 
@@ -126,15 +115,15 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 	if c == nil {
 		return nil, nil
 	}
-	if c.runtime != nil && c.runtime.Kind() != "docker" {
+	if c.Runtime != nil && c.Runtime.Kind() != "docker" {
 		return nil, nil
 	}
-	image := strings.TrimSpace(c.runtimeImage)
+	image := strings.TrimSpace(c.RuntimeImage)
 	if image == "" && c.config != nil {
 		image = strings.TrimSpace(c.config.Docker().Image())
 	}
 	image = componentImage(image)
-	dockerfile := strings.TrimSpace(c.runtimeDockerfile)
+	dockerfile := strings.TrimSpace(c.RuntimeDockerfile)
 	if dockerfile == "" && c.config != nil {
 		dockerfile = strings.TrimSpace(c.config.Docker().Dockerfile())
 	}
@@ -145,8 +134,8 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		Name:       Type,
 		Image:      image,
 		Dockerfile: dockerfile,
-		NoCache:    c.runtimeImageNoCache,
-		Uses:       c.runtimeImageUses,
+		NoCache:    c.RuntimeImageNoCache,
+		Uses:       c.RuntimeImageUses,
 	}
 	if target.Uses != nil {
 		if !target.NoCache {
@@ -199,11 +188,11 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 }
 
 func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
-	if c == nil || c.runtime == nil {
+	if c == nil || c.Runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
-	home := c.runtime.ComponentHome()
-	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
+	home := c.Runtime.ComponentHome()
+	runtimeHomePath := c.Runtime.RuntimeComponentHomePath()
 	if err := PrepareHome(c.config, HomeSpec{
 		HostHome:         home.Path,
 		RuntimeHome:      runtimeHomePath,
@@ -212,7 +201,7 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 	}); err != nil {
 		return err
 	}
-	closeRelay, err := c.runtime.OpenHTTPRelayPort(
+	closeRelay, err := c.Runtime.OpenHTTPRelayPort(
 		ctx,
 		"",
 		modeluuid.UUID{},
@@ -224,24 +213,24 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 		return err
 	}
 	defer func() { _ = closeRelay(context.Background()) }()
-	return c.runtime.Exec(
+	return c.Runtime.Exec(
 		ctx,
 		"",
 		modeluuid.UUID{},
 		nil,
-		writerOrDiscard(stdout),
-		writerOrDiscard(stderr),
+		agentcommon.WriterOrDiscard(stdout),
+		agentcommon.WriterOrDiscard(stderr),
 		"codex",
 		"login",
 	)
 }
 
 func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.Writer) error {
-	if c == nil || c.runtime == nil {
+	if c == nil || c.Runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
-	home := c.runtime.ComponentHome()
-	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
+	home := c.Runtime.ComponentHome()
+	runtimeHomePath := c.Runtime.RuntimeComponentHomePath()
 	if err := PrepareHome(c.config, HomeSpec{
 		HostHome:         home.Path,
 		RuntimeHome:      runtimeHomePath,
@@ -250,13 +239,13 @@ func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.
 	}); err != nil {
 		return err
 	}
-	return c.runtime.Exec(
+	return c.Runtime.Exec(
 		ctx,
 		"",
 		modeluuid.UUID{},
 		nil,
-		writerOrDiscard(stdout),
-		writerOrDiscard(stderr),
+		agentcommon.WriterOrDiscard(stdout),
+		agentcommon.WriterOrDiscard(stderr),
 		"codex",
 		"login",
 		"status",
@@ -267,7 +256,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if c == nil || c.runner == nil {
 		return nil, fmt.Errorf("missing codex runner")
 	}
-	if c.runtime == nil {
+	if c.Runtime == nil {
 		return nil, fmt.Errorf("missing component runtime")
 	}
 	prompt := strings.TrimSpace(turn.Inbound.Text)
@@ -276,20 +265,20 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}
 
 	workspacePath := turn.Runtime.WorkspacePath()
-	runtimeWorkspacePath := c.runtime.RuntimeWorkspacePath(workspacePath)
-	runtimeHomePath := c.runtime.RuntimeComponentHomePath()
+	runtimeWorkspacePath := c.Runtime.RuntimeWorkspacePath(workspacePath)
+	runtimeHomePath := c.Runtime.RuntimeComponentHomePath()
 	settings, err := c.resolveThreadSettings(ctx, &turn.Thread)
 	if err != nil {
 		return nil, err
 	}
 	instructions := turn.Runtime.Instructions()
-	instructions.RuntimeNotices = append(instructions.RuntimeNotices, agentcommon.RuntimeNotices(ctx, c.runtime, workspacePath, turn.Thread.ID, c.logf)...)
+	instructions.RuntimeNotices = append(instructions.RuntimeNotices, c.RuntimeNotices(ctx, workspacePath, turn.Thread.ID)...)
 	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath, instructions)
 	if err != nil {
 		return nil, err
 	}
 	if err := PrepareHome(c.config, HomeSpec{
-		HostHome:         c.runtime.ComponentHome().Path,
+		HostHome:         c.Runtime.ComponentHome().Path,
 		RuntimeHome:      runtimeHomePath,
 		RuntimeWorkspace: runtimeWorkspacePath,
 		BootstrapText:    bootstrapText,
@@ -303,12 +292,12 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		defer stopTyping()
 	}
 
-	providerThreadID, err := agentcommon.ProviderThreadID(c.registration.ID, turn.Runtime)
+	providerThreadID, err := c.ProviderThreadID(turn.Runtime)
 	if err != nil {
 		return nil, err
 	}
 	result, runErr := c.runner.RunTurn(ctx, commandRuntime{
-		runtime:       c.runtime,
+		runtime:       c.Runtime,
 		threadID:      turn.Thread.ID,
 		workspacePath: workspacePath,
 		commands:      turn.Runtime.Commands(),
@@ -319,9 +308,9 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	})
 
 	if !settings.KeepRunning {
-		agentcommon.StopAfterTurn(c.runtime, workspacePath, turn.Thread.ID, stopAfterTurnTimeout, c.logf)
+		c.StopAfterTurn(workspacePath, turn.Thread.ID, stopAfterTurnTimeout)
 	}
-	if saveErr := agentcommon.BindProviderThreadID(c.registration.ID, turn.Runtime, result.ProviderThreadID); saveErr != nil && runErr == nil {
+	if saveErr := c.BindComponentThreadID(turn.Runtime, result.ProviderThreadID); saveErr != nil && runErr == nil {
 		runErr = saveErr
 	}
 	if runErr != nil {
@@ -338,8 +327,8 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
 			Kind:        coremodel.MessageKindAgent,
-			ComponentID: c.registration.ID,
-			ActorID:     c.registration.Ref(),
+			ComponentID: c.Registration.ID,
+			ActorID:     c.Registration.Ref(),
 			ActorLabel:  "Codex",
 			Text:        reply,
 		},
@@ -367,17 +356,11 @@ func componentBindConfig(config runtimepkg.BindConfig, cfg *appstate.Config, ima
 	if strings.TrimSpace(config.Image) == "" && cfg != nil {
 		config.Image = strings.TrimSpace(cfg.Docker().Image())
 	}
-	config.Image = componentImage(firstNonEmpty(imageOverride, config.Image))
+	config.Image = componentImage(agentcommon.FirstNonEmpty(imageOverride, config.Image))
 	return config.WithEnv(
 		"HOME="+runtimeHomePath,
 		"CODEX_HOME="+runtimeHomePath,
 	)
-}
-
-func (c *Component) logf(format string, args ...any) {
-	if c != nil && c.logger != nil {
-		c.logger.Printf(format, args...)
-	}
 }
 
 type commandRuntime struct {
@@ -438,13 +421,6 @@ func callbackTimeoutOrDefault(value time.Duration) time.Duration {
 		return value
 	}
 	return 10 * time.Minute
-}
-
-func writerOrDiscard(w io.Writer) io.Writer {
-	if w == nil {
-		return io.Discard
-	}
-	return w
 }
 
 func componentImage(value string) string {

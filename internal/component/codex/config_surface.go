@@ -48,7 +48,7 @@ func (c *Component) ConfigSchema(ctx context.Context, req commandengine.Request)
 }
 
 func (c *Component) ConfigGet(ctx context.Context, req commandengine.Request, key string) (string, error) {
-	thread, err := agentcommon.Thread(ctx, c.storage, req, Type)
+	thread, err := agentcommon.Thread(ctx, c.Storage, req, Type)
 	if err != nil {
 		return "", err
 	}
@@ -69,7 +69,7 @@ func (c *Component) ConfigGet(ctx context.Context, req commandengine.Request, ke
 }
 
 func (c *Component) ConfigSet(ctx context.Context, req commandengine.Request, key string, value string) error {
-	thread, err := agentcommon.Thread(ctx, c.storage, req, Type)
+	thread, err := agentcommon.Thread(ctx, c.Storage, req, Type)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (c *Component) ConfigSet(ctx context.Context, req commandengine.Request, ke
 }
 
 func (c *Component) ConfigUnset(ctx context.Context, req commandengine.Request, key string) error {
-	thread, err := agentcommon.Thread(ctx, c.storage, req, Type)
+	thread, err := agentcommon.Thread(ctx, c.Storage, req, Type)
 	if err != nil {
 		return err
 	}

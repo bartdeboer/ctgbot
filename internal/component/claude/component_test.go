@@ -11,6 +11,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
@@ -40,7 +41,7 @@ func TestPrepareHomeWritesNonEmptyDefaultBootstrap(t *testing.T) {
 
 func TestAuthRunsClaudeSetupTokenWithRelay(t *testing.T) {
 	runtime := &authRuntime{home: runtimepkg.Home{Path: t.TempDir()}}
-	c := &Component{runtime: runtime}
+	c := &Component{Core: agentcommon.Core{Runtime: runtime}}
 	if err := c.Auth(context.Background(), 1234, time.Minute, io.Discard, io.Discard); err != nil {
 		t.Fatalf("Auth() error = %v", err)
 	}
