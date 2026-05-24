@@ -37,11 +37,12 @@ type Message struct {
 }
 
 type Result struct {
-	Status     string      `json:"status,omitempty"`
-	Text       string      `json:"text,omitempty"`
-	Error      string      `json:"error,omitempty"`
-	Iterations int         `json:"iterations"`
-	Trace      []TraceStep `json:"trace,omitempty"`
+	ConversationID string      `json:"conversation_id,omitempty"`
+	Status         string      `json:"status,omitempty"`
+	Text           string      `json:"text,omitempty"`
+	Error          string      `json:"error,omitempty"`
+	Iterations     int         `json:"iterations"`
+	Trace          []TraceStep `json:"trace,omitempty"`
 }
 
 type TraceStep struct {

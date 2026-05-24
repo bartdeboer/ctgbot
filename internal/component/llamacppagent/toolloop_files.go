@@ -9,27 +9,37 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/toolloop"
 )
 
+type toolloopInvocation struct {
+	BaseURL       string  `json:"base_url"`
+	Model         string  `json:"model"`
+	Prompt        string  `json:"prompt"`
+	Workspace     string  `json:"workspace"`
+	MaxIterations int     `json:"max_iterations,omitempty"`
+	MaxTokens     int     `json:"max_tokens,omitempty"`
+	Temperature   float64 `json:"temperature,omitempty"`
+}
+
 type toolloopRunFiles struct {
-	HostDir     string
-	RuntimeDir  string
-	RequestHost string
-	ResultHost  string
-	EventsHost  string
+	HostDir        string
+	RuntimeDir     string
+	InvocationHost string
+	ResultHost     string
+	EventsHost     string
 }
 
 func newToolloopRunFiles(hostHome string, runtimeHome string, threadID modeluuid.UUID) (*toolloopRunFiles, error) {
 	runName := threadID.String() + "-" + modeluuid.New().String()
-	hostDir := filepath.Join(hostHome, "toolloop", runName)
+	hostDir := filepath.Join(hostHome, "toolloop", "turns", runName)
 	if err := os.MkdirAll(hostDir, 0o700); err != nil {
 		return nil, err
 	}
-	runtimeDir := filepath.ToSlash(filepath.Join(runtimeHome, "toolloop", runName))
+	runtimeDir := filepath.ToSlash(filepath.Join(runtimeHome, "toolloop", "turns", runName))
 	return &toolloopRunFiles{
-		HostDir:     hostDir,
-		RuntimeDir:  runtimeDir,
-		RequestHost: filepath.Join(hostDir, "request.json"),
-		ResultHost:  filepath.Join(hostDir, "result.json"),
-		EventsHost:  filepath.Join(hostDir, "events.jsonl"),
+		HostDir:        hostDir,
+		RuntimeDir:     runtimeDir,
+		InvocationHost: filepath.Join(hostDir, "invocation.json"),
+		ResultHost:     filepath.Join(hostDir, "result.json"),
+		EventsHost:     filepath.Join(hostDir, "events.jsonl"),
 	}, nil
 }
 
@@ -39,24 +49,23 @@ func (f *toolloopRunFiles) Cleanup() {
 	}
 }
 
-func (f *toolloopRunFiles) WriteRequest(req toolloop.Request) error {
-	data, err := json.MarshalIndent(req, "", "  ")
+func (f *toolloopRunFiles) WriteInvocation(invocation toolloopInvocation) error {
+	data, err := json.MarshalIndent(invocation, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(f.RequestHost, data, 0o600)
+	data = append(data, '\n')
+	return os.WriteFile(f.InvocationHost, data, 0o600)
 }
 
-func (f *toolloopRunFiles) RequestRuntime() string {
-	return filepath.ToSlash(filepath.Join(f.RuntimeDir, "request.json"))
-}
 func (f *toolloopRunFiles) ResultRuntime() string {
 	return filepath.ToSlash(filepath.Join(f.RuntimeDir, "result.json"))
 }
+
 func (f *toolloopRunFiles) EventsRuntime() string {
 	return filepath.ToSlash(filepath.Join(f.RuntimeDir, "events.jsonl"))
 }
 
 func (f *toolloopRunFiles) DebugFiles() toolloop.DebugFiles {
-	return toolloop.DebugFiles{Request: f.RequestHost, Result: f.ResultHost, Events: f.EventsHost}
+	return toolloop.DebugFiles{Request: f.InvocationHost, Result: f.ResultHost, Events: f.EventsHost}
 }

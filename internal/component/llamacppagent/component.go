@@ -156,11 +156,18 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		}
 	}()
 
-	result, err := c.runToolloop(ctx, turn, files)
+	providerThreadID, err := c.providerThreadID(turn.Runtime)
 	if err != nil {
+		return nil, err
+	}
+	result, runErr := c.runToolloop(ctx, turn, session, files, providerThreadID, prompt)
+	if bindErr := c.bindProviderThreadID(turn.Runtime, result.ConversationID); bindErr != nil && runErr == nil {
+		runErr = bindErr
+	}
+	if runErr != nil {
 		keepDebugFiles = true
-		c.logToolloopResultTrace(turn.Thread.ID, files.ResultHost)
-		return nil, fmt.Errorf("toolloop: %w\n%s", err, files.DebugFiles())
+		c.logToolloopTrace(turn.Thread.ID, result.Trace)
+		return nil, fmt.Errorf("toolloop: %w\n%s", runErr, files.DebugFiles())
 	}
 	c.logToolloopTrace(turn.Thread.ID, result.Trace)
 
@@ -188,42 +195,60 @@ func (c *Component) prepareToolloopRun(turn component.Turn, session component.Op
 	if err != nil {
 		return nil, err
 	}
-
-	messages := toolloopMessages(turn.History, turn.Inbound)
-	req := toolloop.Request{
+	invocation := toolloopInvocation{
 		BaseURL:       firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
-		APIKey:        firstNonEmpty(c.config.APIKey, session.APIKey()),
 		Model:         session.Model(),
-		System:        c.systemPrompt(turn),
-		Messages:      messages,
-		Prompt:        textPromptFromMessages(messages, prompt),
+		Prompt:        prompt,
 		Workspace:     c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()),
 		MaxIterations: c.config.MaxIterations,
 		MaxTokens:     c.config.MaxTokens,
 		Temperature:   c.config.Temperature,
 	}
-	if err := files.WriteRequest(req); err != nil {
+	if err := files.WriteInvocation(invocation); err != nil {
 		files.Cleanup()
 		return nil, err
 	}
 	return files, nil
 }
 
-func (c *Component) runToolloop(ctx context.Context, turn component.Turn, files *toolloopRunFiles) (toolloop.Result, error) {
-	out, err := c.runtime.CombinedOutput(
-		ctx,
-		turn.Runtime.WorkspacePath(),
-		turn.Thread.ID,
-		turn.Runtime.Commands(),
-		"toolloop",
-		"--request", files.RequestRuntime(),
-		"--output", files.ResultRuntime(),
-		"--events", files.EventsRuntime(),
-	)
-	if err != nil {
-		return toolloop.Result{}, fmt.Errorf("%w\n%s", err, strings.TrimSpace(string(out)))
+func (c *Component) runToolloop(ctx context.Context, turn component.Turn, session component.OpenAIChatSession, files *toolloopRunFiles, providerThreadID string, prompt string) (toolloop.Result, error) {
+	args := c.toolloopEnv(session, turn)
+	args = append(args, "toolloop", "--output", files.ResultRuntime(), "--events", files.EventsRuntime())
+	if providerThreadID != "" {
+		args = append(args, "resume", providerThreadID)
 	}
-	data, err := os.ReadFile(files.ResultHost)
+	args = append(args, "--", prompt)
+
+	out, runErr := c.runtime.CombinedOutput(ctx, turn.Runtime.WorkspacePath(), turn.Thread.ID, turn.Runtime.Commands(), "env", args...)
+	result, readErr := readToolloopResult(files.ResultHost)
+	if runErr != nil {
+		if readErr != nil {
+			return toolloop.Result{}, fmt.Errorf("%w\n%s\nread result: %v", runErr, strings.TrimSpace(string(out)), readErr)
+		}
+		return result, fmt.Errorf("%w\n%s", runErr, strings.TrimSpace(string(out)))
+	}
+	if readErr != nil {
+		return toolloop.Result{}, readErr
+	}
+	return result, nil
+}
+
+func (c *Component) toolloopEnv(session component.OpenAIChatSession, turn component.Turn) []string {
+	return []string{
+		"TOOLLOOP_BASE_URL=" + firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
+		"TOOLLOOP_API_KEY=" + firstNonEmpty(c.config.APIKey, session.APIKey()),
+		"TOOLLOOP_MODEL=" + session.Model(),
+		"TOOLLOOP_SYSTEM=" + c.systemPrompt(turn),
+		"TOOLLOOP_WORKSPACE=" + c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()),
+		"TOOLLOOP_MAX_ITERATIONS=" + fmt.Sprintf("%d", c.config.MaxIterations),
+		"TOOLLOOP_MAX_TOKENS=" + fmt.Sprintf("%d", c.config.MaxTokens),
+		"TOOLLOOP_TEMPERATURE=" + fmt.Sprintf("%g", c.config.Temperature),
+		"TOOLLOOP_CONVERSATION_DIR=" + c.runtime.RuntimeComponentHomePath() + "/toolloop/conversations",
+	}
+}
+
+func readToolloopResult(path string) (toolloop.Result, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return toolloop.Result{}, fmt.Errorf("read result: %w", err)
 	}
@@ -234,16 +259,26 @@ func (c *Component) runToolloop(ctx context.Context, turn component.Turn, files 
 	return result, nil
 }
 
-func (c *Component) logToolloopResultTrace(threadID modeluuid.UUID, outputHost string) {
-	data, err := os.ReadFile(outputHost)
-	if err != nil {
-		return
+func (c *Component) providerThreadID(turnRuntime component.TurnRuntime) (string, error) {
+	if turnRuntime == nil {
+		return "", fmt.Errorf("missing turn runtime")
 	}
-	var result toolloop.Result
-	if err := json.Unmarshal(data, &result); err != nil {
-		return
+	providerThreadID, ok, err := turnRuntime.ComponentThreadID(c.registration.ID)
+	if err != nil || !ok {
+		return "", err
 	}
-	c.logToolloopTrace(threadID, result.Trace)
+	return strings.TrimSpace(providerThreadID), nil
+}
+
+func (c *Component) bindProviderThreadID(turnRuntime component.TurnRuntime, providerThreadID string) error {
+	providerThreadID = strings.TrimSpace(providerThreadID)
+	if providerThreadID == "" {
+		return nil
+	}
+	if turnRuntime == nil {
+		return fmt.Errorf("missing turn runtime")
+	}
+	return turnRuntime.BindComponentThreadID(c.registration.ID, providerThreadID)
 }
 
 func (c *Component) logToolloopTrace(threadID modeluuid.UUID, trace []toolloop.TraceStep) {
@@ -273,78 +308,6 @@ func (c *Component) backend(ctx context.Context) (component.OpenAIChatSessionPro
 		return nil, fmt.Errorf("component %s does not provide OpenAI chat sessions", loaded.Registration.Ref())
 	}
 	return provider, nil
-}
-
-func textPromptFromMessages(messages []toolloop.Message, fallback string) string {
-	if len(messages) == 0 {
-		return strings.TrimSpace(fallback)
-	}
-	var b strings.Builder
-	b.WriteString("Conversation history:\n")
-	for _, message := range messages {
-		role := strings.TrimSpace(message.Role)
-		content := strings.TrimSpace(message.Content)
-		if role == "" || content == "" {
-			continue
-		}
-		switch role {
-		case "assistant":
-			role = "Assistant"
-		case "user":
-			role = "User"
-		case "system":
-			role = "System"
-		}
-		b.WriteString(role)
-		b.WriteString(": ")
-		b.WriteString(content)
-		b.WriteString("\n")
-	}
-	return strings.TrimSpace(b.String())
-}
-
-func toolloopMessages(history []coremodel.ThreadMessage, inbound coremodel.ThreadMessage) []toolloop.Message {
-	if len(history) == 0 {
-		return nil
-	}
-	out := make([]toolloop.Message, 0, len(history))
-	for _, message := range history {
-		if message.Kind == coremodel.MessageKindSystem {
-			continue
-		}
-		if !inbound.ID.IsNull() && message.ID == inbound.ID {
-			message = inbound
-		}
-		content := strings.TrimSpace(message.Text)
-		if content == "" {
-			continue
-		}
-		role, ok := toolloopRole(message)
-		if !ok {
-			continue
-		}
-		out = append(out, toolloop.Message{Role: role, Content: content})
-	}
-	return out
-}
-
-func toolloopRole(message coremodel.ThreadMessage) (string, bool) {
-	switch message.Kind {
-	case coremodel.MessageKindSystem:
-		return "system", true
-	case coremodel.MessageKindAgent:
-		return "assistant", true
-	case coremodel.MessageKindUser:
-		return "user", true
-	}
-	switch message.Direction {
-	case coremodel.MessageDirectionInbound:
-		return "user", true
-	case coremodel.MessageDirectionOutbound:
-		return "assistant", true
-	default:
-		return "", false
-	}
 }
 
 func (c *Component) systemPrompt(turn component.Turn) string {
