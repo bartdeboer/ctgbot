@@ -7,6 +7,7 @@ import (
 	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
 	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	claudecomponent "github.com/bartdeboer/ctgbot/internal/component/claude"
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
@@ -100,8 +101,7 @@ func RegisterGobTypes(register func(any)) {
 	gmailcomponent.RegisterGobTypes(register)
 	gmailv2component.RegisterGobTypes(register)
 	semanticcomponent.RegisterGobTypes(register)
-	claudecomponent.RegisterGobTypes(register)
-	codexcomponent.RegisterGobTypes(register)
+	agentcommon.RegisterGobTypes(register)
 	llamacppcomponent.RegisterGobTypes(register)
 	llamacppagentcomponent.RegisterGobTypes(register)
 	modelcomponent.RegisterGobTypes(register)
