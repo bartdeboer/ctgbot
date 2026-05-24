@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+const defaultTimeout = 2 * time.Minute
+
 type Request struct {
 	BaseURL       string    `json:"base_url"`
 	APIKey        string    `json:"api_key,omitempty"`
@@ -35,8 +37,26 @@ type Message struct {
 }
 
 type Result struct {
-	Text       string `json:"text,omitempty"`
-	Iterations int    `json:"iterations"`
+	Status     string      `json:"status,omitempty"`
+	Text       string      `json:"text,omitempty"`
+	Error      string      `json:"error,omitempty"`
+	Iterations int         `json:"iterations"`
+	Trace      []TraceStep `json:"trace,omitempty"`
+}
+
+type TraceStep struct {
+	Iteration             int               `json:"iteration"`
+	FinishReason          string            `json:"finish_reason,omitempty"`
+	AssistantContentChars int               `json:"assistant_content_chars"`
+	AssistantPreview      string            `json:"assistant_preview,omitempty"`
+	ToolCalls             []string          `json:"tool_calls,omitempty"`
+	ToolResults           []TraceToolResult `json:"tool_results,omitempty"`
+}
+
+type TraceToolResult struct {
+	Name          string `json:"name"`
+	IsError       bool   `json:"is_error,omitempty"`
+	OutputPreview string `json:"output_preview,omitempty"`
 }
 
 type Runner struct {
@@ -45,6 +65,7 @@ type Runner struct {
 	ApplyPatchPath string
 	ToolsPath      string
 	Workspace      string
+	Events         EventSink
 	Stderr         io.Writer
 	CommandTimeout time.Duration
 }
@@ -62,7 +83,7 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 	}
 	client := r.Client
 	if client == nil {
-		client = &http.Client{Timeout: 2 * time.Minute}
+		client = &http.Client{Timeout: defaultTimeout}
 	}
 	messages := []chatMessage{}
 	if req.System != "" {
@@ -80,27 +101,63 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 	} else {
 		messages = append(messages, chatMessage{Role: "user", Content: req.Prompt})
 	}
+	trace := []TraceStep{}
+	r.emit(Event{Type: "turn.started", Data: map[string]any{"model": req.Model}})
 	for i := 0; i < req.MaxIterations; i++ {
+		iteration := i + 1
+		r.emit(Event{Type: "model.request", Iteration: iteration, Data: map[string]any{"messages": len(messages)}})
 		resp, err := r.chat(ctx, client, req, messages)
 		if err != nil {
-			return Result{}, err
+			result := errorResult(trace, i, err)
+			r.emit(Event{Type: "turn.failed", Iteration: iteration, Error: err.Error()})
+			return result, err
 		}
+		step := TraceStep{
+			Iteration:             iteration,
+			FinishReason:          strings.TrimSpace(resp.FinishReason),
+			AssistantContentChars: len([]rune(resp.Content)),
+			AssistantPreview:      previewText(resp.Content, 500),
+			ToolCalls:             toolCallNames(resp.ToolCalls),
+		}
+		r.emit(Event{Type: "model.response", Iteration: iteration, Data: map[string]any{
+			"finish_reason":           step.FinishReason,
+			"assistant_content_chars": step.AssistantContentChars,
+			"tool_calls":              step.ToolCalls,
+		}})
 		if len(resp.ToolCalls) == 0 {
-			return Result{Text: strings.TrimSpace(resp.Content), Iterations: i + 1}, nil
+			trace = append(trace, step)
+			result := Result{Status: "success", Text: strings.TrimSpace(resp.Content), Iterations: iteration, Trace: trace}
+			r.emit(Event{Type: "turn.completed", Iteration: iteration, Data: map[string]any{"text_chars": len([]rune(result.Text))}})
+			return result, nil
 		}
 		messages = append(messages, chatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
 		for _, call := range resp.ToolCalls {
+			r.emit(Event{Type: "tool.started", Iteration: iteration, ToolCall: call.ID, ToolName: call.Function.Name})
 			toolText, isErr := r.executeTool(ctx, call)
 			if strings.TrimSpace(toolText) == "" {
 				toolText = "(no output)"
 			}
+			step.ToolResults = append(step.ToolResults, TraceToolResult{Name: call.Function.Name, IsError: isErr, OutputPreview: previewText(toolText, 500)})
+			r.emit(Event{Type: "tool.finished", Iteration: iteration, ToolCall: call.ID, ToolName: call.Function.Name, Data: map[string]any{"is_error": isErr, "output_preview": previewText(toolText, 500)}})
 			messages = append(messages, chatMessage{Role: "tool", ToolCallID: call.ID, Name: call.Function.Name, Content: toolText})
 			if isErr && r.Stderr != nil {
 				fmt.Fprintf(r.Stderr, "tool %s failed: %s\n", call.Function.Name, strings.TrimSpace(toolText))
 			}
 		}
+		trace = append(trace, step)
 	}
-	return Result{}, fmt.Errorf("tool loop exceeded max iterations (%d)", req.MaxIterations)
+	err := fmt.Errorf("tool loop exceeded max iterations (%d)", req.MaxIterations)
+	result := errorResult(trace, req.MaxIterations, err)
+	r.emit(Event{Type: "turn.failed", Iteration: req.MaxIterations, Error: err.Error()})
+	return result, err
+}
+
+func errorResult(trace []TraceStep, iterations int, err error) Result {
+	message := ""
+	if err != nil {
+		message = err.Error()
+	}
+	return Result{Status: "error", Error: message, Iterations: iterations, Trace: trace}
 }
 
 func cleanRequest(req Request) Request {
@@ -151,7 +208,32 @@ func (r Runner) chat(ctx context.Context, client *http.Client, req Request, mess
 	if len(decoded.Choices) == 0 {
 		return assistantMessage{}, nil
 	}
-	return decoded.Choices[0].Message, nil
+	message := decoded.Choices[0].Message
+	message.FinishReason = decoded.Choices[0].FinishReason
+	return message, nil
+}
+
+func toolCallNames(calls []toolCall) []string {
+	if len(calls) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(calls))
+	for _, call := range calls {
+		names = append(names, strings.TrimSpace(call.Function.Name))
+	}
+	return names
+}
+
+func previewText(text string, maxRunes int) string {
+	text = strings.TrimSpace(text)
+	if text == "" || maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
+	}
+	return string(runes[:maxRunes]) + "\n...<truncated>..."
 }
 
 func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
@@ -469,8 +551,9 @@ type chatMessage struct {
 }
 
 type assistantMessage struct {
-	Content   string     `json:"content"`
-	ToolCalls []toolCall `json:"tool_calls"`
+	Content      string     `json:"content"`
+	ToolCalls    []toolCall `json:"tool_calls"`
+	FinishReason string     `json:"-"`
 }
 
 type toolCall struct {
@@ -484,7 +567,8 @@ type toolCall struct {
 
 type chatResponse struct {
 	Choices []struct {
-		Message assistantMessage `json:"message"`
+		Message      assistantMessage `json:"message"`
+		FinishReason string           `json:"finish_reason"`
 	} `json:"choices"`
 }
 

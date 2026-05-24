@@ -22,6 +22,7 @@ func main() {
 func run() error {
 	requestPath := flag.String("request", "", "path to JSON toolloop request; stdin is used when empty")
 	outputPath := flag.String("output", "", "path to write JSON result; stdout is used when empty")
+	eventsPath := flag.String("events", "", "path to write JSONL event stream")
 	flag.Parse()
 	data, err := readInput(strings.TrimSpace(*requestPath))
 	if err != nil {
@@ -34,11 +35,33 @@ func run() error {
 		}
 	}
 	req = mergeEnv(req)
-	result, err := (toolloop.Runner{Stderr: os.Stderr}).Run(context.Background(), req)
+	events, closeEvents, err := openEvents(strings.TrimSpace(*eventsPath))
 	if err != nil {
 		return err
 	}
-	return writeOutput(strings.TrimSpace(*outputPath), result)
+	defer closeEvents()
+	result, err := (toolloop.Runner{Stderr: os.Stderr, Events: events}).Run(context.Background(), req)
+	if shouldWriteResult(result) {
+		if writeErr := writeOutput(strings.TrimSpace(*outputPath), result); writeErr != nil && err == nil {
+			err = writeErr
+		}
+	} else if err == nil {
+		if writeErr := writeOutput(strings.TrimSpace(*outputPath), result); writeErr != nil {
+			err = writeErr
+		}
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func shouldWriteResult(result toolloop.Result) bool {
+	return strings.TrimSpace(result.Status) != "" ||
+		strings.TrimSpace(result.Text) != "" ||
+		strings.TrimSpace(result.Error) != "" ||
+		result.Iterations > 0 ||
+		len(result.Trace) > 0
 }
 
 func readInput(path string) ([]byte, error) {
@@ -59,6 +82,17 @@ func writeOutput(path string, result toolloop.Result) error {
 	}
 	_, err = os.Stdout.Write(data)
 	return err
+}
+
+func openEvents(path string) (toolloop.EventSink, func(), error) {
+	if path == "" {
+		return nil, func() {}, nil
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return nil, nil, err
+	}
+	return toolloop.NewJSONLEventSink(file), func() { _ = file.Close() }, nil
 }
 
 func mergeEnv(req toolloop.Request) toolloop.Request {

@@ -149,32 +149,106 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		defer stopTyping()
 	}
 
-	requestHost, outputHost, cleanup, err := c.writeRequest(turn, session, prompt)
+	requestHost, outputHost, eventsHost, cleanup, err := c.writeRequest(turn, session, prompt)
 	if err != nil {
 		return nil, err
 	}
-	defer cleanup()
+	keepDebugFiles := false
+	defer func() {
+		if !keepDebugFiles {
+			cleanup()
+		}
+	}()
 
 	runtimeHome := c.runtime.RuntimeComponentHomePath()
 	requestRuntime := filepath.ToSlash(filepath.Join(runtimeHome, "toolloop", filepath.Base(filepath.Dir(requestHost)), filepath.Base(requestHost)))
 	outputRuntime := filepath.ToSlash(filepath.Join(runtimeHome, "toolloop", filepath.Base(filepath.Dir(outputHost)), filepath.Base(outputHost)))
-	out, err := c.runtime.CombinedOutput(ctx, turn.Runtime.WorkspacePath(), turn.Thread.ID, turn.Runtime.Commands(), "toolloop", "--request", requestRuntime, "--output", outputRuntime)
+	eventsRuntime := filepath.ToSlash(filepath.Join(runtimeHome, "toolloop", filepath.Base(filepath.Dir(eventsHost)), filepath.Base(eventsHost)))
+	out, err := c.runtime.CombinedOutput(ctx, turn.Runtime.WorkspacePath(), turn.Thread.ID, turn.Runtime.Commands(), "toolloop", "--request", requestRuntime, "--output", outputRuntime, "--events", eventsRuntime)
 	if err != nil {
-		return nil, fmt.Errorf("toolloop: %w\n%s", err, strings.TrimSpace(string(out)))
+		keepDebugFiles = true
+		c.logToolloopResultTrace(turn.Thread.ID, outputHost)
+		return nil, fmt.Errorf("toolloop: %w\n%s\n%s", err, strings.TrimSpace(string(out)), toolloopDebugPaths(requestHost, outputHost, eventsHost))
 	}
 	data, err := os.ReadFile(outputHost)
 	if err != nil {
-		return nil, fmt.Errorf("read toolloop result: %w", err)
+		keepDebugFiles = true
+		return nil, fmt.Errorf("read toolloop result: %w\n%s", err, toolloopDebugPaths(requestHost, outputHost, eventsHost))
 	}
 	var result toolloop.Result
 	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("decode toolloop result: %w", err)
+		keepDebugFiles = true
+		return nil, fmt.Errorf("decode toolloop result: %w\n%s", err, toolloopDebugPaths(requestHost, outputHost, eventsHost))
+	}
+	if trace := toolloopTraceText(result.Trace); trace != "" {
+		c.logf("llamacppagent toolloop trace thread=%s\n%s", turn.Thread.ID.String(), trace)
 	}
 	reply := strings.TrimSpace(result.Text)
 	if reply == "" {
+		if result.Status == "error" && strings.TrimSpace(result.Error) != "" {
+			keepDebugFiles = true
+			return nil, fmt.Errorf("toolloop error: %s\n%s", result.Error, toolloopDebugPaths(requestHost, outputHost, eventsHost))
+		}
 		return nil, nil
 	}
 	return &component.TurnResult{Final: &coremodel.ThreadMessage{Kind: coremodel.MessageKindAgent, ComponentID: c.registration.ID, ActorID: c.registration.Ref(), ActorLabel: "llama.cpp agent", Text: reply}}, nil
+}
+
+func (c *Component) logToolloopResultTrace(threadID modeluuid.UUID, outputHost string) {
+	data, err := os.ReadFile(outputHost)
+	if err != nil {
+		return
+	}
+	var result toolloop.Result
+	if err := json.Unmarshal(data, &result); err != nil {
+		return
+	}
+	if trace := toolloopTraceText(result.Trace); trace != "" {
+		c.logf("llamacppagent toolloop trace thread=%s\n%s", threadID.String(), trace)
+	}
+}
+
+func toolloopTraceText(trace []toolloop.TraceStep) string {
+	if len(trace) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, step := range trace {
+		fmt.Fprintf(&b, "iteration=%d finish=%q assistant_chars=%d", step.Iteration, step.FinishReason, step.AssistantContentChars)
+		if len(step.ToolCalls) > 0 {
+			b.WriteString(" tool_calls=")
+			b.WriteString(strings.Join(step.ToolCalls, ","))
+		}
+		if strings.TrimSpace(step.AssistantPreview) != "" {
+			b.WriteString("\nassistant_preview:\n")
+			b.WriteString(step.AssistantPreview)
+		}
+		for _, result := range step.ToolResults {
+			fmt.Fprintf(&b, "\ntool_result name=%s is_error=%t", result.Name, result.IsError)
+			if strings.TrimSpace(result.OutputPreview) != "" {
+				b.WriteString("\n")
+				b.WriteString(result.OutputPreview)
+			}
+		}
+		b.WriteString("\n")
+	}
+	return tailText(b.String(), 4000)
+}
+
+func tailText(text string, maxRunes int) string {
+	text = strings.TrimSpace(text)
+	if text == "" || maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
+	}
+	return "...<truncated>...\n" + string(runes[len(runes)-maxRunes:])
+}
+
+func toolloopDebugPaths(requestHost string, outputHost string, eventsHost string) string {
+	return fmt.Sprintf("toolloop debug files retained:\nrequest: %s\nresult: %s\nevents: %s", requestHost, outputHost, eventsHost)
 }
 
 func (c *Component) backend(ctx context.Context) (component.OpenAIChatSessionProvider, error) {
@@ -200,14 +274,15 @@ func (c *Component) backend(ctx context.Context) (component.OpenAIChatSessionPro
 	return provider, nil
 }
 
-func (c *Component) writeRequest(turn component.Turn, session component.OpenAIChatSession, prompt string) (string, string, func(), error) {
+func (c *Component) writeRequest(turn component.Turn, session component.OpenAIChatSession, prompt string) (string, string, string, func(), error) {
 	hostDir := filepath.Join(c.runtime.ComponentHome().Path, "toolloop", turn.Thread.ID.String()+"-"+modeluuid.New().String())
 	if err := os.MkdirAll(hostDir, 0o700); err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	cleanup := func() { _ = os.RemoveAll(hostDir) }
 	requestHost := filepath.Join(hostDir, "request.json")
 	outputHost := filepath.Join(hostDir, "result.json")
+	eventsHost := filepath.Join(hostDir, "events.jsonl")
 	messages := toolloopMessages(turn.History, turn.Inbound)
 	req := toolloop.Request{
 		BaseURL:       firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
@@ -224,13 +299,13 @@ func (c *Component) writeRequest(turn component.Turn, session component.OpenAICh
 	data, err := json.MarshalIndent(req, "", "  ")
 	if err != nil {
 		cleanup()
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	if err := os.WriteFile(requestHost, data, 0o600); err != nil {
 		cleanup()
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
-	return requestHost, outputHost, cleanup, nil
+	return requestHost, outputHost, eventsHost, cleanup, nil
 }
 
 func textPromptFromMessages(messages []toolloop.Message, fallback string) string {
