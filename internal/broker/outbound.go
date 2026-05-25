@@ -81,6 +81,9 @@ func (b *Broker) storeAndRelayMessageWithAttachments(ctx context.Context, runtim
 	if threadMessage.Kind == "" {
 		threadMessage.Kind = coremodel.MessageKindAgent
 	}
+	if threadMessage.Role == "" {
+		threadMessage.Role = threadMessage.ResolvedRole()
+	}
 	if strings.TrimSpace(threadMessage.ActorLabel) == "" {
 		threadMessage.ActorLabel = sourceType
 	}
@@ -107,7 +110,8 @@ func (b *Broker) deliverPayload(ctx context.Context, runtime *ChatRuntime, chat 
 		ChatID:      chat.ID,
 		ThreadID:    thread.ID,
 		Direction:   coremodel.MessageDirectionOutbound,
-		Kind:        coremodel.MessageKindAgent,
+		Role:        outboundRole(payload.Role),
+		Kind:        outboundKind(payload.Kind),
 		ComponentID: componentID,
 		Text:        strings.TrimSpace(payload.Text.Text),
 	}
@@ -194,6 +198,7 @@ func (b *Broker) relaySystemMessage(ctx context.Context, runtime *ChatRuntime, c
 		ChatID:      chat.ID,
 		ThreadID:    thread.ID,
 		Direction:   coremodel.MessageDirectionOutbound,
+		Role:        coremodel.MessageRoleSystem,
 		Kind:        coremodel.MessageKindSystem,
 		ActorID:     "ctgbot",
 		ActorLabel:  "ctgbot",
@@ -218,6 +223,20 @@ func (b *Broker) relaySystemMessage(ctx context.Context, runtime *ChatRuntime, c
 		return nil, err
 	}
 	return threadMessage, nil
+}
+
+func outboundRole(role coremodel.MessageRole) coremodel.MessageRole {
+	if role != "" {
+		return role
+	}
+	return coremodel.MessageRoleAgent
+}
+
+func outboundKind(kind coremodel.MessageKind) coremodel.MessageKind {
+	if kind != "" {
+		return kind
+	}
+	return coremodel.MessageKindAgent
 }
 
 func conversationErrorText(err error) string {

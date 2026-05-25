@@ -72,6 +72,8 @@ type OutboundPayload struct {
 	ProviderChannelID           string
 	ProviderThreadID            string
 	SupersedesProviderMessageID string
+	Role                        coremodel.MessageRole
+	Kind                        coremodel.MessageKind
 	Text                        TextMessage
 	Attachments                 []Media
 }

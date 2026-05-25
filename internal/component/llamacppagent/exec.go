@@ -16,6 +16,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
@@ -209,7 +210,11 @@ func (r *Runner) forwardEvent(ctx context.Context, output OutputHandler, event t
 		maxRunes = 1200
 	}
 	text := toolloop.TailText(preview, maxRunes)
-	if err := output.Send(ctx, message.OutboundPayload{Text: message.TextMessage{Text: text}}); err != nil {
+	if err := output.Send(ctx, message.OutboundPayload{
+		Role: coremodel.MessageRoleAgent,
+		Kind: coremodel.MessageKindProgress,
+		Text: message.TextMessage{Text: text},
+	}); err != nil {
 		r.logf("send llamacppagent reasoning message failed: %v", err)
 	}
 }

@@ -27,6 +27,7 @@ func storeInboundMessageWithStorage(ctx context.Context, storage repository.Stor
 		ChatID:       inbound.Chat.ID,
 		ThreadID:     inbound.Thread.ID,
 		Direction:    coremodel.MessageDirectionInbound,
+		Role:         coremodel.MessageRoleUser,
 		Kind:         inboundKind(inbound),
 		ComponentID:  inbound.ComponentID,
 		ExternalID:   strings.TrimSpace(inbound.ExternalID),

@@ -228,7 +228,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if reply == "" {
 		return nil, nil
 	}
-	return &component.TurnResult{Final: &coremodel.ThreadMessage{Kind: coremodel.MessageKindAgent, ComponentID: c.Registration.ID, ActorID: c.Registration.Ref(), ActorLabel: "Claude", Text: reply}}, nil
+	return &component.TurnResult{Final: &coremodel.ThreadMessage{Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindAgent, ComponentID: c.Registration.ID, ActorID: c.Registration.Ref(), ActorLabel: "Claude", Text: reply}}, nil
 }
 
 func componentBindConfig(config runtimepkg.BindConfig, componentConfig ComponentConfig, runtimeHomePath string) runtimepkg.BindConfig {

@@ -516,6 +516,71 @@ func TestAutoMigrateRenamesExternalChannelColumns(t *testing.T) {
 	}
 }
 
+func TestAutoMigrateBackfillsThreadMessageRoles(t *testing.T) {
+	ctx := context.Background()
+	name := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
+	dsn := fmt.Sprintf("file:%s-%s?mode=memory&cache=shared", name, modeluuid.New().String())
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("gorm.Open() error = %v", err)
+	}
+	if err := db.Exec(`CREATE TABLE thread_messages (
+		id BLOB PRIMARY KEY,
+		chat_id BLOB,
+		thread_id BLOB,
+		direction TEXT,
+		kind TEXT,
+		component_id BLOB,
+		external_id TEXT,
+		actor_id TEXT,
+		actor_label TEXT,
+		text TEXT,
+		metadata_json TEXT,
+		created_at DATETIME,
+		updated_at DATETIME
+	)`).Error; err != nil {
+		t.Fatalf("create legacy thread_messages: %v", err)
+	}
+	messages := []struct {
+		id        modeluuid.UUID
+		direction coremodel.MessageDirection
+		kind      coremodel.MessageKind
+		want      coremodel.MessageRole
+	}{
+		{id: modeluuid.New(), direction: coremodel.MessageDirectionInbound, kind: coremodel.MessageKindUser, want: coremodel.MessageRoleUser},
+		{id: modeluuid.New(), direction: coremodel.MessageDirectionOutbound, kind: coremodel.MessageKindAgent, want: coremodel.MessageRoleAgent},
+		{id: modeluuid.New(), direction: coremodel.MessageDirectionOutbound, kind: coremodel.MessageKindSystem, want: coremodel.MessageRoleSystem},
+		{id: modeluuid.New(), direction: coremodel.MessageDirectionInbound, kind: coremodel.MessageKindEvent, want: coremodel.MessageRoleSystem},
+		{id: modeluuid.New(), direction: coremodel.MessageDirectionInbound, kind: coremodel.MessageKindMessage, want: coremodel.MessageRoleUser},
+	}
+	for _, message := range messages {
+		if err := db.Exec(
+			`INSERT INTO thread_messages (id, chat_id, thread_id, direction, kind, text, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			message.id, modeluuid.New(), modeluuid.New(), string(message.direction), string(message.kind), "hello", time.Now(), time.Now(),
+		).Error; err != nil {
+			t.Fatalf("insert message: %v", err)
+		}
+	}
+
+	store := New(db)
+	if err := store.AutoMigrate(ctx); err != nil {
+		t.Fatalf("AutoMigrate() error = %v", err)
+	}
+	if !db.Migrator().HasColumn(&coremodel.ThreadMessage{}, "role") {
+		t.Fatal("thread_messages.role missing")
+	}
+	for _, message := range messages {
+		var got string
+		if err := db.Raw(`SELECT role FROM thread_messages WHERE id = ?`, message.id).Scan(&got).Error; err != nil {
+			t.Fatalf("select role: %v", err)
+		}
+		if got != string(message.want) {
+			t.Fatalf("role for kind=%s direction=%s = %q, want %q", message.kind, message.direction, got, message.want)
+		}
+	}
+}
+
 func newTestStore(t *testing.T) *GORMStorage {
 	t.Helper()
 	name := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())

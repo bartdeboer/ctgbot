@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/toolloop"
 )
@@ -77,6 +78,9 @@ func TestRunnerForwardsReasoningEventsWhileToolloopRuns(t *testing.T) {
 	if len(output.texts) != 1 || output.texts[0] != "I will inspect the workspace." {
 		t.Fatalf("forwarded texts = %#v", output.texts)
 	}
+	if output.payloads[0].Role != coremodel.MessageRoleAgent || output.payloads[0].Kind != coremodel.MessageKindProgress {
+		t.Fatalf("forwarded payload = %#v", output.payloads[0])
+	}
 }
 
 func writeToolloopEvent(t *testing.T, path string, event toolloop.Event) {
@@ -107,11 +111,13 @@ func (f fakeExecRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.W
 }
 
 type fakeOutputHandler struct {
-	texts []string
+	texts    []string
+	payloads []message.OutboundPayload
 }
 
 func (f *fakeOutputHandler) Send(ctx context.Context, payload message.OutboundPayload) error {
 	_ = ctx
+	f.payloads = append(f.payloads, payload)
 	if text := strings.TrimSpace(payload.Text.Text); text != "" {
 		f.texts = append(f.texts, text)
 	}
