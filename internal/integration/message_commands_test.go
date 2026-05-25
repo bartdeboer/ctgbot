@@ -977,7 +977,7 @@ func (c *mockAgentCommandComponent) HandleTurn(ctx context.Context, turn compone
 	_, _, _ = ctx, turn, c
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
-			Kind:       coremodel.MessageKindAgent,
+			Kind:       coremodel.MessageKindMessage,
 			ActorID:    "agentctl",
 			ActorLabel: "agentctl",
 			Text:       "handled as agent",
@@ -1023,7 +1023,7 @@ func (c *mockLocalAgentCommandComponent) HandleTurn(ctx context.Context, turn co
 	_, _, _ = ctx, turn, c
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
-			Kind:       coremodel.MessageKindAgent,
+			Kind:       coremodel.MessageKindMessage,
 			ActorID:    "agentctl",
 			ActorLabel: "agentctl",
 			Text:       "handled as agent",

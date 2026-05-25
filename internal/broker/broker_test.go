@@ -1694,7 +1694,7 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 	if got, want := len(outcome.Outbound), 1; got != want {
 		t.Fatalf("outbound count = %d, want %d", got, want)
 	}
-	if got, want := outcome.Outbound[0].Kind, coremodel.MessageKindSystem; got != want {
+	if got, want := outcome.Outbound[0].Kind, coremodel.MessageKindMessage; got != want {
 		t.Fatalf("outbound kind = %q, want %q", got, want)
 	}
 	messages, err := storage.Messages().ListByThreadID(context.Background(), outcome.Outbound[0].ThreadID)

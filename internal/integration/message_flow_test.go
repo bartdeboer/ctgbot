@@ -548,7 +548,7 @@ func (a *failingAgent) HandleTurn(ctx context.Context, turn component.Turn) (*co
 	}
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
-			Kind:        coremodel.MessageKindAgent,
+			Kind:        coremodel.MessageKindMessage,
 			ComponentID: a.componentID,
 			ActorID:     "failingagent",
 			ActorLabel:  "Failing Agent",
@@ -597,7 +597,7 @@ func (a *mockAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	a.state.mu.Unlock()
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
-			Kind:        coremodel.MessageKindAgent,
+			Kind:        coremodel.MessageKindMessage,
 			ComponentID: a.componentID,
 			ActorID:     "mockagent",
 			ActorLabel:  "Mock Agent",

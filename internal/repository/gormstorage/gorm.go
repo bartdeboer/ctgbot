@@ -77,9 +77,6 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-	if err := s.migrateThreadMessageRoles(ctx); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -103,29 +100,6 @@ func (s *GORMStorage) migrateProviderChannelColumns(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-func (s *GORMStorage) migrateThreadMessageRoles(ctx context.Context) error {
-	return s.db.WithContext(ctx).Exec(`
-		UPDATE thread_messages
-		SET role = CASE
-			WHEN kind = ? THEN ?
-			WHEN kind = ? THEN ?
-			WHEN kind = ? THEN ?
-			WHEN kind = ? THEN ?
-			WHEN direction = ? THEN ?
-			WHEN direction = ? THEN ?
-			ELSE role
-		END
-		WHERE role IS NULL OR role = ''
-	`,
-		coremodel.MessageKindUser, coremodel.MessageRoleUser,
-		coremodel.MessageKindAgent, coremodel.MessageRoleAgent,
-		coremodel.MessageKindSystem, coremodel.MessageRoleSystem,
-		coremodel.MessageKindEvent, coremodel.MessageRoleSystem,
-		coremodel.MessageDirectionInbound, coremodel.MessageRoleUser,
-		coremodel.MessageDirectionOutbound, coremodel.MessageRoleAgent,
-	).Error
 }
 
 func (s *GORMStorage) Transaction(ctx context.Context, fn func(repository.Storage) error) error {

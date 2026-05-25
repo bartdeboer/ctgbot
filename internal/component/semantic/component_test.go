@@ -33,7 +33,7 @@ func TestSearchScoresThreadMessages(t *testing.T) {
 		config:   ComponentConfig{Completion: "llm/qwen", BatchSize: 10, Limit: 5, MinScore: 0.4, MaxOutputTokens: 256},
 		resolver: fakeResolver{provider: fakeCompletionProvider{reply: `{"scores":[{"id":"` + messageID.String() + `","score":0.7,"reason":"mentions ORM tradeoffs"}]}`}},
 	}
-	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "GORM vs raw SQL"}}})
+	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "GORM vs raw SQL"}}})
 	response, err := c.Search(context.Background(), component.SearchRequest{Query: "database abstraction layer", ThreadID: threadID})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
@@ -57,9 +57,9 @@ func TestSearchKeepsCompletionSessionOpenAcrossBatches(t *testing.T) {
 		config:   ComponentConfig{Completion: "llm/qwen", BatchSize: 10, Limit: 5, MinScore: 0.4, MaxOutputTokens: 256},
 		resolver: fakeResolver{provider: provider},
 	}
-	messages := []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "first message"}}
+	messages := []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "first message"}}
 	for i := 0; i < 24; i++ {
-		messages = append(messages, coremodel.ThreadMessage{ID: modeluuid.New(), ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "other message"})
+		messages = append(messages, coremodel.ThreadMessage{ID: modeluuid.New(), ThreadID: threadID, Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "other message"})
 	}
 	c.SetSearchMessageSource(fakeMessageSource{messages: messages})
 	if _, err := c.Search(context.Background(), component.SearchRequest{Query: "anything", ThreadID: threadID}); err != nil {
@@ -83,7 +83,7 @@ func TestSearchPassesCompletionIdleTimeoutToSession(t *testing.T) {
 		config:   ComponentConfig{Completion: "llm/qwen", BatchSize: 10, Limit: 5, MinScore: 0.4, MaxOutputTokens: 256},
 		resolver: fakeResolver{provider: provider},
 	}
-	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "message"}}})
+	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "message"}}})
 	if _, err := c.Search(context.Background(), component.SearchRequest{Query: "anything", ThreadID: threadID, CompletionIdleTimeout: 10 * time.Second}); err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -107,9 +107,9 @@ func TestStrategyEmbeddingIndexAndSearch(t *testing.T) {
 		resolver: fakeResolver{component: embedder},
 	}
 	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{
-		{ID: horseID, ThreadID: threadID, Kind: coremodel.MessageKindUser, Text: "The black horse runs through the field."},
-		{ID: databaseID, ThreadID: threadID, Kind: coremodel.MessageKindAgent, Text: "We discussed SQLite embeddings and semantic search strategies."},
-		{ID: modeluuid.New(), ThreadID: threadID, Kind: coremodel.MessageKindSystem, Text: "conversation runtime refreshed"},
+		{ID: horseID, ThreadID: threadID, Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "The black horse runs through the field."},
+		{ID: databaseID, ThreadID: threadID, Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, Text: "We discussed SQLite embeddings and semantic search strategies."},
+		{ID: modeluuid.New(), ThreadID: threadID, Role: coremodel.MessageRoleSystem, Kind: coremodel.MessageKindMessage, Text: "conversation runtime refreshed"},
 	}})
 	if err := store.saveStrategy(context.Background(), &strategy{
 		Name:        "qwen-embed",
@@ -163,8 +163,8 @@ func TestStrategySearchAllAndScopedDrop(t *testing.T) {
 		resolver: fakeResolver{component: fakeEmbedder{}},
 	}
 	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{
-		{ID: firstMessageID, ChatID: chatID, ThreadID: firstThreadID, Kind: coremodel.MessageKindUser, Text: "We discussed Gmail attachments."},
-		{ID: secondMessageID, ChatID: chatID, ThreadID: secondThreadID, Kind: coremodel.MessageKindAgent, Text: "We discussed SQLite vector search."},
+		{ID: firstMessageID, ChatID: chatID, ThreadID: firstThreadID, Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "We discussed Gmail attachments."},
+		{ID: secondMessageID, ChatID: chatID, ThreadID: secondThreadID, Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, Text: "We discussed SQLite vector search."},
 	}})
 	if err := store.saveStrategy(context.Background(), &strategy{
 		Name:        "qwen-embed",

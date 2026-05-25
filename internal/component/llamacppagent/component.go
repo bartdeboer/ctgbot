@@ -180,7 +180,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		}
 		return nil, nil
 	}
-	return &component.TurnResult{Final: &coremodel.ThreadMessage{Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindAgent, ComponentID: c.registration.ID, ActorID: c.registration.Ref(), ActorLabel: "llama.cpp agent", Text: reply}}, nil
+	return &component.TurnResult{Final: &coremodel.ThreadMessage{Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, ComponentID: c.registration.ID, ActorID: c.registration.Ref(), ActorLabel: "llama.cpp agent", Text: reply}}, nil
 }
 
 func (c *Component) beginBackendSession(ctx context.Context) (component.OpenAIChatSession, error) {

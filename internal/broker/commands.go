@@ -78,7 +78,7 @@ func (b *Broker) tryHandleMessageCommand(
 		thread,
 		coremodel.ThreadMessage{
 			Role:       coremodel.MessageRoleSystem,
-			Kind:       coremodel.MessageKindSystem,
+			Kind:       coremodel.MessageKindMessage,
 			ActorID:    "ctgbot",
 			ActorLabel: "ctgbot",
 			Text:       text,

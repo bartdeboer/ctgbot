@@ -327,7 +327,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
 			Role:        coremodel.MessageRoleAgent,
-			Kind:        coremodel.MessageKindAgent,
+			Kind:        coremodel.MessageKindMessage,
 			ComponentID: c.Registration.ID,
 			ActorID:     c.Registration.Ref(),
 			ActorLabel:  "Codex",

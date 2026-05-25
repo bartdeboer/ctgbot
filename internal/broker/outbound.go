@@ -79,10 +79,10 @@ func (b *Broker) storeAndRelayMessageWithAttachments(ctx context.Context, runtim
 	threadMessage.ThreadID = thread.ID
 	threadMessage.Direction = coremodel.MessageDirectionOutbound
 	if threadMessage.Kind == "" {
-		threadMessage.Kind = coremodel.MessageKindAgent
+		threadMessage.Kind = coremodel.MessageKindMessage
 	}
 	if threadMessage.Role == "" {
-		threadMessage.Role = threadMessage.ResolvedRole()
+		threadMessage.Role = coremodel.MessageRoleAgent
 	}
 	if strings.TrimSpace(threadMessage.ActorLabel) == "" {
 		threadMessage.ActorLabel = sourceType
@@ -199,7 +199,7 @@ func (b *Broker) relaySystemMessage(ctx context.Context, runtime *ChatRuntime, c
 		ThreadID:    thread.ID,
 		Direction:   coremodel.MessageDirectionOutbound,
 		Role:        coremodel.MessageRoleSystem,
-		Kind:        coremodel.MessageKindSystem,
+		Kind:        coremodel.MessageKindMessage,
 		ActorID:     "ctgbot",
 		ActorLabel:  "ctgbot",
 		Text:        text,
@@ -236,7 +236,7 @@ func outboundKind(kind coremodel.MessageKind) coremodel.MessageKind {
 	if kind != "" {
 		return kind
 	}
-	return coremodel.MessageKindAgent
+	return coremodel.MessageKindMessage
 }
 
 func conversationErrorText(err error) string {

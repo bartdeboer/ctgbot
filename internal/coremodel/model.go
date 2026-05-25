@@ -27,14 +27,8 @@ const (
 type MessageKind string
 
 const (
-	// Legacy speaker-shaped kinds. Keep these while ThreadMessage.Role is
-	// rolled out; new content-shaped kinds live below.
-	MessageKindUser   MessageKind = "user"
-	MessageKindAgent  MessageKind = "agent"
-	MessageKindSystem MessageKind = "system"
-	MessageKindEvent  MessageKind = "event"
-
 	MessageKindMessage    MessageKind = "message"
+	MessageKindEvent      MessageKind = "event"
 	MessageKindReasoning  MessageKind = "reasoning"
 	MessageKindProgress   MessageKind = "progress"
 	MessageKindToolCall   MessageKind = "tool_call"
@@ -246,25 +240,7 @@ type ThreadMessage struct {
 }
 
 func (m ThreadMessage) ResolvedRole() MessageRole {
-	if m.Role != "" {
-		return m.Role
-	}
-	switch m.Kind {
-	case MessageKindUser:
-		return MessageRoleUser
-	case MessageKindAgent:
-		return MessageRoleAgent
-	case MessageKindSystem, MessageKindEvent:
-		return MessageRoleSystem
-	}
-	switch m.Direction {
-	case MessageDirectionInbound:
-		return MessageRoleUser
-	case MessageDirectionOutbound:
-		return MessageRoleAgent
-	default:
-		return ""
-	}
+	return m.Role
 }
 
 type Artifact struct {

@@ -755,7 +755,7 @@ func (a *hostbridgeAgent) HandleTurn(ctx context.Context, turn component.Turn) (
 	a.state.prompt = turn.Inbound.Text
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
-			Kind:        coremodel.MessageKindAgent,
+			Kind:        coremodel.MessageKindMessage,
 			ComponentID: a.componentID,
 			ActorID:     "mockagent",
 			ActorLabel:  "Mock Agent",
@@ -791,7 +791,7 @@ func (a *hostbridgeRunAgent) HandleTurn(ctx context.Context, turn component.Turn
 	a.state.prompt = turn.Inbound.Text
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
-			Kind:        coremodel.MessageKindAgent,
+			Kind:        coremodel.MessageKindMessage,
 			ComponentID: a.componentID,
 			ActorID:     "mockagent",
 			ActorLabel:  "Mock Agent",

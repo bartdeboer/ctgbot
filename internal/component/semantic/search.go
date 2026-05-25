@@ -148,7 +148,7 @@ func (c *Component) beginCompletionSession(ctx context.Context, provider compone
 func searchableMessages(messages []coremodel.ThreadMessage) []coremodel.ThreadMessage {
 	out := make([]coremodel.ThreadMessage, 0, len(messages))
 	for _, message := range messages {
-		if !semanticMessageKind(message.Kind) || strings.TrimSpace(message.Text) == "" || message.ID.IsNull() {
+		if !semanticMessage(message) || strings.TrimSpace(message.Text) == "" || message.ID.IsNull() {
 			continue
 		}
 		out = append(out, message)
@@ -157,16 +157,19 @@ func searchableMessages(messages []coremodel.ThreadMessage) []coremodel.ThreadMe
 }
 
 func semanticMessageKinds() []coremodel.MessageKind {
-	return []coremodel.MessageKind{coremodel.MessageKindUser, coremodel.MessageKindAgent}
+	return []coremodel.MessageKind{coremodel.MessageKindMessage}
 }
 
-func semanticMessageKind(kind coremodel.MessageKind) bool {
-	for _, allowed := range semanticMessageKinds() {
-		if kind == allowed {
-			return true
-		}
+func semanticMessage(message coremodel.ThreadMessage) bool {
+	if message.Kind != coremodel.MessageKindMessage {
+		return false
 	}
-	return false
+	switch message.ResolvedRole() {
+	case coremodel.MessageRoleUser, coremodel.MessageRoleAgent:
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *Component) scoreBatch(ctx context.Context, provider component.CompletionProvider, model string, query string, messages []coremodel.ThreadMessage) ([]scoredMessage, error) {

@@ -74,7 +74,7 @@ func storeOutboundMessageWithStorage(ctx context.Context, storage repository.Sto
 
 func inboundKind(inbound component.ResolvedInbound) coremodel.MessageKind {
 	if strings.TrimSpace(inbound.Payload.Text.Text) != "" {
-		return coremodel.MessageKindUser
+		return coremodel.MessageKindMessage
 	}
 	return coremodel.MessageKindEvent
 }

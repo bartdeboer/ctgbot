@@ -44,26 +44,10 @@ func completionPromptFromMessages(messages []coremodel.ThreadMessage) component.
 }
 
 func completionRoleForMessage(message coremodel.ThreadMessage) (component.CompletionRole, bool) {
-	switch message.Kind {
-	case coremodel.MessageKindEvent, coremodel.MessageKindProgress, coremodel.MessageKindReasoning, coremodel.MessageKindToolCall, coremodel.MessageKindToolResult:
-		return "", false
-	case coremodel.MessageKindMessage:
-		return completionRoleForMessageRole(message.ResolvedRole())
-	case coremodel.MessageKindSystem:
-		return component.CompletionRoleSystem, true
-	case coremodel.MessageKindAgent:
-		return component.CompletionRoleAssistant, true
-	case coremodel.MessageKindUser:
-		return component.CompletionRoleUser, true
-	}
-	switch message.Direction {
-	case coremodel.MessageDirectionInbound:
-		return component.CompletionRoleUser, true
-	case coremodel.MessageDirectionOutbound:
-		return component.CompletionRoleAssistant, true
-	default:
+	if message.Kind != coremodel.MessageKindMessage {
 		return "", false
 	}
+	return completionRoleForMessageRole(message.ResolvedRole())
 }
 
 func completionRoleForMessageRole(role coremodel.MessageRole) (component.CompletionRole, bool) {

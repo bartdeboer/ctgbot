@@ -9,15 +9,13 @@ import (
 
 func TestCompletionPromptFromMessages(t *testing.T) {
 	messages := []coremodel.ThreadMessage{
-		{Kind: coremodel.MessageKindSystem, Text: "system prompt"},
-		{Direction: coremodel.MessageDirectionInbound, Kind: coremodel.MessageKindUser, Text: "hello"},
-		{Direction: coremodel.MessageDirectionOutbound, Kind: coremodel.MessageKindAgent, Text: "hi"},
-		{Direction: coremodel.MessageDirectionOutbound, Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, Text: "new agent message"},
+		{Role: coremodel.MessageRoleSystem, Kind: coremodel.MessageKindMessage, Text: "system prompt"},
+		{Direction: coremodel.MessageDirectionInbound, Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "hello"},
+		{Direction: coremodel.MessageDirectionOutbound, Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, Text: "hi"},
 		{Direction: coremodel.MessageDirectionOutbound, Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindProgress, Text: "reasoning preview"},
-		{Direction: coremodel.MessageDirectionInbound, Text: "fallback user"},
-		{Direction: coremodel.MessageDirectionOutbound, Text: "fallback assistant"},
+		{Direction: coremodel.MessageDirectionInbound, Text: "ignored missing role/kind"},
 		{Kind: coremodel.MessageKindEvent, Text: "ignored event"},
-		{Kind: coremodel.MessageKindUser, Text: "   "},
+		{Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "   "},
 	}
 
 	got := completionPromptFromMessages(messages)
@@ -26,9 +24,6 @@ func TestCompletionPromptFromMessages(t *testing.T) {
 			{Role: component.CompletionRoleSystem, Content: "system prompt"},
 			{Role: component.CompletionRoleUser, Content: "hello"},
 			{Role: component.CompletionRoleAssistant, Content: "hi"},
-			{Role: component.CompletionRoleAssistant, Content: "new agent message"},
-			{Role: component.CompletionRoleUser, Content: "fallback user"},
-			{Role: component.CompletionRoleAssistant, Content: "fallback assistant"},
 		},
 	}
 

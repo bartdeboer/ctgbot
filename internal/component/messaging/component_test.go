@@ -229,7 +229,7 @@ func TestThreadPurgeDeletesCurrentThreadMessagesArtifactsAndAgentMappings(t *tes
 		ChatID:    thread.ChatID,
 		ThreadID:  thread.ID,
 		Direction: coremodel.MessageDirectionInbound,
-		Kind:      coremodel.MessageKindUser,
+		Kind:      coremodel.MessageKindMessage,
 		ActorID:   "bart",
 		Text:      "hello",
 	}
