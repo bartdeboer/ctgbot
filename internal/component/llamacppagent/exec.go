@@ -187,7 +187,11 @@ func readNewEvents(path string, offset *int64) ([]toolloop.Event, error) {
 			return events, err
 		}
 	}
-	*offset = info.Size()
+	position, err := file.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return events, err
+	}
+	*offset = position
 	return events, nil
 }
 
