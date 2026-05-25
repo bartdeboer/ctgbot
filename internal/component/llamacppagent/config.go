@@ -57,7 +57,7 @@ func (c ComponentConfig) withDefaults() ComponentConfig {
 	c.BaseURL = strings.TrimRight(strings.TrimSpace(c.BaseURL), "/")
 	c.APIKey = strings.TrimSpace(c.APIKey)
 	if c.MaxIterations <= 0 {
-		c.MaxIterations = 20
+		c.MaxIterations = 40
 	}
 	if c.MaxTokens <= 0 {
 		c.MaxTokens = 4096
