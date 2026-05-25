@@ -27,7 +27,7 @@ func (p *projectProcessActions) GoGenerate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return runProjectCommand(ctx, projectDir, nil, "go", "generate", "./internal/buildassets")
+	return runProjectCommandFunc(ctx, projectDir, nil, "go", "generate", "./internal/buildassets")
 }
 
 func (p *projectProcessActions) GitPull(ctx context.Context) error {
@@ -35,7 +35,7 @@ func (p *projectProcessActions) GitPull(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return runProjectCommand(ctx, projectDir, nil, "git", "pull", "--ff-only")
+	return runProjectCommandFunc(ctx, projectDir, nil, "git", "pull", "--ff-only")
 }
 
 func (p *projectProcessActions) Install(ctx context.Context) error {
@@ -45,10 +45,7 @@ func (p *projectProcessActions) Install(ctx context.Context) error {
 		return err
 	}
 	env := buildInstallEnv(p.globalStore)
-	if err := runProjectCommand(ctx, projectDir, env, "go", "generate", "./internal/buildassets"); err != nil {
-		return err
-	}
-	return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge", "./cmd/apply_patch")
+	return runProjectCommandFunc(ctx, projectDir, env, "go", goInstallArgs()...)
 }
 
 func (p *projectProcessActions) Upgrade(ctx context.Context, all bool) error {
@@ -61,29 +58,33 @@ func (p *projectProcessActions) Upgrade(ctx context.Context, all bool) error {
 	if err != nil {
 		return err
 	}
-	env := buildInstallEnv(p.globalStore)
 
 	if err := runUpgradeStep(ctx, "git pull", func(ctx context.Context) error {
-		return runProjectCommand(ctx, projectDir, nil, "git", "pull", "--ff-only")
+		return runProjectCommandFunc(ctx, projectDir, nil, "git", "pull", "--ff-only")
 	}); err != nil {
 		return err
 	}
-	if err := runUpgradeStep(ctx, "go generate", func(ctx context.Context) error {
-		return runProjectCommand(ctx, projectDir, env, "go", "generate", "./internal/buildassets")
+	if err := runUpgradeStep(ctx, "ctgbot install", func(ctx context.Context) error {
+		return runInstalledCtgbotCommandFunc(ctx, "install")
 	}); err != nil {
 		return err
 	}
-	if err := runUpgradeStep(ctx, "go install", func(ctx context.Context) error {
-		return runProjectCommand(ctx, projectDir, env, "go", "install", "./cmd/ctgbot", "./cmd/hostbridge", "./cmd/apply_patch")
+	if err := runUpgradeStep(ctx, "ctgbot go-generate", func(ctx context.Context) error {
+		return runInstalledCtgbotCommandFunc(ctx, "go-generate")
 	}); err != nil {
 		return err
 	}
-	imageBuildLabel := "runtime image build"
+	if err := runUpgradeStep(ctx, "ctgbot install", func(ctx context.Context) error {
+		return runInstalledCtgbotCommandFunc(ctx, "install")
+	}); err != nil {
+		return err
+	}
+	imageBuildLabel := "ctgbot image build"
 	if all {
-		imageBuildLabel = "runtime image build --no-cache"
+		imageBuildLabel = "ctgbot image build --no-cache"
 	}
 	return runUpgradeStep(ctx, imageBuildLabel, func(ctx context.Context) error {
-		return p.BuildRuntimeImages(ctx, all)
+		return runInstalledImageBuildCommand(ctx, all)
 	})
 }
 
@@ -190,6 +191,27 @@ func runInstalledCtgbotCommand(ctx context.Context, args ...string) error {
 	return runInstalledCtgbotCommandInDir(ctx, "", args...)
 }
 
+var runInstalledCtgbotCommandFunc = runInstalledCtgbotCommand
+
+func runInstalledImageBuildCommand(ctx context.Context, noCache bool) error {
+	return runInstalledCtgbotCommandFunc(ctx, imageBuildArgs(noCache)...)
+}
+
+func imageBuildArgs(noCache bool) []string {
+	args := []string{"image", "build"}
+	if noCache {
+		args = append(args, "--no-cache")
+	}
+	return args
+}
+
+func goInstallArgs() []string {
+	return []string{
+		"install",
+		"./cmd/ctgbot",
+	}
+}
+
 func runInstalledCtgbotCommandInDir(ctx context.Context, dir string, args ...string) error {
 	binPath, err := resolveInstalledCtgbotPath()
 	if err != nil {
@@ -226,6 +248,8 @@ func runProjectCommand(ctx context.Context, projectDir string, env []string, nam
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
+
+var runProjectCommandFunc = runProjectCommand
 
 func buildInstallEnv(globalStore *clistate.Store) []string {
 	env := os.Environ()

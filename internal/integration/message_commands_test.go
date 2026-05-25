@@ -615,6 +615,8 @@ func TestProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 			wantText  string
 			wantField string
 		}{
+			{text: "/go-generate", wantText: "go-generate completed", wantField: "go-generate"},
+			{text: "/process go-generate", wantText: "go-generate completed", wantField: "go-generate"},
 			{text: "/install", wantText: "install completed\ntype /quit to restart", wantField: "install"},
 			{text: "/process install", wantText: "install completed\ntype /quit to restart", wantField: "install"},
 			{text: "/upgrade", wantText: "upgrade completed\ntype /quit to restart", wantField: "upgrade"},
@@ -696,6 +698,10 @@ func TestProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 				t.Fatalf("relay text for %q = %q, want %q", tc.text, got, want)
 			}
 			switch tc.wantField {
+			case "go-generate":
+				if actions.goGenerateCalls != 1 || actions.installCalls != 0 || actions.upgradeCalls != 0 || actions.upgradeAllCalls != 0 || actions.imageListCalls != 0 || actions.quitCalls != 0 {
+					t.Fatalf("process actions for %q = %+v", tc.text, actions)
+				}
 			case "install":
 				if actions.installCalls != 1 || actions.upgradeCalls != 0 || actions.upgradeAllCalls != 0 || actions.imageListCalls != 0 || actions.quitCalls != 0 {
 					t.Fatalf("process actions for %q = %+v", tc.text, actions)
@@ -1047,6 +1053,11 @@ func (c *mockLocalAgentCommandComponent) RegisterCommandHandlers(registry *comma
 
 type noopProcessActions struct{}
 
+func (n *noopProcessActions) GoGenerate(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
 func (n *noopProcessActions) Install(ctx context.Context) error {
 	_ = ctx
 	return nil
@@ -1073,12 +1084,19 @@ func (n *noopProcessActions) Quit(ctx context.Context) error {
 }
 
 type recordingProcessActions struct {
+	goGenerateCalls int
 	installCalls    int
 	upgradeCalls    int
 	upgradeAllCalls int
 	imageListCalls  int
 	imageBuildCalls int
 	quitCalls       int
+}
+
+func (r *recordingProcessActions) GoGenerate(ctx context.Context) error {
+	_ = ctx
+	r.goGenerateCalls++
+	return nil
 }
 
 func (r *recordingProcessActions) Install(ctx context.Context) error {

@@ -19,6 +19,16 @@ func TestProcessCommandDefinitions(t *testing.T) {
 		visibleRoutes []string
 	}{
 		{
+			pattern:       "go-generate",
+			source:        commandengine.SourceMessage,
+			visibleRoutes: []string{"go-generate", "go-generate"},
+		},
+		{
+			pattern:       "go-generate",
+			source:        commandengine.SourceCLI,
+			visibleRoutes: []string{"go-generate"},
+		},
+		{
 			pattern:       "install",
 			source:        commandengine.SourceMessage,
 			visibleRoutes: []string{"install", "install"},

@@ -2208,6 +2208,11 @@ func (c *fakeCommandComponent) RegisterCommandHandlers(registry *commandengine.R
 
 type fakeProcessActions struct{}
 
+func (f *fakeProcessActions) GoGenerate(ctx context.Context) error {
+	_ = ctx
+	return nil
+}
+
 func (f *fakeProcessActions) Install(ctx context.Context) error {
 	_ = ctx
 	return nil

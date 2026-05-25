@@ -16,6 +16,7 @@ import (
 const Type = "process"
 
 type Actions interface {
+	GoGenerate(ctx context.Context) error
 	Install(ctx context.Context) error
 	Upgrade(ctx context.Context, all bool) error
 	ImageList(ctx context.Context) (string, error)
@@ -31,6 +32,7 @@ var _ component.Component = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 
+type goGenerateCommand struct{}
 type installCommand struct{}
 type upgradeCommand struct{}
 type upgradeAllCommand struct{}
@@ -48,10 +50,17 @@ func (c *Component) Type() string {
 }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	definitions := make([]commandengine.Definition, 0, 8)
+	definitions := make([]commandengine.Definition, 0, 9)
+	definitions = append(definitions, processCommandDefinitions(
+		"go-generate",
+		"Generate ctgbot build assets",
+		buildGoGenerateCommand,
+		[]commandengine.Route{{Pattern: "go-generate", Absolute: true}},
+		simplerbac.Any(simplerbac.RoleRoot),
+	)...)
 	definitions = append(definitions, processCommandDefinitions(
 		"install",
-		"Install ctgbot binaries from source",
+		"Install ctgbot binary from source",
 		buildInstallCommand,
 		[]commandengine.Route{{Pattern: "install", Absolute: true}},
 		simplerbac.Any(simplerbac.RoleRoot),
@@ -109,6 +118,14 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
 	}
+	if err := registerProcessPattern[goGenerateCommand](registry, "go-generate", func(ctx context.Context) (commandengine.Result, error) {
+		if err := c.goGenerate(ctx); err != nil {
+			return commandengine.Result{}, err
+		}
+		return commandengine.Result{Text: "go-generate completed"}, nil
+	}); err != nil {
+		return err
+	}
 	if err := registerProcessPattern[installCommand](registry, "install", func(ctx context.Context) (commandengine.Result, error) {
 		if err := c.install(ctx); err != nil {
 			return commandengine.Result{}, err
@@ -163,6 +180,13 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		_ = ctx
 		return commandengine.Result{Text: buildassets.Version()}, nil
 	})
+}
+
+func (c *Component) goGenerate(ctx context.Context) error {
+	if c == nil || c.Actions == nil {
+		return fmt.Errorf("missing process actions")
+	}
+	return c.Actions.GoGenerate(ctx)
 }
 
 func (c *Component) install(ctx context.Context) error {
@@ -243,6 +267,11 @@ func registerProcessPattern[T any](registry *commandengine.Registry, pattern str
 func buildInstallCommand(req *clir.Request) (any, error) {
 	_ = req
 	return installCommand{}, nil
+}
+
+func buildGoGenerateCommand(req *clir.Request) (any, error) {
+	_ = req
+	return goGenerateCommand{}, nil
 }
 
 func buildUpgradeCommand(req *clir.Request) (any, error) {
