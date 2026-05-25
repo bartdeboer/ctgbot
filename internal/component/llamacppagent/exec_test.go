@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/toolloop"
 )
@@ -53,7 +54,11 @@ func TestRunnerForwardsReasoningEventsWhileToolloopRuns(t *testing.T) {
 	runtime := fakeExecRuntime{run: func(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 		writeToolloopEvent(t, eventsPath, toolloop.Event{
 			Type: "model.response",
-			Data: map[string]any{"reasoning_preview": "I will inspect the workspace.", "reasoning_content_chars": 29},
+			Data: map[string]any{
+				"reasoning_content":       "I will inspect the workspace. Then I will summarize everything I found.",
+				"reasoning_preview":       "summarize everything I found.",
+				"reasoning_content_chars": 68,
+			},
 		})
 		time.Sleep(50 * time.Millisecond)
 		data, _ := json.Marshal(toolloop.Result{Status: "success", Text: "done", ConversationID: "conv-1", Iterations: 1})
@@ -74,8 +79,11 @@ func TestRunnerForwardsReasoningEventsWhileToolloopRuns(t *testing.T) {
 	if result.Reply != "done" || result.ProviderThreadID != "conv-1" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(output.texts) != 1 || output.texts[0] != "I will inspect the workspace." {
+	if len(output.texts) != 1 || output.texts[0] != "I will inspect the workspace. Then I will summarize everything I found." {
 		t.Fatalf("forwarded texts = %#v", output.texts)
+	}
+	if output.payloads[0].Role != coremodel.MessageRoleAgent || output.payloads[0].Kind != coremodel.MessageKindProgress {
+		t.Fatalf("forwarded payload = %#v", output.payloads[0])
 	}
 }
 
@@ -107,11 +115,13 @@ func (f fakeExecRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.W
 }
 
 type fakeOutputHandler struct {
-	texts []string
+	texts    []string
+	payloads []message.OutboundPayload
 }
 
 func (f *fakeOutputHandler) Send(ctx context.Context, payload message.OutboundPayload) error {
 	_ = ctx
+	f.payloads = append(f.payloads, payload)
 	if text := strings.TrimSpace(payload.Text.Text); text != "" {
 		f.texts = append(f.texts, text)
 	}

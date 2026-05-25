@@ -82,6 +82,9 @@ func TestRunnerCapturesReasoningContent(t *testing.T) {
 	if got, _ := response.Data["reasoning_preview"].(string); !strings.Contains(got, "summarize") {
 		t.Fatalf("model.response reasoning preview = %#v", response.Data)
 	}
+	if got, _ := response.Data["reasoning_content"].(string); got != "I should summarize the tool output." {
+		t.Fatalf("model.response reasoning content = %#v", response.Data)
+	}
 }
 
 func TestRunnerReturnsStructuredResultOnChatError(t *testing.T) {

@@ -36,6 +36,7 @@ func (b *Broker) sendInboundRejectionNotice(ctx context.Context, rejection *Inbo
 		return err
 	}
 	_, err = b.storeAndRelayMessage(ctx, runtime, *rejection.Chat, *thread, coremodel.ThreadMessage{
+		Role:        coremodel.MessageRoleSystem,
 		Kind:        coremodel.MessageKindSystem,
 		ComponentID: rejection.Event.ComponentID,
 		ActorID:     "ctgbot",

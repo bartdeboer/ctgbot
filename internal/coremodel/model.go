@@ -27,10 +27,26 @@ const (
 type MessageKind string
 
 const (
+	// Legacy speaker-shaped kinds. Keep these while ThreadMessage.Role is
+	// rolled out; new content-shaped kinds live below.
 	MessageKindUser   MessageKind = "user"
 	MessageKindAgent  MessageKind = "agent"
 	MessageKindSystem MessageKind = "system"
 	MessageKindEvent  MessageKind = "event"
+
+	MessageKindMessage    MessageKind = "message"
+	MessageKindReasoning  MessageKind = "reasoning"
+	MessageKindProgress   MessageKind = "progress"
+	MessageKindToolCall   MessageKind = "tool_call"
+	MessageKindToolResult MessageKind = "tool_result"
+)
+
+type MessageRole string
+
+const (
+	MessageRoleUser   MessageRole = "user"
+	MessageRoleAgent  MessageRole = "agent"
+	MessageRoleSystem MessageRole = "system"
 )
 
 type Actor struct {
@@ -216,6 +232,7 @@ type ThreadMessage struct {
 	ChatID       modeluuid.UUID `gorm:"index"`
 	ThreadID     modeluuid.UUID `gorm:"index"`
 	Direction    MessageDirection
+	Role         MessageRole
 	Kind         MessageKind
 	ComponentID  modeluuid.UUID `gorm:"index"`
 	ExternalID   string         `gorm:"index"`
@@ -226,6 +243,28 @@ type ThreadMessage struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+func (m ThreadMessage) ResolvedRole() MessageRole {
+	if m.Role != "" {
+		return m.Role
+	}
+	switch m.Kind {
+	case MessageKindUser:
+		return MessageRoleUser
+	case MessageKindAgent:
+		return MessageRoleAgent
+	case MessageKindSystem, MessageKindEvent:
+		return MessageRoleSystem
+	}
+	switch m.Direction {
+	case MessageDirectionInbound:
+		return MessageRoleUser
+	case MessageDirectionOutbound:
+		return MessageRoleAgent
+	default:
+		return ""
+	}
 }
 
 type Artifact struct {
