@@ -145,7 +145,8 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		defer stopTyping()
 	}
 
-	files, err := c.prepareToolloopRun(turn, session, prompt)
+	profile := c.modelToolloopProfile(ctx, session.Model())
+	files, err := c.prepareToolloopRun(turn, session, profile, prompt)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +161,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if err != nil {
 		return nil, err
 	}
-	result, runErr := c.runToolloop(ctx, turn, session, files, providerThreadID, prompt)
+	result, runErr := c.runToolloop(ctx, turn, session, profile, files, providerThreadID, prompt)
 	if bindErr := c.bindProviderThreadID(turn.Runtime, result.ConversationID); bindErr != nil && runErr == nil {
 		runErr = bindErr
 	}
@@ -190,19 +191,23 @@ func (c *Component) beginBackendSession(ctx context.Context) (component.OpenAICh
 	return backend.BeginOpenAIChatSession(ctx, component.CompletionSessionOptions{Model: c.config.Model, IdleTimeout: c.config.backendIdleTimeout()})
 }
 
-func (c *Component) prepareToolloopRun(turn component.Turn, session component.OpenAIChatSession, prompt string) (*toolloopRunFiles, error) {
+func (c *Component) prepareToolloopRun(turn component.Turn, session component.OpenAIChatSession, profile component.ModelToolloopProfile, prompt string) (*toolloopRunFiles, error) {
 	files, err := newToolloopRunFiles(c.runtime.ComponentHome().Path, c.runtime.RuntimeComponentHomePath(), turn.Thread.ID)
 	if err != nil {
 		return nil, err
 	}
 	invocation := toolloopInvocation{
-		BaseURL:       firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
-		Model:         session.Model(),
-		Prompt:        prompt,
-		Workspace:     c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()),
-		MaxIterations: c.config.MaxIterations,
-		MaxTokens:     c.config.MaxTokens,
-		Temperature:   c.config.Temperature,
+		BaseURL:                 firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
+		Model:                   session.Model(),
+		Prompt:                  prompt,
+		Workspace:               c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()),
+		MaxIterations:           c.config.MaxIterations,
+		MaxTokens:               c.config.MaxTokens,
+		Temperature:             c.config.Temperature,
+		ModelPromptInstructions: profile.PromptInstructions,
+		ModelToolInstructions:   profile.ToolInstructions,
+		ModelReasoningFormat:    profile.ReasoningFormat,
+		ModelToolCallFormat:     profile.ToolCallFormat,
 	}
 	if err := files.WriteInvocation(invocation); err != nil {
 		files.Cleanup()
@@ -211,8 +216,8 @@ func (c *Component) prepareToolloopRun(turn component.Turn, session component.Op
 	return files, nil
 }
 
-func (c *Component) runToolloop(ctx context.Context, turn component.Turn, session component.OpenAIChatSession, files *toolloopRunFiles, providerThreadID string, prompt string) (toolloop.Result, error) {
-	args := c.toolloopEnv(session, turn)
+func (c *Component) runToolloop(ctx context.Context, turn component.Turn, session component.OpenAIChatSession, profile component.ModelToolloopProfile, files *toolloopRunFiles, providerThreadID string, prompt string) (toolloop.Result, error) {
+	args := c.toolloopEnv(session, turn, profile)
 	args = append(args, "toolloop", "--output", files.ResultRuntime(), "--events", files.EventsRuntime())
 	if providerThreadID != "" {
 		args = append(args, "resume", providerThreadID)
@@ -233,7 +238,7 @@ func (c *Component) runToolloop(ctx context.Context, turn component.Turn, sessio
 	return result, nil
 }
 
-func (c *Component) toolloopEnv(session component.OpenAIChatSession, turn component.Turn) []string {
+func (c *Component) toolloopEnv(session component.OpenAIChatSession, turn component.Turn, profile component.ModelToolloopProfile) []string {
 	return []string{
 		"TOOLLOOP_BASE_URL=" + firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
 		"TOOLLOOP_API_KEY=" + firstNonEmpty(c.config.APIKey, session.APIKey()),
@@ -244,6 +249,10 @@ func (c *Component) toolloopEnv(session component.OpenAIChatSession, turn compon
 		"TOOLLOOP_MAX_TOKENS=" + fmt.Sprintf("%d", c.config.MaxTokens),
 		"TOOLLOOP_TEMPERATURE=" + fmt.Sprintf("%g", c.config.Temperature),
 		"TOOLLOOP_CONVERSATION_DIR=" + c.runtime.RuntimeComponentHomePath() + "/toolloop/conversations",
+		"TOOLLOOP_MODEL_PROMPT_INSTRUCTIONS=" + profile.PromptInstructions,
+		"TOOLLOOP_MODEL_TOOL_INSTRUCTIONS=" + profile.ToolInstructions,
+		"TOOLLOOP_MODEL_REASONING_FORMAT=" + profile.ReasoningFormat,
+		"TOOLLOOP_MODEL_TOOL_CALL_FORMAT=" + profile.ToolCallFormat,
 	}
 }
 
@@ -257,6 +266,33 @@ func readToolloopResult(path string) (toolloop.Result, error) {
 		return toolloop.Result{}, fmt.Errorf("decode result: %w", err)
 	}
 	return result, nil
+}
+
+func (c *Component) modelToolloopProfile(ctx context.Context, modelName string) component.ModelToolloopProfile {
+	if c == nil || c.resolver == nil || strings.TrimSpace(modelName) == "" {
+		return component.ModelToolloopProfile{}
+	}
+	registration, err := c.resolver.ResolveComponentRef(ctx, c.config.ModelRegistry)
+	if err != nil {
+		c.logf("model profile registry resolve failed model=%s err=%v", modelName, err)
+		return component.ModelToolloopProfile{}
+	}
+	loaded, err := c.resolver.ResolveComponent(ctx, registration.ID)
+	if err != nil || loaded == nil {
+		c.logf("model profile component resolve failed model=%s err=%v", modelName, err)
+		return component.ModelToolloopProfile{}
+	}
+	registry, ok := loaded.Component.(component.ModelRegistry)
+	if !ok {
+		c.logf("model profile component %s is not model registry", loaded.Registration.Ref())
+		return component.ModelToolloopProfile{}
+	}
+	profile, err := registry.ModelToolloopProfile(ctx, modelName)
+	if err != nil {
+		c.logf("model toolloop profile unavailable model=%s err=%v", modelName, err)
+		return component.ModelToolloopProfile{}
+	}
+	return profile
 }
 
 func (c *Component) providerThreadID(turnRuntime component.TurnRuntime) (string, error) {

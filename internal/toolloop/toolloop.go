@@ -19,16 +19,20 @@ import (
 const defaultTimeout = 2 * time.Minute
 
 type Request struct {
-	BaseURL       string    `json:"base_url"`
-	APIKey        string    `json:"api_key,omitempty"`
-	Model         string    `json:"model"`
-	System        string    `json:"system,omitempty"`
-	Messages      []Message `json:"messages,omitempty"`
-	Prompt        string    `json:"prompt"`
-	Workspace     string    `json:"workspace,omitempty"`
-	MaxIterations int       `json:"max_iterations,omitempty"`
-	MaxTokens     int       `json:"max_tokens,omitempty"`
-	Temperature   float64   `json:"temperature,omitempty"`
+	BaseURL                 string    `json:"base_url"`
+	APIKey                  string    `json:"api_key,omitempty"`
+	Model                   string    `json:"model"`
+	System                  string    `json:"system,omitempty"`
+	Messages                []Message `json:"messages,omitempty"`
+	Prompt                  string    `json:"prompt"`
+	Workspace               string    `json:"workspace,omitempty"`
+	MaxIterations           int       `json:"max_iterations,omitempty"`
+	MaxTokens               int       `json:"max_tokens,omitempty"`
+	Temperature             float64   `json:"temperature,omitempty"`
+	ModelPromptInstructions string    `json:"model_prompt_instructions,omitempty"`
+	ModelToolInstructions   string    `json:"model_tool_instructions,omitempty"`
+	ModelReasoningFormat    string    `json:"model_reasoning_format,omitempty"`
+	ModelToolCallFormat     string    `json:"model_tool_call_format,omitempty"`
 }
 
 type Message struct {
@@ -79,6 +83,10 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 	if req.Model == "" {
 		return Result{}, errors.New("missing model")
 	}
+	req.ModelPromptInstructions = strings.TrimSpace(req.ModelPromptInstructions)
+	req.ModelToolInstructions = strings.TrimSpace(req.ModelToolInstructions)
+	req.ModelReasoningFormat = strings.TrimSpace(req.ModelReasoningFormat)
+	req.ModelToolCallFormat = strings.TrimSpace(req.ModelToolCallFormat)
 	if req.Prompt == "" && len(req.Messages) == 0 {
 		return Result{}, errors.New("missing prompt")
 	}
@@ -87,8 +95,8 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 		client = &http.Client{Timeout: defaultTimeout}
 	}
 	messages := []chatMessage{}
-	if req.System != "" {
-		messages = append(messages, chatMessage{Role: "system", Content: req.System})
+	if system := systemPrompt(req); system != "" {
+		messages = append(messages, chatMessage{Role: "system", Content: system})
 	}
 	if len(req.Messages) > 0 {
 		for _, message := range req.Messages {
@@ -174,6 +182,30 @@ func cleanRequest(req Request) Request {
 		req.MaxIterations = 100
 	}
 	return req
+}
+
+func systemPrompt(req Request) string {
+	parts := []string{}
+	if strings.TrimSpace(req.System) != "" {
+		parts = append(parts, strings.TrimSpace(req.System))
+	}
+	if strings.TrimSpace(req.ModelPromptInstructions) != "" {
+		parts = append(parts, strings.TrimSpace(req.ModelPromptInstructions))
+	}
+	if strings.TrimSpace(req.ModelToolInstructions) != "" {
+		parts = append(parts, strings.TrimSpace(req.ModelToolInstructions))
+	}
+	metadata := []string{}
+	if strings.TrimSpace(req.ModelReasoningFormat) != "" {
+		metadata = append(metadata, "Reasoning format: "+strings.TrimSpace(req.ModelReasoningFormat))
+	}
+	if strings.TrimSpace(req.ModelToolCallFormat) != "" {
+		metadata = append(metadata, "Tool call format: "+strings.TrimSpace(req.ModelToolCallFormat))
+	}
+	if len(metadata) > 0 {
+		parts = append(parts, strings.Join(metadata, "\n"))
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n\n"))
 }
 
 func (r Runner) chat(ctx context.Context, client *http.Client, req Request, messages []chatMessage) (assistantMessage, error) {
@@ -721,15 +753,19 @@ func RequestFromEnv(prompt string) Request {
 	maxTokens, _ := strconv.Atoi(strings.TrimSpace(getenv("TOOLLOOP_MAX_TOKENS")))
 	temperature, _ := strconv.ParseFloat(strings.TrimSpace(getenv("TOOLLOOP_TEMPERATURE")), 64)
 	return Request{
-		BaseURL:       getenv("TOOLLOOP_BASE_URL"),
-		APIKey:        getenv("TOOLLOOP_API_KEY"),
-		Model:         getenv("TOOLLOOP_MODEL"),
-		System:        getenv("TOOLLOOP_SYSTEM"),
-		Prompt:        prompt,
-		Workspace:     getenv("TOOLLOOP_WORKSPACE"),
-		MaxIterations: maxIterations,
-		MaxTokens:     maxTokens,
-		Temperature:   temperature,
+		BaseURL:                 getenv("TOOLLOOP_BASE_URL"),
+		APIKey:                  getenv("TOOLLOOP_API_KEY"),
+		Model:                   getenv("TOOLLOOP_MODEL"),
+		System:                  getenv("TOOLLOOP_SYSTEM"),
+		Prompt:                  prompt,
+		Workspace:               getenv("TOOLLOOP_WORKSPACE"),
+		MaxIterations:           maxIterations,
+		MaxTokens:               maxTokens,
+		Temperature:             temperature,
+		ModelPromptInstructions: getenv("TOOLLOOP_MODEL_PROMPT_INSTRUCTIONS"),
+		ModelToolInstructions:   getenv("TOOLLOOP_MODEL_TOOL_INSTRUCTIONS"),
+		ModelReasoningFormat:    getenv("TOOLLOOP_MODEL_REASONING_FORMAT"),
+		ModelToolCallFormat:     getenv("TOOLLOOP_MODEL_TOOL_CALL_FORMAT"),
 	}
 }
 

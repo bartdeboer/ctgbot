@@ -39,6 +39,7 @@ type ModelRecord struct {
 	Temperature float64                         `json:"temperature,omitempty"`
 	Pooling     string                          `json:"pooling,omitempty"`
 	Normalize   *bool                           `json:"normalize,omitempty"`
+	Toolloop    component.ModelToolloopProfile  `json:"toolloop,omitempty"`
 	ConfigKeys  map[string]ModelConfigKeyRecord `json:"config_keys,omitempty"`
 }
 
@@ -123,6 +124,7 @@ func cleanModelRecord(record ModelRecord) ModelRecord {
 	record.SHA256 = strings.TrimSpace(record.SHA256)
 	record.MMProjPath = strings.TrimSpace(record.MMProjPath)
 	record.Pooling = strings.TrimSpace(record.Pooling)
+	record.Toolloop = cleanModelToolloopProfile(record.Toolloop)
 	record.ConfigKeys = cleanModelConfigKeys(record.ConfigKeys)
 	return record
 }
@@ -148,6 +150,14 @@ func modelRecordFromComponent(model component.Model) ModelRecord {
 		Pooling:     model.Pooling,
 		Normalize:   normalize,
 	}
+}
+
+func cleanModelToolloopProfile(profile component.ModelToolloopProfile) component.ModelToolloopProfile {
+	profile.PromptInstructions = strings.TrimSpace(profile.PromptInstructions)
+	profile.ToolInstructions = strings.TrimSpace(profile.ToolInstructions)
+	profile.ReasoningFormat = strings.TrimSpace(profile.ReasoningFormat)
+	profile.ToolCallFormat = strings.TrimSpace(profile.ToolCallFormat)
+	return profile
 }
 
 func cleanModelConfigKeys(keys map[string]ModelConfigKeyRecord) map[string]ModelConfigKeyRecord {

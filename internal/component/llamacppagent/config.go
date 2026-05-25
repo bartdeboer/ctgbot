@@ -23,6 +23,7 @@ const (
 
 type ComponentConfig struct {
 	Backend            string  `json:"backend,omitempty"`
+	ModelRegistry      string  `json:"model_registry,omitempty"`
 	Model              string  `json:"model,omitempty"`
 	BaseURL            string  `json:"base_url,omitempty"`
 	APIKey             string  `json:"api_key,omitempty"`
@@ -51,6 +52,7 @@ func loadComponentConfig(homePath string) (ComponentConfig, error) {
 
 func (c ComponentConfig) withDefaults() ComponentConfig {
 	c.Backend = firstNonEmpty(c.Backend, "llamacpp")
+	c.ModelRegistry = firstNonEmpty(c.ModelRegistry, "model")
 	c.Model = strings.TrimSpace(c.Model)
 	c.BaseURL = strings.TrimRight(strings.TrimSpace(c.BaseURL), "/")
 	c.APIKey = strings.TrimSpace(c.APIKey)

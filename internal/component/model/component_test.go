@@ -215,6 +215,12 @@ func TestModelCardAndConfigSchema(t *testing.T) {
 			Path: "supertonic3",
 			Mode: string(component.ModelModeTTS),
 			Card: "Supertonic model card",
+			Toolloop: component.ModelToolloopProfile{
+				PromptInstructions: "Use native tools.",
+				ToolInstructions:   "Never emit fake XML tool calls.",
+				ReasoningFormat:    "qwen",
+				ToolCallFormat:     "openai",
+			},
 			ConfigKeys: map[string]ModelConfigKeyRecord{
 				"voice.name": {
 					Type:    "enum",
@@ -239,6 +245,13 @@ func TestModelCardAndConfigSchema(t *testing.T) {
 	}
 	if card != "Supertonic model card" {
 		t.Fatalf("card = %q", card)
+	}
+	profile, err := models.ModelToolloopProfile(context.Background(), "supertonic")
+	if err != nil {
+		t.Fatalf("ModelToolloopProfile() error = %v", err)
+	}
+	if profile.PromptInstructions != "Use native tools." || profile.ToolInstructions != "Never emit fake XML tool calls." || profile.ReasoningFormat != "qwen" || profile.ToolCallFormat != "openai" {
+		t.Fatalf("profile = %#v", profile)
 	}
 	schema, err := models.ModelConfigSchema(context.Background(), "supertonic")
 	if err != nil {

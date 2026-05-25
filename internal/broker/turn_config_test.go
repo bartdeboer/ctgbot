@@ -247,6 +247,11 @@ func (fakeModelRegistry) ModelCard(ctx context.Context, name string) (string, er
 	return "", nil
 }
 
+func (fakeModelRegistry) ModelToolloopProfile(ctx context.Context, name string) (component.ModelToolloopProfile, error) {
+	_, _ = ctx, name
+	return component.ModelToolloopProfile{}, nil
+}
+
 func (fakeModelRegistry) ModelConfigSchema(ctx context.Context, name string) (configsurface.ConfigSchema, error) {
 	_, _ = ctx, name
 	return configsurface.ConfigSchema{Fields: []configsurface.FieldSchema{

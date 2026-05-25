@@ -10,13 +10,17 @@ import (
 )
 
 type toolloopInvocation struct {
-	BaseURL       string  `json:"base_url"`
-	Model         string  `json:"model"`
-	Prompt        string  `json:"prompt"`
-	Workspace     string  `json:"workspace"`
-	MaxIterations int     `json:"max_iterations,omitempty"`
-	MaxTokens     int     `json:"max_tokens,omitempty"`
-	Temperature   float64 `json:"temperature,omitempty"`
+	BaseURL                 string  `json:"base_url"`
+	Model                   string  `json:"model"`
+	Prompt                  string  `json:"prompt"`
+	Workspace               string  `json:"workspace"`
+	MaxIterations           int     `json:"max_iterations,omitempty"`
+	MaxTokens               int     `json:"max_tokens,omitempty"`
+	Temperature             float64 `json:"temperature,omitempty"`
+	ModelPromptInstructions string  `json:"model_prompt_instructions,omitempty"`
+	ModelToolInstructions   string  `json:"model_tool_instructions,omitempty"`
+	ModelReasoningFormat    string  `json:"model_reasoning_format,omitempty"`
+	ModelToolCallFormat     string  `json:"model_tool_call_format,omitempty"`
 }
 
 type toolloopRunFiles struct {

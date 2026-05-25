@@ -13,6 +13,22 @@ import (
 	"testing"
 )
 
+func TestSystemPromptIncludesModelInstructions(t *testing.T) {
+	t.Parallel()
+	prompt := systemPrompt(Request{
+		System:                  "base",
+		ModelPromptInstructions: "model prompt",
+		ModelToolInstructions:   "model tools",
+		ModelReasoningFormat:    "qwen",
+		ModelToolCallFormat:     "openai",
+	})
+	for _, want := range []string{"base", "model prompt", "model tools", "Reasoning format: qwen", "Tool call format: openai"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("systemPrompt() = %q, want %q", prompt, want)
+		}
+	}
+}
+
 func TestRunnerEmitsJSONLEventsForSuccessfulTurn(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

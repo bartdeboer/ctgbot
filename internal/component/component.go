@@ -193,6 +193,13 @@ type ModelInstallRequest struct {
 	Default bool
 }
 
+type ModelToolloopProfile struct {
+	PromptInstructions string `json:"prompt_instructions,omitempty"`
+	ToolInstructions   string `json:"tool_instructions,omitempty"`
+	ReasoningFormat    string `json:"reasoning_format,omitempty"`
+	ToolCallFormat     string `json:"tool_call_format,omitempty"`
+}
+
 type ModelRegistry interface {
 	Component
 	ListModels(ctx context.Context) ([]Model, error)
@@ -203,6 +210,7 @@ type ModelRegistry interface {
 	DefaultModelForMode(ctx context.Context, mode ModelMode) (string, error)
 	ModelCard(ctx context.Context, name string) (string, error)
 	ModelConfigSchema(ctx context.Context, name string) (configsurface.ConfigSchema, error)
+	ModelToolloopProfile(ctx context.Context, name string) (ModelToolloopProfile, error)
 }
 
 type InboundEvent struct {

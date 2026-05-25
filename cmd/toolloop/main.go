@@ -205,5 +205,17 @@ func mergeEnv(req toolloop.Request) toolloop.Request {
 	if req.Temperature == 0 {
 		req.Temperature = env.Temperature
 	}
+	if strings.TrimSpace(req.ModelPromptInstructions) == "" {
+		req.ModelPromptInstructions = env.ModelPromptInstructions
+	}
+	if strings.TrimSpace(req.ModelToolInstructions) == "" {
+		req.ModelToolInstructions = env.ModelToolInstructions
+	}
+	if strings.TrimSpace(req.ModelReasoningFormat) == "" {
+		req.ModelReasoningFormat = env.ModelReasoningFormat
+	}
+	if strings.TrimSpace(req.ModelToolCallFormat) == "" {
+		req.ModelToolCallFormat = env.ModelToolCallFormat
+	}
 	return req
 }

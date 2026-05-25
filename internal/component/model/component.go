@@ -117,6 +117,18 @@ func (c *Component) ModelCard(ctx context.Context, name string) (string, error) 
 	return strings.TrimSpace(record.Card), nil
 }
 
+func (c *Component) ModelToolloopProfile(ctx context.Context, name string) (component.ModelToolloopProfile, error) {
+	_ = ctx
+	if c == nil {
+		return component.ModelToolloopProfile{}, fmt.Errorf("missing model component")
+	}
+	_, record, err := c.lookupRecord(name)
+	if err != nil {
+		return component.ModelToolloopProfile{}, err
+	}
+	return cleanModelToolloopProfile(record.Toolloop), nil
+}
+
 func (c *Component) SetModelCard(ctx context.Context, name string, text string) error {
 	_ = ctx
 	if c == nil {
