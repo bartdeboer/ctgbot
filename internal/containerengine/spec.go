@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-const ActivePIDFile = "/tmp/ctgbot-codex.pid"
+const ActivePIDFile = "/tmp/ctgbot-active-command.pid"
 
 type State string
 

@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
-	"github.com/bartdeboer/ctgbot/internal/containerengine"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
@@ -177,12 +177,7 @@ func BuildExecArgs(request ExecArgs) []string {
 	} else {
 		innerArgs = append(innerArgs, "--", prompt)
 	}
-	return wrapWithPIDFile(innerArgs)
-}
-
-func wrapWithPIDFile(args []string) []string {
-	wrapped := []string{"sh", "-lc", "rm -f " + containerengine.ActivePIDFile + "; echo $$ > " + containerengine.ActivePIDFile + "; exec \"$@\"", "sh"}
-	return append(wrapped, args...)
+	return agentcommon.WrapWithPIDFile(innerArgs)
 }
 
 func (r *Runner) logf(format string, args ...any) {

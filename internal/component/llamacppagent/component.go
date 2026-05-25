@@ -217,25 +217,22 @@ func (c *Component) prepareToolloopRun(turn component.Turn, session component.Op
 }
 
 func (c *Component) runToolloop(ctx context.Context, turn component.Turn, session component.OpenAIChatSession, profile component.ModelToolloopProfile, files *toolloopRunFiles, providerThreadID string, prompt string) (toolloop.Result, error) {
-	args := c.toolloopEnv(session, turn, profile)
-	args = append(args, "toolloop", "--output", files.ResultRuntime(), "--events", files.EventsRuntime())
-	if providerThreadID != "" {
-		args = append(args, "resume", providerThreadID)
+	runtime := commandRuntime{
+		runtime:       c.runtime,
+		workspacePath: turn.Runtime.WorkspacePath(),
+		threadID:      turn.Thread.ID,
+		commands:      turn.Runtime.Commands(),
 	}
-	args = append(args, "--", prompt)
-
-	out, runErr := c.runtime.CombinedOutput(ctx, turn.Runtime.WorkspacePath(), turn.Thread.ID, turn.Runtime.Commands(), "env", args...)
-	result, readErr := readToolloopResult(files.ResultHost)
-	if runErr != nil {
-		if readErr != nil {
-			return toolloop.Result{}, fmt.Errorf("%w\n%s\nread result: %v", runErr, strings.TrimSpace(string(out)), readErr)
-		}
-		return result, fmt.Errorf("%w\n%s", runErr, strings.TrimSpace(string(out)))
-	}
-	if readErr != nil {
-		return toolloop.Result{}, readErr
-	}
-	return result, nil
+	result, err := NewRunner(c.logger).RunTurn(ctx, runtime, outputHandler{runtime: turn.Runtime}, ToolloopTurnRequest{
+		ProviderThreadID: providerThreadID,
+		Prompt:           prompt,
+		Env:              c.toolloopEnv(session, turn, profile),
+		ResultRuntime:    files.ResultRuntime(),
+		ResultHost:       files.ResultHost,
+		EventsRuntime:    files.EventsRuntime(),
+		EventsHost:       files.EventsHost,
+	})
+	return result.Result, err
 }
 
 func (c *Component) toolloopEnv(session component.OpenAIChatSession, turn component.Turn, profile component.ModelToolloopProfile) []string {

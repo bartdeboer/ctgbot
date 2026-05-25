@@ -31,6 +31,10 @@ func FormatTrace(trace []TraceStep, maxRunes int) string {
 			b.WriteString("\nassistant_preview:\n")
 			b.WriteString(step.AssistantPreview)
 		}
+		if strings.TrimSpace(step.ReasoningPreview) != "" {
+			b.WriteString("\nreasoning_preview:\n")
+			b.WriteString(step.ReasoningPreview)
+		}
 		for _, result := range step.ToolResults {
 			fmt.Fprintf(&b, "\ntool_result name=%s is_error=%t", result.Name, result.IsError)
 			if strings.TrimSpace(result.OutputPreview) != "" {
