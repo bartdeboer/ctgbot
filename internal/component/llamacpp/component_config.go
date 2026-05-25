@@ -12,7 +12,7 @@ import (
 
 const (
 	Type                    = "llamacpp"
-	DefaultImage            = "ghcr.io/ggml-org/llama.cpp:server-cuda"
+	DefaultImage            = "ghcr.io/bartdeboer/llama-cpp:server-cuda-ctgbot-patches-a03afef"
 	ComponentConfigFilename = "component.json"
 )
 
