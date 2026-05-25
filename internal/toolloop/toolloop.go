@@ -138,6 +138,7 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 			"tool_calls":              step.ToolCalls,
 			"reasoning_content_chars": step.ReasoningContentChars,
 			"reasoning_preview":       step.ReasoningPreview,
+			"reasoning_content":       resp.ReasoningContent,
 		}})
 		if len(resp.ToolCalls) == 0 {
 			trace = append(trace, step)

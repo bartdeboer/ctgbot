@@ -200,16 +200,14 @@ func (r *Runner) forwardEvent(ctx context.Context, output OutputHandler, event t
 	if output == nil || event.Type != "model.response" {
 		return
 	}
-	preview, _ := event.Data["reasoning_preview"].(string)
-	preview = strings.TrimSpace(preview)
-	if preview == "" {
+	text, _ := event.Data["reasoning_content"].(string)
+	if strings.TrimSpace(text) == "" {
+		text, _ = event.Data["reasoning_preview"].(string)
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
 		return
 	}
-	maxRunes := r.ReasoningMax
-	if maxRunes <= 0 {
-		maxRunes = 1200
-	}
-	text := toolloop.TailText(preview, maxRunes)
 	if err := output.Send(ctx, message.OutboundPayload{
 		Role: coremodel.MessageRoleAgent,
 		Kind: coremodel.MessageKindProgress,
