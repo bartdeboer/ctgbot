@@ -74,7 +74,7 @@ func TestRunnerForwardsReasoningEventsWhileToolloopRuns(t *testing.T) {
 	if result.Reply != "done" || result.ProviderThreadID != "conv-1" {
 		t.Fatalf("result = %#v", result)
 	}
-	if len(output.texts) != 1 || !strings.Contains(output.texts[0], "I will inspect") {
+	if len(output.texts) != 1 || output.texts[0] != "I will inspect the workspace." {
 		t.Fatalf("forwarded texts = %#v", output.texts)
 	}
 }

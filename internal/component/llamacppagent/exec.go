@@ -208,7 +208,7 @@ func (r *Runner) forwardEvent(ctx context.Context, output OutputHandler, event t
 	if maxRunes <= 0 {
 		maxRunes = 1200
 	}
-	text := "Reasoning:\n" + toolloop.TailText(preview, maxRunes)
+	text := toolloop.TailText(preview, maxRunes)
 	if err := output.Send(ctx, message.OutboundPayload{Text: message.TextMessage{Text: text}}); err != nil {
 		r.logf("send llamacppagent reasoning message failed: %v", err)
 	}
