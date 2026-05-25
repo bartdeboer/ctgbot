@@ -52,6 +52,38 @@ func TestRunnerEmitsJSONLEventsForSuccessfulTurn(t *testing.T) {
 	}
 }
 
+func TestRunnerCapturesReasoningContent(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]any{"content": "", "reasoning_content": "I should summarize the tool output."}}}})
+	}))
+	defer server.Close()
+
+	var events bytes.Buffer
+	result, err := (Runner{Events: NewJSONLEventSink(&events)}).Run(context.Background(), Request{BaseURL: server.URL, Model: "qwen", Prompt: "hi", MaxIterations: 2})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.Status != "success" || result.Text != "" || len(result.Trace) != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+	if result.Trace[0].ReasoningContentChars == 0 || !strings.Contains(result.Trace[0].ReasoningPreview, "summarize") {
+		t.Fatalf("reasoning trace = %#v", result.Trace[0])
+	}
+	eventsByType := decodeEvents(t, events.String())
+	response := eventsByType["model.response"]
+	if response == nil {
+		t.Fatalf("missing model.response event: %s", events.String())
+	}
+	if got, _ := response.Data["reasoning_content_chars"].(float64); got == 0 {
+		t.Fatalf("model.response reasoning chars = %#v", response.Data)
+	}
+	if got, _ := response.Data["reasoning_preview"].(string); !strings.Contains(got, "summarize") {
+		t.Fatalf("model.response reasoning preview = %#v", response.Data)
+	}
+}
+
 func TestRunnerReturnsStructuredResultOnChatError(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -123,6 +155,24 @@ func eventTypes(t *testing.T, text string) []string {
 			t.Fatalf("decode event %q: %v", line, err)
 		}
 		out = append(out, event.Type)
+	}
+	return out
+}
+
+func decodeEvents(t *testing.T, text string) map[string]*Event {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	out := map[string]*Event{}
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var event Event
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("decode event %q: %v", line, err)
+		}
+		eventCopy := event
+		out[event.Type] = &eventCopy
 	}
 	return out
 }

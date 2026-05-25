@@ -54,6 +54,8 @@ type TraceStep struct {
 	FinishReason          string            `json:"finish_reason,omitempty"`
 	AssistantContentChars int               `json:"assistant_content_chars"`
 	AssistantPreview      string            `json:"assistant_preview,omitempty"`
+	ReasoningContentChars int               `json:"reasoning_content_chars,omitempty"`
+	ReasoningPreview      string            `json:"reasoning_preview,omitempty"`
 	ToolCalls             []string          `json:"tool_calls,omitempty"`
 	ToolResults           []TraceToolResult `json:"tool_results,omitempty"`
 }
@@ -126,12 +128,16 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 			FinishReason:          strings.TrimSpace(resp.FinishReason),
 			AssistantContentChars: len([]rune(resp.Content)),
 			AssistantPreview:      previewText(resp.Content, 500),
+			ReasoningContentChars: len([]rune(resp.ReasoningContent)),
+			ReasoningPreview:      previewText(resp.ReasoningContent, 500),
 			ToolCalls:             toolCallNames(resp.ToolCalls),
 		}
 		r.emit(Event{Type: "model.response", Iteration: iteration, Data: map[string]any{
 			"finish_reason":           step.FinishReason,
 			"assistant_content_chars": step.AssistantContentChars,
 			"tool_calls":              step.ToolCalls,
+			"reasoning_content_chars": step.ReasoningContentChars,
+			"reasoning_preview":       step.ReasoningPreview,
 		}})
 		if len(resp.ToolCalls) == 0 {
 			trace = append(trace, step)
@@ -584,9 +590,10 @@ type chatMessage struct {
 }
 
 type assistantMessage struct {
-	Content      string     `json:"content"`
-	ToolCalls    []toolCall `json:"tool_calls"`
-	FinishReason string     `json:"-"`
+	Content          string     `json:"content"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCalls        []toolCall `json:"tool_calls"`
+	FinishReason     string     `json:"-"`
 }
 
 type toolCall struct {
