@@ -798,6 +798,7 @@ func formatThreadPurge(result messagingdomain.PurgeThreadResult) string {
 		"thread_id: " + result.ThreadID.String(),
 		fmt.Sprintf("messages_deleted: %d", result.MessagesDeleted),
 		fmt.Sprintf("artifacts_deleted: %d", result.ArtifactsDeleted),
+		fmt.Sprintf("agent_mappings_deleted: %d", result.AgentMappingsDeleted),
 	}, "\n")
 }
 

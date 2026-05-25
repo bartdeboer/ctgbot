@@ -191,9 +191,39 @@ func TestThreadConfigCommandsDenyUserSet(t *testing.T) {
 	}
 }
 
-func TestThreadPurgeDeletesCurrentThreadMessagesAndArtifacts(t *testing.T) {
+func TestThreadPurgeDeletesCurrentThreadMessagesArtifactsAndAgentMappings(t *testing.T) {
 	ctx := context.Background()
 	storage, thread := testMessagingStorage(t, ctx)
+	agent := testRegisterComponent(t, ctx, storage, "llamacppagent", "llamacppagent")
+	relay := testRegisterComponent(t, ctx, storage, "telegram", "relay")
+	testSaveChatComponent(t, ctx, storage, coremodel.ChatComponent{
+		ChatID:      thread.ChatID,
+		ComponentID: agent.ID,
+		Role:        coremodel.ChatComponentRoleAgent,
+		Enabled:     true,
+	})
+	testSaveChatComponent(t, ctx, storage, coremodel.ChatComponent{
+		ChatID:      thread.ChatID,
+		ComponentID: relay.ID,
+		Role:        coremodel.ChatComponentRoleRelay,
+		Enabled:     true,
+	})
+	if err := storage.ThreadComponentMappings().Save(ctx, &coremodel.ThreadComponentMapping{
+		ThreadID:          thread.ID,
+		ChatID:            thread.ChatID,
+		ComponentID:       agent.ID,
+		ComponentThreadID: "toolloop-conversation-id",
+	}); err != nil {
+		t.Fatalf("Save(agent mapping) error = %v", err)
+	}
+	if err := storage.ThreadComponentMappings().Save(ctx, &coremodel.ThreadComponentMapping{
+		ThreadID:          thread.ID,
+		ChatID:            thread.ChatID,
+		ComponentID:       relay.ID,
+		ComponentThreadID: "telegram-thread-id",
+	}); err != nil {
+		t.Fatalf("Save(relay mapping) error = %v", err)
+	}
 	engine := testMessagingEngine(t, storage)
 	message := &coremodel.ThreadMessage{
 		ChatID:    thread.ChatID,
@@ -225,6 +255,7 @@ func TestThreadPurgeDeletesCurrentThreadMessagesAndArtifacts(t *testing.T) {
 		"thread purged",
 		"messages_deleted: 1",
 		"artifacts_deleted: 1",
+		"agent_mappings_deleted: 1",
 	} {
 		if !strings.Contains(result.Text, want) {
 			t.Fatalf("purge result missing %q:\n%s", want, result.Text)
@@ -244,6 +275,11 @@ func TestThreadPurgeDeletesCurrentThreadMessagesAndArtifacts(t *testing.T) {
 	if len(artifacts) != 0 {
 		t.Fatalf("artifacts after purge = %d, want 0", len(artifacts))
 	}
+	if got, err := storage.Threads().GetByID(ctx, thread.ID); err != nil || got == nil {
+		t.Fatalf("thread after purge = %v, %v; want local thread retained", got, err)
+	}
+	assertNoThreadComponentMapping(t, ctx, storage, thread.ID, agent.ID)
+	assertThreadComponentMapping(t, ctx, storage, thread.ID, relay.ID, "telegram-thread-id")
 }
 
 func TestThreadPurgeReferencedThreadDeniesUser(t *testing.T) {
@@ -530,6 +566,17 @@ func assertThreadComponentMapping(t *testing.T, ctx context.Context, storage rep
 	}
 	if got := strings.TrimSpace(mapping.ComponentThreadID); got != providerThreadID {
 		t.Fatalf("ComponentThreadID = %q, want %q", got, providerThreadID)
+	}
+}
+
+func assertNoThreadComponentMapping(t *testing.T, ctx context.Context, storage repository.Storage, threadID modeluuid.UUID, componentID modeluuid.UUID) {
+	t.Helper()
+	mapping, err := storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, threadID, componentID)
+	if err != nil {
+		t.Fatalf("GetByThreadAndComponent() error = %v", err)
+	}
+	if mapping != nil {
+		t.Fatalf("thread component mapping exists for thread=%s component=%s: %q", threadID, componentID, mapping.ComponentThreadID)
 	}
 }
 

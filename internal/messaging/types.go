@@ -55,9 +55,10 @@ type MessagePage struct {
 }
 
 type PurgeThreadResult struct {
-	ThreadID         modeluuid.UUID `json:"thread_id"`
-	MessagesDeleted  int64          `json:"messages_deleted"`
-	ArtifactsDeleted int64          `json:"artifacts_deleted"`
+	ThreadID             modeluuid.UUID `json:"thread_id"`
+	MessagesDeleted      int64          `json:"messages_deleted"`
+	ArtifactsDeleted     int64          `json:"artifacts_deleted"`
+	AgentMappingsDeleted int64          `json:"agent_mappings_deleted"`
 }
 
 type ThreadComponentBindRequest struct {

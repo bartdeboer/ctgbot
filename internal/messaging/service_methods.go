@@ -131,6 +131,10 @@ func (s *Service) PurgeThread(ctx context.Context, actor coremodel.Actor, thread
 	}
 	result := PurgeThreadResult{ThreadID: thread.ID}
 	if err := s.Storage.Transaction(ctx, func(tx repository.Storage) error {
+		agentMappingsDeleted, err := purgeAgentThreadMappings(ctx, tx, chat.ID, thread.ID)
+		if err != nil {
+			return err
+		}
 		artifactsDeleted, err := tx.Artifacts().DeleteByThreadID(ctx, thread.ID)
 		if err != nil {
 			return err
@@ -141,11 +145,39 @@ func (s *Service) PurgeThread(ctx context.Context, actor coremodel.Actor, thread
 		}
 		result.MessagesDeleted = messagesDeleted
 		result.ArtifactsDeleted = artifactsDeleted
+		result.AgentMappingsDeleted = agentMappingsDeleted
 		return nil
 	}); err != nil {
 		return PurgeThreadResult{}, err
 	}
 	return result, nil
+}
+
+func purgeAgentThreadMappings(ctx context.Context, storage repository.Storage, chatID modeluuid.UUID, threadID modeluuid.UUID) (int64, error) {
+	bindings, err := storage.ChatComponents().ListEnabledByChatID(ctx, chatID)
+	if err != nil {
+		return 0, err
+	}
+	var deleted int64
+	seen := map[modeluuid.UUID]bool{}
+	for _, binding := range bindings {
+		if binding.Role != coremodel.ChatComponentRoleAgent || seen[binding.ComponentID] {
+			continue
+		}
+		seen[binding.ComponentID] = true
+		mapping, err := storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, threadID, binding.ComponentID)
+		if err != nil {
+			return 0, err
+		}
+		if mapping == nil {
+			continue
+		}
+		if err := storage.ThreadComponentMappings().DeleteByThreadAndComponent(ctx, threadID, binding.ComponentID); err != nil {
+			return 0, err
+		}
+		deleted++
+	}
+	return deleted, nil
 }
 
 func (s *Service) ThreadStatus(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID) (ThreadStatus, error) {
