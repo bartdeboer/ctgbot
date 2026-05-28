@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSystemPromptIncludesModelInstructions(t *testing.T) {
@@ -320,9 +321,181 @@ func TestRunnerExecutesShellToolInWorkspace(t *testing.T) {
 	if isErr {
 		t.Fatalf("shell failed: %s", text)
 	}
-	if text != "hello" {
+	if !strings.Contains(text, "hello") || !strings.Contains(text, "status: exited") || strings.Contains(text, "session_id:") {
 		t.Fatalf("shell output = %q", text)
 	}
+}
+
+func TestExecSessionShellExitsQuicklyWithoutSessionID(t *testing.T) {
+	t.Parallel()
+	text, isErr := NewExecSessionManager(t.TempDir(), 0).Exec(context.Background(), shellArgs{Command: "printf hello"})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	if !strings.Contains(text, "hello") || !strings.Contains(text, "exit_code: 0") || strings.Contains(text, "session_id:") {
+		t.Fatalf("Exec output = %q", text)
+	}
+}
+
+func TestExecSessionShellYieldsRunningSessionID(t *testing.T) {
+	t.Parallel()
+	manager := NewExecSessionManager(t.TempDir(), 0)
+	defer manager.Cleanup()
+
+	text, isErr := manager.Exec(context.Background(), shellArgs{Command: "sleep 1", YieldTimeMS: 20})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	sessionID := parseSessionID(t, text)
+	if sessionID == "" || !strings.Contains(text, "status: running") {
+		t.Fatalf("Exec output = %q", text)
+	}
+}
+
+func TestExecSessionWriteStdinAndExitedStatus(t *testing.T) {
+	t.Parallel()
+	workspace := writeCalcFixture(t)
+	manager := NewExecSessionManager(workspace, 0)
+	defer manager.Cleanup()
+
+	text, isErr := manager.Exec(context.Background(), shellArgs{Command: "./calc.sh", TTY: true, YieldTimeMS: 50})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	sessionID := parseSessionID(t, text)
+
+	text, isErr = manager.WriteStdin(context.Background(), writeStdinArgs{SessionID: sessionID, Chars: "5 + 3\n", YieldTimeMS: 500})
+	if isErr {
+		t.Fatalf("WriteStdin failed: %s", text)
+	}
+	if !strings.Contains(text, "8") || !strings.Contains(text, "status: running") {
+		t.Fatalf("WriteStdin output = %q", text)
+	}
+
+	text, isErr = manager.WriteStdin(context.Background(), writeStdinArgs{SessionID: sessionID, Chars: "quit\n", YieldTimeMS: 500})
+	if isErr {
+		t.Fatalf("quit WriteStdin failed: %s", text)
+	}
+	if !strings.Contains(text, "goodbye") || !strings.Contains(text, "status: exited") || !strings.Contains(text, "exit_code: 0") {
+		t.Fatalf("quit output = %q", text)
+	}
+}
+
+func TestExecSessionWriteStdinEmptyPollsOutput(t *testing.T) {
+	t.Parallel()
+	manager := NewExecSessionManager(t.TempDir(), 0)
+	defer manager.Cleanup()
+
+	text, isErr := manager.Exec(context.Background(), shellArgs{Command: "sleep 0.05; echo later; sleep 1", YieldTimeMS: 10})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	sessionID := parseSessionID(t, text)
+
+	text, isErr = manager.WriteStdin(context.Background(), writeStdinArgs{SessionID: sessionID, YieldTimeMS: 500})
+	if isErr {
+		t.Fatalf("poll failed: %s", text)
+	}
+	if !strings.Contains(text, "later") {
+		t.Fatalf("poll output = %q", text)
+	}
+}
+
+func TestExecSessionUnknownSessionIDErrors(t *testing.T) {
+	t.Parallel()
+	text, isErr := NewExecSessionManager(t.TempDir(), 0).WriteStdin(context.Background(), writeStdinArgs{SessionID: "session-nope"})
+	if !isErr || !strings.Contains(text, `unknown session_id "session-nope"`) {
+		t.Fatalf("text=%q isErr=%t, want unknown session error", text, isErr)
+	}
+}
+
+func TestExecSessionOutputIsCapped(t *testing.T) {
+	t.Parallel()
+	text, isErr := NewExecSessionManager(t.TempDir(), 0).Exec(context.Background(), shellArgs{Command: `python3 -c 'print("x"*70000)'`})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	if !strings.Contains(text, "output_truncated: true") || !strings.Contains(text, "omitted_bytes:") {
+		t.Fatalf("Exec output = %q", text[:min(len(text), 500)])
+	}
+	if strings.Count(text, "omitted_bytes:") != 1 {
+		t.Fatalf("omitted_bytes should appear once in %q", text[:min(len(text), 500)])
+	}
+}
+
+func TestExecSessionShellStopKillsAndRemovesSession(t *testing.T) {
+	t.Parallel()
+	manager := NewExecSessionManager(t.TempDir(), 0)
+	text, isErr := manager.Exec(context.Background(), shellArgs{Command: "sleep 30", YieldTimeMS: 20})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	sessionID := parseSessionID(t, text)
+
+	text, isErr = manager.Stop(context.Background(), shellStopArgs{SessionID: sessionID})
+	if isErr {
+		t.Fatalf("Stop failed: %s", text)
+	}
+	if !strings.Contains(text, "status: exited") || !strings.Contains(text, "exit_code:") {
+		t.Fatalf("Stop output = %q", text)
+	}
+	if _, ok := manager.Sessions[sessionID]; ok {
+		t.Fatalf("session %q still present after Stop", sessionID)
+	}
+}
+
+func TestExecSessionCleanupKillsRunningSessions(t *testing.T) {
+	t.Parallel()
+	manager := NewExecSessionManager(t.TempDir(), 0)
+	text, isErr := manager.Exec(context.Background(), shellArgs{Command: "sleep 30", YieldTimeMS: 20})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	session := manager.Sessions[parseSessionID(t, text)]
+	if session == nil {
+		t.Fatal("missing session")
+	}
+
+	manager.Cleanup()
+
+	select {
+	case <-session.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Cleanup did not kill session")
+	}
+	if len(manager.Sessions) != 0 {
+		t.Fatalf("Sessions after Cleanup = %d, want 0", len(manager.Sessions))
+	}
+}
+
+func writeCalcFixture(t *testing.T) string {
+	t.Helper()
+	workspace := t.TempDir()
+	calc := `#!/usr/bin/env bash
+while IFS= read -r line; do
+  case "$line" in
+    quit) echo goodbye; exit 0 ;;
+    "5 + 3") echo 8 ;;
+    *) echo "got:$line" ;;
+  esac
+done
+`
+	path := filepath.Join(workspace, "calc.sh")
+	if err := os.WriteFile(path, []byte(calc), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return workspace
+}
+
+func parseSessionID(t *testing.T, text string) string {
+	t.Helper()
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(line, "session_id: ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "session_id: "))
+		}
+	}
+	t.Fatalf("missing session_id in %q", text)
+	return ""
 }
 
 func TestRunnerRejectsShellWorkdirOutsideWorkspace(t *testing.T) {
