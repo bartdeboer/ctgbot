@@ -96,6 +96,8 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 	if client == nil {
 		client = &http.Client{Timeout: defaultTimeout}
 	}
+	execSessions := NewExecSessionManager(r.Workspace, r.CommandTimeout)
+	defer execSessions.Cleanup()
 	messages := []chatMessage{}
 	if system := systemPrompt(req); system != "" {
 		messages = append(messages, chatMessage{Role: "system", Content: system})
@@ -149,7 +151,7 @@ func (r Runner) Run(ctx context.Context, req Request) (Result, error) {
 		messages = append(messages, chatMessage{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls})
 		for _, call := range resp.ToolCalls {
 			r.emit(Event{Type: "tool.started", Iteration: iteration, ToolCall: call.ID, ToolName: call.Function.Name})
-			toolText, isErr := r.executeTool(ctx, call)
+			toolText, isErr := r.executeToolWithSessions(ctx, execSessions, call)
 			if strings.TrimSpace(toolText) == "" {
 				toolText = "(no output)"
 			}
@@ -277,6 +279,12 @@ func previewText(text string, maxRunes int) string {
 }
 
 func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
+	execSessions := NewExecSessionManager(r.Workspace, r.CommandTimeout)
+	defer execSessions.Cleanup()
+	return r.executeToolWithSessions(ctx, execSessions, call)
+}
+
+func (r Runner) executeToolWithSessions(ctx context.Context, execSessions *ExecSessionManager, call toolCall) (string, bool) {
 	name := strings.TrimSpace(call.Function.Name)
 	switch name {
 	case "shell":
@@ -284,7 +292,13 @@ func (r Runner) executeTool(ctx context.Context, call toolCall) (string, bool) {
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
 			return "invalid shell arguments: " + err.Error(), true
 		}
-		return r.runShell(ctx, args)
+		return execSessions.Exec(ctx, args)
+	case "write_stdin":
+		var args writeStdinArgs
+		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+			return "invalid write_stdin arguments: " + err.Error(), true
+		}
+		return execSessions.WriteStdin(ctx, args)
 	case "hostbridge":
 		var args hostbridgeArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
@@ -326,9 +340,13 @@ type hostbridgeArgs struct {
 }
 
 type shellArgs struct {
-	Command   string `json:"command"`
-	Workdir   string `json:"workdir,omitempty"`
-	TimeoutMS int    `json:"timeout_ms,omitempty"`
+	Command         string `json:"command"`
+	Cmd             string `json:"cmd,omitempty"`
+	Workdir         string `json:"workdir,omitempty"`
+	TTY             bool   `json:"tty,omitempty"`
+	TimeoutMS       int    `json:"timeout_ms,omitempty"`
+	YieldTimeMS     int    `json:"yield_time_ms,omitempty"`
+	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
 }
 
 type readFileArgs struct {
@@ -348,40 +366,6 @@ type editFileArgs struct {
 	OldString  string `json:"old_string"`
 	NewString  string `json:"new_string"`
 	ReplaceAll bool   `json:"replace_all,omitempty"`
-}
-
-func (r Runner) runShell(ctx context.Context, args shellArgs) (string, bool) {
-	command := strings.TrimSpace(args.Command)
-	if command == "" {
-		return "missing shell command", true
-	}
-	workspace := firstNonEmpty(r.Workspace, getenv("TOOLLOOP_WORKSPACE"), "/workspace")
-	workdir, err := resolveWorkdir(workspace, args.Workdir)
-	if err != nil {
-		return err.Error(), true
-	}
-	timeout := r.CommandTimeout
-	if args.TimeoutMS > 0 {
-		timeout = time.Duration(args.TimeoutMS) * time.Millisecond
-	}
-	if timeout <= 0 {
-		timeout = 2 * time.Minute
-	}
-	toolCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	cmd := exec.CommandContext(toolCtx, "/bin/bash", "-c", command)
-	cmd.Dir = workdir
-	out, err := cmd.CombinedOutput()
-	text := strings.TrimSpace(string(out))
-	if err != nil {
-		if text == "" {
-			text = err.Error()
-		} else {
-			text = err.Error() + "\n" + text
-		}
-		return text, true
-	}
-	return text, false
 }
 
 func (r Runner) readFile(ctx context.Context, args readFileArgs) (string, bool) {
@@ -632,15 +616,41 @@ func toolDefinitions() []toolDef {
 				Name: "shell",
 				Description: `Run a bash command inside the sandbox workspace.
 Use shell for normal commands such as go test, go run, rg, find, ls, sed, and nl.
+Codex-style session behavior: shell starts the command and waits up to yield_time_ms when that field is set.
+If the command exits before the yield, the result includes output and exit_code with no session_id.
+If the command is still running after the yield, the result includes partial output and a session_id for write_stdin.
+Use tty=true for commands that require stdin interaction. Use write_stdin with chars including final newlines; empty chars polls output.
 Prefer read-only inspection before editing. For file edits, prefer edit/write or apply_patch instead of shell redirection.`,
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
-						"command":    map[string]any{"type": "string", "description": "Bash command to run, for example rg -n \"functionName\" path or nl -ba file | sed -n '120,180p'."},
-						"workdir":    map[string]any{"type": "string", "description": "Workspace-relative directory. Defaults to /workspace."},
-						"timeout_ms": map[string]any{"type": "integer", "description": "Optional timeout in milliseconds."},
+						"command":           map[string]any{"type": "string", "description": "Bash command to run, for example rg -n \"functionName\" path or nl -ba file | sed -n '120,180p'."},
+						"cmd":               map[string]any{"type": "string", "description": "Alias for command."},
+						"workdir":           map[string]any{"type": "string", "description": "Workspace-relative directory. Defaults to /workspace."},
+						"tty":               map[string]any{"type": "boolean", "description": "Set true for interactive commands that need stdin. PTY allocation is not required for most simple stdin pipes."},
+						"timeout_ms":        map[string]any{"type": "integer", "description": "Optional timeout in milliseconds when no yield_time_ms is set."},
+						"yield_time_ms":     map[string]any{"type": "integer", "description": "If set, wait this long before returning. Running commands return a session_id."},
+						"max_output_tokens": map[string]any{"type": "integer", "description": "Optional approximate output token budget for returned output."},
 					},
-					"required": []string{"command"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFunction{
+				Name: "write_stdin",
+				Description: `Write to or poll a running shell session created by shell.
+Pass the session_id returned by shell. Include final newlines in chars when the process expects line input, for example "5 + 3\n" or "quit\n".
+Use empty chars or omit chars to poll recent output without writing.`,
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"session_id":        map[string]any{"type": "string", "description": "Session id returned by shell."},
+						"chars":             map[string]any{"type": "string", "description": "Text to write to stdin. Empty or omitted means poll."},
+						"yield_time_ms":     map[string]any{"type": "integer", "description": "Optional milliseconds to wait for new output after writing or polling."},
+						"max_output_tokens": map[string]any{"type": "integer", "description": "Optional approximate output token budget for returned output."},
+					},
+					"required": []string{"session_id"},
 				},
 			},
 		},
