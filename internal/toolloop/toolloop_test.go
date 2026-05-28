@@ -418,6 +418,30 @@ func TestExecSessionOutputIsCapped(t *testing.T) {
 	if !strings.Contains(text, "output_truncated: true") || !strings.Contains(text, "omitted_bytes:") {
 		t.Fatalf("Exec output = %q", text[:min(len(text), 500)])
 	}
+	if strings.Count(text, "omitted_bytes:") != 1 {
+		t.Fatalf("omitted_bytes should appear once in %q", text[:min(len(text), 500)])
+	}
+}
+
+func TestExecSessionShellStopKillsAndRemovesSession(t *testing.T) {
+	t.Parallel()
+	manager := NewExecSessionManager(t.TempDir(), 0)
+	text, isErr := manager.Exec(context.Background(), shellArgs{Command: "sleep 30", YieldTimeMS: 20})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	sessionID := parseSessionID(t, text)
+
+	text, isErr = manager.Stop(context.Background(), shellStopArgs{SessionID: sessionID})
+	if isErr {
+		t.Fatalf("Stop failed: %s", text)
+	}
+	if !strings.Contains(text, "status: exited") || !strings.Contains(text, "exit_code:") {
+		t.Fatalf("Stop output = %q", text)
+	}
+	if _, ok := manager.Sessions[sessionID]; ok {
+		t.Fatalf("session %q still present after Stop", sessionID)
+	}
 }
 
 func TestExecSessionCleanupKillsRunningSessions(t *testing.T) {

@@ -38,7 +38,6 @@ type ExecSession struct {
 	ExitCode  *int
 
 	done chan struct{}
-	copy sync.WaitGroup
 	mu   sync.Mutex
 }
 
@@ -46,6 +45,11 @@ type writeStdinArgs struct {
 	SessionID       string `json:"session_id"`
 	Chars           string `json:"chars,omitempty"`
 	YieldTimeMS     int    `json:"yield_time_ms,omitempty"`
+	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
+}
+
+type shellStopArgs struct {
+	SessionID       string `json:"session_id"`
 	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
 }
 
@@ -112,6 +116,20 @@ func (m *ExecSessionManager) WriteStdin(ctx context.Context, args writeStdinArgs
 	return session.format(output, true), false
 }
 
+func (m *ExecSessionManager) Stop(_ context.Context, args shellStopArgs) (string, bool) {
+	session, err := m.session(args.SessionID)
+	if err != nil {
+		return err.Error(), true
+	}
+	if !session.exited() {
+		session.kill()
+	}
+	<-session.done
+	delete(m.Sessions, session.ID)
+	output := session.Output.Drain(m.maxOutputChars(args.MaxOutputTokens))
+	return session.format(output, true), false
+}
+
 func (m *ExecSessionManager) Cleanup() {
 	for id, session := range m.Sessions {
 		if !session.exited() {
@@ -138,15 +156,6 @@ func (m *ExecSessionManager) start(ctx context.Context, command string, requeste
 	if err != nil {
 		return nil, fmt.Errorf("open stdin: %w", err)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("open stdout: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("open stderr: %w", err)
-	}
-
 	session := &ExecSession{
 		ID:        id,
 		Command:   command,
@@ -156,12 +165,11 @@ func (m *ExecSessionManager) start(ctx context.Context, command string, requeste
 		StartedAt: time.Now().UTC(),
 		done:      make(chan struct{}),
 	}
+	cmd.Stdout = session.Output
+	cmd.Stderr = session.Output
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start shell command: %w", err)
 	}
-	session.copy.Add(2)
-	go session.copyOutput(stdout)
-	go session.copyOutput(stderr)
 	go session.wait()
 	return session, nil
 }
@@ -202,14 +210,8 @@ func (m *ExecSessionManager) maxOutputChars(maxOutputTokens int) int {
 	return maxOutputTokens * charsPerRequestedToken
 }
 
-func (s *ExecSession) copyOutput(r io.Reader) {
-	defer s.copy.Done()
-	_, _ = io.Copy(s.Output, r)
-}
-
 func (s *ExecSession) wait() {
 	err := s.Cmd.Wait()
-	s.copy.Wait()
 	now := time.Now().UTC()
 	exitCode := processExitCode(err)
 	s.mu.Lock()

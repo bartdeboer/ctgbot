@@ -299,6 +299,12 @@ func (r Runner) executeToolWithSessions(ctx context.Context, execSessions *ExecS
 			return "invalid write_stdin arguments: " + err.Error(), true
 		}
 		return execSessions.WriteStdin(ctx, args)
+	case "shell_stop":
+		var args shellStopArgs
+		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+			return "invalid shell_stop arguments: " + err.Error(), true
+		}
+		return execSessions.Stop(ctx, args)
 	case "hostbridge":
 		var args hostbridgeArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
@@ -619,7 +625,9 @@ Use shell for normal commands such as go test, go run, rg, find, ls, sed, and nl
 Codex-style session behavior: shell starts the command and waits up to yield_time_ms when that field is set.
 If the command exits before the yield, the result includes output and exit_code with no session_id.
 If the command is still running after the yield, the result includes partial output and a session_id for write_stdin.
-Use tty=true for commands that require stdin interaction. Use write_stdin with chars including final newlines; empty chars polls output.
+The tty field is accepted for future compatibility but currently ignored; v1 uses normal stdin/stdout/stderr pipes, not a PTY.
+Use write_stdin with chars including final newlines for stdin interaction; empty chars polls output.
+Unread output is capped to a tail buffer and returned with output_bytes, output_truncated, and omitted_bytes metadata when truncated.
 Prefer read-only inspection before editing. For file edits, prefer edit/write or apply_patch instead of shell redirection.`,
 				Parameters: map[string]any{
 					"type": "object",
@@ -627,7 +635,7 @@ Prefer read-only inspection before editing. For file edits, prefer edit/write or
 						"command":           map[string]any{"type": "string", "description": "Bash command to run, for example rg -n \"functionName\" path or nl -ba file | sed -n '120,180p'."},
 						"cmd":               map[string]any{"type": "string", "description": "Alias for command."},
 						"workdir":           map[string]any{"type": "string", "description": "Workspace-relative directory. Defaults to /workspace."},
-						"tty":               map[string]any{"type": "boolean", "description": "Set true for interactive commands that need stdin. PTY allocation is not required for most simple stdin pipes."},
+						"tty":               map[string]any{"type": "boolean", "description": "Accepted for future Codex compatibility, but currently ignored; this implementation always uses normal pipes, not a PTY."},
 						"timeout_ms":        map[string]any{"type": "integer", "description": "Optional timeout in milliseconds when no yield_time_ms is set."},
 						"yield_time_ms":     map[string]any{"type": "integer", "description": "If set, wait this long before returning. Running commands return a session_id."},
 						"max_output_tokens": map[string]any{"type": "integer", "description": "Optional approximate output token budget for returned output."},
@@ -648,6 +656,23 @@ Use empty chars or omit chars to poll recent output without writing.`,
 						"session_id":        map[string]any{"type": "string", "description": "Session id returned by shell."},
 						"chars":             map[string]any{"type": "string", "description": "Text to write to stdin. Empty or omitted means poll."},
 						"yield_time_ms":     map[string]any{"type": "integer", "description": "Optional milliseconds to wait for new output after writing or polling."},
+						"max_output_tokens": map[string]any{"type": "integer", "description": "Optional approximate output token budget for returned output."},
+					},
+					"required": []string{"session_id"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFunction{
+				Name: "shell_stop",
+				Description: `Stop a running shell session created by shell.
+This kills the process group where practical, removes the session, and returns final status/output if available.
+Remaining sessions are also cleaned up automatically at the end of the toolloop turn.`,
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"session_id":        map[string]any{"type": "string", "description": "Session id returned by shell."},
 						"max_output_tokens": map[string]any{"type": "integer", "description": "Optional approximate output token budget for returned output."},
 					},
 					"required": []string{"session_id"},
