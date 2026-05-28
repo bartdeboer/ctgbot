@@ -381,6 +381,85 @@ func TestExecSessionWriteStdinAndExitedStatus(t *testing.T) {
 	}
 }
 
+func TestExecSessionWriteStdinLineSendsLineToShellRead(t *testing.T) {
+	t.Parallel()
+	workspace := writeEchoLinesFixture(t)
+	manager := NewExecSessionManager(workspace, 0)
+	defer manager.Cleanup()
+
+	text, isErr := manager.Exec(context.Background(), shellArgs{Command: "./echo_lines.sh", YieldTimeMS: 50})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	sessionID := parseSessionID(t, text)
+
+	text, isErr = manager.WriteStdinLine(context.Background(), writeStdinLineArgs{SessionID: sessionID, Line: "hello", YieldTimeMS: 500})
+	if isErr {
+		t.Fatalf("WriteStdinLine failed: %s", text)
+	}
+	if !strings.Contains(text, "line:hello") {
+		t.Fatalf("WriteStdinLine output = %q", text)
+	}
+}
+
+func TestExecSessionWriteStdinRawDoesNotAppendNewline(t *testing.T) {
+	t.Parallel()
+	workspace := writeEchoLinesFixture(t)
+	manager := NewExecSessionManager(workspace, 0)
+	defer manager.Cleanup()
+
+	text, isErr := manager.Exec(context.Background(), shellArgs{Command: "./echo_lines.sh", YieldTimeMS: 50})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	sessionID := parseSessionID(t, text)
+
+	text, isErr = manager.WriteStdin(context.Background(), writeStdinArgs{SessionID: sessionID, Chars: "partial", YieldTimeMS: 100})
+	if isErr {
+		t.Fatalf("WriteStdin partial failed: %s", text)
+	}
+	if strings.Contains(text, "line:partial") {
+		t.Fatalf("raw WriteStdin unexpectedly completed a line: %q", text)
+	}
+
+	text, isErr = manager.WriteStdin(context.Background(), writeStdinArgs{SessionID: sessionID, Chars: "\n", YieldTimeMS: 500})
+	if isErr {
+		t.Fatalf("WriteStdin newline failed: %s", text)
+	}
+	if !strings.Contains(text, "line:partial") {
+		t.Fatalf("raw WriteStdin did not preserve partial input: %q", text)
+	}
+}
+
+func TestExecSessionWriteStdinLineGoReadStringCalculatorRegression(t *testing.T) {
+	t.Parallel()
+	workspace := writeGoReadStringCalcFixture(t)
+	manager := NewExecSessionManager(workspace, 0)
+	defer manager.Cleanup()
+
+	text, isErr := manager.Exec(context.Background(), shellArgs{Command: "go run ./calc.go", YieldTimeMS: 50})
+	if isErr {
+		t.Fatalf("Exec failed: %s", text)
+	}
+	sessionID := parseSessionID(t, text)
+
+	text, isErr = manager.WriteStdinLine(context.Background(), writeStdinLineArgs{SessionID: sessionID, Line: "5 + 3", YieldTimeMS: 1000})
+	if isErr {
+		t.Fatalf("WriteStdinLine calc failed: %s", text)
+	}
+	if !strings.Contains(text, "8") {
+		t.Fatalf("calc output = %q", text)
+	}
+
+	text, isErr = manager.WriteStdinLine(context.Background(), writeStdinLineArgs{SessionID: sessionID, Line: "quit", YieldTimeMS: 1000})
+	if isErr {
+		t.Fatalf("WriteStdinLine quit failed: %s", text)
+	}
+	if !strings.Contains(text, "goodbye") || !strings.Contains(text, "status: exited") {
+		t.Fatalf("quit output = %q", text)
+	}
+}
+
 func TestExecSessionWriteStdinEmptyPollsOutput(t *testing.T) {
 	t.Parallel()
 	manager := NewExecSessionManager(t.TempDir(), 0)
@@ -482,6 +561,58 @@ done
 `
 	path := filepath.Join(workspace, "calc.sh")
 	if err := os.WriteFile(path, []byte(calc), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return workspace
+}
+
+func writeEchoLinesFixture(t *testing.T) string {
+	t.Helper()
+	workspace := t.TempDir()
+	script := `#!/usr/bin/env bash
+while IFS= read -r line; do
+  echo "line:$line"
+done
+`
+	path := filepath.Join(workspace, "echo_lines.sh")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return workspace
+}
+
+func writeGoReadStringCalcFixture(t *testing.T) string {
+	t.Helper()
+	workspace := t.TempDir()
+	source := `package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strings"
+)
+
+func main() {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		switch strings.TrimSpace(line) {
+		case "quit":
+			fmt.Println("goodbye")
+			return
+		case "5 + 3":
+			fmt.Println("8")
+		default:
+			fmt.Println("got:" + strings.TrimSpace(line))
+		}
+	}
+}
+`
+	if err := os.WriteFile(filepath.Join(workspace, "calc.go"), []byte(source), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return workspace

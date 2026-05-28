@@ -57,6 +57,13 @@ type writeStdinArgs struct {
 	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
 }
 
+type writeStdinLineArgs struct {
+	SessionID       string `json:"session_id"`
+	Line            string `json:"line"`
+	YieldTimeMS     int    `json:"yield_time_ms,omitempty"`
+	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
+}
+
 type shellStopArgs struct {
 	SessionID       string `json:"session_id"`
 	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
@@ -123,6 +130,15 @@ func (m *ExecSessionManager) WriteStdin(ctx context.Context, args writeStdinArgs
 	session.waitFor(m.yieldWait(args.YieldTimeMS))
 	output := session.Output.Drain(m.maxOutputChars(args.MaxOutputTokens))
 	return session.format(output, true), false
+}
+
+func (m *ExecSessionManager) WriteStdinLine(ctx context.Context, args writeStdinLineArgs) (string, bool) {
+	return m.WriteStdin(ctx, writeStdinArgs{
+		SessionID:       args.SessionID,
+		Chars:           args.Line + "\n",
+		YieldTimeMS:     args.YieldTimeMS,
+		MaxOutputTokens: args.MaxOutputTokens,
+	})
 }
 
 func (m *ExecSessionManager) Stop(_ context.Context, args shellStopArgs) (string, bool) {

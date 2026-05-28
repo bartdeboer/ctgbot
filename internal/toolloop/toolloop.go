@@ -299,6 +299,12 @@ func (r Runner) executeToolWithSessions(ctx context.Context, execSessions *ExecS
 			return "invalid write_stdin arguments: " + err.Error(), true
 		}
 		return execSessions.WriteStdin(ctx, args)
+	case "write_stdin_line":
+		var args writeStdinLineArgs
+		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+			return "invalid write_stdin_line arguments: " + err.Error(), true
+		}
+		return execSessions.WriteStdinLine(ctx, args)
 	case "shell_stop":
 		var args shellStopArgs
 		if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
@@ -626,7 +632,7 @@ Codex-style session behavior: shell starts the command and waits up to yield_tim
 If the command exits before the yield, the result includes output and exit_code with no session_id.
 If the command is still running after the yield, the result includes partial output and a session_id for write_stdin.
 The tty field is accepted for future compatibility but currently ignored; v1 uses normal stdin/stdout/stderr pipes, not a PTY.
-Use write_stdin with chars including final newlines for stdin interaction; empty chars polls output.
+Use write_stdin_line for line-oriented CLIs, prompts, and REPLs. Use write_stdin only for raw or partial input; empty chars polls output.
 Unread output is capped to a tail buffer and returned with output_bytes, output_truncated, and omitted_bytes metadata when truncated.
 Prefer read-only inspection before editing. For file edits, prefer edit/write or apply_patch instead of shell redirection.`,
 				Parameters: map[string]any{
@@ -648,7 +654,8 @@ Prefer read-only inspection before editing. For file edits, prefer edit/write or
 			Function: toolFunction{
 				Name: "write_stdin",
 				Description: `Write to or poll a running shell session created by shell.
-Pass the session_id returned by shell. Include final newlines in chars when the process expects line input, for example "5 + 3\n" or "quit\n".
+Pass the session_id returned by shell. This is the raw/partial input tool: chars are written exactly as provided.
+For line-oriented CLIs, prompts, and REPLs, prefer write_stdin_line so the final newline byte is added reliably.
 Use empty chars or omit chars to poll recent output without writing.`,
 				Parameters: map[string]any{
 					"type": "object",
@@ -659,6 +666,25 @@ Use empty chars or omit chars to poll recent output without writing.`,
 						"max_output_tokens": map[string]any{"type": "integer", "description": "Optional approximate output token budget for returned output."},
 					},
 					"required": []string{"session_id"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: toolFunction{
+				Name: "write_stdin_line",
+				Description: `Write one complete line to a running shell session created by shell, then wait/drain like write_stdin.
+This writes exactly line plus one newline byte to the session.
+Use write_stdin_line for line-oriented CLIs, prompts, calculators, and REPLs. Use write_stdin only for raw or partial input.`,
+				Parameters: map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"session_id":        map[string]any{"type": "string", "description": "Session id returned by shell."},
+						"line":              map[string]any{"type": "string", "description": "Line content without the trailing newline; the tool appends exactly one newline byte."},
+						"yield_time_ms":     map[string]any{"type": "integer", "description": "Optional milliseconds to wait for new output after writing."},
+						"max_output_tokens": map[string]any{"type": "integer", "description": "Optional approximate output token budget for returned output."},
+					},
+					"required": []string{"session_id", "line"},
 				},
 			},
 		},
