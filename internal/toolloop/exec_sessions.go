@@ -20,6 +20,15 @@ const (
 	charsPerRequestedToken = 4
 )
 
+// TODO(toolloop): switch cappedOutput from a tail-only buffer to a Codex-style
+// head/tail buffer. Keeping the beginning and end is more useful for commands
+// that print setup context first and failures last.
+// TODO(toolloop): decide whether exec sessions should remain turn-scoped or
+// become conversation/job-scoped with explicit persistence and cleanup policy.
+// TODO(toolloop): consider returning structured shell metadata in addition to
+// the current model-readable text format when the surrounding protocol supports
+// typed tool results.
+
 type ExecSessionManager struct {
 	Workspace      string
 	CommandTimeout time.Duration
@@ -151,6 +160,10 @@ func (m *ExecSessionManager) start(ctx context.Context, command string, requeste
 	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", command)
 	cmd.Dir = workdir
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// TODO(toolloop): implement tty=true by allocating a PTY and attaching the
+	// command to the PTY slave. The model-facing schema already accepts tty for
+	// Codex compatibility, but v1 intentionally uses normal stdin/stdout/stderr
+	// pipes for all sessions.
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
