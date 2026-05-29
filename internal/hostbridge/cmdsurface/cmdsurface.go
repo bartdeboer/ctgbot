@@ -6,13 +6,14 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	componentpkg "github.com/bartdeboer/ctgbot/internal/component"
 	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
-	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
+	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
 	claudecomponent "github.com/bartdeboer/ctgbot/internal/component/claude"
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	gmailcomponent "github.com/bartdeboer/ctgbot/internal/component/gmail"
 	gmailv2component "github.com/bartdeboer/ctgbot/internal/component/gmailv2"
+	indexingcomponent "github.com/bartdeboer/ctgbot/internal/component/indexing"
 	llamacppcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	llamacppagentcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacppagent"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
@@ -100,6 +101,7 @@ func RegisterGobTypes(register func(any)) {
 	sqlcomponent.RegisterGobTypes(register)
 	gmailcomponent.RegisterGobTypes(register)
 	gmailv2component.RegisterGobTypes(register)
+	indexingcomponent.RegisterGobTypes(register)
 	semanticcomponent.RegisterGobTypes(register)
 	agentcommon.RegisterGobTypes(register)
 	llamacppcomponent.RegisterGobTypes(register)
@@ -124,6 +126,8 @@ func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 		return (*gmailcomponent.Component)(nil), true
 	case gmailv2component.Type:
 		return (*gmailv2component.Component)(nil), true
+	case indexingcomponent.Type:
+		return (*indexingcomponent.Component)(nil), true
 	case llamacppcomponent.Type:
 		return (*llamacppcomponent.Component)(nil), true
 	case llamacppagentcomponent.Type:
