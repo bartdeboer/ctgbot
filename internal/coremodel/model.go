@@ -262,3 +262,30 @@ type Artifact struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+const (
+	ScheduledJobStatusNever   = "never"
+	ScheduledJobStatusSuccess = "success"
+	ScheduledJobStatusFailed  = "failed"
+)
+
+// ScheduledJob is the persisted control-plane record for commands that should
+// be dispatched by the scheduler runtime.
+//
+// The scheduler intentionally stores command arguments as JSON rather than as a
+// shell string. Scheduled work enters the same commandengine path as hostbridge
+// and message commands; it is not a shell escape hatch.
+type ScheduledJob struct {
+	ID          modeluuid.UUID `gorm:"primaryKey"`
+	Name        string         `gorm:"uniqueIndex"`
+	Enabled     bool           `gorm:"index"`
+	Every       string
+	CommandJSON string
+	LastRunAt   *time.Time
+	NextRunAt   *time.Time `gorm:"index"`
+	LastStatus  string
+	LastError   string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}

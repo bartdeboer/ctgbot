@@ -31,6 +31,7 @@ type GORMStorage struct {
 	threadComponentStates   *gormThreadComponentStates
 	messages                *gormMessages
 	artifacts               *gormArtifacts
+	scheduledJobs           *gormScheduledJobs
 }
 
 func New(db *gorm.DB) *GORMStorage {
@@ -54,6 +55,7 @@ func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
 		threadComponentStates:   &gormThreadComponentStates{db: db},
 		messages:                &gormMessages{db: db},
 		artifacts:               &gormArtifacts{db: db, artifactDir: artifactDir},
+		scheduledJobs:           &gormScheduledJobs{db: db},
 	}
 }
 
@@ -74,6 +76,7 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.ThreadComponentState{},
 		&coremodel.ThreadMessage{},
 		&coremodel.Artifact{},
+		&coremodel.ScheduledJob{},
 	); err != nil {
 		return err
 	}
@@ -131,6 +134,9 @@ func (s *GORMStorage) ThreadComponentStates() repository.ThreadComponentStateRep
 }
 func (s *GORMStorage) Messages() repository.MessageRepository   { return s.messages }
 func (s *GORMStorage) Artifacts() repository.ArtifactRepository { return s.artifacts }
+func (s *GORMStorage) ScheduledJobs() repository.ScheduledJobRepository {
+	return s.scheduledJobs
+}
 
 type gormChats struct{ db *gorm.DB }
 
@@ -817,6 +823,61 @@ func (r *gormArtifacts) artifactFilePath(relPath string) (string, error) {
 		return "", fmt.Errorf("unsafe artifact path: %q", relPath)
 	}
 	return filepath.Join(r.artifactDir, relPath), nil
+}
+
+type gormScheduledJobs struct{ db *gorm.DB }
+
+func (r *gormScheduledJobs) Save(ctx context.Context, job *coremodel.ScheduledJob) error {
+	if job == nil {
+		return fmt.Errorf("missing scheduled job")
+	}
+	job.Name = clean(job.Name)
+	job.Every = clean(job.Every)
+	job.CommandJSON = clean(job.CommandJSON)
+	if job.ID.IsNull() {
+		var existing coremodel.ScheduledJob
+		err := r.db.WithContext(ctx).Where("name = ?", job.Name).First(&existing).Error
+		if err == nil {
+			job.ID = existing.ID
+			job.CreatedAt = existing.CreatedAt
+			if job.LastRunAt == nil {
+				job.LastRunAt = existing.LastRunAt
+			}
+			if job.LastStatus == "" {
+				job.LastStatus = existing.LastStatus
+			}
+			if job.LastError == "" {
+				job.LastError = existing.LastError
+			}
+		} else if err != gorm.ErrRecordNotFound {
+			return err
+		}
+	}
+	ensureID(&job.ID)
+	return r.db.WithContext(ctx).Save(job).Error
+}
+
+func (r *gormScheduledJobs) List(ctx context.Context) ([]coremodel.ScheduledJob, error) {
+	var jobs []coremodel.ScheduledJob
+	err := r.db.WithContext(ctx).Order("name ASC").Find(&jobs).Error
+	return jobs, err
+}
+
+func (r *gormScheduledJobs) ListDue(ctx context.Context, now time.Time) ([]coremodel.ScheduledJob, error) {
+	var jobs []coremodel.ScheduledJob
+	err := r.db.WithContext(ctx).
+		Where("enabled = ? AND next_run_at <= ?", true, now.UTC()).
+		Order("next_run_at ASC").
+		Order("name ASC").
+		Find(&jobs).Error
+	return jobs, err
+}
+
+func (r *gormScheduledJobs) DeleteByName(ctx context.Context, name string) (bool, error) {
+	result := r.db.WithContext(ctx).
+		Where("name = ?", clean(name)).
+		Delete(&coremodel.ScheduledJob{})
+	return result.RowsAffected > 0, result.Error
 }
 
 func ensureID(id *modeluuid.UUID) {

@@ -47,6 +47,9 @@ func resolveScope(ctx commandengine.Context, flags scopeFlags) (scope, error) {
 		}
 		return scope{ThreadID: id}, nil
 	}
+	if ctx.Source == commandengine.SourceScheduler {
+		return scope{All: true}, nil
+	}
 	threadID := ctx.ThreadID
 	if threadID.IsNull() {
 		threadID = ctx.SandboxID

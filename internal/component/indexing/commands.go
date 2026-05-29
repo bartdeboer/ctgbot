@@ -74,8 +74,8 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		},
 		{
 			Pattern: "run <strategy>",
-			Help:    "Run an indexing strategy for the current thread",
-			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Help:    "Run an indexing strategy for the current thread; scheduled runs default to all messages unless --chat or --thread is set",
+			Sources: []commandengine.Source{commandengine.SourceHostbridge, commandengine.SourceScheduler},
 			Policy:  policy,
 			Build:   buildRunCommand,
 		},

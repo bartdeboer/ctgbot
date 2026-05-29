@@ -16,6 +16,7 @@ const (
 	SourceCLI        Source = "cli"
 	SourceMessage    Source = "message"
 	SourceHostbridge Source = "hostbridge"
+	SourceScheduler  Source = "scheduler"
 )
 
 type Actor = coremodel.Actor

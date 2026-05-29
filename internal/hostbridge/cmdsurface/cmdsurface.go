@@ -18,6 +18,7 @@ import (
 	llamacppagentcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacppagent"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
 	modelcomponent "github.com/bartdeboer/ctgbot/internal/component/model"
+	schedulercomponent "github.com/bartdeboer/ctgbot/internal/component/scheduler"
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
 	supertoniccomponent "github.com/bartdeboer/ctgbot/internal/component/supertonic"
@@ -102,6 +103,7 @@ func RegisterGobTypes(register func(any)) {
 	gmailcomponent.RegisterGobTypes(register)
 	gmailv2component.RegisterGobTypes(register)
 	indexingcomponent.RegisterGobTypes(register)
+	schedulercomponent.RegisterGobTypes(register)
 	semanticcomponent.RegisterGobTypes(register)
 	agentcommon.RegisterGobTypes(register)
 	llamacppcomponent.RegisterGobTypes(register)
@@ -134,6 +136,8 @@ func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 		return (*llamacppagentcomponent.Component)(nil), true
 	case modelcomponent.Type:
 		return (*modelcomponent.Component)(nil), true
+	case schedulercomponent.Type:
+		return (*schedulercomponent.Component)(nil), true
 	case semanticcomponent.Type:
 		return (*semanticcomponent.Component)(nil), true
 	case supertoniccomponent.Type:

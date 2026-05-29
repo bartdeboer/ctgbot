@@ -26,6 +26,7 @@ type MemoryStorage struct {
 	threadComponentStates   map[modeluuid.UUID]coremodel.ThreadComponentState
 	messages                map[modeluuid.UUID]coremodel.ThreadMessage
 	artifacts               map[modeluuid.UUID]coremodel.Artifact
+	scheduledJobs           map[modeluuid.UUID]coremodel.ScheduledJob
 }
 
 func NewMemory() *MemoryStorage {
@@ -42,6 +43,7 @@ func NewMemory() *MemoryStorage {
 		threadComponentStates:   map[modeluuid.UUID]coremodel.ThreadComponentState{},
 		messages:                map[modeluuid.UUID]coremodel.ThreadMessage{},
 		artifacts:               map[modeluuid.UUID]coremodel.Artifact{},
+		scheduledJobs:           map[modeluuid.UUID]coremodel.ScheduledJob{},
 	}
 }
 
@@ -83,6 +85,9 @@ func (s *MemoryStorage) ThreadComponentStates() ThreadComponentStateRepository {
 }
 func (s *MemoryStorage) Messages() MessageRepository   { return memoryMessages{s} }
 func (s *MemoryStorage) Artifacts() ArtifactRepository { return memoryArtifacts{s} }
+func (s *MemoryStorage) ScheduledJobs() ScheduledJobRepository {
+	return memoryScheduledJobs{s}
+}
 
 func (s *MemoryStorage) cloneLocked() *MemoryStorage {
 	clone := NewMemory()
@@ -122,6 +127,9 @@ func (s *MemoryStorage) cloneLocked() *MemoryStorage {
 	for k, v := range s.artifacts {
 		clone.artifacts[k] = v
 	}
+	for k, v := range s.scheduledJobs {
+		clone.scheduledJobs[k] = v
+	}
 	return clone
 }
 
@@ -141,6 +149,7 @@ func (s *MemoryStorage) replaceLocked(next *MemoryStorage) {
 	s.threadComponentStates = next.threadComponentStates
 	s.messages = next.messages
 	s.artifacts = next.artifacts
+	s.scheduledJobs = next.scheduledJobs
 }
 
 type memoryChats struct{ s *MemoryStorage }
@@ -1031,4 +1040,95 @@ func (r memoryArtifacts) DeleteByThreadID(ctx context.Context, threadID modeluui
 		}
 	}
 	return count, nil
+}
+
+type memoryScheduledJobs struct{ s *MemoryStorage }
+
+func (r memoryScheduledJobs) Save(ctx context.Context, job *coremodel.ScheduledJob) error {
+	_ = ctx
+	if job == nil {
+		return nil
+	}
+	job.Name = strings.TrimSpace(job.Name)
+	job.Every = strings.TrimSpace(job.Every)
+	job.CommandJSON = strings.TrimSpace(job.CommandJSON)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	if job.ID.IsNull() {
+		for _, existing := range r.s.scheduledJobs {
+			if existing.Name == job.Name {
+				job.ID = existing.ID
+				job.CreatedAt = existing.CreatedAt
+				if job.LastRunAt == nil {
+					job.LastRunAt = existing.LastRunAt
+				}
+				if job.LastStatus == "" {
+					job.LastStatus = existing.LastStatus
+				}
+				if job.LastError == "" {
+					job.LastError = existing.LastError
+				}
+				break
+			}
+		}
+	}
+	now := time.Now()
+	if job.ID.IsNull() {
+		job.ID = modeluuid.New()
+		job.CreatedAt = now
+	} else if existing, ok := r.s.scheduledJobs[job.ID]; ok && job.CreatedAt.IsZero() {
+		job.CreatedAt = existing.CreatedAt
+	}
+	job.UpdatedAt = now
+	r.s.scheduledJobs[job.ID] = *job
+	return nil
+}
+
+func (r memoryScheduledJobs) List(ctx context.Context) ([]coremodel.ScheduledJob, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	out := make([]coremodel.ScheduledJob, 0, len(r.s.scheduledJobs))
+	for _, job := range r.s.scheduledJobs {
+		out = append(out, job)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+func (r memoryScheduledJobs) ListDue(ctx context.Context, now time.Time) ([]coremodel.ScheduledJob, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var out []coremodel.ScheduledJob
+	for _, job := range r.s.scheduledJobs {
+		if !job.Enabled || job.NextRunAt == nil || job.NextRunAt.After(now.UTC()) {
+			continue
+		}
+		out = append(out, job)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].NextRunAt == nil || out[j].NextRunAt == nil {
+			return out[i].Name < out[j].Name
+		}
+		if out[i].NextRunAt.Equal(*out[j].NextRunAt) {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].NextRunAt.Before(*out[j].NextRunAt)
+	})
+	return out, nil
+}
+
+func (r memoryScheduledJobs) DeleteByName(ctx context.Context, name string) (bool, error) {
+	_ = ctx
+	name = strings.TrimSpace(name)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for id, job := range r.s.scheduledJobs {
+		if job.Name == name {
+			delete(r.s.scheduledJobs, id)
+			return true, nil
+		}
+	}
+	return false, nil
 }

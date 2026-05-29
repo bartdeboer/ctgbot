@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -44,6 +45,8 @@ type Service interface {
 	BrokerService
 	RuntimeImageService
 	CLICommandSurfaces(ctx context.Context) ([]component.CommandSurface, error)
+	ScheduledCommandEngine(ctx context.Context) (*commandengine.Engine, error)
+	ScheduledJobRepository() repository.ScheduledJobRepository
 }
 
 type ChatAdminService interface {
@@ -138,6 +141,13 @@ func (s *service) Repository() repository.Storage {
 		return nil
 	}
 	return s.Storage
+}
+
+func (s *service) ScheduledJobRepository() repository.ScheduledJobRepository {
+	if s == nil || s.Storage == nil {
+		return nil
+	}
+	return s.Storage.ScheduledJobs()
 }
 
 func (s *service) ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error) {

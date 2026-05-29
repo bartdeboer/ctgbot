@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -26,6 +27,7 @@ import (
 	llamacppagentcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacppagent"
 	modelcomponent "github.com/bartdeboer/ctgbot/internal/component/model"
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
+	schedulercomponent "github.com/bartdeboer/ctgbot/internal/component/scheduler"
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
 	supertoniccomponent "github.com/bartdeboer/ctgbot/internal/component/supertonic"
@@ -34,9 +36,11 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	schedulerpkg "github.com/bartdeboer/ctgbot/internal/scheduler"
 	systempkg "github.com/bartdeboer/ctgbot/internal/system"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
+	"golang.org/x/sync/errgroup"
 )
 
 func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *clistate.Store) {
@@ -69,7 +73,14 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 				logf = rtSystem.Logger.Printf
 			}
 			appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logf)
-			return broker.New(appService, logf).Run(runCtx)
+			group, groupCtx := errgroup.WithContext(runCtx)
+			group.Go(func() error {
+				return ignoreRuntimeStop(groupCtx, schedulerpkg.New(appService, logf).Run(groupCtx))
+			})
+			group.Go(func() error {
+				return ignoreRuntimeStop(groupCtx, broker.New(appService, logf).Run(groupCtx))
+			})
+			return group.Wait()
 		})
 	})
 }
@@ -160,6 +171,11 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}); err != nil {
 		return nil, err
 	}
+	if err := registry.Add(schedulercomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return schedulercomponent.New(ctx, registration, runtime, home, storage, rtSystem.Logger.Printf)
+	}); err != nil {
+		return nil, err
+	}
 	if err := registry.Add(whispercppcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return whispercppcomponent.New(ctx, registration, runtime, home, storage, rtSystem)
 	}); err != nil {
@@ -183,4 +199,14 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 		return nil, err
 	}
 	return registry, nil
+}
+
+func ignoreRuntimeStop(ctx context.Context, err error) error {
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, ctx.Err())) {
+		return nil
+	}
+	return err
 }

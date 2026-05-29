@@ -22,6 +22,7 @@ type Storage interface {
 	ThreadComponentStates() ThreadComponentStateRepository
 	Messages() MessageRepository
 	Artifacts() ArtifactRepository
+	ScheduledJobs() ScheduledJobRepository
 }
 
 type ChatRepository interface {
@@ -115,4 +116,11 @@ type ArtifactRepository interface {
 	Append(ctx context.Context, artifact *coremodel.Artifact) error
 	ListByMessageID(ctx context.Context, messageID modeluuid.UUID) ([]coremodel.Artifact, error)
 	DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error)
+}
+
+type ScheduledJobRepository interface {
+	Save(ctx context.Context, job *coremodel.ScheduledJob) error
+	List(ctx context.Context) ([]coremodel.ScheduledJob, error)
+	ListDue(ctx context.Context, now time.Time) ([]coremodel.ScheduledJob, error)
+	DeleteByName(ctx context.Context, name string) (bool, error)
 }
