@@ -37,7 +37,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Help:    "Add or replace a scheduled command job",
 			Build:   buildJobAddCommand,
 			Sources: []commandengine.Source{commandengine.SourceHostbridge, commandengine.SourceMessage},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 		},
 		{
 			Pattern: "job list",
@@ -59,7 +59,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 				return jobRemoveCommand{Name: name}, nil
 			},
 			Sources: []commandengine.Source{commandengine.SourceHostbridge, commandengine.SourceMessage},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot),
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 		},
 	}
 }
