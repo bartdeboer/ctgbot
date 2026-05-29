@@ -1379,7 +1379,7 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 			Kind:      "Internal thread message",
 			FromLabel: actor.Label,
 			FromID:    actor.ID,
-			ReplyHint: "cat <<'EOF' | hostbridge thread 11111111-2222-3333-4444-555555555555 message send --stdin\n<message>\nEOF",
+			ReplyHint: "cat <<'EOF' | hostbridge thread 11111111-2222-3333-4444-555555555555 message sendstdin\n<message>\nEOF",
 		},
 	})
 	if err != nil {
@@ -1425,7 +1425,7 @@ func TestMessagingSendMessageRunsTargetThread(t *testing.T) {
 	for _, want := range []string{
 		"[Internal thread message]",
 		"From: source thread",
-		"Reply path: cat <<'EOF' | hostbridge thread 11111111-2222-3333-4444-555555555555 message send --stdin\n<message>\nEOF",
+		"Reply path: cat <<'EOF' | hostbridge thread 11111111-2222-3333-4444-555555555555 message sendstdin\n<message>\nEOF",
 		"hello from another thread",
 	} {
 		if !strings.Contains(prompt, want) {

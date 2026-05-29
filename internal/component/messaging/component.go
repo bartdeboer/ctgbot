@@ -225,7 +225,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		},
 		{
 			Pattern:               "thread <thread> message send",
-			Help:                  "Send a message into another thread; hostbridge supports --stdin for multiline text",
+			Help:                  "Send a message into another thread; hostbridge supports sendstdin for multiline text",
 			Build:                 buildMessageSendCommand,
 			Sources:               []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
 			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
@@ -494,7 +494,7 @@ func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Req
 	}
 	if !sourceThreadID.IsNull() {
 		inbound.Metadata = append(inbound.Metadata, "source_thread_id="+sourceThreadID.String())
-		inbound.PromptContext.ReplyHint = "cat <<'EOF' | hostbridge thread " + sourceThreadID.String() + " message send --stdin\n<message>\nEOF"
+		inbound.PromptContext.ReplyHint = "cat <<'EOF' | hostbridge thread " + sourceThreadID.String() + " message sendstdin\n<message>\nEOF"
 	}
 	if err := c.Inbound.QueueResolvedInbound(ctx, inbound); err != nil {
 		return commandengine.Result{}, err
