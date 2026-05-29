@@ -20,6 +20,12 @@ import (
 
 func main() {
 	args := normalizedArgs(os.Args[1:], currentComponentRef())
+	var err error
+	args, err = expandStdinArgs(args, os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
 	if len(args) == 0 || (len(args) == 1 && args[0] == "help") {
 		printHelp(defaultHostbridgeActor())
 		return
@@ -57,6 +63,26 @@ func main() {
 	if strings.TrimSpace(resp.Result.Text) != "" {
 		fmt.Fprintln(os.Stdout, resp.Result.Text)
 	}
+}
+
+func expandStdinArgs(args []string, stdin io.Reader) ([]string, error) {
+	if len(args) == 6 && args[0] == "thread" && args[2] == "message" && args[3] == "send" && args[4] == "--stdin" {
+		return nil, fmt.Errorf("unexpected thread message send form; use: thread <thread> message send --stdin")
+	}
+	if len(args) == 5 && args[0] == "thread" && args[2] == "message" && args[3] == "send" && args[4] == "--stdin" {
+		data, err := io.ReadAll(stdin)
+		if err != nil {
+			return nil, fmt.Errorf("read stdin: %w", err)
+		}
+		text := string(data)
+		if strings.TrimSpace(text) == "" {
+			return nil, fmt.Errorf("missing stdin message")
+		}
+		out := append([]string{}, args[:4]...)
+		out = append(out, text)
+		return out, nil
+	}
+	return args, nil
 }
 
 func parseOrRenderHelp(
