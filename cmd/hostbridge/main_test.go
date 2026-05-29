@@ -54,37 +54,37 @@ func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 }
 
 func TestExpandStdinArgsThreadMessageSend(t *testing.T) {
-	tests := []struct {
-		name string
-		args []string
-		want []string
-	}{
-		{
-			name: "sendstdin",
-			args: []string{"thread", "abc", "message", "sendstdin"},
-			want: []string{"thread", "abc", "message", "send", "hello `world`\nline two\n"},
-		},
-		{
-			name: "send stdin flag compatibility",
-			args: []string{"thread", "abc", "message", "send", "--stdin"},
-			want: []string{"thread", "abc", "message", "send", "hello `world`\nline two\n"},
-		},
+	got, err := expandStdinArgs(
+		[]string{"thread", "abc", "message", "send"},
+		strings.NewReader("hello `world`\nline two\n"),
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := expandStdinArgs(tc.args, strings.NewReader("hello `world`\nline two\n"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(got) != len(tc.want) {
-				t.Fatalf("len = %d, want %d: %#v", len(got), len(tc.want), got)
-			}
-			for i := range tc.want {
-				if got[i] != tc.want[i] {
-					t.Fatalf("got[%d] = %q, want %q", i, got[i], tc.want[i])
-				}
-			}
-		})
+	want := []string{"thread", "abc", "message", "send", "hello `world`\nline two\n"}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestExpandStdinArgsThreadMessageSendEmptyStdinKeepsArgs(t *testing.T) {
+	args := []string{"thread", "abc", "message", "send"}
+	got, err := expandStdinArgs(args, strings.NewReader(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(args) {
+		t.Fatalf("len = %d, want %d: %#v", len(got), len(args), got)
+	}
+	for i := range args {
+		if got[i] != args[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], args[i])
+		}
 	}
 }
 

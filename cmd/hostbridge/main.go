@@ -66,36 +66,18 @@ func main() {
 }
 
 func expandStdinArgs(args []string, stdin io.Reader) ([]string, error) {
-	if len(args) >= 4 && args[0] == "thread" && args[2] == "message" {
-		switch {
-		case args[3] == "sendstdin":
-			if len(args) != 4 {
-				return nil, fmt.Errorf("unexpected thread message sendstdin arguments; use: thread <thread> message sendstdin")
-			}
-			return readThreadMessageStdin(args[:3], stdin)
-		case args[3] == "send" && args[4] == "--stdin":
-			if len(args) != 5 {
-				return nil, fmt.Errorf("unexpected thread message send --stdin arguments; use: thread <thread> message send --stdin")
-			}
-			return readThreadMessageStdin(args[:4], stdin)
-		}
+	if len(args) != 4 || args[0] != "thread" || args[2] != "message" || args[3] != "send" {
+		return args, nil
 	}
-	return args, nil
-}
-
-func readThreadMessageStdin(prefix []string, stdin io.Reader) ([]string, error) {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return nil, fmt.Errorf("read stdin: %w", err)
 	}
 	text := string(data)
 	if strings.TrimSpace(text) == "" {
-		return nil, fmt.Errorf("missing stdin message")
+		return args, nil
 	}
-	out := append([]string{}, prefix...)
-	if len(prefix) == 3 {
-		out = append(out, "send")
-	}
+	out := append([]string{}, args...)
 	out = append(out, text)
 	return out, nil
 }
