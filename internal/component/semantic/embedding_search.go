@@ -57,7 +57,7 @@ func (c *Component) Index(ctx context.Context, req IndexRequest) (IndexResult, e
 	if err != nil {
 		return IndexResult{}, err
 	}
-	embedder, _, err := c.resolveEmbedder(ctx, strategy.EmbedderRef)
+	embedder, _, err := c.resolveEmbeddingEngine(ctx, strategy.EmbedderRef)
 	if err != nil {
 		return IndexResult{}, err
 	}
@@ -87,7 +87,7 @@ func (c *Component) Index(ctx context.Context, req IndexRequest) (IndexResult, e
 		for _, message := range batch {
 			inputs = append(inputs, component.EmbeddingInput{ID: message.ID.String(), Text: message.Text, Kind: component.EmbeddingKindDocument})
 		}
-		response, err := embedder.Embed(ctx, component.EmbedRequest{Model: strategy.Model, Inputs: inputs})
+		response, err := embedder.Embed(ctx, component.EmbeddingRequest{Model: strategy.Model, Inputs: inputs})
 		if err != nil {
 			return err
 		}
@@ -201,12 +201,12 @@ func (c *Component) SearchStrategy(ctx context.Context, req StrategySearchReques
 	if err != nil {
 		return component.SearchResponse{}, err
 	}
-	embedder, _, err := c.resolveEmbedder(ctx, strategy.EmbedderRef)
+	embedder, _, err := c.resolveEmbeddingEngine(ctx, strategy.EmbedderRef)
 	if err != nil {
 		return component.SearchResponse{}, err
 	}
 	queryText := embeddingQueryText(strategy, query)
-	response, err := embedder.Embed(ctx, component.EmbedRequest{Model: strategy.Model, Inputs: []component.EmbeddingInput{{ID: "query", Text: queryText, Kind: component.EmbeddingKindQuery}}})
+	response, err := embedder.Embed(ctx, component.EmbeddingRequest{Model: strategy.Model, Inputs: []component.EmbeddingInput{{ID: "query", Text: queryText, Kind: component.EmbeddingKindQuery}}})
 	if err != nil {
 		return component.SearchResponse{}, err
 	}

@@ -50,9 +50,10 @@ type modelRuntimeState struct {
 }
 
 var _ component.Component = (*Component)(nil)
-var _ component.CompletionProvider = (*Component)(nil)
-var _ component.CompletionSessionProvider = (*Component)(nil)
-var _ component.OpenAIChatSessionProvider = (*Component)(nil)
+var _ component.InferenceEngine = (*Component)(nil)
+var _ component.CompletionEngine = (*Component)(nil)
+var _ component.InferenceSessionEngine = (*Component)(nil)
+var _ component.OpenAIChatEngine = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 
 func New(
@@ -99,7 +100,7 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 	}
 }
 
-func (c *Component) HandleCompletion(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
+func (c *Component) Complete(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
 	text, err := c.completeWithManagedBackend(ctx, request.Model, completionPromptToChat(request.Prompt), request.MaxOutputTokens, request.ResponseFormat)
 	if err != nil {
 		return nil, err
@@ -112,40 +113,40 @@ func (c *Component) HandleCompletion(ctx context.Context, request component.Comp
 }
 
 func (c *Component) completeWithManagedBackend(ctx context.Context, modelName string, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
-	session, err := c.BeginCompletionSession(ctx, component.CompletionSessionOptions{Model: modelName})
+	session, err := c.BeginInferenceSession(ctx, component.InferenceSessionOptions{Model: modelName})
 	if err != nil {
 		return "", err
 	}
 	defer func() {
 		if err := session.Close(); err != nil {
-			c.logf("llamacpp completion session close failed component=%s err=%v", c.registration.Ref(), err)
+			c.logf("llamacpp inference session close failed component=%s err=%v", c.registration.Ref(), err)
 		}
 	}()
 	return c.completeWithOptions(ctx, modelName, messages, maxOutputTokens, responseFormat)
 }
 
-func (c *Component) BeginCompletionSession(ctx context.Context, options component.CompletionSessionOptions) (component.CompletionSession, error) {
+func (c *Component) BeginInferenceSession(ctx context.Context, options component.InferenceSessionOptions) (component.InferenceSession, error) {
 	return c.beginSession(ctx, options)
 }
 
-func (c *Component) BeginOpenAIChatSession(ctx context.Context, options component.CompletionSessionOptions) (component.OpenAIChatSession, error) {
+func (c *Component) BeginOpenAIChatInferenceSession(ctx context.Context, options component.InferenceSessionOptions) (component.OpenAIChatInferenceSession, error) {
 	session, runtime, model, err := c.beginSessionWithRuntime(ctx, options)
 	if err != nil {
 		return nil, err
 	}
 	return openAIChatSession{
-		CompletionSession: session,
-		baseURL:           strings.TrimRight(runtime.BaseURL(), "/") + "/v1",
-		model:             model.Name,
+		InferenceSession: session,
+		baseURL:          strings.TrimRight(runtime.BaseURL(), "/") + "/v1",
+		model:            model.Name,
 	}, nil
 }
 
-func (c *Component) beginSession(ctx context.Context, options component.CompletionSessionOptions) (component.CompletionSession, error) {
+func (c *Component) beginSession(ctx context.Context, options component.InferenceSessionOptions) (component.InferenceSession, error) {
 	session, _, _, err := c.beginSessionWithRuntime(ctx, options)
 	return session, err
 }
 
-func (c *Component) beginSessionWithRuntime(ctx context.Context, options component.CompletionSessionOptions) (component.CompletionSession, *backendruntime.Runtime, resolvedModel, error) {
+func (c *Component) beginSessionWithRuntime(ctx context.Context, options component.InferenceSessionOptions) (component.InferenceSession, *backendruntime.Runtime, resolvedModel, error) {
 	if c == nil {
 		return nil, nil, resolvedModel{}, fmt.Errorf("missing llamacpp component")
 	}
@@ -172,9 +173,9 @@ func (c *Component) beginSessionWithRuntime(ctx context.Context, options compone
 	}
 	state.activeSessions++
 	modelName := model.Name
-	return &completionSession{
+	return &inferenceSession{
 		close: func() error {
-			return c.releaseCompletionSession(modelName, options.IdleTimeout)
+			return c.releaseInferenceSession(modelName, options.IdleTimeout)
 		},
 	}, runtime, model, nil
 }
@@ -245,7 +246,7 @@ func serviceSpec(config resolvedModel) backendruntime.ServiceSpec {
 	}
 }
 
-func (c *Component) stopAfterCompletion(modelName string) error {
+func (c *Component) stopAfterInference(modelName string) error {
 	runtime, _, err := c.runtimeForModel(modelName)
 	if err != nil {
 		return err
@@ -262,7 +263,7 @@ func (c *Component) stopAfterCompletion(modelName string) error {
 	return nil
 }
 
-func (c *Component) releaseCompletionSession(modelName string, idleTimeout time.Duration) error {
+func (c *Component) releaseInferenceSession(modelName string, idleTimeout time.Duration) error {
 	if c == nil {
 		return nil
 	}
@@ -282,7 +283,7 @@ func (c *Component) releaseCompletionSession(modelName string, idleTimeout time.
 	if idleTimeout <= 0 {
 		state.autoManaged = false
 		c.runtimeMu.Unlock()
-		return c.stopAfterCompletion(modelName)
+		return c.stopAfterInference(modelName)
 	}
 	c.cancelIdleStopLocked(state)
 	var timer *time.Timer
@@ -296,7 +297,7 @@ func (c *Component) releaseCompletionSession(modelName string, idleTimeout time.
 		state.idleStop = nil
 		state.autoManaged = false
 		c.runtimeMu.Unlock()
-		if err := c.stopAfterCompletion(modelName); err != nil {
+		if err := c.stopAfterInference(modelName); err != nil {
 			c.logf("llamacpp idle stop failed component=%s err=%v", c.registration.Ref(), err)
 		}
 	})
@@ -329,13 +330,13 @@ func (c *Component) cancelIdleStopLocked(state *modelRuntimeState) {
 	state.idleStop = nil
 }
 
-type completionSession struct {
+type inferenceSession struct {
 	once  sync.Once
 	close func() error
 	err   error
 }
 
-func (s *completionSession) Close() error {
+func (s *inferenceSession) Close() error {
 	if s == nil {
 		return nil
 	}
@@ -453,7 +454,7 @@ type completionResponse struct {
 }
 
 type openAIChatSession struct {
-	component.CompletionSession
+	component.InferenceSession
 	baseURL string
 	model   string
 	apiKey  string

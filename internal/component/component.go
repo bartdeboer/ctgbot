@@ -106,18 +106,25 @@ type Embedding struct {
 	Normalized bool
 }
 
-type EmbedRequest struct {
+type EmbeddingRequest struct {
 	Model  string
 	Inputs []EmbeddingInput
 }
 
-type EmbedResponse struct {
+type EmbeddingResponse struct {
 	Embeddings []Embedding
 }
 
-type Embedder interface {
+// InferenceEngine is a component that can run AI model inference. Specific
+// capabilities are expressed by narrower interfaces such as CompletionEngine,
+// EmbeddingEngine, and OpenAIChatEngine.
+type InferenceEngine interface {
 	Component
-	Embed(ctx context.Context, req EmbedRequest) (EmbedResponse, error)
+}
+
+type EmbeddingEngine interface {
+	InferenceEngine
+	Embed(ctx context.Context, req EmbeddingRequest) (EmbeddingResponse, error)
 }
 
 type TranscriptionRequest struct {
@@ -311,45 +318,45 @@ type Agent interface {
 	HandleTurn(ctx context.Context, turn Turn) (*TurnResult, error)
 }
 
-// CompletionProvider receives a normalized completion prompt.
+// CompletionEngine receives a normalized completion prompt.
 //
 // The prompt shape intentionally aligns with OpenAI-style chat completions so
-// that components such as llama.cpp can translate it almost directly to their
-// backend payloads without needing to understand broker storage details.
-type CompletionProvider interface {
-	Component
-	HandleCompletion(ctx context.Context, request CompletionRequest) (*CompletionResult, error)
+// that inference engines such as llama.cpp can translate it to their backend
+// payloads without needing to understand broker storage details.
+type CompletionEngine interface {
+	InferenceEngine
+	Complete(ctx context.Context, request CompletionRequest) (*CompletionResult, error)
 }
 
-// CompletionSession lets callers bracket several completion requests as one
-// logical use of a provider. Providers with expensive warm state, such as a
+// InferenceSession lets callers bracket several inference requests as one
+// logical use of an engine. Engines with expensive warm state, such as a
 // GPU-backed model server, can keep that state alive until the session closes.
-type CompletionSession interface {
+type InferenceSession interface {
 	Close() error
 }
 
-type CompletionSessionOptions struct {
+type InferenceSessionOptions struct {
 	Model       string
 	IdleTimeout time.Duration
 }
 
-type CompletionSessionProvider interface {
-	Component
-	BeginCompletionSession(ctx context.Context, options CompletionSessionOptions) (CompletionSession, error)
+type InferenceSessionEngine interface {
+	InferenceEngine
+	BeginInferenceSession(ctx context.Context, options InferenceSessionOptions) (InferenceSession, error)
 }
 
-// OpenAIChatSession exposes an OpenAI-compatible chat-completions endpoint for
-// sandbox-side agent loops.
-type OpenAIChatSession interface {
-	CompletionSession
+// OpenAIChatInferenceSession exposes an OpenAI-compatible chat-completions
+// endpoint for sandbox-side agent loops.
+type OpenAIChatInferenceSession interface {
+	InferenceSession
 	BaseURL() string
 	Model() string
 	APIKey() string
 }
 
-type OpenAIChatSessionProvider interface {
-	Component
-	BeginOpenAIChatSession(ctx context.Context, options CompletionSessionOptions) (OpenAIChatSession, error)
+type OpenAIChatEngine interface {
+	InferenceEngine
+	BeginOpenAIChatInferenceSession(ctx context.Context, options InferenceSessionOptions) (OpenAIChatInferenceSession, error)
 }
 
 type CommandSurface interface {
@@ -414,7 +421,7 @@ const (
 // CompletionRequest is intentionally reusable for both normal thread turns and
 // bounded classifier-style completions. Restricted consumers should leave
 // Runtime nil and use Mode/controls to make the intended execution envelope
-// explicit to providers.
+// explicit to engines.
 type CompletionRequest struct {
 	Chat            coremodel.Chat
 	Thread          coremodel.Thread

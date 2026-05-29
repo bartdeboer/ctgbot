@@ -46,7 +46,7 @@ type ChatRuntime struct {
 type AgentBinding struct {
 	ComponentID modeluuid.UUID
 	Agent       component.Agent
-	Completion  component.CompletionProvider
+	Completion  component.CompletionEngine
 }
 
 type RelayBinding struct {
@@ -333,7 +333,7 @@ func (b *Broker) runAgentTurn(
 		if err != nil {
 			return nil, err
 		}
-		result, err := agentBinding.Completion.HandleCompletion(ctx, component.CompletionRequest{
+		result, err := agentBinding.Completion.Complete(ctx, component.CompletionRequest{
 			Chat:    chat,
 			Thread:  thread,
 			Prompt:  prompt,

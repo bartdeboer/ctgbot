@@ -183,15 +183,15 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	return &component.TurnResult{Final: &coremodel.ThreadMessage{Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, ComponentID: c.registration.ID, ActorID: c.registration.Ref(), ActorLabel: "llama.cpp agent", Text: reply}}, nil
 }
 
-func (c *Component) beginBackendSession(ctx context.Context) (component.OpenAIChatSession, error) {
+func (c *Component) beginBackendSession(ctx context.Context) (component.OpenAIChatInferenceSession, error) {
 	backend, err := c.backend(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return backend.BeginOpenAIChatSession(ctx, component.CompletionSessionOptions{Model: c.config.Model, IdleTimeout: c.config.backendIdleTimeout()})
+	return backend.BeginOpenAIChatInferenceSession(ctx, component.InferenceSessionOptions{Model: c.config.Model, IdleTimeout: c.config.backendIdleTimeout()})
 }
 
-func (c *Component) prepareToolloopRun(turn component.Turn, session component.OpenAIChatSession, profile component.ModelToolloopProfile, prompt string) (*toolloopRunFiles, error) {
+func (c *Component) prepareToolloopRun(turn component.Turn, session component.OpenAIChatInferenceSession, profile component.ModelToolloopProfile, prompt string) (*toolloopRunFiles, error) {
 	files, err := newToolloopRunFiles(c.runtime.ComponentHome().Path, c.runtime.RuntimeComponentHomePath(), turn.Thread.ID)
 	if err != nil {
 		return nil, err
@@ -216,7 +216,7 @@ func (c *Component) prepareToolloopRun(turn component.Turn, session component.Op
 	return files, nil
 }
 
-func (c *Component) runToolloop(ctx context.Context, turn component.Turn, session component.OpenAIChatSession, profile component.ModelToolloopProfile, files *toolloopRunFiles, providerThreadID string, prompt string) (toolloop.Result, error) {
+func (c *Component) runToolloop(ctx context.Context, turn component.Turn, session component.OpenAIChatInferenceSession, profile component.ModelToolloopProfile, files *toolloopRunFiles, providerThreadID string, prompt string) (toolloop.Result, error) {
 	runtime := commandRuntime{
 		runtime:       c.runtime,
 		workspacePath: turn.Runtime.WorkspacePath(),
@@ -235,7 +235,7 @@ func (c *Component) runToolloop(ctx context.Context, turn component.Turn, sessio
 	return result.Result, err
 }
 
-func (c *Component) toolloopEnv(session component.OpenAIChatSession, turn component.Turn, profile component.ModelToolloopProfile) []string {
+func (c *Component) toolloopEnv(session component.OpenAIChatInferenceSession, turn component.Turn, profile component.ModelToolloopProfile) []string {
 	return []string{
 		"TOOLLOOP_BASE_URL=" + firstNonEmpty(c.config.BaseURL, sandboxBaseURL(session.BaseURL())),
 		"TOOLLOOP_API_KEY=" + firstNonEmpty(c.config.APIKey, session.APIKey()),
@@ -320,7 +320,7 @@ func (c *Component) logToolloopTrace(threadID modeluuid.UUID, trace []toolloop.T
 	}
 }
 
-func (c *Component) backend(ctx context.Context) (component.OpenAIChatSessionProvider, error) {
+func (c *Component) backend(ctx context.Context) (component.OpenAIChatEngine, error) {
 	if c == nil || c.resolver == nil {
 		return nil, fmt.Errorf("missing component resolver")
 	}
@@ -336,7 +336,7 @@ func (c *Component) backend(ctx context.Context) (component.OpenAIChatSessionPro
 	if loaded == nil {
 		return nil, fmt.Errorf("backend component not found: %s", ref)
 	}
-	provider, ok := loaded.Component.(component.OpenAIChatSessionProvider)
+	provider, ok := loaded.Component.(component.OpenAIChatEngine)
 	if !ok {
 		return nil, fmt.Errorf("component %s does not provide OpenAI chat sessions", loaded.Registration.Ref())
 	}

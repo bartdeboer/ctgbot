@@ -13,7 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 )
 
-var _ component.Embedder = (*Component)(nil)
+var _ component.EmbeddingEngine = (*Component)(nil)
 
 type embeddingRequest struct {
 	Model string   `json:"model"`
@@ -27,28 +27,28 @@ type embeddingResponse struct {
 	} `json:"data"`
 }
 
-func (c *Component) Embed(ctx context.Context, req component.EmbedRequest) (component.EmbedResponse, error) {
+func (c *Component) Embed(ctx context.Context, req component.EmbeddingRequest) (component.EmbeddingResponse, error) {
 	modelName := strings.TrimSpace(req.Model)
 	runtime, model, err := c.runtimeForModel(modelName)
 	if err != nil {
-		return component.EmbedResponse{}, err
+		return component.EmbeddingResponse{}, err
 	}
 	if cleanModelMode(model.Mode) != "embedding" {
-		return component.EmbedResponse{}, fmt.Errorf("llama.cpp model %s is not configured for embeddings", model.Name)
+		return component.EmbeddingResponse{}, fmt.Errorf("llama.cpp model %s is not configured for embeddings", model.Name)
 	}
-	session, err := c.BeginCompletionSession(ctx, component.CompletionSessionOptions{Model: model.Name})
+	session, err := c.BeginInferenceSession(ctx, component.InferenceSessionOptions{Model: model.Name})
 	if err != nil {
-		return component.EmbedResponse{}, err
+		return component.EmbeddingResponse{}, err
 	}
 	defer func() { _ = session.Close() }()
 
 	inputs := cleanEmbeddingInputs(req.Inputs)
 	if len(inputs) == 0 {
-		return component.EmbedResponse{}, fmt.Errorf("missing embedding input")
+		return component.EmbeddingResponse{}, fmt.Errorf("missing embedding input")
 	}
 	release, err := c.acquireInference(ctx, model.Name)
 	if err != nil {
-		return component.EmbedResponse{}, err
+		return component.EmbeddingResponse{}, err
 	}
 	defer release()
 	texts := make([]string, 0, len(inputs))
@@ -57,28 +57,28 @@ func (c *Component) Embed(ctx context.Context, req component.EmbedRequest) (comp
 	}
 	body, err := json.Marshal(embeddingRequest{Model: model.Name, Input: texts})
 	if err != nil {
-		return component.EmbedResponse{}, err
+		return component.EmbeddingResponse{}, err
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, runtime.BaseURL()+"/v1/embeddings", bytes.NewReader(body))
 	if err != nil {
-		return component.EmbedResponse{}, err
+		return component.EmbeddingResponse{}, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
-		return component.EmbedResponse{}, err
+		return component.EmbeddingResponse{}, err
 	}
 	defer resp.Body.Close()
 	payload, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return component.EmbedResponse{}, err
+		return component.EmbeddingResponse{}, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return component.EmbedResponse{}, fmt.Errorf("llamacpp embedding status %s: %s", resp.Status, strings.TrimSpace(string(payload)))
+		return component.EmbeddingResponse{}, fmt.Errorf("llamacpp embedding status %s: %s", resp.Status, strings.TrimSpace(string(payload)))
 	}
 	var decoded embeddingResponse
 	if err := json.Unmarshal(payload, &decoded); err != nil {
-		return component.EmbedResponse{}, err
+		return component.EmbeddingResponse{}, err
 	}
 	out := make([]component.Embedding, 0, len(decoded.Data))
 	for _, item := range decoded.Data {
@@ -99,7 +99,7 @@ func (c *Component) Embed(ctx context.Context, req component.EmbedRequest) (comp
 			Normalized: normalized,
 		})
 	}
-	return component.EmbedResponse{Embeddings: out}, nil
+	return component.EmbeddingResponse{Embeddings: out}, nil
 }
 
 func cleanEmbeddingInputs(inputs []component.EmbeddingInput) []component.EmbeddingInput {

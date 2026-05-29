@@ -31,7 +31,7 @@ func TestSearchScoresThreadMessages(t *testing.T) {
 	threadID := modeluuid.New()
 	c := &Component{
 		config:   ComponentConfig{Completion: "llm/qwen", BatchSize: 10, Limit: 5, MinScore: 0.4, MaxOutputTokens: 256},
-		resolver: fakeResolver{provider: fakeCompletionProvider{reply: `{"scores":[{"id":"` + messageID.String() + `","score":0.7,"reason":"mentions ORM tradeoffs"}]}`}},
+		resolver: fakeResolver{provider: fakeCompletionEngine{reply: `{"scores":[{"id":"` + messageID.String() + `","score":0.7,"reason":"mentions ORM tradeoffs"}]}`}},
 	}
 	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{{ID: messageID, ThreadID: threadID, Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "GORM vs raw SQL"}}})
 	response, err := c.Search(context.Background(), component.SearchRequest{Query: "database abstraction layer", ThreadID: threadID})
@@ -47,10 +47,10 @@ func TestSearchScoresThreadMessages(t *testing.T) {
 	}
 }
 
-func TestSearchKeepsCompletionSessionOpenAcrossBatches(t *testing.T) {
+func TestSearchKeepsInferenceSessionOpenAcrossBatches(t *testing.T) {
 	threadID := modeluuid.New()
 	messageID := modeluuid.New()
-	provider := &fakeSessionCompletionProvider{
+	provider := &fakeSessionCompletionEngine{
 		reply: `{"scores":[{"id":"` + messageID.String() + `","score":0.7}]}`,
 	}
 	c := &Component{
@@ -76,7 +76,7 @@ func TestSearchKeepsCompletionSessionOpenAcrossBatches(t *testing.T) {
 func TestSearchPassesCompletionIdleTimeoutToSession(t *testing.T) {
 	threadID := modeluuid.New()
 	messageID := modeluuid.New()
-	provider := &fakeSessionCompletionProvider{
+	provider := &fakeSessionCompletionEngine{
 		reply: `{"scores":[{"id":"` + messageID.String() + `","score":0.7}]}`,
 	}
 	c := &Component{
@@ -100,7 +100,7 @@ func TestStrategyEmbeddingIndexAndSearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openStore() error = %v", err)
 	}
-	embedder := fakeEmbedder{}
+	embedder := fakeEmbeddingEngine{}
 	c := &Component{
 		config:   ComponentConfig{Limit: 5, EmbeddingBatchSize: 10},
 		store:    store,
@@ -160,7 +160,7 @@ func TestStrategySearchAllAndScopedDrop(t *testing.T) {
 	c := &Component{
 		config:   ComponentConfig{Limit: 5, EmbeddingBatchSize: 10},
 		store:    store,
-		resolver: fakeResolver{component: fakeEmbedder{}},
+		resolver: fakeResolver{component: fakeEmbeddingEngine{}},
 	}
 	c.SetSearchMessageSource(fakeMessageSource{messages: []coremodel.ThreadMessage{
 		{ID: firstMessageID, ChatID: chatID, ThreadID: firstThreadID, Role: coremodel.MessageRoleUser, Kind: coremodel.MessageKindMessage, Text: "We discussed Gmail attachments."},
@@ -361,15 +361,15 @@ func fakeScopeAllowsKind(scope component.MessageScope, kind coremodel.MessageKin
 	return false
 }
 
-type fakeCompletionProvider struct{ reply string }
+type fakeCompletionEngine struct{ reply string }
 
-func (f fakeCompletionProvider) Type() string { return "llm" }
+func (f fakeCompletionEngine) Type() string { return "llm" }
 
-func (f fakeCompletionProvider) HandleCompletion(context.Context, component.CompletionRequest) (*component.CompletionResult, error) {
+func (f fakeCompletionEngine) Complete(context.Context, component.CompletionRequest) (*component.CompletionResult, error) {
 	return &component.CompletionResult{Final: &coremodel.ThreadMessage{Text: f.reply}}, nil
 }
 
-type fakeSessionCompletionProvider struct {
+type fakeSessionCompletionEngine struct {
 	reply       string
 	begins      int
 	closes      int
@@ -377,38 +377,38 @@ type fakeSessionCompletionProvider struct {
 	idleTimeout time.Duration
 }
 
-func (f *fakeSessionCompletionProvider) Type() string { return "llm" }
+func (f *fakeSessionCompletionEngine) Type() string { return "llm" }
 
-func (f *fakeSessionCompletionProvider) HandleCompletion(context.Context, component.CompletionRequest) (*component.CompletionResult, error) {
+func (f *fakeSessionCompletionEngine) Complete(context.Context, component.CompletionRequest) (*component.CompletionResult, error) {
 	f.completions++
 	return &component.CompletionResult{Final: &coremodel.ThreadMessage{Text: f.reply}}, nil
 }
 
-func (f *fakeSessionCompletionProvider) BeginCompletionSession(_ context.Context, options component.CompletionSessionOptions) (component.CompletionSession, error) {
+func (f *fakeSessionCompletionEngine) BeginInferenceSession(_ context.Context, options component.InferenceSessionOptions) (component.InferenceSession, error) {
 	f.begins++
 	f.idleTimeout = options.IdleTimeout
-	return fakeCompletionSession{close: func() error {
+	return fakeInferenceSession{close: func() error {
 		f.closes++
 		return nil
 	}}, nil
 }
 
-type fakeCompletionSession struct {
+type fakeInferenceSession struct {
 	close func() error
 }
 
-func (f fakeCompletionSession) Close() error {
+func (f fakeInferenceSession) Close() error {
 	if f.close == nil {
 		return nil
 	}
 	return f.close()
 }
 
-type fakeEmbedder struct{}
+type fakeEmbeddingEngine struct{}
 
-func (fakeEmbedder) Type() string { return "embedder" }
+func (fakeEmbeddingEngine) Type() string { return "embedder" }
 
-func (fakeEmbedder) Embed(_ context.Context, req component.EmbedRequest) (component.EmbedResponse, error) {
+func (fakeEmbeddingEngine) Embed(_ context.Context, req component.EmbeddingRequest) (component.EmbeddingResponse, error) {
 	out := make([]component.Embedding, 0, len(req.Inputs))
 	for _, input := range req.Inputs {
 		out = append(out, component.Embedding{
@@ -419,7 +419,7 @@ func (fakeEmbedder) Embed(_ context.Context, req component.EmbedRequest) (compon
 			Normalized: true,
 		})
 	}
-	return component.EmbedResponse{Embeddings: out}, nil
+	return component.EmbeddingResponse{Embeddings: out}, nil
 }
 
 func fakeVector(text string) []float32 {
@@ -438,7 +438,7 @@ func fakeVector(text string) []float32 {
 }
 
 type fakeResolver struct {
-	provider  component.CompletionProvider
+	provider  component.CompletionEngine
 	component component.Component
 }
 

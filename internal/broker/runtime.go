@@ -71,7 +71,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		}
 		switch binding.Role {
 		case coremodel.ChatComponentRoleAgent:
-			if completionImpl, ok := instance.Component.(component.CompletionProvider); ok {
+			if completionImpl, ok := instance.Component.(component.CompletionEngine); ok {
 				agents = append(agents, AgentBinding{
 					ComponentID: binding.ComponentID,
 					Completion:  completionImpl,

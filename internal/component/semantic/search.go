@@ -52,7 +52,7 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	if len(items) == 0 {
 		return component.SearchResponse{}, nil
 	}
-	provider, providerRef, err := c.resolveCompletionProvider(ctx)
+	engine, engineRef, err := c.resolveCompletionEngine(ctx)
 	if err != nil {
 		return component.SearchResponse{}, err
 	}
@@ -60,7 +60,7 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	if model == "" {
 		model = strings.TrimSpace(c.config.Model)
 	}
-	closeSession, err := c.beginCompletionSession(ctx, provider, providerRef, model, req.CompletionIdleTimeout)
+	closeSession, err := c.beginInferenceSession(ctx, engine, engineRef, model, req.CompletionIdleTimeout)
 	if err != nil {
 		return component.SearchResponse{}, err
 	}
@@ -94,9 +94,9 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 			end = len(items)
 		}
 		batch := items[start:end]
-		scores, err := c.scoreBatch(ctx, provider, model, query, batch)
+		scores, err := c.scoreBatch(ctx, engine, model, query, batch)
 		if err != nil {
-			return component.SearchResponse{}, fmt.Errorf("semantic batch %d-%d via %s: %w", start, end, providerRef, err)
+			return component.SearchResponse{}, fmt.Errorf("semantic batch %d-%d via %s: %w", start, end, engineRef, err)
 		}
 		for _, score := range scores {
 			if score.Score < minScore {
@@ -129,18 +129,18 @@ func (c *Component) Search(ctx context.Context, req component.SearchRequest) (co
 	return component.SearchResponse{Results: results}, nil
 }
 
-func (c *Component) beginCompletionSession(ctx context.Context, provider component.CompletionProvider, providerRef string, model string, idleTimeout time.Duration) (func(), error) {
-	sessionProvider, ok := provider.(component.CompletionSessionProvider)
+func (c *Component) beginInferenceSession(ctx context.Context, engine component.CompletionEngine, engineRef string, model string, idleTimeout time.Duration) (func(), error) {
+	sessionEngine, ok := engine.(component.InferenceSessionEngine)
 	if !ok {
 		return func() {}, nil
 	}
-	session, err := sessionProvider.BeginCompletionSession(ctx, component.CompletionSessionOptions{Model: strings.TrimSpace(model), IdleTimeout: idleTimeout})
+	session, err := sessionEngine.BeginInferenceSession(ctx, component.InferenceSessionOptions{Model: strings.TrimSpace(model), IdleTimeout: idleTimeout})
 	if err != nil {
-		return nil, fmt.Errorf("begin completion session via %s: %w", providerRef, err)
+		return nil, fmt.Errorf("begin inference session via %s: %w", engineRef, err)
 	}
 	return func() {
 		if err := session.Close(); err != nil {
-			c.log("semantic completion session close failed provider=%s err=%v", providerRef, err)
+			c.log("semantic inference session close failed engine=%s err=%v", engineRef, err)
 		}
 	}, nil
 }
@@ -172,8 +172,8 @@ func semanticMessage(message coremodel.ThreadMessage) bool {
 	}
 }
 
-func (c *Component) scoreBatch(ctx context.Context, provider component.CompletionProvider, model string, query string, messages []coremodel.ThreadMessage) ([]scoredMessage, error) {
-	result, err := provider.HandleCompletion(ctx, component.CompletionRequest{
+func (c *Component) scoreBatch(ctx context.Context, engine component.CompletionEngine, model string, query string, messages []coremodel.ThreadMessage) ([]scoredMessage, error) {
+	result, err := engine.Complete(ctx, component.CompletionRequest{
 		Model: strings.TrimSpace(model),
 		Prompt: component.CompletionPrompt{Messages: []component.CompletionMessage{{
 			Role:    component.CompletionRoleUser,

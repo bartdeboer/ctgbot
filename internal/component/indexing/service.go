@@ -73,18 +73,18 @@ func (c *Component) runStrategy(ctx context.Context, strategy indexStrategy, run
 	}
 	switch strategy.Type {
 	case StrategyTypeSummary:
-		provider, providerRef, err := c.resolveCompletionProvider(ctx, strategy.ProviderRef)
+		engine, engineRef, err := c.resolveCompletionEngine(ctx, strategy.ProviderRef)
 		if err != nil {
 			return result, err
 		}
-		result.ProviderRef = providerRef
-		return c.runSummaryStrategy(ctx, provider, strategy, run, req, messages, result)
+		result.ProviderRef = engineRef
+		return c.runSummaryStrategy(ctx, engine, strategy, run, req, messages, result)
 	case StrategyTypeEmbedding:
-		embedder, providerRef, err := c.resolveEmbedder(ctx, strategy.ProviderRef)
+		embedder, engineRef, err := c.resolveEmbeddingEngine(ctx, strategy.ProviderRef)
 		if err != nil {
 			return result, err
 		}
-		result.ProviderRef = providerRef
+		result.ProviderRef = engineRef
 		return c.runEmbeddingStrategy(ctx, embedder, strategy, run, req, messages, result)
 	default:
 		return result, fmt.Errorf("unsupported strategy type: %s", strategy.Type)
@@ -128,7 +128,7 @@ func searchableMessage(message coremodel.ThreadMessage) bool {
 	}
 }
 
-func (c *Component) runSummaryStrategy(ctx context.Context, provider component.CompletionProvider, strategy indexStrategy, run *indexRun, req RunRequest, messages []coremodel.ThreadMessage, result RunResult) (RunResult, error) {
+func (c *Component) runSummaryStrategy(ctx context.Context, engine component.CompletionEngine, strategy indexStrategy, run *indexRun, req RunRequest, messages []coremodel.ThreadMessage, result RunResult) (RunResult, error) {
 	for _, message := range messages {
 		hash := textHash(message.Text)
 		existing, err := c.store.summary(ctx, strategy.ID, message.ID.String())
@@ -139,7 +139,7 @@ func (c *Component) runSummaryStrategy(ctx context.Context, provider component.C
 			result.Skipped++
 			continue
 		}
-		summary, err := c.summarizeMessage(ctx, provider, strategy, message)
+		summary, err := c.summarizeMessage(ctx, engine, strategy, message)
 		if err != nil {
 			return result, err
 		}
@@ -165,7 +165,7 @@ func (c *Component) runSummaryStrategy(ctx context.Context, provider component.C
 	return result, nil
 }
 
-func (c *Component) summarizeMessage(ctx context.Context, provider component.CompletionProvider, strategy indexStrategy, message coremodel.ThreadMessage) (string, error) {
+func (c *Component) summarizeMessage(ctx context.Context, engine component.CompletionEngine, strategy indexStrategy, message coremodel.ThreadMessage) (string, error) {
 	targetChars := strategy.TargetChars
 	if targetChars <= 0 {
 		targetChars = 500
@@ -175,7 +175,7 @@ func (c *Component) summarizeMessage(ctx context.Context, provider component.Com
 		prompt = defaultSummaryPrompt
 	}
 	content := fmt.Sprintf("%s\n\nTarget: at most %d characters.\nRole: %s\nMessage:\n%s", prompt, targetChars, message.ResolvedRole(), strings.TrimSpace(message.Text))
-	result, err := provider.HandleCompletion(ctx, component.CompletionRequest{
+	result, err := engine.Complete(ctx, component.CompletionRequest{
 		Model: strings.TrimSpace(strategy.Model),
 		Prompt: component.CompletionPrompt{Messages: []component.CompletionMessage{{
 			Role:    component.CompletionRoleUser,
@@ -193,7 +193,7 @@ func (c *Component) summarizeMessage(ctx context.Context, provider component.Com
 	return strings.TrimSpace(result.Final.Text), nil
 }
 
-func (c *Component) runEmbeddingStrategy(ctx context.Context, embedder component.Embedder, strategy indexStrategy, run *indexRun, req RunRequest, messages []coremodel.ThreadMessage, result RunResult) (RunResult, error) {
+func (c *Component) runEmbeddingStrategy(ctx context.Context, embedder component.EmbeddingEngine, strategy indexStrategy, run *indexRun, req RunRequest, messages []coremodel.ThreadMessage, result RunResult) (RunResult, error) {
 	batchSize := firstPositive(req.BatchSize, strategy.BatchSize, 128)
 	var batch []coremodel.ThreadMessage
 	flush := func() error {
@@ -207,7 +207,7 @@ func (c *Component) runEmbeddingStrategy(ctx context.Context, embedder component
 			byID[id] = message
 			inputs = append(inputs, component.EmbeddingInput{ID: id, Text: message.Text, Kind: component.EmbeddingKindDocument})
 		}
-		response, err := embedder.Embed(ctx, component.EmbedRequest{Model: strategy.Model, Inputs: inputs})
+		response, err := embedder.Embed(ctx, component.EmbeddingRequest{Model: strategy.Model, Inputs: inputs})
 		if err != nil {
 			return err
 		}

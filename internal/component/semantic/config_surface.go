@@ -35,7 +35,7 @@ func (c *Component) ConfigSchema(ctx context.Context, req commandengine.Request)
 		{Key: semanticConfigMaxMessages, Help: "Default maximum messages to index/search", Type: configsurface.FieldTypeInt, Writable: true, Default: strconv.Itoa(defaults.MaxMessages)},
 		{Key: semanticConfigMaxOutputTokens, Help: "Maximum LLM output tokens for semantic operations", Type: configsurface.FieldTypeInt, Writable: true, Default: strconv.Itoa(defaults.MaxOutputTokens)},
 		{Key: semanticConfigMinScore, Help: "Minimum search score returned by default", Type: configsurface.FieldTypeFloat, Writable: true, Default: strconv.FormatFloat(defaults.MinScore, 'f', -1, 64)},
-		{Key: semanticConfigKeepWarmFor, Help: "Keep completion sessions warm for this duration", Type: configsurface.FieldTypeDuration, Writable: true},
+		{Key: semanticConfigKeepWarmFor, Help: "Keep inference sessions warm for this duration", Type: configsurface.FieldTypeDuration, Writable: true},
 	}}, nil
 }
 

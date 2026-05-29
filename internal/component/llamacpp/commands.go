@@ -185,7 +185,7 @@ func buildModelEmbedCommand(req *clir.Request) (any, error) {
 
 func (c *Component) handleCompletionCommand(ctx context.Context, req commandengine.Request, cmd completionCommand) (commandengine.Result, error) {
 	_, _ = req, c
-	result, err := c.HandleCompletion(ctx, component.CompletionRequest{
+	result, err := c.Complete(ctx, component.CompletionRequest{
 		Model: cmd.Model,
 		Prompt: component.CompletionPrompt{Messages: []component.CompletionMessage{{
 			Role:    component.CompletionRoleUser,
@@ -200,7 +200,7 @@ func (c *Component) handleCompletionCommand(ctx context.Context, req commandengi
 
 func (c *Component) handleEmbedCommand(ctx context.Context, req commandengine.Request, cmd embedCommand) (commandengine.Result, error) {
 	_, _ = req, c
-	result, err := c.Embed(ctx, component.EmbedRequest{
+	result, err := c.Embed(ctx, component.EmbeddingRequest{
 		Model: cmd.Model,
 		Inputs: []component.EmbeddingInput{{
 			ID:   "input",

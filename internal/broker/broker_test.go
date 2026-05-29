@@ -340,12 +340,12 @@ type fakeCompletionRecorder struct {
 	requests []component.CompletionRequest
 }
 
-type fakeCompletionProvider struct {
+type fakeCompletionEngine struct {
 	recorder *fakeCompletionRecorder
 }
 
-func (p *fakeCompletionProvider) Type() string { return "llm" }
-func (p *fakeCompletionProvider) HandleCompletion(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
+func (p *fakeCompletionEngine) Type() string { return "llm" }
+func (p *fakeCompletionEngine) Complete(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
 	_ = ctx
 	if p.recorder != nil {
 		p.recorder.requests = append(p.recorder.requests, request)
@@ -431,7 +431,7 @@ func newGuardInboundFixture(t *testing.T, guardOutput string) guardInboundFixtur
 	system = newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
 		if err := registry.Add("llm", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 			_, _, _, _, _ = ctx, registration, rt, home, storage
-			return &fakeCompletionProvider{recorder: completionRecorder}, nil
+			return &fakeCompletionEngine{recorder: completionRecorder}, nil
 		}); err != nil {
 			return err
 		}

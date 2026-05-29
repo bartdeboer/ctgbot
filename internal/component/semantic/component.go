@@ -82,7 +82,7 @@ Results include exact ctgbot message IDs, scores, and excerpts.`),
 	}
 }
 
-func (c *Component) resolveEmbedder(ctx context.Context, ref string) (component.Embedder, string, error) {
+func (c *Component) resolveEmbeddingEngine(ctx context.Context, ref string) (component.EmbeddingEngine, string, error) {
 	if c == nil {
 		return nil, "", fmt.Errorf("missing semantic component")
 	}
@@ -104,14 +104,14 @@ func (c *Component) resolveEmbedder(ctx context.Context, ref string) (component.
 	if loaded == nil {
 		return nil, registration.Ref(), fmt.Errorf("embedder component not found: %s", registration.Ref())
 	}
-	embedder, ok := loaded.Component.(component.Embedder)
+	embedder, ok := loaded.Component.(component.EmbeddingEngine)
 	if !ok {
 		return nil, loaded.Registration.Ref(), fmt.Errorf("component %s does not implement embedder", loaded.Registration.Ref())
 	}
 	return embedder, loaded.Registration.Ref(), nil
 }
 
-func (c *Component) resolveCompletionProvider(ctx context.Context) (component.CompletionProvider, string, error) {
+func (c *Component) resolveCompletionEngine(ctx context.Context) (component.CompletionEngine, string, error) {
 	if c == nil {
 		return nil, "", fmt.Errorf("missing semantic component")
 	}
@@ -133,11 +133,11 @@ func (c *Component) resolveCompletionProvider(ctx context.Context) (component.Co
 	if loaded == nil {
 		return nil, registration.Ref(), fmt.Errorf("completion component not found: %s", registration.Ref())
 	}
-	provider, ok := loaded.Component.(component.CompletionProvider)
+	engine, ok := loaded.Component.(component.CompletionEngine)
 	if !ok {
-		return nil, loaded.Registration.Ref(), fmt.Errorf("component %s does not implement completion provider", loaded.Registration.Ref())
+		return nil, loaded.Registration.Ref(), fmt.Errorf("component %s does not implement completion engine", loaded.Registration.Ref())
 	}
-	return provider, loaded.Registration.Ref(), nil
+	return engine, loaded.Registration.Ref(), nil
 }
 
 func (c *Component) log(format string, args ...any) {

@@ -153,7 +153,7 @@ func newTestGuard(t *testing.T, configJSON string, recorder *fakeCompletionRecor
 	providerID := modeluuid.New()
 	resolver := &fakeGuardResolver{
 		registration: coremodel.Component{ID: providerID, Type: "llm", Name: "qwen", Runtime: "local", Enabled: true},
-		provider:     &fakeCompletionProvider{recorder: recorder},
+		provider:     &fakeCompletionEngine{recorder: recorder},
 	}
 	registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "qwen", Runtime: "local", Enabled: true}
 	created, err := New(context.Background(), registration, nil, runtimepkg.Home{Path: dir}, repository.NewMemory(), resolver, nil)
@@ -169,7 +169,7 @@ func newTestGuard(t *testing.T, configJSON string, recorder *fakeCompletionRecor
 
 type fakeGuardResolver struct {
 	registration coremodel.Component
-	provider     component.CompletionProvider
+	provider     component.CompletionEngine
 }
 
 func (r *fakeGuardResolver) ResolveComponentRef(ctx context.Context, ref string) (*coremodel.Component, error) {
@@ -194,12 +194,12 @@ type fakeCompletionRecorder struct {
 	requests []component.CompletionRequest
 }
 
-type fakeCompletionProvider struct {
+type fakeCompletionEngine struct {
 	recorder *fakeCompletionRecorder
 }
 
-func (p *fakeCompletionProvider) Type() string { return "llm" }
-func (p *fakeCompletionProvider) HandleCompletion(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
+func (p *fakeCompletionEngine) Type() string { return "llm" }
+func (p *fakeCompletionEngine) Complete(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
 	_ = ctx
 	if p.recorder != nil {
 		p.recorder.requests = append(p.recorder.requests, request)

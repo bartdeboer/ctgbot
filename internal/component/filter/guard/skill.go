@@ -10,7 +10,7 @@ func (c *Component) Skill() component.Skill {
 
 What it does:
 - Classifies admitted inbound events before they reach an agent.
-- Uses a configured completion provider in restricted JSON mode.
+- Uses a configured completion engine in restricted JSON mode.
 - Passes low-risk messages and quarantines/denies suspicious messages.
 
 Managed files:
@@ -28,7 +28,7 @@ Optional settings:
 }
 
 Setup commands:
-1. Register the completion provider, for example:
+1. Register the completion engine, for example:
    ctgbot component register llamacpp/qwen-q5 --runtime backend
 
 2. Register this guard profile:

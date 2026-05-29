@@ -61,13 +61,13 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 }
 
 func (c *Component) FilterInbound(ctx context.Context, input inbound.ChannelEvent) (inbound.FilterResult, error) {
-	provider, ref, err := c.resolveCompletionProvider(ctx)
+	engine, ref, err := c.resolveCompletionEngine(ctx)
 	if err != nil {
 		c.log("inbound guard unavailable guard=%s err=%v", c.ref(), err)
 		return inbound.Quarantine(input, "guard-quarantine", "guard_error="+logValue(err.Error())), nil
 	}
 
-	result, err := provider.HandleCompletion(ctx, component.CompletionRequest{
+	result, err := engine.Complete(ctx, component.CompletionRequest{
 		Prompt:          inboundGuardPrompt(filterEventToGuardInput(input)),
 		MaxOutputTokens: c.config.MaxOutputTokens,
 		ResponseFormat:  "json",
@@ -87,7 +87,7 @@ func (c *Component) FilterInbound(ctx context.Context, input inbound.ChannelEven
 	return parsed.filterResult(input, ref, c.config.HighRiskScore), nil
 }
 
-func (c *Component) resolveCompletionProvider(ctx context.Context) (component.CompletionProvider, string, error) {
+func (c *Component) resolveCompletionEngine(ctx context.Context) (component.CompletionEngine, string, error) {
 	if c == nil {
 		return nil, "", fmt.Errorf("missing guard component")
 	}
@@ -109,11 +109,11 @@ func (c *Component) resolveCompletionProvider(ctx context.Context) (component.Co
 	if loaded == nil {
 		return nil, registration.Ref(), fmt.Errorf("completion component not found: %s", registration.Ref())
 	}
-	provider, ok := loaded.Component.(component.CompletionProvider)
+	engine, ok := loaded.Component.(component.CompletionEngine)
 	if !ok {
-		return nil, loaded.Registration.Ref(), fmt.Errorf("component %s does not implement completion provider", loaded.Registration.Ref())
+		return nil, loaded.Registration.Ref(), fmt.Errorf("component %s does not implement completion engine", loaded.Registration.Ref())
 	}
-	return provider, loaded.Registration.Ref(), nil
+	return engine, loaded.Registration.Ref(), nil
 }
 
 func (c *Component) ref() string {

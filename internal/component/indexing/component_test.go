@@ -22,7 +22,7 @@ func TestEmbeddingStrategyRunIndexesMessagesAndSkipsUnchanged(t *testing.T) {
 		messageFixture(chatID, threadID, coremodel.MessageRoleAgent, "The agent proposed summary strategies."),
 		messageFixture(chatID, threadID, coremodel.MessageRoleSystem, "system message should not be indexed"),
 	}
-	embedder := &fakeEmbedder{}
+	embedder := &fakeEmbeddingEngine{}
 	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": embedder}), messages)
 	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "default-message", Type: StrategyTypeEmbedding, ProviderRef: "llamacpp", Model: "qwen-embed"}); err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func TestClearIndexKeepsStrategies(t *testing.T) {
 	messages := []coremodel.ThreadMessage{
 		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "Index this message."),
 	}
-	embedder := &fakeEmbedder{}
+	embedder := &fakeEmbeddingEngine{}
 	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": embedder}), messages)
 	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "default-message", Type: StrategyTypeEmbedding, ProviderRef: "llamacpp", Model: "qwen-embed"}); err != nil {
 		t.Fatal(err)
@@ -222,23 +222,23 @@ func shouldVisit(message coremodel.ThreadMessage, scope component.MessageScope) 
 	return true
 }
 
-type fakeEmbedder struct{ calls int }
+type fakeEmbeddingEngine struct{ calls int }
 
-func (f *fakeEmbedder) Type() string { return "fake-embedder" }
-func (f *fakeEmbedder) Embed(ctx context.Context, req component.EmbedRequest) (component.EmbedResponse, error) {
+func (f *fakeEmbeddingEngine) Type() string { return "fake-embedder" }
+func (f *fakeEmbeddingEngine) Embed(ctx context.Context, req component.EmbeddingRequest) (component.EmbeddingResponse, error) {
 	_ = ctx
 	f.calls++
 	out := make([]component.Embedding, 0, len(req.Inputs))
 	for i, input := range req.Inputs {
 		out = append(out, component.Embedding{ID: input.ID, Model: req.Model, Dim: 2, Normalized: true, Vector: []float32{float32(i + 1), float32(len(input.Text))}})
 	}
-	return component.EmbedResponse{Embeddings: out}, nil
+	return component.EmbeddingResponse{Embeddings: out}, nil
 }
 
 type fakeCompletion struct{ lastPrompt string }
 
 func (f *fakeCompletion) Type() string { return "fake-completion" }
-func (f *fakeCompletion) HandleCompletion(ctx context.Context, req component.CompletionRequest) (*component.CompletionResult, error) {
+func (f *fakeCompletion) Complete(ctx context.Context, req component.CompletionRequest) (*component.CompletionResult, error) {
 	_ = ctx
 	if len(req.Prompt.Messages) > 0 {
 		f.lastPrompt = req.Prompt.Messages[0].Content
