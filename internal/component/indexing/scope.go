@@ -57,10 +57,6 @@ func resolveScope(ctx commandengine.Context, flags scopeFlags) (scope, error) {
 	return scope{ThreadID: threadID}, nil
 }
 
-func resolveIndexScope(ctx commandengine.Context, flags scopeFlags) (scope, error) {
-	return resolveScope(ctx, flags)
-}
-
 func parseRequiredUUID(name string, value string) (modeluuid.UUID, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {

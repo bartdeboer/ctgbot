@@ -23,7 +23,7 @@ func TestEmbeddingStrategyRunIndexesMessagesAndSkipsUnchanged(t *testing.T) {
 		messageFixture(chatID, threadID, coremodel.MessageRoleSystem, "system message should not be indexed"),
 	}
 	embedder := &fakeEmbedder{}
-	component := newTestComponent(t, fakeResolver{byRef: map[string]component.Component{"llamacpp": embedder}}, messages)
+	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": embedder}), messages)
 	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "default-message", Type: StrategyTypeEmbedding, ProviderRef: "llamacpp", Model: "qwen-embed"}); err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestSummaryStrategyRunStoresPerMessageSummaries(t *testing.T) {
 		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "Please summarize this message."),
 	}
 	completion := &fakeCompletion{}
-	component := newTestComponent(t, fakeResolver{byRef: map[string]component.Component{"llamacpp": completion}}, messages)
+	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": completion}), messages)
 	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "context-100", Type: StrategyTypeSummary, ProviderRef: "llamacpp", Model: "qwen3.5", TargetChars: 100}); err != nil {
 		t.Fatal(err)
 	}
@@ -113,6 +113,18 @@ func newTestComponent(t *testing.T, resolver fakeResolver, messages []coremodel.
 
 type fakeResolver struct {
 	byRef map[string]component.Component
+	byID  map[modeluuid.UUID]string
+}
+
+func newFakeResolver(items map[string]component.Component) fakeResolver {
+	byID := make(map[modeluuid.UUID]string, len(items))
+	byRef := make(map[string]component.Component, len(items))
+	for ref, candidate := range items {
+		id := modeluuid.New()
+		byRef[ref] = candidate
+		byID[id] = ref
+	}
+	return fakeResolver{byRef: byRef, byID: byID}
 }
 
 func (r fakeResolver) ResolveComponentRef(ctx context.Context, ref string) (*coremodel.Component, error) {
@@ -120,15 +132,25 @@ func (r fakeResolver) ResolveComponentRef(ctx context.Context, ref string) (*cor
 	if _, ok := r.byRef[ref]; !ok {
 		return nil, fmt.Errorf("not found: %s", ref)
 	}
-	return &coremodel.Component{ID: modeluuid.New(), Type: ref, Name: ref}, nil
+	for id, idRef := range r.byID {
+		if idRef == ref {
+			return &coremodel.Component{ID: id, Type: ref, Name: ref}, nil
+		}
+	}
+	return nil, fmt.Errorf("missing fake id for ref: %s", ref)
 }
 
 func (r fakeResolver) ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error) {
 	_ = ctx
-	for ref, candidate := range r.byRef {
-		return &component.Loaded{Registration: coremodel.Component{ID: componentID, Type: ref, Name: ref}, Component: candidate}, nil
+	ref, ok := r.byID[componentID]
+	if !ok {
+		return nil, nil
 	}
-	return nil, nil
+	candidate, ok := r.byRef[ref]
+	if !ok {
+		return nil, nil
+	}
+	return &component.Loaded{Registration: coremodel.Component{ID: componentID, Type: ref, Name: ref}, Component: candidate}, nil
 }
 
 type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
