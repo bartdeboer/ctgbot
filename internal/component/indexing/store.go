@@ -30,21 +30,17 @@ const (
 type store struct{ db *gorm.DB }
 
 type indexStrategy struct {
-	ID              string `gorm:"primaryKey"`
-	Name            string `gorm:"uniqueIndex"`
-	Type            string `gorm:"index"`
-	ProviderRef     string
-	Model           string
-	Prompt          string
-	TargetChars     int
-	BatchSize       int
-	ScheduleEnabled bool
-	ScheduleEvery   string
-	LastRunAt       *time.Time
-	NextRunAt       *time.Time
-	Enabled         bool `gorm:"index"`
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID          string `gorm:"primaryKey"`
+	Name        string `gorm:"uniqueIndex"`
+	Type        string `gorm:"index"`
+	ProviderRef string
+	Model       string
+	Prompt      string
+	TargetChars int
+	BatchSize   int
+	Enabled     bool `gorm:"index"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 func (indexStrategy) TableName() string { return "index_strategies" }
@@ -140,7 +136,6 @@ func (s *store) saveStrategy(ctx context.Context, strategy *indexStrategy) error
 	strategy.ProviderRef = strings.TrimSpace(strategy.ProviderRef)
 	strategy.Model = strings.TrimSpace(strategy.Model)
 	strategy.Prompt = strings.TrimSpace(strategy.Prompt)
-	strategy.ScheduleEvery = strings.TrimSpace(strategy.ScheduleEvery)
 	if strategy.Name == "" {
 		return fmt.Errorf("missing strategy name")
 	}
@@ -236,10 +231,7 @@ func (s *store) finishRun(ctx context.Context, run *indexRun, err error) error {
 		run.Status = RunStatusSuccess
 		run.Error = ""
 	}
-	if err := s.db.WithContext(ctx).Save(run).Error; err != nil {
-		return err
-	}
-	return s.db.WithContext(ctx).Model(&indexStrategy{}).Where("id = ?", run.StrategyID).Update("last_run_at", finished).Error
+	return s.db.WithContext(ctx).Save(run).Error
 }
 
 func (s *store) stats(ctx context.Context) (stats, error) {

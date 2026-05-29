@@ -16,23 +16,19 @@ import (
 type strategyListCommand struct{}
 
 type strategyAddSummaryCommand struct {
-	Name            string
-	Completion      string
-	Model           string
-	Prompt          string
-	TargetChars     int
-	BatchSize       int
-	ScheduleEnabled bool
-	ScheduleEvery   string
+	Name        string
+	Completion  string
+	Model       string
+	Prompt      string
+	TargetChars int
+	BatchSize   int
 }
 
 type strategyAddEmbeddingCommand struct {
-	Name            string
-	Embedder        string
-	Model           string
-	BatchSize       int
-	ScheduleEnabled bool
-	ScheduleEvery   string
+	Name      string
+	Embedder  string
+	Model     string
+	BatchSize int
 }
 
 type runCommand struct {
@@ -119,15 +115,13 @@ func buildStrategyAddSummaryCommand(req *clir.Request) (any, error) {
 	prompt := fs.String("prompt", defaultSummaryPrompt, "Summary prompt")
 	targetChars := fs.Int("target-chars", 0, "Target summary characters")
 	batchSize := fs.Int("batch-size", 0, "Summary batch size")
-	scheduleEvery := fs.String("schedule-every", "", "Optional schedule interval, for example 24h")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
 	if len(fs.Args()) > 0 {
 		return nil, fmt.Errorf("unexpected strategy arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	cmd := strategyAddSummaryCommand{Name: strings.TrimSpace(req.Params["name"]), Completion: strings.TrimSpace(*completion), Model: strings.TrimSpace(*model), Prompt: strings.TrimSpace(*prompt), TargetChars: *targetChars, BatchSize: *batchSize, ScheduleEvery: strings.TrimSpace(*scheduleEvery)}
-	cmd.ScheduleEnabled = cmd.ScheduleEvery != ""
+	cmd := strategyAddSummaryCommand{Name: strings.TrimSpace(req.Params["name"]), Completion: strings.TrimSpace(*completion), Model: strings.TrimSpace(*model), Prompt: strings.TrimSpace(*prompt), TargetChars: *targetChars, BatchSize: *batchSize}
 	if cmd.Name == "" {
 		return nil, fmt.Errorf("missing strategy name")
 	}
@@ -149,15 +143,13 @@ func buildStrategyAddEmbeddingCommand(req *clir.Request) (any, error) {
 	embedder := fs.String("embedder", "", "Embedding component ref, for example llamacpp/local")
 	model := fs.String("model", "", "Embedding model name")
 	batchSize := fs.Int("batch-size", 0, "Embedding batch size")
-	scheduleEvery := fs.String("schedule-every", "", "Optional schedule interval, for example 1h")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
 	if len(fs.Args()) > 0 {
 		return nil, fmt.Errorf("unexpected strategy arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	cmd := strategyAddEmbeddingCommand{Name: strings.TrimSpace(req.Params["name"]), Embedder: strings.TrimSpace(*embedder), Model: strings.TrimSpace(*model), BatchSize: *batchSize, ScheduleEvery: strings.TrimSpace(*scheduleEvery)}
-	cmd.ScheduleEnabled = cmd.ScheduleEvery != ""
+	cmd := strategyAddEmbeddingCommand{Name: strings.TrimSpace(req.Params["name"]), Embedder: strings.TrimSpace(*embedder), Model: strings.TrimSpace(*model), BatchSize: *batchSize}
 	if cmd.Name == "" {
 		return nil, fmt.Errorf("missing strategy name")
 	}
@@ -210,16 +202,13 @@ func (c *Component) handleStrategyList(ctx context.Context, req commandengine.Re
 		if strategy.TargetChars > 0 {
 			line += fmt.Sprintf(" target_chars=%d", strategy.TargetChars)
 		}
-		if strategy.ScheduleEvery != "" {
-			line += " schedule_every=" + strategy.ScheduleEvery
-		}
 		lines = append(lines, line)
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
 
 func (c *Component) handleStrategyAddSummary(ctx context.Context, req commandengine.Request, cmd strategyAddSummaryCommand) (commandengine.Result, error) {
-	strategy := indexStrategy{Name: cmd.Name, Type: StrategyTypeSummary, ProviderRef: cmd.Completion, Model: cmd.Model, Prompt: cmd.Prompt, TargetChars: cmd.TargetChars, BatchSize: cmd.BatchSize, ScheduleEnabled: cmd.ScheduleEnabled, ScheduleEvery: cmd.ScheduleEvery}
+	strategy := indexStrategy{Name: cmd.Name, Type: StrategyTypeSummary, ProviderRef: cmd.Completion, Model: cmd.Model, Prompt: cmd.Prompt, TargetChars: cmd.TargetChars, BatchSize: cmd.BatchSize}
 	if err := c.store.saveStrategy(ctx, &strategy); err != nil {
 		return commandengine.Result{}, err
 	}
@@ -227,7 +216,7 @@ func (c *Component) handleStrategyAddSummary(ctx context.Context, req commandeng
 }
 
 func (c *Component) handleStrategyAddEmbedding(ctx context.Context, req commandengine.Request, cmd strategyAddEmbeddingCommand) (commandengine.Result, error) {
-	strategy := indexStrategy{Name: cmd.Name, Type: StrategyTypeEmbedding, ProviderRef: cmd.Embedder, Model: cmd.Model, BatchSize: cmd.BatchSize, ScheduleEnabled: cmd.ScheduleEnabled, ScheduleEvery: cmd.ScheduleEvery}
+	strategy := indexStrategy{Name: cmd.Name, Type: StrategyTypeEmbedding, ProviderRef: cmd.Embedder, Model: cmd.Model, BatchSize: cmd.BatchSize}
 	if err := c.store.saveStrategy(ctx, &strategy); err != nil {
 		return commandengine.Result{}, err
 	}
