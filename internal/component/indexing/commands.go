@@ -39,7 +39,7 @@ type runCommand struct {
 }
 
 type statsCommand struct{}
-type clearCommand struct{}
+type clearCommand struct{ Strategy string }
 
 func RegisterGobTypes(register func(any)) {
 	register(strategyListCommand{})
@@ -89,11 +89,17 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Build:   func(*clir.Request) (any, error) { return statsCommand{}, nil },
 		},
 		{
-			Pattern: "clear",
-			Help:    "Clear index runs, summaries, and embeddings while keeping strategies",
+			Pattern: "clear <strategy>",
+			Help:    "Clear runs, summaries, and embeddings for one indexing strategy",
 			Sources: []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:  policy,
-			Build:   func(*clir.Request) (any, error) { return clearCommand{}, nil },
+			Build: func(req *clir.Request) (any, error) {
+				strategy := strings.TrimSpace(req.Params["strategy"])
+				if strategy == "" {
+					return nil, fmt.Errorf("missing strategy")
+				}
+				return clearCommand{Strategy: strategy}, nil
+			},
 		},
 	}
 }
@@ -108,7 +114,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		commandengine.RegisterPattern[strategyAddEmbeddingCommand](registry, "strategy add embedding <name>", c.handleStrategyAddEmbedding),
 		commandengine.RegisterPattern[runCommand](registry, "run <strategy>", c.handleRun),
 		commandengine.RegisterPattern[statsCommand](registry, "stats", c.handleStats),
-		commandengine.RegisterPattern[clearCommand](registry, "clear", c.handleClear),
+		commandengine.RegisterPattern[clearCommand](registry, "clear <strategy>", c.handleClear),
 	} {
 		if err != nil {
 			return err
@@ -256,9 +262,9 @@ func (c *Component) handleStats(ctx context.Context, req commandengine.Request, 
 }
 
 func (c *Component) handleClear(ctx context.Context, req commandengine.Request, cmd clearCommand) (commandengine.Result, error) {
-	result, err := c.store.clearIndex(ctx)
+	result, err := c.store.clearStrategy(ctx, cmd.Strategy)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: fmt.Sprintf("index cleared\nruns: %d\nsummaries: %d\nembeddings: %d", result.Runs, result.Summaries, result.Embeddings)}, nil
+	return commandengine.Result{Text: fmt.Sprintf("index cleared: %s\nruns: %d\nsummaries: %d\nembeddings: %d", result.Strategy, result.Runs, result.Summaries, result.Embeddings)}, nil
 }

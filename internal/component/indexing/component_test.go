@@ -103,11 +103,11 @@ func TestClearIndexKeepsStrategies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := component.store.clearIndex(ctx)
+	result, err := component.store.clearStrategy(ctx, "default-message")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Runs != 1 || result.Embeddings != 1 || result.Summaries != 0 {
+	if result.Strategy != "default-message" || result.Runs != 1 || result.Embeddings != 1 || result.Summaries != 0 {
 		t.Fatalf("clear result = %#v", result)
 	}
 	stats, err := component.store.stats(ctx)

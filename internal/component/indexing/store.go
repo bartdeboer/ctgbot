@@ -103,6 +103,7 @@ type stats struct {
 }
 
 type clearResult struct {
+	Strategy   string
 	Runs       int64
 	Summaries  int64
 	Embeddings int64
@@ -257,27 +258,33 @@ func (s *store) stats(ctx context.Context) (stats, error) {
 	return out, nil
 }
 
-func (s *store) clearIndex(ctx context.Context) (clearResult, error) {
+func (s *store) clearStrategy(ctx context.Context, name string) (clearResult, error) {
 	if s == nil || s.db == nil {
 		return clearResult{}, fmt.Errorf("missing indexing store")
 	}
+	strategy, err := s.strategyByName(ctx, name)
+	if err != nil {
+		return clearResult{}, err
+	}
+	if strategy == nil {
+		return clearResult{}, fmt.Errorf("indexing strategy not found: %s", normalizeName(name))
+	}
 	var out clearResult
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		clear := tx.Session(&gorm.Session{AllowGlobalUpdate: true})
-
-		result := clear.Delete(&messageEmbedding{})
+	out.Strategy = strategy.Name
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("strategy_id = ?", strategy.ID).Delete(&messageEmbedding{})
 		if result.Error != nil {
 			return result.Error
 		}
 		out.Embeddings = result.RowsAffected
 
-		result = clear.Delete(&messageSummary{})
+		result = tx.Where("strategy_id = ?", strategy.ID).Delete(&messageSummary{})
 		if result.Error != nil {
 			return result.Error
 		}
 		out.Summaries = result.RowsAffected
 
-		result = clear.Delete(&indexRun{})
+		result = tx.Where("strategy_id = ?", strategy.ID).Delete(&indexRun{})
 		if result.Error != nil {
 			return result.Error
 		}
