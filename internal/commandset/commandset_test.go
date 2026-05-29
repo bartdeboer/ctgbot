@@ -133,11 +133,11 @@ func TestInstructionRoutePatternsAddsScopedHelpForDiscoverableFamilies(t *testin
 	definitions := []commandengine.Definition{
 		testInstructionDefinition("codex status", commandengine.InstructionImportant, simplerbac.Any(simplerbac.RoleAgent)),
 		testInstructionDefinition("codex config get <key>", "", simplerbac.Any(simplerbac.RoleAgent)),
-		testInstructionDefinition("sendstdin", commandengine.InstructionEssential, simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("send <text>", commandengine.InstructionEssential, simplerbac.Any(simplerbac.RoleAgent)),
 	}
 
 	patterns := InstructionRoutePatterns(definitions, coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}})
-	for _, want := range []string{"codex status", "codex help", "sendstdin"} {
+	for _, want := range []string{"codex status", "codex help", "send <text>"} {
 		if !containsPattern(patterns, want) {
 			t.Fatalf("InstructionRoutePatterns() missing %q in %#v", want, patterns)
 		}
@@ -145,7 +145,7 @@ func TestInstructionRoutePatternsAddsScopedHelpForDiscoverableFamilies(t *testin
 	if containsPattern(patterns, "codex config get <key>") {
 		t.Fatalf("InstructionRoutePatterns() unexpectedly contains discoverable leaf in %#v", patterns)
 	}
-	if containsPattern(patterns, "sendstdin help") {
+	if containsPattern(patterns, "send help") {
 		t.Fatalf("InstructionRoutePatterns() unexpectedly adds help for single root command in %#v", patterns)
 	}
 }

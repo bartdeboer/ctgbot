@@ -21,14 +21,14 @@ func TestPrepareTurnInboundWithPromptContextInjectsSourceMetadata(t *testing.T) 
 			Kind:      "Internal thread message",
 			FromLabel: "source thread",
 			FromID:    "thread:123",
-			ReplyHint: "hostbridge thread 123 message send <message>",
+			ReplyHint: "hostbridge thread 123 message send",
 		},
 	}, "hello")
 	for _, want := range []string{
 		"[Internal thread message]",
 		"From: source thread",
 		"Sender ID: thread:123",
-		"Reply path: hostbridge thread 123 message send <message>",
+		"Reply path: hostbridge thread 123 message send",
 		"Message:\nhello",
 	} {
 		if !strings.Contains(got, want) {

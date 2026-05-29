@@ -21,6 +21,7 @@ import (
 	guardcomponent "github.com/bartdeboer/ctgbot/internal/component/filter/guard"
 	"github.com/bartdeboer/ctgbot/internal/component/gmail"
 	"github.com/bartdeboer/ctgbot/internal/component/gmailv2"
+	indexingcomponent "github.com/bartdeboer/ctgbot/internal/component/indexing"
 	"github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	llamacppagentcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacppagent"
 	modelcomponent "github.com/bartdeboer/ctgbot/internal/component/model"
@@ -151,6 +152,11 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(semanticcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return semanticcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(indexingcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return indexingcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
 	}); err != nil {
 		return nil, err
 	}

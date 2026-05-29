@@ -126,7 +126,7 @@ func TestHostbridgeSendFileParsesMediaAttributes(t *testing.T) {
 	}
 }
 
-func TestHostbridgeMessageParsesPayloadWithAttachments(t *testing.T) {
+func TestHostbridgeSendParsesPayloadWithAttachments(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "one.txt")
 	second := filepath.Join(dir, "two.bin")
@@ -145,7 +145,7 @@ func TestHostbridgeMessageParsesPayloadWithAttachments(t *testing.T) {
 		Context: commandengine.Context{
 			Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
 		},
-	}, []string{"message", "hello", "--type", "text/html", "--syntax", "html", "--attach", first + ";type=text/plain;syntax=txt;name=one-renamed.txt", "--attach", second})
+	}, []string{"send", "hello", "--type", "text/html", "--syntax", "html", "--attach", first + ";type=text/plain;syntax=txt;name=one-renamed.txt", "--attach", second})
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -273,7 +273,7 @@ func TestHostbridgeMessageRejectsUnknownAttachmentParameter(t *testing.T) {
 	}
 }
 
-func TestHostbridgeSendStdinParsesMediaCommand(t *testing.T) {
+func TestHostbridgeSendStdinLegacyAliasParsesMediaCommand(t *testing.T) {
 	originalStdin := os.Stdin
 	reader, writer, err := os.Pipe()
 	if err != nil {

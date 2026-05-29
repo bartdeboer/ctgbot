@@ -43,16 +43,24 @@ func HostbridgeCommands() []commandengine.Definition {
 	definitions := []commandengine.Definition{
 		RunCommandDefinition(),
 		{
-			Pattern:               "message <text>",
-			Help:                  "Send a chat message with optional attachments",
+			Pattern:               "send <text>",
+			Help:                  "Send an outbound message; hostbridge reads stdin when message args are omitted",
 			Build:                 buildMessagePayload,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                agentPolicy(),
 			InstructionVisibility: commandengine.InstructionEssential,
 		},
 		{
+			Pattern:               "message <text>",
+			Help:                  "Legacy alias for send",
+			Build:                 buildMessagePayload,
+			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:                agentPolicy(),
+			InstructionVisibility: commandengine.InstructionHidden,
+		},
+		{
 			Pattern:               "sendfile <path>",
-			Help:                  "Upload a file",
+			Help:                  "Send an outbound file; hostbridge reads stdin when path is omitted",
 			Build:                 buildSendFile,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                agentPolicy(),
@@ -60,11 +68,11 @@ func HostbridgeCommands() []commandengine.Definition {
 		},
 		{
 			Pattern:               "sendstdin",
-			Help:                  "Send stdin as text",
+			Help:                  "Legacy alias for sendfile reading stdin",
 			Build:                 buildSendStdin,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                agentPolicy(),
-			InstructionVisibility: commandengine.InstructionEssential,
+			InstructionVisibility: commandengine.InstructionHidden,
 		},
 	}
 	definitions = append(definitions, TurnCommands()...)
@@ -113,7 +121,7 @@ func (f *repeatPathFlag) Set(value string) error {
 }
 
 func buildMessagePayload(req *clir.Request) (any, error) {
-	fs := flag.NewFlagSet("hostbridge message", flag.ContinueOnError)
+	fs := flag.NewFlagSet("hostbridge send", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	contentType := fs.String("type", "", "Optional text content type")
 	language := fs.String("language", "", "Optional legacy syntax hint")

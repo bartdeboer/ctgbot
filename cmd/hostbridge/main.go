@@ -20,6 +20,12 @@ import (
 
 func main() {
 	args := normalizedArgs(os.Args[1:], currentComponentRef())
+	var err error
+	args, err = expandStdinArgs(args, os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
 	if len(args) == 0 || (len(args) == 1 && args[0] == "help") {
 		printHelp(defaultHostbridgeActor())
 		return
@@ -57,6 +63,38 @@ func main() {
 	if strings.TrimSpace(resp.Result.Text) != "" {
 		fmt.Fprintln(os.Stdout, resp.Result.Text)
 	}
+}
+
+func expandStdinArgs(args []string, stdin io.Reader) ([]string, error) {
+	switch {
+	case len(args) == 1 && args[0] == "send":
+		return appendStdinText(args, stdin)
+	case len(args) >= 1 && args[0] == "sendfile" && sendfileUsesStdin(args[1:]):
+		out := append([]string{"sendstdin"}, args[1:]...)
+		return out, nil
+	case len(args) == 4 && args[0] == "thread" && args[2] == "message" && args[3] == "send":
+		return appendStdinText(args, stdin)
+	default:
+		return args, nil
+	}
+}
+
+func sendfileUsesStdin(args []string) bool {
+	return len(args) == 0 || strings.HasPrefix(args[0], "-")
+}
+
+func appendStdinText(args []string, stdin io.Reader) ([]string, error) {
+	data, err := io.ReadAll(stdin)
+	if err != nil {
+		return nil, fmt.Errorf("read stdin: %w", err)
+	}
+	text := string(data)
+	if strings.TrimSpace(text) == "" {
+		return args, nil
+	}
+	out := append([]string{}, args...)
+	out = append(out, text)
+	return out, nil
 }
 
 func parseOrRenderHelp(
@@ -162,7 +200,7 @@ func componentType(ref string) string {
 
 func isDirectHostbridgeCommand(arg string, componentRef string) bool {
 	switch arg {
-	case "", "run", "message", "sendfile", "sendstdin", "config", "help", "version":
+	case "", "run", "send", "message", "sendfile", "sendstdin", "config", "help", "version":
 		return true
 	}
 	for _, prefix := range cmdsurface.GlobalDirectPrefixes() {
