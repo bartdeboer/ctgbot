@@ -87,6 +87,38 @@ func TestSummaryStrategyRunStoresPerMessageSummaries(t *testing.T) {
 	}
 }
 
+func TestClearIndexKeepsStrategies(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "Index this message."),
+	}
+	embedder := &fakeEmbedder{}
+	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": embedder}), messages)
+	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "default-message", Type: StrategyTypeEmbedding, ProviderRef: "llamacpp", Model: "qwen-embed"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := component.RunStrategy(ctx, RunRequest{Strategy: "default-message", Scope: scope{ThreadID: threadID}}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := component.store.clearIndex(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Runs != 1 || result.Embeddings != 1 || result.Summaries != 0 {
+		t.Fatalf("clear result = %#v", result)
+	}
+	stats, err := component.store.stats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Strategies != 1 || stats.Runs != 0 || stats.Embeddings != 0 || stats.Summaries != 0 {
+		t.Fatalf("stats = %#v, want strategy only", stats)
+	}
+}
+
 func TestCommandBuildersRequireProviderAndModel(t *testing.T) {
 	req := &clirRequest{params: map[string]string{"name": "context-100"}}
 	_, err := buildStrategyAddSummaryCommand(req.request("--target-chars", "100"))

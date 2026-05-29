@@ -39,6 +39,7 @@ type runCommand struct {
 }
 
 type statsCommand struct{}
+type clearCommand struct{}
 
 func RegisterGobTypes(register func(any)) {
 	register(strategyListCommand{})
@@ -46,6 +47,7 @@ func RegisterGobTypes(register func(any)) {
 	register(strategyAddEmbeddingCommand{})
 	register(runCommand{})
 	register(statsCommand{})
+	register(clearCommand{})
 }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
@@ -86,6 +88,13 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Policy:  policy,
 			Build:   func(*clir.Request) (any, error) { return statsCommand{}, nil },
 		},
+		{
+			Pattern: "clear",
+			Help:    "Clear index runs, summaries, and embeddings while keeping strategies",
+			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:  policy,
+			Build:   func(*clir.Request) (any, error) { return clearCommand{}, nil },
+		},
 	}
 }
 
@@ -99,6 +108,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		commandengine.RegisterPattern[strategyAddEmbeddingCommand](registry, "strategy add embedding <name>", c.handleStrategyAddEmbedding),
 		commandengine.RegisterPattern[runCommand](registry, "run <strategy>", c.handleRun),
 		commandengine.RegisterPattern[statsCommand](registry, "stats", c.handleStats),
+		commandengine.RegisterPattern[clearCommand](registry, "clear", c.handleClear),
 	} {
 		if err != nil {
 			return err
@@ -243,4 +253,12 @@ func (c *Component) handleStats(ctx context.Context, req commandengine.Request, 
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: fmt.Sprintf("indexing stats\nstrategies: %d\nruns: %d\nsummaries: %d\nembeddings: %d", stats.Strategies, stats.Runs, stats.Summaries, stats.Embeddings)}, nil
+}
+
+func (c *Component) handleClear(ctx context.Context, req commandengine.Request, cmd clearCommand) (commandengine.Result, error) {
+	result, err := c.store.clearIndex(ctx)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("index cleared\nruns: %d\nsummaries: %d\nembeddings: %d", result.Runs, result.Summaries, result.Embeddings)}, nil
 }
