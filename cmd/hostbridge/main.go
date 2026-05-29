@@ -66,9 +66,24 @@ func main() {
 }
 
 func expandStdinArgs(args []string, stdin io.Reader) ([]string, error) {
-	if len(args) != 4 || args[0] != "thread" || args[2] != "message" || args[3] != "send" {
+	switch {
+	case len(args) == 1 && args[0] == "send":
+		return appendStdinText(args, stdin)
+	case len(args) >= 1 && args[0] == "sendfile" && sendfileUsesStdin(args[1:]):
+		out := append([]string{"sendstdin"}, args[1:]...)
+		return out, nil
+	case len(args) == 4 && args[0] == "thread" && args[2] == "message" && args[3] == "send":
+		return appendStdinText(args, stdin)
+	default:
 		return args, nil
 	}
+}
+
+func sendfileUsesStdin(args []string) bool {
+	return len(args) == 0 || strings.HasPrefix(args[0], "-")
+}
+
+func appendStdinText(args []string, stdin io.Reader) ([]string, error) {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return nil, fmt.Errorf("read stdin: %w", err)
@@ -185,7 +200,7 @@ func componentType(ref string) string {
 
 func isDirectHostbridgeCommand(arg string, componentRef string) bool {
 	switch arg {
-	case "", "run", "message", "sendfile", "sendstdin", "config", "help", "version":
+	case "", "run", "send", "message", "sendfile", "sendstdin", "config", "help", "version":
 		return true
 	}
 	for _, prefix := range cmdsurface.GlobalDirectPrefixes() {

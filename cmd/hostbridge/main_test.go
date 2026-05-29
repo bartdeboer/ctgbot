@@ -88,6 +88,38 @@ func TestExpandStdinArgsThreadMessageSendEmptyStdinKeepsArgs(t *testing.T) {
 	}
 }
 
+func TestExpandStdinArgsSendReadsStdin(t *testing.T) {
+	got, err := expandStdinArgs([]string{"send"}, strings.NewReader("hello `world`\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"send", "hello `world`\n"}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestExpandStdinArgsSendfileWithoutPathUsesSendstdin(t *testing.T) {
+	got, err := expandStdinArgs([]string{"sendfile", "--caption", "note"}, strings.NewReader("ignored by expand"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"sendstdin", "--caption", "note"}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestHostbridgeRouterUsesCodexDefinitions(t *testing.T) {
 	t.Setenv("CTGBOT_ACTIVE_COMPONENTS", "")
 	t.Setenv("CTGBOT_COMPONENT_REF", "codex")

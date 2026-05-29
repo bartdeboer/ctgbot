@@ -688,8 +688,8 @@ func (a *hostbridgeMediaAgent) HandleTurn(ctx context.Context, turn component.Tu
 			Syntax:      "markdown",
 			Content:     []byte("hello from hostbridge"),
 		},
-		CanonicalPattern: "sendstdin",
-		Route:            "sendstdin",
+		CanonicalPattern: "sendfile <path>",
+		Route:            "sendfile <path>",
 	})
 	if err != nil {
 		return nil, err
