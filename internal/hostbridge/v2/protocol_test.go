@@ -87,6 +87,24 @@ func TestHandlerBuildsContextFromHeaders(t *testing.T) {
 	}
 }
 
+func TestHandlerSourceCanBeConfigured(t *testing.T) {
+	runner := &fakeRunner{result: commandengine.Result{Text: "ok"}}
+	handler := NewHandler(runner)
+	handler.Source = commandengine.SourceScheduler
+
+	req := httptest.NewRequest(http.MethodPost, "/v2/run/status", nil)
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%q", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if got := runner.base.Context.Source; got != commandengine.SourceScheduler {
+		t.Fatalf("source = %q, want %q", got, commandengine.SourceScheduler)
+	}
+}
+
 func TestHandlerReturnsPlainTextByDefault(t *testing.T) {
 	runner := &fakeRunner{result: commandengine.Result{Text: "plain output\n"}}
 	handler := NewHandler(runner)

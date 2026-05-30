@@ -18,6 +18,10 @@ import (
 )
 
 const (
+	// defaultRunPrefix is intentionally POST-only for the first v2 slice:
+	// one HTTP endpoint routes command-shaped URLs into the command engine.
+	// If v2 later grows HTTP verb semantics, those routes can live alongside
+	// or replace this /run/ prefix without changing the command envelope.
 	defaultRunPrefix = "/v2/run/"
 )
 
@@ -27,6 +31,7 @@ type CommandRunner interface {
 
 type Handler struct {
 	Runner CommandRunner
+	Source commandengine.Source
 }
 
 type JSONResponse struct {
@@ -56,7 +61,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		writeError(w, req, http.StatusBadRequest, err, 0)
 		return
 	}
-	base, err := baseRequestFromHeaders(req.Header)
+	base, err := h.baseRequestFromHeaders(req.Header)
 	if err != nil {
 		writeError(w, req, http.StatusBadRequest, err, 0)
 		return
@@ -146,10 +151,16 @@ func flagsFromQuery(values url.Values) []string {
 	return flags
 }
 
-func baseRequestFromHeaders(header http.Header) (commandengine.Request, error) {
+func (h *Handler) baseRequestFromHeaders(header http.Header) (commandengine.Request, error) {
+	source := commandengine.SourceHostbridge
+	if h != nil && h.Source != "" {
+		source = h.Source
+	}
 	ctx := commandengine.Context{
-		Source: commandengine.SourceHostbridge,
-		Actor:  commandengine.Actor{ID: firstHeader(header, "X-Actor-Id", "hostbridgev2"), Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		Source: source,
+		// Headers may identify the caller, but they do not grant privileges.
+		// Role elevation belongs with the future auth layer.
+		Actor: commandengine.Actor{ID: firstHeader(header, "X-Actor-Id", "hostbridgev2"), Roles: []simplerbac.Role{simplerbac.RoleAgent}},
 	}
 	for _, item := range []struct {
 		header string
