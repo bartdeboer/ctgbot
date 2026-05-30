@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -14,6 +15,8 @@ import (
 )
 
 const defaultSummaryPrompt = "Summarize this chat message for compact future context. Preserve concrete facts, decisions, tasks, filenames, commands, and user preferences. Do not add information."
+
+const summaryRunIdleTimeout = 5 * time.Minute
 
 type RunRequest struct {
 	Strategy    string
@@ -135,6 +138,12 @@ func indexableMessageKinds() []coremodel.MessageKind {
 }
 
 func (c *Component) runSummaryStrategy(ctx context.Context, engine component.CompletionEngine, strategy indexStrategy, run *indexRun, req RunRequest, messages []coremodel.ThreadMessage, result RunResult) (RunResult, error) {
+	var session component.InferenceSession
+	defer func() {
+		if session != nil {
+			_ = session.Close()
+		}
+	}()
 	for _, message := range messages {
 		hash := textHash(message.Text)
 		existing, err := c.store.summary(ctx, strategy.ID, message.ID.String())
@@ -144,6 +153,12 @@ func (c *Component) runSummaryStrategy(ctx context.Context, engine component.Com
 		if existing != nil && existing.SourceHash == hash && strings.TrimSpace(existing.Summary) != "" {
 			result.Skipped++
 			continue
+		}
+		if !shouldCopySummaryVerbatim(strategy, strings.TrimSpace(message.Text)) && session == nil {
+			session, err = beginSummaryRunSession(ctx, engine, strategy.Model)
+			if err != nil {
+				return result, err
+			}
 		}
 		summary, err := c.summarizeMessage(ctx, engine, strategy, message)
 		if err != nil {
@@ -169,6 +184,14 @@ func (c *Component) runSummaryStrategy(ctx context.Context, engine component.Com
 	}
 	copyRunCounts(run, result)
 	return result, nil
+}
+
+func beginSummaryRunSession(ctx context.Context, engine component.CompletionEngine, model string) (component.InferenceSession, error) {
+	sessionEngine, ok := engine.(component.InferenceSessionEngine)
+	if !ok {
+		return nil, nil
+	}
+	return sessionEngine.BeginInferenceSession(ctx, component.InferenceSessionOptions{Model: strings.TrimSpace(model), IdleTimeout: summaryRunIdleTimeout})
 }
 
 func (c *Component) summarizeMessage(ctx context.Context, engine component.CompletionEngine, strategy indexStrategy, message coremodel.ThreadMessage) (string, error) {

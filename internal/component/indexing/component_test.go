@@ -160,6 +160,9 @@ func TestSummaryStrategyCopiesShortMessagesWithoutCompletion(t *testing.T) {
 	if completion.calls != 0 {
 		t.Fatalf("completion calls = %d, want 0", completion.calls)
 	}
+	if len(completion.sessionRequests) != 0 {
+		t.Fatalf("session requests = %d, want 0", len(completion.sessionRequests))
+	}
 	strategy, err := component.store.strategyByName(ctx, "search-title")
 	if err != nil {
 		t.Fatal(err)
@@ -191,6 +194,37 @@ func TestSummaryStrategySummarizesLongMessages(t *testing.T) {
 	}
 	if completion.calls != 1 {
 		t.Fatalf("completion calls = %d, want 1", completion.calls)
+	}
+}
+
+func TestSummaryStrategyKeepsInferenceSessionOpenForRun(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "first long message that needs the model"),
+		messageFixture(chatID, threadID, coremodel.MessageRoleAgent, "second long message that needs the model"),
+	}
+	completion := &fakeCompletion{}
+	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": completion}), messages)
+	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "search-title", Type: StrategyTypeSummary, ProviderRef: "llamacpp", Model: "qwen3", TargetChars: 80}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := component.RunStrategy(ctx, RunRequest{Strategy: "search-title", Scope: scope{All: true}}); err != nil {
+		t.Fatal(err)
+	}
+	if completion.calls != 2 {
+		t.Fatalf("completion calls = %d, want 2", completion.calls)
+	}
+	if len(completion.sessionRequests) != 1 {
+		t.Fatalf("session requests = %d, want 1", len(completion.sessionRequests))
+	}
+	if completion.sessionRequests[0].Model != "qwen3" || completion.sessionRequests[0].IdleTimeout != summaryRunIdleTimeout {
+		t.Fatalf("session request = %#v", completion.sessionRequests[0])
+	}
+	if completion.sessionCloseCalls != 1 {
+		t.Fatalf("session close calls = %d, want 1", completion.sessionCloseCalls)
 	}
 }
 
@@ -379,8 +413,10 @@ func (f *fakeEmbeddingEngine) Embed(ctx context.Context, req component.Embedding
 }
 
 type fakeCompletion struct {
-	lastPrompt string
-	calls      int
+	lastPrompt        string
+	calls             int
+	sessionRequests   []component.InferenceSessionOptions
+	sessionCloseCalls int
 }
 
 func (f *fakeCompletion) Type() string { return "fake-completion" }
@@ -391,6 +427,21 @@ func (f *fakeCompletion) Complete(ctx context.Context, req component.CompletionR
 		f.lastPrompt = req.Prompt.Messages[0].Content
 	}
 	return &component.CompletionResult{Final: &coremodel.ThreadMessage{Text: "summary: " + firstLine(f.lastPrompt)}}, nil
+}
+
+func (f *fakeCompletion) BeginInferenceSession(ctx context.Context, options component.InferenceSessionOptions) (component.InferenceSession, error) {
+	_ = ctx
+	f.sessionRequests = append(f.sessionRequests, options)
+	return fakeInferenceSession{close: func() { f.sessionCloseCalls++ }}, nil
+}
+
+type fakeInferenceSession struct{ close func() }
+
+func (s fakeInferenceSession) Close() error {
+	if s.close != nil {
+		s.close()
+	}
+	return nil
 }
 
 func messageFixture(chatID modeluuid.UUID, threadID modeluuid.UUID, role coremodel.MessageRole, text string) coremodel.ThreadMessage {
