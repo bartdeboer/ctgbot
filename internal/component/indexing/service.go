@@ -16,7 +16,7 @@ import (
 
 const defaultSummaryPrompt = "Summarize this chat message for compact future context. Preserve concrete facts, decisions, tasks, filenames, commands, and user preferences. Do not add information."
 
-const summaryRunIdleTimeout = 5 * time.Minute
+const indexingRunIdleTimeout = 5 * time.Minute
 
 type RunRequest struct {
 	Strategy    string
@@ -155,7 +155,7 @@ func (c *Component) runSummaryStrategy(ctx context.Context, engine component.Com
 			continue
 		}
 		if !shouldCopySummaryVerbatim(strategy, strings.TrimSpace(message.Text)) && session == nil {
-			session, err = beginSummaryRunSession(ctx, engine, strategy.Model)
+			session, err = beginIndexingRunSession(ctx, engine, strategy.Model)
 			if err != nil {
 				return result, err
 			}
@@ -186,12 +186,12 @@ func (c *Component) runSummaryStrategy(ctx context.Context, engine component.Com
 	return result, nil
 }
 
-func beginSummaryRunSession(ctx context.Context, engine component.CompletionEngine, model string) (component.InferenceSession, error) {
+func beginIndexingRunSession(ctx context.Context, engine component.InferenceEngine, model string) (component.InferenceSession, error) {
 	sessionEngine, ok := engine.(component.InferenceSessionEngine)
 	if !ok {
 		return nil, nil
 	}
-	return sessionEngine.BeginInferenceSession(ctx, component.InferenceSessionOptions{Model: strings.TrimSpace(model), IdleTimeout: summaryRunIdleTimeout})
+	return sessionEngine.BeginInferenceSession(ctx, component.InferenceSessionOptions{Model: strings.TrimSpace(model), IdleTimeout: indexingRunIdleTimeout})
 }
 
 func (c *Component) summarizeMessage(ctx context.Context, engine component.CompletionEngine, strategy indexStrategy, message coremodel.ThreadMessage) (string, error) {
@@ -235,6 +235,12 @@ func runeCount(text string) int { return len([]rune(text)) }
 func (c *Component) runEmbeddingStrategy(ctx context.Context, embedder component.EmbeddingEngine, strategy indexStrategy, run *indexRun, req RunRequest, messages []coremodel.ThreadMessage, result RunResult) (RunResult, error) {
 	batchSize := firstPositive(req.BatchSize, strategy.BatchSize, 128)
 	var batch []coremodel.ThreadMessage
+	var session component.InferenceSession
+	defer func() {
+		if session != nil {
+			_ = session.Close()
+		}
+	}()
 	flush := func() error {
 		if len(batch) == 0 {
 			return nil
@@ -245,6 +251,13 @@ func (c *Component) runEmbeddingStrategy(ctx context.Context, embedder component
 			id := message.ID.String()
 			byID[id] = message
 			inputs = append(inputs, component.EmbeddingInput{ID: id, Text: message.Text, Kind: component.EmbeddingKindDocument})
+		}
+		if session == nil {
+			var err error
+			session, err = beginIndexingRunSession(ctx, embedder, strategy.Model)
+			if err != nil {
+				return err
+			}
 		}
 		response, err := embedder.Embed(ctx, component.EmbeddingRequest{Model: strategy.Model, Inputs: inputs})
 		if err != nil {

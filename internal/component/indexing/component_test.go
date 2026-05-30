@@ -51,6 +51,38 @@ func TestEmbeddingStrategyRunIndexesMessagesAndSkipsUnchanged(t *testing.T) {
 	}
 }
 
+func TestEmbeddingStrategyKeepsInferenceSessionOpenAcrossBatches(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "first message"),
+		messageFixture(chatID, threadID, coremodel.MessageRoleAgent, "second message"),
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "third message"),
+	}
+	embedder := &fakeEmbeddingEngine{}
+	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": embedder}), messages)
+	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "default-message", Type: StrategyTypeEmbedding, ProviderRef: "llamacpp", Model: "qwen-embed", BatchSize: 2}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := component.RunStrategy(ctx, RunRequest{Strategy: "default-message", Scope: scope{ThreadID: threadID}}); err != nil {
+		t.Fatal(err)
+	}
+	if embedder.calls != 2 {
+		t.Fatalf("embed calls = %d, want 2 batches", embedder.calls)
+	}
+	if len(embedder.sessionRequests) != 1 {
+		t.Fatalf("session requests = %d, want 1", len(embedder.sessionRequests))
+	}
+	if embedder.sessionRequests[0].Model != "qwen-embed" || embedder.sessionRequests[0].IdleTimeout != indexingRunIdleTimeout {
+		t.Fatalf("session request = %#v", embedder.sessionRequests[0])
+	}
+	if embedder.sessionCloseCalls != 1 {
+		t.Fatalf("session close calls = %d, want 1", embedder.sessionCloseCalls)
+	}
+}
+
 func TestSummaryStrategyRunStoresPerMessageSummaries(t *testing.T) {
 	ctx := context.Background()
 	chatID := modeluuid.New()
@@ -220,7 +252,7 @@ func TestSummaryStrategyKeepsInferenceSessionOpenForRun(t *testing.T) {
 	if len(completion.sessionRequests) != 1 {
 		t.Fatalf("session requests = %d, want 1", len(completion.sessionRequests))
 	}
-	if completion.sessionRequests[0].Model != "qwen3" || completion.sessionRequests[0].IdleTimeout != summaryRunIdleTimeout {
+	if completion.sessionRequests[0].Model != "qwen3" || completion.sessionRequests[0].IdleTimeout != indexingRunIdleTimeout {
 		t.Fatalf("session request = %#v", completion.sessionRequests[0])
 	}
 	if completion.sessionCloseCalls != 1 {
@@ -399,7 +431,11 @@ func shouldVisit(message coremodel.ThreadMessage, scope component.MessageScope) 
 	return true
 }
 
-type fakeEmbeddingEngine struct{ calls int }
+type fakeEmbeddingEngine struct {
+	calls             int
+	sessionRequests   []component.InferenceSessionOptions
+	sessionCloseCalls int
+}
 
 func (f *fakeEmbeddingEngine) Type() string { return "fake-embedder" }
 func (f *fakeEmbeddingEngine) Embed(ctx context.Context, req component.EmbeddingRequest) (component.EmbeddingResponse, error) {
@@ -410,6 +446,12 @@ func (f *fakeEmbeddingEngine) Embed(ctx context.Context, req component.Embedding
 		out = append(out, component.Embedding{ID: input.ID, Model: req.Model, Dim: 2, Normalized: true, Vector: []float32{float32(i + 1), float32(len(input.Text))}})
 	}
 	return component.EmbeddingResponse{Embeddings: out}, nil
+}
+
+func (f *fakeEmbeddingEngine) BeginInferenceSession(ctx context.Context, options component.InferenceSessionOptions) (component.InferenceSession, error) {
+	_ = ctx
+	f.sessionRequests = append(f.sessionRequests, options)
+	return fakeInferenceSession{close: func() { f.sessionCloseCalls++ }}, nil
 }
 
 type fakeCompletion struct {
