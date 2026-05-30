@@ -14,7 +14,6 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 const (
@@ -32,6 +31,7 @@ type CommandRunner interface {
 type Handler struct {
 	Runner CommandRunner
 	Source commandengine.Source
+	Auth   Authenticator
 }
 
 type JSONResponse struct {
@@ -61,9 +61,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		writeError(w, req, http.StatusBadRequest, err, 0)
 		return
 	}
-	base, err := h.baseRequestFromHeaders(req.Header)
+	base, err := h.baseRequestFromRequest(req)
 	if err != nil {
-		writeError(w, req, http.StatusBadRequest, err, 0)
+		writeError(w, req, http.StatusUnauthorized, err, 0)
 		return
 	}
 	started := time.Now()
@@ -151,16 +151,26 @@ func flagsFromQuery(values url.Values) []string {
 	return flags
 }
 
-func (h *Handler) baseRequestFromHeaders(header http.Header) (commandengine.Request, error) {
+func (h *Handler) baseRequestFromRequest(req *http.Request) (commandengine.Request, error) {
 	source := commandengine.SourceHostbridge
 	if h != nil && h.Source != "" {
 		source = h.Source
 	}
+	auth := Authenticator(StaticActorAuth{})
+	if h != nil && h.Auth != nil {
+		auth = h.Auth
+	}
+	actor, err := auth.Authenticate(req)
+	if err != nil {
+		return commandengine.Request{}, err
+	}
 	ctx := commandengine.Context{
 		Source: source,
-		// Headers may identify the caller, but they do not grant privileges.
-		// Role elevation belongs with the future auth layer.
-		Actor: commandengine.Actor{ID: firstHeader(header, "X-Actor-Id", "hostbridgev2"), Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		Actor:  actor,
+	}
+	header := http.Header(nil)
+	if req != nil {
+		header = req.Header
 	}
 	for _, item := range []struct {
 		header string
@@ -181,14 +191,6 @@ func (h *Handler) baseRequestFromHeaders(header http.Header) (commandengine.Requ
 		*item.target = id
 	}
 	return commandengine.Request{Context: ctx}, nil
-}
-
-func firstHeader(header http.Header, key string, fallback string) string {
-	value := strings.TrimSpace(header.Get(key))
-	if value == "" {
-		return fallback
-	}
-	return value
 }
 
 func writeResult(w http.ResponseWriter, req *http.Request, stdout string, elapsedMS int64) {

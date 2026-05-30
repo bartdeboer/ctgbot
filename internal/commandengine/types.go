@@ -16,7 +16,11 @@ const (
 	SourceCLI        Source = "cli"
 	SourceMessage    Source = "message"
 	SourceHostbridge Source = "hostbridge"
-	SourceScheduler  Source = "scheduler"
+	// SourceRemoteHostbridge is reserved for explicitly authenticated remote
+	// hostbridgev2 callers. It intentionally does not inherit SourceHostbridge
+	// policy; commands must opt into the remote surface deliberately.
+	SourceRemoteHostbridge Source = "remote_hostbridge"
+	SourceScheduler        Source = "scheduler"
 )
 
 type Actor = coremodel.Actor

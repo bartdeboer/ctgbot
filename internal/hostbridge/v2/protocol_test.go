@@ -2,6 +2,9 @@ package v2
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -62,9 +65,9 @@ func TestHandlerBuildsContextFromHeaders(t *testing.T) {
 	sandboxID := modeluuid.New()
 	runner := &fakeRunner{result: commandengine.Result{Text: "ok"}}
 	handler := NewHandler(runner)
+	handler.Auth = StaticActorAuth{Actor: commandengine.Actor{ID: "agent-1"}}
 
 	req := httptest.NewRequest(http.MethodPost, "/v2/run/status", nil)
-	req.Header.Set("X-Actor-Id", "agent-1")
 	req.Header.Set("X-Chat-Id", chatID.String())
 	req.Header.Set("X-Thread-Id", threadID.String())
 	req.Header.Set("X-Sandbox-Id", sandboxID.String())
@@ -102,6 +105,66 @@ func TestHandlerSourceCanBeConfigured(t *testing.T) {
 	}
 	if got := runner.base.Context.Source; got != commandengine.SourceScheduler {
 		t.Fatalf("source = %q, want %q", got, commandengine.SourceScheduler)
+	}
+}
+
+func TestNewServerAppliesSharedHTTPContracts(t *testing.T) {
+	runner := &fakeRunner{result: commandengine.Result{Text: "ok"}}
+	server := NewServer(runner, ServerConfig{
+		Addr:   "127.0.0.1:0",
+		Source: commandengine.SourceRemoteHostbridge,
+		Auth:   StaticActorAuth{Actor: commandengine.Actor{ID: "remote-agent"}},
+	})
+
+	handler, ok := server.Handler.(*Handler)
+	if !ok {
+		t.Fatalf("server handler = %T, want *Handler", server.Handler)
+	}
+	if server.Addr != "127.0.0.1:0" {
+		t.Fatalf("server addr = %q", server.Addr)
+	}
+	if handler.Runner != runner {
+		t.Fatalf("handler runner not preserved")
+	}
+	if handler.Source != commandengine.SourceRemoteHostbridge {
+		t.Fatalf("source = %q, want %q", handler.Source, commandengine.SourceRemoteHostbridge)
+	}
+}
+
+func TestMTLSClientAuthUsesCertificateCommonName(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v2/run/status", nil)
+	req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{
+		{Subject: pkix.Name{CommonName: "thread-1"}},
+	}}
+
+	actor, err := (MTLSClientAuth{}).Authenticate(req)
+	if err != nil {
+		t.Fatalf("authenticate mTLS: %v", err)
+	}
+	if actor.ID != "thread-1" {
+		t.Fatalf("actor id = %q, want thread-1", actor.ID)
+	}
+}
+
+func TestBearerTokenAuthRequiresAuthorizationHeader(t *testing.T) {
+	auth := BearerTokenAuth{
+		Token: "secret",
+		Actor: commandengine.Actor{ID: "remote-agent"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v2/run/status?access_token=secret", nil)
+
+	if _, err := auth.Authenticate(req); err == nil {
+		t.Fatalf("Authenticate accepted bearer token in query")
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/v2/run/status", nil)
+	req.Header.Set("Authorization", "Bearer secret")
+	actor, err := auth.Authenticate(req)
+	if err != nil {
+		t.Fatalf("authenticate bearer token: %v", err)
+	}
+	if actor.ID != "remote-agent" {
+		t.Fatalf("actor id = %q, want remote-agent", actor.ID)
 	}
 }
 
