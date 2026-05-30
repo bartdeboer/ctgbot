@@ -7,8 +7,8 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
-func TestResolveScopeDefaultsSchedulerToAll(t *testing.T) {
-	scope, err := resolveScope(commandengine.Context{Source: commandengine.SourceScheduler}, scopeFlags{})
+func TestResolveScopeDefaultsToAll(t *testing.T) {
+	scope, err := resolveScope(commandengine.Context{}, scopeFlags{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,9 +17,9 @@ func TestResolveScopeDefaultsSchedulerToAll(t *testing.T) {
 	}
 }
 
-func TestResolveScopeSchedulerHonorsExplicitThread(t *testing.T) {
+func TestResolveScopeHonorsExplicitThread(t *testing.T) {
 	threadID := modeluuid.New()
-	scope, err := resolveScope(commandengine.Context{Source: commandengine.SourceScheduler}, scopeFlags{Thread: threadID.String()})
+	scope, err := resolveScope(commandengine.Context{}, scopeFlags{Thread: threadID.String()})
 	if err != nil {
 		t.Fatal(err)
 	}

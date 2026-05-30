@@ -23,7 +23,7 @@ type scope struct {
 	Order    component.MessageOrder
 }
 
-func resolveScope(ctx commandengine.Context, flags scopeFlags) (scope, error) {
+func resolveScope(_ commandengine.Context, flags scopeFlags) (scope, error) {
 	if flags.All {
 		if strings.TrimSpace(flags.Chat) != "" || strings.TrimSpace(flags.Thread) != "" {
 			return scope{}, fmt.Errorf("--all cannot be combined with --chat or --thread")
@@ -47,17 +47,7 @@ func resolveScope(ctx commandengine.Context, flags scopeFlags) (scope, error) {
 		}
 		return scope{ThreadID: id}, nil
 	}
-	if ctx.Source == commandengine.SourceScheduler {
-		return scope{All: true}, nil
-	}
-	threadID := ctx.ThreadID
-	if threadID.IsNull() {
-		threadID = ctx.SandboxID
-	}
-	if threadID.IsNull() {
-		return scope{}, fmt.Errorf("missing thread id")
-	}
-	return scope{ThreadID: threadID}, nil
+	return scope{All: true}, nil
 }
 
 func parseRequiredUUID(name string, value string) (modeluuid.UUID, error) {
@@ -84,6 +74,6 @@ func scopeText(scope scope) string {
 	case !scope.ChatID.IsNull():
 		return "chat " + scope.ChatID.String()
 	default:
-		return "current thread"
+		return "all"
 	}
 }

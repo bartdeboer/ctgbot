@@ -106,7 +106,8 @@ func (c *Component) messagesForScope(ctx context.Context, scope scope, maxMessag
 		All:      scope.All,
 		Limit:    scope.Limit,
 		Order:    scope.Order,
-		Kinds:    []coremodel.MessageKind{coremodel.MessageKindMessage},
+		Kinds:    indexableMessageKinds(),
+		Roles:    []coremodel.MessageRole{coremodel.MessageRoleUser, coremodel.MessageRoleAgent},
 	}, func(message coremodel.ThreadMessage) error {
 		if searchableMessage(message) {
 			messages = append(messages, message)
@@ -117,14 +118,19 @@ func (c *Component) messagesForScope(ctx context.Context, scope scope, maxMessag
 }
 
 func searchableMessage(message coremodel.ThreadMessage) bool {
-	if message.Kind != coremodel.MessageKindMessage || strings.TrimSpace(message.Text) == "" || message.ID.IsNull() {
+	if strings.TrimSpace(message.Text) == "" || message.ID.IsNull() {
 		return false
 	}
-	switch message.ResolvedRole() {
-	case coremodel.MessageRoleUser, coremodel.MessageRoleAgent:
-		return true
-	default:
-		return false
+	return true
+}
+
+func indexableMessageKinds() []coremodel.MessageKind {
+	return []coremodel.MessageKind{
+		coremodel.MessageKindMessage,
+		// Legacy rows before the Role/Kind split stored the conversational role
+		// in Kind. Keep them indexable until old databases are backfilled.
+		coremodel.MessageKind("user"),
+		coremodel.MessageKind("agent"),
 	}
 }
 

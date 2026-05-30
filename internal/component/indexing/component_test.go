@@ -87,6 +87,56 @@ func TestSummaryStrategyRunStoresPerMessageSummaries(t *testing.T) {
 	}
 }
 
+func TestSummaryStrategyMaxMessagesAppliesAfterEligibilityFiltering(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "older user"),
+		messageFixture(chatID, threadID, coremodel.MessageRoleSystem, "newer system 1"),
+		messageFixture(chatID, threadID, coremodel.MessageRoleAgent, "newer agent"),
+		messageFixture(chatID, threadID, coremodel.MessageRoleSystem, "newer system 2"),
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "newest user"),
+	}
+	completion := &fakeCompletion{}
+	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": completion}), messages)
+	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "context-100", Type: StrategyTypeSummary, ProviderRef: "llamacpp", Model: "qwen3.5", TargetChars: 100}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := component.RunStrategy(ctx, RunRequest{Strategy: "context-100", Scope: scope{ThreadID: threadID}, MaxMessages: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Messages != 2 || result.Created != 2 {
+		t.Fatalf("result = %#v, want two eligible user/agent messages", result)
+	}
+}
+
+func TestSummaryStrategyIndexesLegacyUserAgentKinds(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		legacyMessageFixture(chatID, threadID, coremodel.MessageKind("user"), "legacy user"),
+		legacyMessageFixture(chatID, threadID, coremodel.MessageKind("agent"), "legacy agent"),
+		legacyMessageFixture(chatID, threadID, coremodel.MessageKind("system"), "legacy system"),
+	}
+	completion := &fakeCompletion{}
+	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": completion}), messages)
+	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "context-100", Type: StrategyTypeSummary, ProviderRef: "llamacpp", Model: "qwen3.5", TargetChars: 100}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := component.RunStrategy(ctx, RunRequest{Strategy: "context-100", Scope: scope{All: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Messages != 2 || result.Created != 2 {
+		t.Fatalf("result = %#v, want legacy user and agent only", result)
+	}
+}
+
 func TestClearIndexKeepsStrategies(t *testing.T) {
 	ctx := context.Background()
 	chatID := modeluuid.New()
@@ -190,21 +240,24 @@ type fakeMessageSource struct{ messages []coremodel.ThreadMessage }
 func (s fakeMessageSource) ForEachMessage(ctx context.Context, scope component.MessageScope, visit component.MessageVisitor) error {
 	_ = ctx
 	items := s.messages
-	if scope.Order == component.MessageOrderNewestFirst {
-		for i := len(items) - 1; i >= 0; i-- {
-			if shouldVisit(items[i], scope) {
-				if err := visit(items[i]); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}
+	var filtered []coremodel.ThreadMessage
 	for _, message := range items {
 		if shouldVisit(message, scope) {
-			if err := visit(message); err != nil {
-				return err
-			}
+			filtered = append(filtered, message)
+		}
+	}
+	if scope.Order == component.MessageOrderNewestFirst {
+		for i := 0; i < len(filtered)/2; i++ {
+			j := len(filtered) - 1 - i
+			filtered[i], filtered[j] = filtered[j], filtered[i]
+		}
+	}
+	if scope.Limit > 0 && len(filtered) > scope.Limit {
+		filtered = filtered[:scope.Limit]
+	}
+	for _, message := range filtered {
+		if err := visit(message); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -216,6 +269,39 @@ func shouldVisit(message coremodel.ThreadMessage, scope component.MessageScope) 
 			return false
 		}
 		if !scope.ChatID.IsNull() && message.ChatID != scope.ChatID {
+			return false
+		}
+	}
+	if len(scope.Kinds) > 0 {
+		allowed := false
+		for _, kind := range scope.Kinds {
+			if message.Kind == kind {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return false
+		}
+	}
+	if len(scope.Roles) > 0 {
+		allowed := false
+		role := message.Role
+		if role == "" {
+			switch message.Kind {
+			case coremodel.MessageKind("user"):
+				role = coremodel.MessageRoleUser
+			case coremodel.MessageKind("agent"):
+				role = coremodel.MessageRoleAgent
+			}
+		}
+		for _, candidate := range scope.Roles {
+			if role == candidate {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
 			return false
 		}
 	}
@@ -248,6 +334,10 @@ func (f *fakeCompletion) Complete(ctx context.Context, req component.CompletionR
 
 func messageFixture(chatID modeluuid.UUID, threadID modeluuid.UUID, role coremodel.MessageRole, text string) coremodel.ThreadMessage {
 	return coremodel.ThreadMessage{ID: modeluuid.New(), ChatID: chatID, ThreadID: threadID, Role: role, Kind: coremodel.MessageKindMessage, Text: text}
+}
+
+func legacyMessageFixture(chatID modeluuid.UUID, threadID modeluuid.UUID, kind coremodel.MessageKind, text string) coremodel.ThreadMessage {
+	return coremodel.ThreadMessage{ID: modeluuid.New(), ChatID: chatID, ThreadID: threadID, Kind: kind, Text: text}
 }
 
 func firstLine(text string) string {

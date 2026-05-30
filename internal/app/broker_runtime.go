@@ -87,7 +87,7 @@ func (s *service) ForEachMessage(ctx context.Context, scope component.MessageSco
 }
 
 func filterMessages(messages []coremodel.ThreadMessage, scope component.MessageScope) []coremodel.ThreadMessage {
-	if len(scope.Kinds) == 0 {
+	if len(scope.Kinds) == 0 && len(scope.Roles) == 0 {
 		return messages
 	}
 	out := messages[:0]
@@ -100,15 +100,49 @@ func filterMessages(messages []coremodel.ThreadMessage, scope component.MessageS
 }
 
 func messageScopeAllows(scope component.MessageScope, message coremodel.ThreadMessage) bool {
-	if len(scope.Kinds) == 0 {
-		return true
-	}
-	for _, kind := range scope.Kinds {
-		if message.Kind == kind {
-			return true
+	if len(scope.Kinds) > 0 {
+		kindAllowed := false
+		for _, kind := range scope.Kinds {
+			if message.Kind == kind {
+				kindAllowed = true
+				break
+			}
+		}
+		if !kindAllowed {
+			return false
 		}
 	}
-	return false
+	if len(scope.Roles) > 0 {
+		role := messageScopeRole(message)
+		roleAllowed := false
+		for _, allowed := range scope.Roles {
+			if role == allowed {
+				roleAllowed = true
+				break
+			}
+		}
+		if !roleAllowed {
+			return false
+		}
+	}
+	return true
+}
+
+func messageScopeRole(message coremodel.ThreadMessage) coremodel.MessageRole {
+	if message.Role != "" {
+		return message.Role
+	}
+	// Legacy rows before the Role/Kind split stored user/agent/system in Kind.
+	switch message.Kind {
+	case coremodel.MessageKind("user"):
+		return coremodel.MessageRoleUser
+	case coremodel.MessageKind("agent"):
+		return coremodel.MessageRoleAgent
+	case coremodel.MessageKind("system"):
+		return coremodel.MessageRoleSystem
+	default:
+		return ""
+	}
 }
 
 func (s *service) chatMessages(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
