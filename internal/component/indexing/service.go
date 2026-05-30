@@ -172,6 +172,10 @@ func (c *Component) runSummaryStrategy(ctx context.Context, engine component.Com
 }
 
 func (c *Component) summarizeMessage(ctx context.Context, engine component.CompletionEngine, strategy indexStrategy, message coremodel.ThreadMessage) (string, error) {
+	text := strings.TrimSpace(message.Text)
+	if shouldCopySummaryVerbatim(strategy, text) {
+		return text, nil
+	}
 	targetChars := strategy.TargetChars
 	if targetChars <= 0 {
 		targetChars = 500
@@ -180,7 +184,7 @@ func (c *Component) summarizeMessage(ctx context.Context, engine component.Compl
 	if prompt == "" {
 		prompt = defaultSummaryPrompt
 	}
-	content := fmt.Sprintf("%s\n\nTarget: at most %d characters.\nRole: %s\nMessage:\n%s", prompt, targetChars, message.ResolvedRole(), strings.TrimSpace(message.Text))
+	content := fmt.Sprintf("%s\n\nTarget: at most %d characters.\nRole: %s\nMessage:\n%s", prompt, targetChars, message.ResolvedRole(), text)
 	result, err := engine.Complete(ctx, component.CompletionRequest{
 		Model: strings.TrimSpace(strategy.Model),
 		Prompt: component.CompletionPrompt{Messages: []component.CompletionMessage{{
@@ -198,6 +202,12 @@ func (c *Component) summarizeMessage(ctx context.Context, engine component.Compl
 	}
 	return strings.TrimSpace(result.Final.Text), nil
 }
+
+func shouldCopySummaryVerbatim(strategy indexStrategy, text string) bool {
+	return strategy.CopyUnderChars > 0 && runeCount(text) <= strategy.CopyUnderChars
+}
+
+func runeCount(text string) int { return len([]rune(text)) }
 
 func (c *Component) runEmbeddingStrategy(ctx context.Context, embedder component.EmbeddingEngine, strategy indexStrategy, run *indexRun, req RunRequest, messages []coremodel.ThreadMessage, result RunResult) (RunResult, error) {
 	batchSize := firstPositive(req.BatchSize, strategy.BatchSize, 128)

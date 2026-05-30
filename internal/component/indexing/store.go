@@ -30,17 +30,18 @@ const (
 type store struct{ db *gorm.DB }
 
 type indexStrategy struct {
-	ID          string `gorm:"primaryKey"`
-	Name        string `gorm:"uniqueIndex"`
-	Type        string `gorm:"index"`
-	ProviderRef string
-	Model       string
-	Prompt      string
-	TargetChars int
-	BatchSize   int
-	Enabled     bool `gorm:"index"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID             string `gorm:"primaryKey"`
+	Name           string `gorm:"uniqueIndex"`
+	Type           string `gorm:"index"`
+	ProviderRef    string
+	Model          string
+	Prompt         string
+	TargetChars    int
+	CopyUnderChars int
+	BatchSize      int
+	Enabled        bool `gorm:"index"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 func (indexStrategy) TableName() string { return "index_strategies" }

@@ -137,6 +137,63 @@ func TestSummaryStrategyIndexesLegacyUserAgentKinds(t *testing.T) {
 	}
 }
 
+func TestSummaryStrategyCopiesShortMessagesWithoutCompletion(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "short exact message"),
+	}
+	completion := &fakeCompletion{}
+	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": completion}), messages)
+	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "search-title", Type: StrategyTypeSummary, ProviderRef: "llamacpp", Model: "qwen3", TargetChars: 80, CopyUnderChars: 80}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := component.RunStrategy(ctx, RunRequest{Strategy: "search-title", Scope: scope{All: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Messages != 1 || result.Created != 1 {
+		t.Fatalf("result = %#v", result)
+	}
+	if completion.calls != 0 {
+		t.Fatalf("completion calls = %d, want 0", completion.calls)
+	}
+	strategy, err := component.store.strategyByName(ctx, "search-title")
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, err := component.store.summary(ctx, strategy.ID, messages[0].ID.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary == nil || summary.Summary != "short exact message" {
+		t.Fatalf("summary = %#v, want verbatim text", summary)
+	}
+}
+
+func TestSummaryStrategySummarizesLongMessages(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "this message is definitely longer than the tiny copy threshold"),
+	}
+	completion := &fakeCompletion{}
+	component := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": completion}), messages)
+	if err := component.store.saveStrategy(ctx, &indexStrategy{Name: "search-title", Type: StrategyTypeSummary, ProviderRef: "llamacpp", Model: "qwen3", TargetChars: 80, CopyUnderChars: 10}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := component.RunStrategy(ctx, RunRequest{Strategy: "search-title", Scope: scope{All: true}}); err != nil {
+		t.Fatal(err)
+	}
+	if completion.calls != 1 {
+		t.Fatalf("completion calls = %d, want 1", completion.calls)
+	}
+}
+
 func TestClearIndexKeepsStrategies(t *testing.T) {
 	ctx := context.Background()
 	chatID := modeluuid.New()
@@ -321,11 +378,15 @@ func (f *fakeEmbeddingEngine) Embed(ctx context.Context, req component.Embedding
 	return component.EmbeddingResponse{Embeddings: out}, nil
 }
 
-type fakeCompletion struct{ lastPrompt string }
+type fakeCompletion struct {
+	lastPrompt string
+	calls      int
+}
 
 func (f *fakeCompletion) Type() string { return "fake-completion" }
 func (f *fakeCompletion) Complete(ctx context.Context, req component.CompletionRequest) (*component.CompletionResult, error) {
 	_ = ctx
+	f.calls++
 	if len(req.Prompt.Messages) > 0 {
 		f.lastPrompt = req.Prompt.Messages[0].Content
 	}

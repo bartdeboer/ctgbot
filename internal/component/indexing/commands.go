@@ -16,12 +16,13 @@ import (
 type strategyListCommand struct{}
 
 type strategyAddSummaryCommand struct {
-	Name        string
-	Completion  string
-	Model       string
-	Prompt      string
-	TargetChars int
-	BatchSize   int
+	Name           string
+	Completion     string
+	Model          string
+	Prompt         string
+	TargetChars    int
+	CopyUnderChars int
+	BatchSize      int
 }
 
 type strategyAddEmbeddingCommand struct {
@@ -130,6 +131,7 @@ func buildStrategyAddSummaryCommand(req *clir.Request) (any, error) {
 	model := fs.String("model", "", "Completion model name")
 	prompt := fs.String("prompt", defaultSummaryPrompt, "Summary prompt")
 	targetChars := fs.Int("target-chars", 0, "Target summary characters")
+	copyUnderChars := fs.Int("copy-under-chars", 0, "Copy messages at or below this character count without model summarization")
 	batchSize := fs.Int("batch-size", 0, "Summary batch size")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
@@ -137,7 +139,7 @@ func buildStrategyAddSummaryCommand(req *clir.Request) (any, error) {
 	if len(fs.Args()) > 0 {
 		return nil, fmt.Errorf("unexpected strategy arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	cmd := strategyAddSummaryCommand{Name: strings.TrimSpace(req.Params["name"]), Completion: strings.TrimSpace(*completion), Model: strings.TrimSpace(*model), Prompt: strings.TrimSpace(*prompt), TargetChars: *targetChars, BatchSize: *batchSize}
+	cmd := strategyAddSummaryCommand{Name: strings.TrimSpace(req.Params["name"]), Completion: strings.TrimSpace(*completion), Model: strings.TrimSpace(*model), Prompt: strings.TrimSpace(*prompt), TargetChars: *targetChars, CopyUnderChars: *copyUnderChars, BatchSize: *batchSize}
 	if cmd.Name == "" {
 		return nil, fmt.Errorf("missing strategy name")
 	}
@@ -218,13 +220,16 @@ func (c *Component) handleStrategyList(ctx context.Context, req commandengine.Re
 		if strategy.TargetChars > 0 {
 			line += fmt.Sprintf(" target_chars=%d", strategy.TargetChars)
 		}
+		if strategy.CopyUnderChars > 0 {
+			line += fmt.Sprintf(" copy_under_chars=%d", strategy.CopyUnderChars)
+		}
 		lines = append(lines, line)
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
 
 func (c *Component) handleStrategyAddSummary(ctx context.Context, req commandengine.Request, cmd strategyAddSummaryCommand) (commandengine.Result, error) {
-	strategy := indexStrategy{Name: cmd.Name, Type: StrategyTypeSummary, ProviderRef: cmd.Completion, Model: cmd.Model, Prompt: cmd.Prompt, TargetChars: cmd.TargetChars, BatchSize: cmd.BatchSize}
+	strategy := indexStrategy{Name: cmd.Name, Type: StrategyTypeSummary, ProviderRef: cmd.Completion, Model: cmd.Model, Prompt: cmd.Prompt, TargetChars: cmd.TargetChars, CopyUnderChars: cmd.CopyUnderChars, BatchSize: cmd.BatchSize}
 	if err := c.store.saveStrategy(ctx, &strategy); err != nil {
 		return commandengine.Result{}, err
 	}
