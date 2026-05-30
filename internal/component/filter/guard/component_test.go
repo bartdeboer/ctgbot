@@ -65,17 +65,14 @@ func TestGuardUsesRestrictedCompletionAndAllowsLowRisk(t *testing.T) {
 		t.Fatalf("completion requests = %d, want %d", got, want)
 	}
 	request := recorder.requests[0]
-	if request.Mode != component.CompletionModeRestricted {
-		t.Fatalf("Mode = %q, want restricted", request.Mode)
+	if request.Reasoning != component.ReasoningDisabled {
+		t.Fatalf("Reasoning = %q, want disabled", request.Reasoning)
 	}
 	if request.ResponseFormat != "json" {
 		t.Fatalf("ResponseFormat = %q, want json", request.ResponseFormat)
 	}
 	if request.MaxOutputTokens != defaultMaxOutputTokens {
 		t.Fatalf("MaxOutputTokens = %d, want %d", request.MaxOutputTokens, defaultMaxOutputTokens)
-	}
-	if request.Runtime != nil {
-		t.Fatal("restricted guard request received runtime")
 	}
 }
 

@@ -182,7 +182,7 @@ func (c *Component) summarizeMessage(ctx context.Context, engine component.Compl
 			Content: content,
 		}}},
 		MaxOutputTokens: max(64, targetChars/3),
-		Mode:            component.CompletionModeRestricted,
+		Reasoning:       component.ReasoningDisabled,
 	})
 	if err != nil {
 		return "", err

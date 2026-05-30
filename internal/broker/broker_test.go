@@ -1100,8 +1100,8 @@ func TestGuardEventFilterBlocksBeforeAgent(t *testing.T) {
 		t.Fatalf("guard completion requests = %d, want %d", got, want)
 	}
 	request := fixture.completionRecorder.requests[0]
-	if request.Mode != component.CompletionModeRestricted || request.ResponseFormat != "json" || request.MaxOutputTokens == 0 || request.Runtime != nil {
-		t.Fatalf("guard request = %#v, want restricted/json/bounded/no runtime", request)
+	if request.Reasoning != component.ReasoningDisabled || request.ResponseFormat != "json" || request.MaxOutputTokens == 0 {
+		t.Fatalf("guard request = %#v, want reasoning-disabled/json/bounded", request)
 	}
 	droppedIDs, err := fixture.storage.DroppedEvents().ListIDs(context.Background())
 	if err != nil {

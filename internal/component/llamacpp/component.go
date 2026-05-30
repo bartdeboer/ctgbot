@@ -101,7 +101,7 @@ func (c *Component) ManagedFiles() []component.ManagedFile {
 }
 
 func (c *Component) Complete(ctx context.Context, request component.CompletionRequest) (*component.CompletionResult, error) {
-	text, err := c.completeWithManagedBackend(ctx, request.Model, completionPromptToChat(request.Prompt), request.MaxOutputTokens, request.ResponseFormat)
+	text, err := c.completeWithManagedBackend(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -112,8 +112,8 @@ func (c *Component) Complete(ctx context.Context, request component.CompletionRe
 	return &component.CompletionResult{Final: &coremodel.ThreadMessage{Text: text}}, nil
 }
 
-func (c *Component) completeWithManagedBackend(ctx context.Context, modelName string, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
-	session, err := c.BeginInferenceSession(ctx, component.InferenceSessionOptions{Model: modelName})
+func (c *Component) completeWithManagedBackend(ctx context.Context, request component.CompletionRequest) (string, error) {
+	session, err := c.BeginInferenceSession(ctx, component.InferenceSessionOptions{Model: request.Model})
 	if err != nil {
 		return "", err
 	}
@@ -122,14 +122,14 @@ func (c *Component) completeWithManagedBackend(ctx context.Context, modelName st
 			c.logf("llamacpp inference session close failed component=%s err=%v", c.registration.Ref(), err)
 		}
 	}()
-	return c.completeWithOptions(ctx, modelName, messages, maxOutputTokens, responseFormat)
+	return c.completeWithOptions(ctx, request)
 }
 
 func (c *Component) BeginInferenceSession(ctx context.Context, options component.InferenceSessionOptions) (component.InferenceSession, error) {
 	return c.beginSession(ctx, options)
 }
 
-func (c *Component) BeginOpenAIChatInferenceSession(ctx context.Context, options component.InferenceSessionOptions) (component.OpenAIChatInferenceSession, error) {
+func (c *Component) BeginOpenAIChatSession(ctx context.Context, options component.InferenceSessionOptions) (component.OpenAIChatSession, error) {
 	session, runtime, model, err := c.beginSessionWithRuntime(ctx, options)
 	if err != nil {
 		return nil, err
@@ -348,8 +348,8 @@ func (s *inferenceSession) Close() error {
 	return s.err
 }
 
-func (c *Component) completeWithOptions(ctx context.Context, modelName string, messages []chatMessage, maxOutputTokens int, responseFormat string) (string, error) {
-	runtime, model, err := c.runtimeForModel(modelName)
+func (c *Component) completeWithOptions(ctx context.Context, request component.CompletionRequest) (string, error) {
+	runtime, model, err := c.runtimeForModel(request.Model)
 	if err != nil {
 		return "", err
 	}
@@ -362,18 +362,26 @@ func (c *Component) completeWithOptions(ctx context.Context, modelName string, m
 	}
 	defer release()
 	maxTokens := model.MaxTokens
-	if maxOutputTokens > 0 {
-		maxTokens = maxOutputTokens
+	if request.MaxOutputTokens > 0 {
+		maxTokens = request.MaxOutputTokens
 	}
-	body := completionRequest{
-		Model:       model.Name,
-		Messages:    messages,
-		MaxTokens:   maxTokens,
-		Temperature: model.Temperature,
+	temperature := model.Temperature
+	if request.Temperature > 0 {
+		temperature = request.Temperature
 	}
-	if strings.EqualFold(strings.TrimSpace(responseFormat), "json") {
-		body.ResponseFormat = &completionResponseFormat{Type: "json_object"}
+	body := cloneProviderOptions(request.ProviderOptions)
+	body["model"] = model.Name
+	body["messages"] = completionPromptToChat(request.Prompt)
+	if maxTokens > 0 {
+		body["max_tokens"] = maxTokens
 	}
+	if temperature > 0 {
+		body["temperature"] = temperature
+	}
+	if strings.EqualFold(strings.TrimSpace(request.ResponseFormat), "json") {
+		body["response_format"] = completionResponseFormat{Type: "json_object"}
+	}
+	applyReasoningMode(body, request.Reasoning)
 	data, err := json.Marshal(body)
 	if err != nil {
 		return "", err
@@ -405,6 +413,50 @@ func (c *Component) completeWithOptions(ctx context.Context, modelName string, m
 	return decoded.Choices[0].Message.Content, nil
 }
 
+func cloneProviderOptions(options map[string]any) map[string]any {
+	if len(options) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(options))
+	for key, value := range options {
+		out[strings.TrimSpace(key)] = cloneProviderOptionValue(value)
+	}
+	return out
+}
+
+func cloneProviderOptionValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return cloneProviderOptions(typed)
+	case []any:
+		out := make([]any, len(typed))
+		for i, item := range typed {
+			out[i] = cloneProviderOptionValue(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func applyReasoningMode(body map[string]any, mode component.ReasoningMode) {
+	var enableThinking any
+	switch mode {
+	case component.ReasoningEnabled:
+		enableThinking = true
+	case component.ReasoningDisabled:
+		enableThinking = false
+	default:
+		return
+	}
+	kwargs, _ := body["chat_template_kwargs"].(map[string]any)
+	if kwargs == nil {
+		kwargs = map[string]any{}
+	}
+	kwargs["enable_thinking"] = enableThinking
+	body["chat_template_kwargs"] = kwargs
+}
+
 func (c *Component) acquireInference(ctx context.Context, modelName string) (func(), error) {
 	if c == nil || c.inferenceGate == nil {
 		return func() {}, nil
@@ -431,14 +483,6 @@ func (c *Component) runtimeForModel(name string) (*backendruntime.Runtime, resol
 		registration.Name = c.registration.Name + "-" + model.Name
 	}
 	return c.backendFactory.BindBackend(registration, c.home, c.runtimeConfig, serviceSpec(model)), model, nil
-}
-
-type completionRequest struct {
-	Model          string                    `json:"model"`
-	Messages       []chatMessage             `json:"messages"`
-	MaxTokens      int                       `json:"max_tokens,omitempty"`
-	Temperature    float64                   `json:"temperature,omitempty"`
-	ResponseFormat *completionResponseFormat `json:"response_format,omitempty"`
 }
 
 type completionResponseFormat struct {

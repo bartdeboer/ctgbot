@@ -71,7 +71,7 @@ func (c *Component) FilterInbound(ctx context.Context, input inbound.ChannelEven
 		Prompt:          inboundGuardPrompt(filterEventToGuardInput(input)),
 		MaxOutputTokens: c.config.MaxOutputTokens,
 		ResponseFormat:  "json",
-		Mode:            component.CompletionModeRestricted,
+		Reasoning:       component.ReasoningDisabled,
 	})
 	if err != nil {
 		c.log("inbound guard failed guard=%s completion=%s err=%v", c.ref(), ref, err)

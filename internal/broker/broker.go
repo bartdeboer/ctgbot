@@ -334,10 +334,7 @@ func (b *Broker) runAgentTurn(
 			return nil, err
 		}
 		result, err := agentBinding.Completion.Complete(ctx, component.CompletionRequest{
-			Chat:    chat,
-			Thread:  thread,
-			Prompt:  prompt,
-			Runtime: turnRuntime,
+			Prompt: prompt,
 		})
 		if err != nil || result == nil {
 			return nil, err

@@ -345,9 +345,9 @@ type InferenceSessionEngine interface {
 	BeginInferenceSession(ctx context.Context, options InferenceSessionOptions) (InferenceSession, error)
 }
 
-// OpenAIChatInferenceSession exposes an OpenAI-compatible chat-completions
+// OpenAIChatSession exposes an OpenAI-compatible chat-completions
 // endpoint for sandbox-side agent loops.
-type OpenAIChatInferenceSession interface {
+type OpenAIChatSession interface {
 	InferenceSession
 	BaseURL() string
 	Model() string
@@ -356,7 +356,7 @@ type OpenAIChatInferenceSession interface {
 
 type OpenAIChatEngine interface {
 	InferenceEngine
-	BeginOpenAIChatInferenceSession(ctx context.Context, options InferenceSessionOptions) (OpenAIChatInferenceSession, error)
+	BeginOpenAIChatSession(ctx context.Context, options InferenceSessionOptions) (OpenAIChatSession, error)
 }
 
 type CommandSurface interface {
@@ -411,26 +411,25 @@ type CompletionPrompt struct {
 	Messages []CompletionMessage
 }
 
-type CompletionMode string
+type ReasoningMode string
 
 const (
-	CompletionModeDefault    CompletionMode = ""
-	CompletionModeRestricted CompletionMode = "restricted"
+	ReasoningDefault  ReasoningMode = ""
+	ReasoningEnabled  ReasoningMode = "enabled"
+	ReasoningDisabled ReasoningMode = "disabled"
 )
 
-// CompletionRequest is intentionally reusable for both normal thread turns and
-// bounded classifier-style completions. Restricted consumers should leave
-// Runtime nil and use Mode/controls to make the intended execution envelope
-// explicit to engines.
+// CompletionRequest is the provider-neutral inference contract for chat-style
+// completions. Feature-specific behavior should be expressed by the prompt and
+// explicit controls here, not by broker/chat runtime state.
 type CompletionRequest struct {
-	Chat            coremodel.Chat
-	Thread          coremodel.Thread
 	Model           string
 	Prompt          CompletionPrompt
-	Runtime         TurnRuntime
 	MaxOutputTokens int
+	Temperature     float64
 	ResponseFormat  string
-	Mode            CompletionMode
+	Reasoning       ReasoningMode
+	ProviderOptions map[string]any
 }
 
 type CompletionResult struct {

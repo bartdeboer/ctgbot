@@ -181,7 +181,7 @@ func (c *Component) scoreBatch(ctx context.Context, engine component.CompletionE
 		}}},
 		MaxOutputTokens: c.config.MaxOutputTokens,
 		ResponseFormat:  "json",
-		Mode:            component.CompletionModeRestricted,
+		Reasoning:       component.ReasoningDisabled,
 	})
 	if err != nil {
 		return nil, err
