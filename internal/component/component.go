@@ -426,7 +426,7 @@ type CompletionRequest struct {
 	Model           string
 	Prompt          CompletionPrompt
 	MaxOutputTokens int
-	Temperature     float64
+	Temperature     *float64
 	ResponseFormat  string
 	Reasoning       ReasoningMode
 	ProviderOptions map[string]any

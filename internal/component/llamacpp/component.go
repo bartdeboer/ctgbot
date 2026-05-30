@@ -361,27 +361,7 @@ func (c *Component) completeWithOptions(ctx context.Context, request component.C
 		return "", err
 	}
 	defer release()
-	maxTokens := model.MaxTokens
-	if request.MaxOutputTokens > 0 {
-		maxTokens = request.MaxOutputTokens
-	}
-	temperature := model.Temperature
-	if request.Temperature > 0 {
-		temperature = request.Temperature
-	}
-	body := cloneProviderOptions(request.ProviderOptions)
-	body["model"] = model.Name
-	body["messages"] = completionPromptToChat(request.Prompt)
-	if maxTokens > 0 {
-		body["max_tokens"] = maxTokens
-	}
-	if temperature > 0 {
-		body["temperature"] = temperature
-	}
-	if strings.EqualFold(strings.TrimSpace(request.ResponseFormat), "json") {
-		body["response_format"] = completionResponseFormat{Type: "json_object"}
-	}
-	applyReasoningMode(body, request.Reasoning)
+	body := completionRequestBody(model, request)
 	data, err := json.Marshal(body)
 	if err != nil {
 		return "", err
@@ -411,6 +391,31 @@ func (c *Component) completeWithOptions(ctx context.Context, request component.C
 		return "", nil
 	}
 	return decoded.Choices[0].Message.Content, nil
+}
+
+func completionRequestBody(model resolvedModel, request component.CompletionRequest) map[string]any {
+	maxTokens := model.MaxTokens
+	if request.MaxOutputTokens > 0 {
+		maxTokens = request.MaxOutputTokens
+	}
+	temperature := model.Temperature
+	if request.Temperature != nil {
+		temperature = *request.Temperature
+	}
+	body := cloneProviderOptions(request.ProviderOptions)
+	body["model"] = model.Name
+	body["messages"] = completionPromptToChat(request.Prompt)
+	if maxTokens > 0 {
+		body["max_tokens"] = maxTokens
+	}
+	if request.Temperature != nil || temperature > 0 {
+		body["temperature"] = temperature
+	}
+	if strings.EqualFold(strings.TrimSpace(request.ResponseFormat), "json") {
+		body["response_format"] = completionResponseFormat{Type: "json_object"}
+	}
+	applyReasoningMode(body, request.Reasoning)
+	return body
 }
 
 func cloneProviderOptions(options map[string]any) map[string]any {

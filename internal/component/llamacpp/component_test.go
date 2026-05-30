@@ -97,6 +97,22 @@ func TestProviderOptionsAreClonedBeforeReasoningMerge(t *testing.T) {
 	}
 }
 
+func TestCompletionRequestBodyAllowsExplicitZeroTemperature(t *testing.T) {
+	zero := 0.0
+
+	body := completionRequestBody(resolvedModel{Name: "qwen", Temperature: 0.7}, component.CompletionRequest{
+		Prompt: component.CompletionPrompt{Messages: []component.CompletionMessage{{
+			Role:    component.CompletionRoleUser,
+			Content: "hello",
+		}}},
+		Temperature: &zero,
+	})
+
+	if got, ok := body["temperature"].(float64); !ok || got != 0 {
+		t.Fatalf("temperature = %#v, want explicit 0", body["temperature"])
+	}
+}
+
 func TestServiceSpecCanExposePortToSandboxes(t *testing.T) {
 	t.Parallel()
 
