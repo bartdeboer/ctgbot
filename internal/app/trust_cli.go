@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -28,6 +30,8 @@ type showIdentityCommand struct{}
 type listTrustedControllersCommand struct{}
 
 type revokeTrustedControllerCommand struct{ Fingerprint string }
+
+var trustedControllerFingerprintPattern = regexp.MustCompile(`^SHA256:[0-9a-f]{64}$`)
 
 func trustCommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
@@ -171,6 +175,9 @@ func (s *cliCommandSurface) handleTrustController(ctx context.Context, req comma
 		fmt.Sprintf("confirm_code: %s", code),
 	}
 	if !cmd.Yes {
+		if !stdinIsTerminal() {
+			return commandengine.Result{}, fmt.Errorf("interactive confirmation requires a terminal; pass --yes to trust this controller non-interactively")
+		}
 		fmt.Println(strings.Join(lines, "\n"))
 		fmt.Print("Trust this controller? [y/N] ")
 		var answer string
@@ -210,6 +217,9 @@ func (s *cliCommandSurface) handleListTrustedControllers(ctx context.Context, re
 
 func (s *cliCommandSurface) handleRevokeTrustedController(ctx context.Context, req commandengine.Request, cmd revokeTrustedControllerCommand) (commandengine.Result, error) {
 	_ = req
+	if !validTrustedControllerFingerprint(cmd.Fingerprint) {
+		return commandengine.Result{}, fmt.Errorf("invalid controller fingerprint %q: expected SHA256:<64 lowercase hex chars>", cmd.Fingerprint)
+	}
 	ok, err := s.service.Storage.TrustedControllers().RevokeByFingerprint(ctx, cmd.Fingerprint)
 	if err != nil {
 		return commandengine.Result{}, err
@@ -218,6 +228,18 @@ func (s *cliCommandSurface) handleRevokeTrustedController(ctx context.Context, r
 		return commandengine.Result{}, fmt.Errorf("trusted controller not found: %s", cmd.Fingerprint)
 	}
 	return commandengine.Result{Text: "controller revoked"}, nil
+}
+
+func validTrustedControllerFingerprint(value string) bool {
+	return trustedControllerFingerprintPattern.MatchString(strings.TrimSpace(value))
+}
+
+func stdinIsTerminal() bool {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 func (s *service) identityManager() (*identity.Manager, error) {
