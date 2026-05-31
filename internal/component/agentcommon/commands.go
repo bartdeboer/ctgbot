@@ -3,6 +3,7 @@ package agentcommon
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -17,7 +18,7 @@ type PurgeChat struct{}
 type InterruptTurn struct{}
 type Status struct{}
 type Compact struct{}
-type Goal struct{}
+type Goal struct{ Text string }
 
 func RegisterGobTypes(register func(any)) {
 	register(RefreshContainer{})
@@ -52,24 +53,29 @@ func AgentCommandDefinitions(opts AgentCommandOptions) []commandengine.Definitio
 		pattern string
 		command any
 		help    string
+		build   func(*clir.Request) (any, error)
 	}
 	entries := []entry{
-		{"container refresh", RefreshContainer{}, fmt.Sprintf("Delete and recreate the %s runtime on next turn", opts.Name)},
-		{"container start", StartContainer{}, fmt.Sprintf("Start the %s runtime container", opts.Name)},
-		{"container stop", StopContainer{}, fmt.Sprintf("Stop the %s runtime container but keep its data", opts.Name)},
-		{"chat purge", PurgeChat{}, fmt.Sprintf("Reset the %s conversation and delete the runtime container", opts.Name)},
-		{"compact", Compact{}, fmt.Sprintf("Ask %s to compact its current provider conversation", opts.Name)},
-		{"goal", Goal{}, fmt.Sprintf("Ask %s to show or update its current provider goal", opts.Name)},
-		{"interrupt", InterruptTurn{}, fmt.Sprintf("Interrupt the active %s turn", opts.Name)},
-		{"status", Status{}, fmt.Sprintf("Show %s conversation and runtime status", opts.Name)},
+		{pattern: "container refresh", command: RefreshContainer{}, help: fmt.Sprintf("Delete and recreate the %s runtime on next turn", opts.Name)},
+		{pattern: "container start", command: StartContainer{}, help: fmt.Sprintf("Start the %s runtime container", opts.Name)},
+		{pattern: "container stop", command: StopContainer{}, help: fmt.Sprintf("Stop the %s runtime container but keep its data", opts.Name)},
+		{pattern: "chat purge", command: PurgeChat{}, help: fmt.Sprintf("Reset the %s conversation and delete the runtime container", opts.Name)},
+		{pattern: "compact", command: Compact{}, help: fmt.Sprintf("Ask %s to compact its current provider conversation", opts.Name)},
+		{pattern: "goal", command: Goal{}, help: fmt.Sprintf("Ask %s to show or update its current provider goal", opts.Name), build: buildGoalCommand},
+		{pattern: "interrupt", command: InterruptTurn{}, help: fmt.Sprintf("Interrupt the active %s turn", opts.Name)},
+		{pattern: "status", command: Status{}, help: fmt.Sprintf("Show %s conversation and runtime status", opts.Name)},
 	}
 	definitions := make([]commandengine.Definition, 0, len(entries))
 	for _, e := range entries {
 		e := e
+		build := e.build
+		if build == nil {
+			build = func(_ *clir.Request) (any, error) { return e.command, nil }
+		}
 		def := commandengine.Definition{
 			Pattern:               e.pattern,
 			Help:                  e.help,
-			Build:                 func(_ *clir.Request) (any, error) { return e.command, nil },
+			Build:                 build,
 			Sources:               agentCommandSourcesFor(e.pattern),
 			Policy:                AgentCommandPolicy(),
 			InstructionVisibility: agentInstructionVisibility(e.pattern),
@@ -80,6 +86,10 @@ func AgentCommandDefinitions(opts AgentCommandOptions) []commandengine.Definitio
 		definitions = append(definitions, def)
 	}
 	return definitions
+}
+
+func buildGoalCommand(req *clir.Request) (any, error) {
+	return Goal{Text: strings.TrimSpace(strings.Join(req.Extra, " "))}, nil
 }
 
 func (c *Core) RegisterAgentCommandHandlers(
