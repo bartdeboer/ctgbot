@@ -48,11 +48,67 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := core.RegisterAgentCommandHandlers(registry, Type, c, statusFn); err != nil {
 		return err
 	}
+	if err := commandengine.RegisterPattern[agentcommon.Compact](registry, "compact", func(ctx context.Context, req commandengine.Request, _ agentcommon.Compact) (commandengine.Result, error) {
+		return c.runProviderSlashCommand(ctx, req, "/compact")
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[agentcommon.Goal](registry, "goal", func(ctx context.Context, req commandengine.Request, _ agentcommon.Goal) (commandengine.Result, error) {
+		return c.runProviderSlashCommand(ctx, req, "/goal")
+	}); err != nil {
+		return err
+	}
 	return configsurface.RegisterCommandHandlers(registry, c)
 }
 
 func (c *Component) thread(ctx context.Context, req commandengine.Request) (*coremodel.Thread, error) {
 	return agentcommon.Thread(ctx, c.Storage, req, Type)
+}
+
+func (c *Component) runProviderSlashCommand(ctx context.Context, req commandengine.Request, slash string) (commandengine.Result, error) {
+	if c == nil || c.runner == nil {
+		return commandengine.Result{}, fmt.Errorf("missing claude runner")
+	}
+	if c.Runtime == nil {
+		return commandengine.Result{}, fmt.Errorf("missing component runtime")
+	}
+	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.Storage, c.ResolveWorkspace, req, Type)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	providerThreadID, err := c.StoredProviderThreadID(ctx, thread.ID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if providerThreadID == "" {
+		return commandengine.Result{}, fmt.Errorf("missing claude provider session id")
+	}
+	runtimeWorkspacePath := c.Runtime.RuntimeWorkspacePath(workspacePath)
+	bootstrapText := claudeBootstrap(runtimeWorkspacePath, component.TurnInstructions{ChatProvider: "Chat"})
+	if err := PrepareHome(HomeSpec{HostHome: c.Runtime.ComponentHome().Path, BootstrapText: bootstrapText}); err != nil {
+		return commandengine.Result{}, err
+	}
+	settings, err := c.resolveThreadSettings(ctx, thread)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	result, err := c.runner.RunTurn(ctx, commandRuntime{runtime: c.Runtime, threadID: thread.ID, workspacePath: workspacePath}, TurnRequest{
+		ProviderThreadID: providerThreadID,
+		Prompt:           slash,
+		Options: TurnOptions{
+			Model:             modelOption(settings),
+			PermissionMode:    settings.PermissionMode,
+			SystemPrompt:      bootstrapText,
+			SessionTimeoutSec: settings.SessionTimeoutSec,
+		},
+	})
+	if saveErr := c.SaveStoredProviderThreadID(ctx, thread, result.ProviderThreadID); saveErr != nil && err == nil {
+		err = saveErr
+	}
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: strings.TrimSpace(result.Reply)}, nil
 }
 
 func (c *Component) status(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
