@@ -190,7 +190,22 @@ func (c *Component) runProviderSlashCommand(ctx context.Context, req commandengi
 		err = saveErr
 	}
 	if err != nil {
+		if isEmptyProviderSlashResponse(err) {
+			return commandengine.Result{Text: providerSlashCommandName(slash) + " completed with no response"}, nil
+		}
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: strings.TrimSpace(result.Reply)}, nil
+}
+
+func isEmptyProviderSlashResponse(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "returned an empty response")
+}
+
+func providerSlashCommandName(slash string) string {
+	fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(slash), "/"))
+	if len(fields) == 0 {
+		return "provider command"
+	}
+	return fields[0]
 }
