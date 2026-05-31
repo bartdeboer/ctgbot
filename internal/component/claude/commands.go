@@ -18,8 +18,6 @@ var _ component.LocalCommandSurface = (*Component)(nil)
 var _ configsurface.ConfigSurface = (*Component)(nil)
 var _ agentcommon.KeepRunningSetter = (*Component)(nil)
 
-const defaultClaudeCompactionInstructions = "Preserve the original task, file paths changed, commands run and outcomes, decisions made, errors and status, key identifiers such as branch names, commit SHAs, config keys, URLs, IDs, function names, and open tasks or blockers. Omit conversational filler, superseded details, and reasoning chains. Format as a compact structured continuation summary."
-
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	definitions := agentcommon.AgentCommandDefinitions(agentcommon.AgentCommandOptions{Name: "Claude"})
 	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
@@ -51,11 +49,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.RegisterPattern[agentcommon.Compact](registry, "compact", func(ctx context.Context, req commandengine.Request, cmd agentcommon.Compact) (commandengine.Result, error) {
-		instructions := strings.TrimSpace(cmd.Text)
-		if instructions == "" {
-			instructions = defaultClaudeCompactionInstructions
-		}
-		return c.runProviderSlashCommand(ctx, req, providerSlashCommand("/compact", instructions))
+		return c.runProviderSlashCommand(ctx, req, providerSlashCommand("/compact", cmd.Text))
 	}); err != nil {
 		return err
 	}
