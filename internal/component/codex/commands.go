@@ -75,12 +75,20 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[agentcommon.Goal](registry, "goal", func(ctx context.Context, req commandengine.Request, _ agentcommon.Goal) (commandengine.Result, error) {
-		return c.runProviderSlashCommand(ctx, req, "/goal")
+	if err := commandengine.RegisterPattern[agentcommon.Goal](registry, "goal", func(ctx context.Context, req commandengine.Request, cmd agentcommon.Goal) (commandengine.Result, error) {
+		return c.runProviderSlashCommand(ctx, req, providerSlashCommand("/goal", cmd.Text))
 	}); err != nil {
 		return err
 	}
 	return configsurface.RegisterCommandHandlers(registry, c)
+}
+
+func providerSlashCommand(name string, text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return name
+	}
+	return name + " " + text
 }
 
 func (c *Component) status(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
