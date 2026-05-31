@@ -27,6 +27,7 @@ type MemoryStorage struct {
 	messages                map[modeluuid.UUID]coremodel.ThreadMessage
 	artifacts               map[modeluuid.UUID]coremodel.Artifact
 	scheduledJobs           map[modeluuid.UUID]coremodel.ScheduledJob
+	trustedControllers      map[modeluuid.UUID]coremodel.TrustedController
 }
 
 func NewMemory() *MemoryStorage {
@@ -44,6 +45,7 @@ func NewMemory() *MemoryStorage {
 		messages:                map[modeluuid.UUID]coremodel.ThreadMessage{},
 		artifacts:               map[modeluuid.UUID]coremodel.Artifact{},
 		scheduledJobs:           map[modeluuid.UUID]coremodel.ScheduledJob{},
+		trustedControllers:      map[modeluuid.UUID]coremodel.TrustedController{},
 	}
 }
 
@@ -89,6 +91,10 @@ func (s *MemoryStorage) ScheduledJobs() ScheduledJobRepository {
 	return memoryScheduledJobs{s}
 }
 
+func (s *MemoryStorage) TrustedControllers() TrustedControllerRepository {
+	return memoryTrustedControllers{s}
+}
+
 func (s *MemoryStorage) cloneLocked() *MemoryStorage {
 	clone := NewMemory()
 	for k, v := range s.chats {
@@ -130,6 +136,9 @@ func (s *MemoryStorage) cloneLocked() *MemoryStorage {
 	for k, v := range s.scheduledJobs {
 		clone.scheduledJobs[k] = v
 	}
+	for k, v := range s.trustedControllers {
+		clone.trustedControllers[k] = v
+	}
 	return clone
 }
 
@@ -150,6 +159,7 @@ func (s *MemoryStorage) replaceLocked(next *MemoryStorage) {
 	s.messages = next.messages
 	s.artifacts = next.artifacts
 	s.scheduledJobs = next.scheduledJobs
+	s.trustedControllers = next.trustedControllers
 }
 
 type memoryChats struct{ s *MemoryStorage }
@@ -1127,6 +1137,83 @@ func (r memoryScheduledJobs) DeleteByName(ctx context.Context, name string) (boo
 	for id, job := range r.s.scheduledJobs {
 		if job.Name == name {
 			delete(r.s.scheduledJobs, id)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+type memoryTrustedControllers struct{ s *MemoryStorage }
+
+func (r memoryTrustedControllers) Save(ctx context.Context, controller *coremodel.TrustedController) error {
+	_ = ctx
+	if controller == nil {
+		return nil
+	}
+	controller.ControllerID = strings.TrimSpace(controller.ControllerID)
+	controller.DisplayName = strings.TrimSpace(controller.DisplayName)
+	controller.Fingerprint = strings.TrimSpace(controller.Fingerprint)
+	controller.CertificatePEM = strings.TrimSpace(controller.CertificatePEM)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	if controller.ID.IsNull() {
+		for _, existing := range r.s.trustedControllers {
+			if existing.Fingerprint == controller.Fingerprint || (controller.ControllerID != "" && existing.ControllerID == controller.ControllerID) {
+				controller.ID = existing.ID
+				controller.CreatedAt = existing.CreatedAt
+				break
+			}
+		}
+	}
+	now := time.Now()
+	if controller.ID.IsNull() {
+		controller.ID = modeluuid.New()
+		controller.CreatedAt = now
+	} else if existing, ok := r.s.trustedControllers[controller.ID]; ok && controller.CreatedAt.IsZero() {
+		controller.CreatedAt = existing.CreatedAt
+	}
+	controller.UpdatedAt = now
+	r.s.trustedControllers[controller.ID] = *controller
+	return nil
+}
+
+func (r memoryTrustedControllers) GetByFingerprint(ctx context.Context, fingerprint string) (*coremodel.TrustedController, error) {
+	_ = ctx
+	fingerprint = strings.TrimSpace(fingerprint)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for _, controller := range r.s.trustedControllers {
+		if controller.Fingerprint == fingerprint && controller.RevokedAt == nil {
+			copy := controller
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
+func (r memoryTrustedControllers) List(ctx context.Context) ([]coremodel.TrustedController, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	out := make([]coremodel.TrustedController, 0, len(r.s.trustedControllers))
+	for _, controller := range r.s.trustedControllers {
+		out = append(out, controller)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].DisplayName < out[j].DisplayName })
+	return out, nil
+}
+
+func (r memoryTrustedControllers) RevokeByFingerprint(ctx context.Context, fingerprint string) (bool, error) {
+	_ = ctx
+	fingerprint = strings.TrimSpace(fingerprint)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	now := time.Now()
+	for id, controller := range r.s.trustedControllers {
+		if controller.Fingerprint == fingerprint {
+			controller.RevokedAt = &now
+			controller.UpdatedAt = now
+			r.s.trustedControllers[id] = controller
 			return true, nil
 		}
 	}

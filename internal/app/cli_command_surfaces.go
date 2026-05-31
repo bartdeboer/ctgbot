@@ -95,6 +95,7 @@ func (s *cliCommandSurface) CommandDefinitions() []commandengine.Definition {
 		},
 	}
 	definitions = append(definitions, chatCLICommandDefinitions()...)
+	definitions = append(definitions, trustCommandDefinitions()...)
 	return definitions
 }
 
@@ -111,7 +112,10 @@ func (s *cliCommandSurface) RegisterCommandHandlers(registry *commandengine.Regi
 	if err := commandengine.Register[componentRunCommand](registry, s.handleComponentRun); err != nil {
 		return err
 	}
-	return registerChatCLICommandHandlers(registry, s)
+	if err := registerChatCLICommandHandlers(registry, s); err != nil {
+		return err
+	}
+	return registerTrustCommandHandlers(registry, s)
 }
 
 func buildComponentRegisterCommand(req *clir.Request) (any, error) {

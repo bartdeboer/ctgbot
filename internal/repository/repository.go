@@ -23,6 +23,7 @@ type Storage interface {
 	Messages() MessageRepository
 	Artifacts() ArtifactRepository
 	ScheduledJobs() ScheduledJobRepository
+	TrustedControllers() TrustedControllerRepository
 }
 
 type ChatRepository interface {
@@ -116,6 +117,13 @@ type ArtifactRepository interface {
 	Append(ctx context.Context, artifact *coremodel.Artifact) error
 	ListByMessageID(ctx context.Context, messageID modeluuid.UUID) ([]coremodel.Artifact, error)
 	DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error)
+}
+
+type TrustedControllerRepository interface {
+	Save(ctx context.Context, controller *coremodel.TrustedController) error
+	GetByFingerprint(ctx context.Context, fingerprint string) (*coremodel.TrustedController, error)
+	List(ctx context.Context) ([]coremodel.TrustedController, error)
+	RevokeByFingerprint(ctx context.Context, fingerprint string) (bool, error)
 }
 
 type ScheduledJobRepository interface {

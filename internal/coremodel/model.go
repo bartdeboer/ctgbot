@@ -275,6 +275,23 @@ const (
 // The scheduler intentionally stores command arguments as JSON rather than as a
 // shell string. Scheduled work enters the same commandengine path as hostbridge
 // and message commands; it is not a shell escape hatch.
+
+// TrustedController records a directional authorization decision made by this
+// ctgbot instance: the controller identity named here may send commands to
+// this instance when it proves possession of the matching private key.
+type TrustedController struct {
+	ID             modeluuid.UUID `gorm:"primaryKey"`
+	ControllerID   string         `gorm:"uniqueIndex"`
+	DisplayName    string
+	Fingerprint    string `gorm:"uniqueIndex"`
+	CertificatePEM string
+	ScopesJSON     string
+	RevokedAt      *time.Time `gorm:"index"`
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type ScheduledJob struct {
 	ID          modeluuid.UUID `gorm:"primaryKey"`
 	Name        string         `gorm:"uniqueIndex"`
