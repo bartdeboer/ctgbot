@@ -321,7 +321,8 @@ func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, e
 		_ = ln.Close()
 		return "", "", err
 	}
-	httpLn, err := hostbridgeserver.ListenTLS(listenAddress, tlsConfig)
+	httpListenAddress := hostbridgeHTTPListenAddress(listenAddress)
+	httpLn, err := hostbridgeserver.ListenTLS(httpListenAddress, tlsConfig)
 	if err != nil {
 		_ = ln.Close()
 		return "", "", err
@@ -392,6 +393,14 @@ func (b *Bridge) ensureClientTLSDir(threadID modeluuid.UUID) (string, error) {
 		return "", err
 	}
 	return dir, nil
+}
+
+func hostbridgeHTTPListenAddress(gobListenAddress string) string {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(gobListenAddress))
+	if err != nil {
+		return "127.0.0.1:0"
+	}
+	return net.JoinHostPort(host, "0")
 }
 
 func (b *Bridge) register(threadID modeluuid.UUID, commands commandengine.CommandExecutor) func() {

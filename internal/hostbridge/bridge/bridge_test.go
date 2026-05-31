@@ -36,6 +36,12 @@ func TestDefaultListenAddressMatchesEstablishedNetworkContract(t *testing.T) {
 	}
 }
 
+func TestHostbridgeHTTPListenAddressUsesEphemeralPort(t *testing.T) {
+	if got, want := hostbridgeHTTPListenAddress("127.0.0.1:4567"), "127.0.0.1:0"; got != want {
+		t.Fatalf("hostbridgeHTTPListenAddress() = %q, want %q", got, want)
+	}
+}
+
 func TestBridgeStartIsIdempotent(t *testing.T) {
 	bridge := NewBridge(t.TempDir(), nil, log.New(io.Discard, "", 0)).WithListenAddress("127.0.0.1:0")
 	t.Cleanup(func() {
