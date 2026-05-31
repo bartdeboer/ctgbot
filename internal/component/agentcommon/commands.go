@@ -17,7 +17,7 @@ type StopContainer struct{}
 type PurgeChat struct{}
 type InterruptTurn struct{}
 type Status struct{}
-type Compact struct{}
+type Compact struct{ Text string }
 type Goal struct{ Text string }
 
 func RegisterGobTypes(register func(any)) {
@@ -60,7 +60,7 @@ func AgentCommandDefinitions(opts AgentCommandOptions) []commandengine.Definitio
 		{pattern: "container start", command: StartContainer{}, help: fmt.Sprintf("Start the %s runtime container", opts.Name)},
 		{pattern: "container stop", command: StopContainer{}, help: fmt.Sprintf("Stop the %s runtime container but keep its data", opts.Name)},
 		{pattern: "chat purge", command: PurgeChat{}, help: fmt.Sprintf("Reset the %s conversation and delete the runtime container", opts.Name)},
-		{pattern: "compact", command: Compact{}, help: fmt.Sprintf("Ask %s to compact its current provider conversation", opts.Name)},
+		{pattern: "compact", command: Compact{}, help: fmt.Sprintf("Ask %s to compact its current provider conversation", opts.Name), build: buildCompactCommand},
 		{pattern: "goal", command: Goal{}, help: fmt.Sprintf("Ask %s to show or update its current provider goal", opts.Name), build: buildGoalCommand},
 		{pattern: "interrupt", command: InterruptTurn{}, help: fmt.Sprintf("Interrupt the active %s turn", opts.Name)},
 		{pattern: "status", command: Status{}, help: fmt.Sprintf("Show %s conversation and runtime status", opts.Name)},
@@ -86,6 +86,10 @@ func AgentCommandDefinitions(opts AgentCommandOptions) []commandengine.Definitio
 		definitions = append(definitions, def)
 	}
 	return definitions
+}
+
+func buildCompactCommand(req *clir.Request) (any, error) {
+	return Compact{Text: strings.TrimSpace(strings.Join(req.Extra, " "))}, nil
 }
 
 func buildGoalCommand(req *clir.Request) (any, error) {

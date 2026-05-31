@@ -70,8 +70,8 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := core.RegisterAgentCommandHandlers(registry, Type, c, statusFn); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[agentcommon.Compact](registry, "compact", func(ctx context.Context, req commandengine.Request, _ agentcommon.Compact) (commandengine.Result, error) {
-		return c.runProviderSlashCommand(ctx, req, "/compact")
+	if err := commandengine.RegisterPattern[agentcommon.Compact](registry, "compact", func(ctx context.Context, req commandengine.Request, cmd agentcommon.Compact) (commandengine.Result, error) {
+		return c.runProviderSlashCommand(ctx, req, providerSlashCommand("/compact", cmd.Text))
 	}); err != nil {
 		return err
 	}
