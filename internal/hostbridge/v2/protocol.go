@@ -1,6 +1,7 @@
 package v2
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,6 +63,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	base.Stdin = invocation.Stdin
 	argv := invocation.Argv()
 	started := time.Now()
+	if invocation.Help {
+		result, err := h.help(req.Context(), base, invocation.Command)
+		elapsed := time.Since(started).Milliseconds()
+		if err != nil {
+			writeError(w, req, http.StatusOK, err, elapsed)
+			return
+		}
+		writeResult(w, req, result.Text, elapsed)
+		return
+	}
 	if wantsSSE(req) {
 		writeSSEHeaders(w)
 		stream := newSSEStream(w)
@@ -83,6 +94,17 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeResult(w, req, result.Text, elapsed)
+}
+
+func (h *Handler) help(ctx context.Context, base commandengine.Request, scope []string) (commandengine.Result, error) {
+	if h == nil || h.Runner == nil {
+		return commandengine.Result{}, fmt.Errorf("hostbridgev2 command runner unavailable")
+	}
+	helper, ok := h.Runner.(commandengine.CommandHelper)
+	if !ok || helper == nil {
+		return commandengine.Result{}, fmt.Errorf("hostbridgev2 command helper unavailable")
+	}
+	return helper.Help(ctx, base, scope)
 }
 
 func (h *Handler) baseRequestFromRequest(req *http.Request) (commandengine.Request, error) {

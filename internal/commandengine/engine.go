@@ -1,6 +1,7 @@
 package commandengine
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 )
@@ -39,6 +40,24 @@ func (e *Engine) Run(ctx context.Context, base Request, argv []string) (Result, 
 		return Result{}, err
 	}
 	return e.Execute(ctx, req)
+}
+
+func (e *Engine) Help(ctx context.Context, base Request, scope []string) (Result, error) {
+	if e == nil || e.Router == nil {
+		return Result{}, fmt.Errorf("missing command router")
+	}
+	scope = append([]string(nil), scope...)
+	var buf bytes.Buffer
+	if len(scope) == 0 {
+		if err := e.Router.FPrintHelpIndex(ctx, &buf, base.Context.Actor); err != nil {
+			return Result{}, err
+		}
+	} else {
+		if err := e.Router.FPrintHelpWithOptions(ctx, &buf, scope, []HelpOption{HelpLitDepth(2)}, base.Context.Actor); err != nil {
+			return Result{}, err
+		}
+	}
+	return Result{Text: buf.String()}, nil
 }
 
 func (e *Engine) Parse(ctx context.Context, base Request, argv []string) (Request, error) {

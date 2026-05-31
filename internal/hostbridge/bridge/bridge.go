@@ -193,6 +193,36 @@ func (b *Bridge) Run(ctx context.Context, req commandengine.Request, argv []stri
 	return runner.Run(ctx, prepared, argv)
 }
 
+func (b *Bridge) Help(ctx context.Context, req commandengine.Request, scope []string) (commandengine.Result, error) {
+	if b == nil {
+		return commandengine.Result{}, fmt.Errorf("missing hostbridge")
+	}
+	clientIdentity := strings.TrimSpace(req.Context.Actor.ID)
+	prepared, err := b.prepareRequest(ctx, clientIdentity, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	threadID := prepared.Context.ThreadID
+	if threadID.IsNull() {
+		threadID = prepared.Context.SandboxID
+	}
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("missing thread id")
+	}
+
+	b.mu.Lock()
+	entry := b.entries[threadID]
+	b.mu.Unlock()
+	if entry == nil || entry.commands == nil {
+		return commandengine.Result{}, fmt.Errorf("hostbridge command executor is unavailable for thread %s", threadID)
+	}
+	helper, ok := entry.commands.(commandengine.CommandHelper)
+	if !ok || helper == nil {
+		return commandengine.Result{}, fmt.Errorf("hostbridge command helper is unavailable for thread %s", threadID)
+	}
+	return helper.Help(ctx, prepared, scope)
+}
+
 func (b *Bridge) prepareRequest(
 	ctx context.Context,
 	clientIdentity string,

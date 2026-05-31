@@ -7,12 +7,15 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 )
 
 type Invocation struct {
 	Command []string
 	Flags   url.Values
 	Stdin   string
+	Help    bool
 }
 
 func (inv Invocation) Argv() []string {
@@ -79,11 +82,17 @@ func DecodeInvocation(req *http.Request) (Invocation, error) {
 		}
 		stdin = string(body)
 	}
-	return Invocation{
+	invocation := Invocation{
 		Command: command,
 		Flags:   cloneValues(req.URL.Query()),
 		Stdin:   stdin,
-	}, nil
+	}
+	if help, ok := commandengine.ParseHelpRequest(invocation.Argv()); ok {
+		invocation.Help = true
+		invocation.Command = append([]string(nil), help.Scope...)
+		invocation.Flags = nil
+	}
+	return invocation, nil
 }
 
 func flagsFromValues(values url.Values) []string {

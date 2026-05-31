@@ -10,7 +10,12 @@ type CommandRunner interface {
 	Run(ctx context.Context, base Request, argv []string) (Result, error)
 }
 
+type CommandHelper interface {
+	Help(ctx context.Context, base Request, scope []string) (Result, error)
+}
+
 type CommandRuntime interface {
 	CommandExecutor
 	CommandRunner
+	CommandHelper
 }

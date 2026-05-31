@@ -17,16 +17,26 @@ import (
 )
 
 type fakeRunner struct {
-	base   commandengine.Request
-	argv   []string
-	result commandengine.Result
-	err    error
+	base       commandengine.Request
+	argv       []string
+	helpBase   commandengine.Request
+	helpScope  []string
+	result     commandengine.Result
+	helpResult commandengine.Result
+	err        error
+	helpErr    error
 }
 
 func (r *fakeRunner) Run(ctx context.Context, base commandengine.Request, argv []string) (commandengine.Result, error) {
 	r.base = base
 	r.argv = append([]string(nil), argv...)
 	return r.result, r.err
+}
+
+func (r *fakeRunner) Help(ctx context.Context, base commandengine.Request, scope []string) (commandengine.Result, error) {
+	r.helpBase = base
+	r.helpScope = append([]string(nil), scope...)
+	return r.helpResult, r.helpErr
 }
 
 func TestHandlerMapsPathQueryAndBodyToCommandArgv(t *testing.T) {
@@ -57,6 +67,32 @@ func TestHandlerMapsPathQueryAndBodyToCommandArgv(t *testing.T) {
 		t.Fatalf("argv = %#v, want %#v", got, want)
 	}
 	if got, want := runner.base.Stdin, "stdin with `backticks`"; got != want {
+		t.Fatalf("stdin = %q, want %q", got, want)
+	}
+}
+
+func TestHandlerRendersHelpBeforeRouteParsing(t *testing.T) {
+	runner := &fakeRunner{helpResult: commandengine.Result{Text: "send help"}}
+	handler := NewHandler(runner)
+
+	req := httptest.NewRequest(http.MethodPost, "/v2/run/send/--help", strings.NewReader("not argv"))
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%q", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if got := rr.Body.String(); got != "send help" {
+		t.Fatalf("body = %q, want help", got)
+	}
+	if runner.argv != nil {
+		t.Fatalf("run argv = %#v, want help path to bypass command execution", runner.argv)
+	}
+	if got, want := runner.helpScope, []string{"send"}; !equalStrings(got, want) {
+		t.Fatalf("help scope = %#v, want %#v", got, want)
+	}
+	if got, want := runner.helpBase.Stdin, "not argv"; got != want {
 		t.Fatalf("stdin = %q, want %q", got, want)
 	}
 }

@@ -71,6 +71,14 @@ func (e turnCommandExecutor) Run(ctx context.Context, base commandengine.Request
 	return e.Execute(ctx, req)
 }
 
+func (e turnCommandExecutor) Help(ctx context.Context, base commandengine.Request, scope []string) (commandengine.Result, error) {
+	helper, ok := e.next.(commandengine.CommandHelper)
+	if !ok || helper == nil {
+		return commandengine.Result{}, fmt.Errorf("missing command helper")
+	}
+	return helper.Help(ctx, base, scope)
+}
+
 func (r *agentTurnRuntime) turnInfo(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	_, _ = ctx, req
 	if r == nil {
