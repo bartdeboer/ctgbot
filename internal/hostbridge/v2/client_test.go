@@ -3,6 +3,8 @@ package v2
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -15,6 +17,10 @@ import (
 )
 
 type e2eEchoCommand struct {
+	Text string
+}
+
+type e2eStreamCommand struct {
 	Text string
 }
 
@@ -107,6 +113,92 @@ func TestClientUsesBearerTokenForRemoteHTTP(t *testing.T) {
 	}
 }
 
+func TestHandlerStreamsCommandOutputAsSSE(t *testing.T) {
+	engine := newStreamTestEngine(t, commandengine.SourceHostbridge, func(ctx context.Context, req commandengine.Request, cmd e2eStreamCommand) (commandengine.Result, error) {
+		if req.OutputStream == nil {
+			return commandengine.Result{}, fmt.Errorf("missing output stream")
+		}
+		req.OutputStream.Stdout("out:" + cmd.Text)
+		req.OutputStream.Stderr("warn:" + cmd.Text)
+		req.OutputStream.Event("progress", map[string]any{"step": 1})
+		return commandengine.Result{Text: "done:" + cmd.Text}, nil
+	})
+	server := httptest.NewServer(NewServer(engine, ServerConfig{
+		Source: commandengine.SourceHostbridge,
+		Auth:   StaticActorAuth{Actor: commandengine.Actor{ID: "agent-1", Roles: []simplerbac.Role{simplerbac.RoleAgent}}},
+	}).Handler)
+	defer server.Close()
+
+	httpReq, err := http.NewRequest(http.MethodPost, server.URL+"/v2/run/stream/hello", nil)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+	httpReq.Header.Set("Accept", "text/event-stream")
+	httpResp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	defer httpResp.Body.Close()
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"event: started\n",
+		"event: stdout\n",
+		`"text":"out:hello"`,
+		"event: stderr\n",
+		`"text":"warn:hello"`,
+		"event: event\n",
+		`"kind":"progress"`,
+		"event: completed\n",
+		`"summary":"done:hello"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("SSE body missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestHandlerStreamsCommandFailureAsSSE(t *testing.T) {
+	engine := newStreamTestEngine(t, commandengine.SourceHostbridge, func(ctx context.Context, req commandengine.Request, cmd e2eStreamCommand) (commandengine.Result, error) {
+		req.OutputStream.Stdout("before failure")
+		return commandengine.Result{}, fmt.Errorf("failed %s", cmd.Text)
+	})
+	server := httptest.NewServer(NewServer(engine, ServerConfig{
+		Source: commandengine.SourceHostbridge,
+		Auth:   StaticActorAuth{Actor: commandengine.Actor{ID: "agent-1", Roles: []simplerbac.Role{simplerbac.RoleAgent}}},
+	}).Handler)
+	defer server.Close()
+
+	httpReq, err := http.NewRequest(http.MethodPost, server.URL+"/v2/run/stream/oops", nil)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+	httpReq.Header.Set("Accept", "text/event-stream")
+	httpResp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	defer httpResp.Body.Close()
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"event: stdout\n",
+		`"text":"before failure"`,
+		"event: failed\n",
+		`"error":"failed oops"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("SSE body missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestClientEscapesCommandPathSegments(t *testing.T) {
 	client := &Client{BaseURL: "https://example.test/root"}
 	target, err := client.runURL(RunRequest{
@@ -122,6 +214,33 @@ func TestClientEscapesCommandPathSegments(t *testing.T) {
 	if !strings.Contains(target, "dry-run=true") {
 		t.Fatalf("target URL missing query: %q", target)
 	}
+}
+
+func newStreamTestEngine(
+	t *testing.T,
+	source commandengine.Source,
+	handler commandengine.HandlerFunc[e2eStreamCommand],
+) *commandengine.Engine {
+	t.Helper()
+	definitions := []commandengine.Definition{
+		{
+			Pattern: "stream <text>",
+			Sources: []commandengine.Source{source},
+			Policy:  simplerbac.Any(simplerbac.RoleAgent),
+			Build: func(req *clir.Request) (any, error) {
+				return e2eStreamCommand{Text: req.Params["text"]}, nil
+			},
+		},
+	}
+	router, err := commandengine.NewRouter(definitions, source)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+	registry := commandengine.NewRegistry()
+	if err := commandengine.Register[e2eStreamCommand](registry, handler); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	return commandengine.NewEngine(router, registry)
 }
 
 func newTestEngine(

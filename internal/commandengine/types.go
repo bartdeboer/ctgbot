@@ -25,6 +25,12 @@ const (
 
 type Actor = coremodel.Actor
 
+type OutputStream interface {
+	Stdout(line string)
+	Stderr(line string)
+	Event(kind string, payload any)
+}
+
 type Context struct {
 	Source    Source
 	Actor     Actor
@@ -38,6 +44,7 @@ type Request struct {
 	Command          any
 	CanonicalPattern string
 	Route            string
+	OutputStream     OutputStream
 }
 
 // RouteMatch describes clir's best route match without executing a command builder.

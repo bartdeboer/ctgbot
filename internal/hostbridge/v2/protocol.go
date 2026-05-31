@@ -67,6 +67,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	started := time.Now()
+	if wantsSSE(req) {
+		writeSSEHeaders(w)
+		stream := newSSEStream(w)
+		base.OutputStream = stream
+		stream.Started()
+		result, err := h.Runner.Run(req.Context(), base, argv)
+		elapsed := time.Since(started)
+		if err != nil {
+			stream.Failed(err, elapsed)
+			return
+		}
+		stream.Completed(result.Text, elapsed)
+		return
+	}
 	result, err := h.Runner.Run(req.Context(), base, argv)
 	elapsed := time.Since(started).Milliseconds()
 	if err != nil {
@@ -229,6 +243,13 @@ func wantsJSON(req *http.Request) bool {
 		return false
 	}
 	return strings.Contains(req.Header.Get("Accept"), "application/json")
+}
+
+func wantsSSE(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	return strings.Contains(req.Header.Get("Accept"), "text/event-stream")
 }
 
 func writeJSON(w http.ResponseWriter, status int, resp JSONResponse) {
