@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	_ "github.com/bartdeboer/ctgbot/internal/hostbridge/gobregister"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	hostbridgetls "github.com/bartdeboer/ctgbot/internal/hostbridge/tls"
+	hostbridgev2 "github.com/bartdeboer/ctgbot/internal/hostbridge/v2"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
@@ -40,6 +42,8 @@ type Bridge struct {
 	closed           bool
 	hostAddress      string
 	containerAddress string
+	hostHTTPAddress  string
+	containerHTTPURL string
 	cancel           context.CancelFunc
 }
 
@@ -75,13 +79,15 @@ func (b *Bridge) BindThread(
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 ) ([]string, sandboxengine.Mount, func(), error) {
-	address, _, tlsDir, unregister, err := b.bindThread(threadID, commands)
+	address, _, httpURL, tlsDir, unregister, err := b.bindThread(threadID, commands)
 	if err != nil {
 		return nil, sandboxengine.Mount{}, nil, err
 	}
 	env := []string{
 		"HOSTBRIDGE_ADDR=" + address,
+		"HOSTBRIDGE_V2_ADDR=" + httpURL,
 		"HOSTBRIDGE_TLS_DIR=" + TLSDir,
+		"HOSTBRIDGE_V2_TLS_DIR=" + TLSDir,
 		"CTGBOT_SANDBOX_ID=" + threadID.String(),
 	}
 	if active := activeCommandComponents(commands); active != "" {
@@ -101,7 +107,7 @@ func (b *Bridge) DoCommand(
 	commands commandengine.CommandExecutor,
 	req commandengine.Request,
 ) (commandengine.Result, error) {
-	_, address, tlsDir, unregister, err := b.bindThread(threadID, commands)
+	_, address, _, tlsDir, unregister, err := b.bindThread(threadID, commands)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -155,6 +161,38 @@ func (b *Bridge) Execute(ctx context.Context, req commandengine.Request) (comman
 		return commandengine.Result{}, fmt.Errorf("hostbridge command executor is unavailable for thread %s", threadID)
 	}
 	return entry.commands.Execute(ctx, req)
+}
+
+func (b *Bridge) Run(ctx context.Context, req commandengine.Request, argv []string) (commandengine.Result, error) {
+	if b == nil {
+		return commandengine.Result{}, fmt.Errorf("missing hostbridge")
+	}
+	clientIdentity := strings.TrimSpace(req.Context.Actor.ID)
+	prepared, err := b.prepareRequest(ctx, clientIdentity, req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	threadID := prepared.Context.ThreadID
+	if threadID.IsNull() {
+		threadID = prepared.Context.SandboxID
+	}
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("missing thread id")
+	}
+
+	b.mu.Lock()
+	entry := b.entries[threadID]
+	b.mu.Unlock()
+	if entry == nil || entry.commands == nil {
+		return commandengine.Result{}, fmt.Errorf("hostbridge command executor is unavailable for thread %s", threadID)
+	}
+	runner, ok := entry.commands.(interface {
+		Run(context.Context, commandengine.Request, []string) (commandengine.Result, error)
+	})
+	if !ok || runner == nil {
+		return commandengine.Result{}, fmt.Errorf("hostbridge command runner is unavailable for thread %s", threadID)
+	}
+	return runner.Run(ctx, prepared, argv)
 }
 
 func (b *Bridge) prepareRequest(
@@ -220,24 +258,25 @@ func ensureHostbridgeThreadMatch(authenticated modeluuid.UUID, claimed modeluuid
 func (b *Bridge) bindThread(
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
-) (containerAddress string, hostAddress string, tlsDir string, unregister func(), err error) {
+) (containerAddress string, hostAddress string, containerHTTPURL string, tlsDir string, unregister func(), err error) {
 	if b == nil {
-		return "", "", "", nil, fmt.Errorf("missing hostbridge")
+		return "", "", "", "", nil, fmt.Errorf("missing hostbridge")
 	}
 	if threadID.IsNull() {
-		return "", "", "", nil, fmt.Errorf("missing thread id")
+		return "", "", "", "", nil, fmt.Errorf("missing thread id")
 	}
 
 	containerAddress, hostAddress, err = b.ensureStarted()
 	if err != nil {
-		return "", "", "", nil, err
+		return "", "", "", "", nil, err
 	}
+	containerHTTPURL = b.containerHTTPURL
 	tlsDir, err = b.ensureClientTLSDir(threadID)
 	if err != nil {
-		return "", "", "", nil, err
+		return "", "", "", "", nil, err
 	}
 	unregister = b.register(threadID, commands)
-	return containerAddress, hostAddress, tlsDir, unregister, nil
+	return containerAddress, hostAddress, containerHTTPURL, tlsDir, unregister, nil
 }
 
 func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, err error) {
@@ -282,6 +321,17 @@ func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, e
 		_ = ln.Close()
 		return "", "", err
 	}
+	httpLn, err := hostbridgeserver.ListenTLS(listenAddress, tlsConfig)
+	if err != nil {
+		_ = ln.Close()
+		return "", "", err
+	}
+	_, httpPort, err := net.SplitHostPort(httpLn.Addr().String())
+	if err != nil {
+		_ = ln.Close()
+		_ = httpLn.Close()
+		return "", "", err
+	}
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	srv := hostbridgeserver.NewCommandServer(b)
@@ -292,10 +342,27 @@ func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, e
 			b.logf("hostbridge serve error: %v", err)
 		}
 	}()
+	httpSrv := hostbridgev2.NewServer(b, hostbridgev2.ServerConfig{
+		Source: commandengine.SourceHostbridge,
+		Auth:   hostbridgev2.MTLSClientAuth{},
+	})
+	go func() {
+		<-runCtx.Done()
+		_ = httpLn.Close()
+	}()
+	go func() {
+		err := httpSrv.Serve(httpLn)
+		if err != nil && err != http.ErrServerClosed && runCtx.Err() == nil {
+			b.logf("hostbridge v2 serve error: %v", err)
+		}
+	}()
 
 	containerAddress = net.JoinHostPort(hostbridgetls.ServerName, port)
 	hostAddress = net.JoinHostPort("127.0.0.1", port)
+	containerHTTPURL := "https://" + net.JoinHostPort(hostbridgetls.ServerName, httpPort)
+	hostHTTPAddress := net.JoinHostPort("127.0.0.1", httpPort)
 	b.logf("hostbridge listening host=%s container=%s", hostAddress, containerAddress)
+	b.logf("hostbridge v2 listening host=https://%s container=%s", hostHTTPAddress, containerHTTPURL)
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -311,6 +378,8 @@ func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, e
 	b.cancel = cancel
 	b.containerAddress = containerAddress
 	b.hostAddress = hostAddress
+	b.containerHTTPURL = containerHTTPURL
+	b.hostHTTPAddress = hostHTTPAddress
 	return containerAddress, hostAddress, nil
 }
 
