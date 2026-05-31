@@ -46,6 +46,36 @@ func (c *Core) BindComponentThreadID(turnRuntime component.TurnRuntime, provider
 	return BindProviderThreadID(c.Registration.ID, turnRuntime, providerThreadID)
 }
 
+func (c *Core) StoredProviderThreadID(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	if c == nil || c.Storage == nil {
+		return "", fmt.Errorf("missing storage")
+	}
+	mapping, err := c.Storage.ThreadComponentMappings().GetByThreadAndComponent(ctx, threadID, c.Registration.ID)
+	if err != nil || mapping == nil {
+		return "", err
+	}
+	return strings.TrimSpace(mapping.ComponentThreadID), nil
+}
+
+func (c *Core) SaveStoredProviderThreadID(ctx context.Context, thread *coremodel.Thread, providerThreadID string) error {
+	providerThreadID = strings.TrimSpace(providerThreadID)
+	if providerThreadID == "" {
+		return nil
+	}
+	if c == nil || c.Storage == nil {
+		return fmt.Errorf("missing storage")
+	}
+	if thread == nil {
+		return fmt.Errorf("missing thread")
+	}
+	return c.Storage.ThreadComponentMappings().Save(ctx, &coremodel.ThreadComponentMapping{
+		ThreadID:          thread.ID,
+		ChatID:            thread.ChatID,
+		ComponentID:       c.Registration.ID,
+		ComponentThreadID: providerThreadID,
+	})
+}
+
 func (c *Core) RuntimeNotices(ctx context.Context, workspacePath string, threadID modeluuid.UUID) []string {
 	return RuntimeNotices(ctx, c.Runtime, workspacePath, threadID, c.Logf)
 }

@@ -16,6 +16,8 @@ type StopContainer struct{}
 type PurgeChat struct{}
 type InterruptTurn struct{}
 type Status struct{}
+type Compact struct{}
+type Goal struct{}
 
 func RegisterGobTypes(register func(any)) {
 	register(RefreshContainer{})
@@ -24,6 +26,8 @@ func RegisterGobTypes(register func(any)) {
 	register(PurgeChat{})
 	register(InterruptTurn{})
 	register(Status{})
+	register(Compact{})
+	register(Goal{})
 }
 
 type KeepRunningSetter interface {
@@ -54,6 +58,8 @@ func AgentCommandDefinitions(opts AgentCommandOptions) []commandengine.Definitio
 		{"container start", StartContainer{}, fmt.Sprintf("Start the %s runtime container", opts.Name)},
 		{"container stop", StopContainer{}, fmt.Sprintf("Stop the %s runtime container but keep its data", opts.Name)},
 		{"chat purge", PurgeChat{}, fmt.Sprintf("Reset the %s conversation and delete the runtime container", opts.Name)},
+		{"compact", Compact{}, fmt.Sprintf("Ask %s to compact its current provider conversation", opts.Name)},
+		{"goal", Goal{}, fmt.Sprintf("Ask %s to show or update its current provider goal", opts.Name)},
 		{"interrupt", InterruptTurn{}, fmt.Sprintf("Interrupt the active %s turn", opts.Name)},
 		{"status", Status{}, fmt.Sprintf("Show %s conversation and runtime status", opts.Name)},
 	}
@@ -198,7 +204,7 @@ func agentCommandSourcesFor(pattern string) []commandengine.Source {
 
 func agentInstructionVisibility(pattern string) commandengine.InstructionVisibility {
 	switch commandengine.NormalizePattern(pattern) {
-	case "container refresh", "chat purge", "interrupt", "status":
+	case "container refresh", "chat purge", "compact", "goal", "interrupt", "status":
 		return commandengine.InstructionImportant
 	default:
 		return commandengine.InstructionDiscoverable
