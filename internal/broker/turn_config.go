@@ -57,6 +57,28 @@ func (e turnCommandExecutor) Execute(ctx context.Context, req commandengine.Requ
 	}
 }
 
+func (e turnCommandExecutor) Run(ctx context.Context, base commandengine.Request, argv []string) (commandengine.Result, error) {
+	parser, ok := e.next.(interface {
+		Parse(context.Context, commandengine.Request, []string) (commandengine.Request, error)
+	})
+	if !ok || parser == nil {
+		return commandengine.Result{}, fmt.Errorf("missing command parser")
+	}
+	req, err := parser.Parse(ctx, base, argv)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return e.Execute(ctx, req)
+}
+
+func (e turnCommandExecutor) Help(ctx context.Context, base commandengine.Request, scope []string) (commandengine.Result, error) {
+	helper, ok := e.next.(commandengine.CommandHelper)
+	if !ok || helper == nil {
+		return commandengine.Result{}, fmt.Errorf("missing command helper")
+	}
+	return helper.Help(ctx, base, scope)
+}
+
 func (r *agentTurnRuntime) turnInfo(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {
 	_, _ = ctx, req
 	if r == nil {

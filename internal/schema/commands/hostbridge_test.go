@@ -182,6 +182,29 @@ func TestHostbridgeSendParsesPayloadWithAttachments(t *testing.T) {
 	}
 }
 
+func TestHostbridgeSendAllowsStdinBodyRoute(t *testing.T) {
+	router, err := commandengine.NewRouter(HostbridgeCommands(), commandengine.SourceHostbridge)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	req, err := router.Parse(context.Background(), commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		},
+	}, []string{"send"})
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	cmd, ok := req.Command.(SendPayload)
+	if !ok {
+		t.Fatalf("command = %T, want SendPayload", req.Command)
+	}
+	if !cmd.Payload.IsZero() {
+		t.Fatalf("payload = %#v, want empty payload filled from request stdin by handler", cmd.Payload)
+	}
+}
+
 func TestHostbridgeMessageParsesAttachmentMediaAttributes(t *testing.T) {
 	dir := t.TempDir()
 	video := filepath.Join(dir, "video.mp4")

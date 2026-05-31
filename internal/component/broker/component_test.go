@@ -78,3 +78,23 @@ func TestSendPayloadUsesCurrentThread(t *testing.T) {
 		t.Fatalf("payload = %#v, want copied payload", actions.payload)
 	}
 }
+
+func TestSendPayloadUsesRequestStdinWhenPayloadEmpty(t *testing.T) {
+	actions := &fakeActions{}
+	component := New(actions)
+	threadID := modeluuid.New()
+
+	err := component.sendPayload(context.Background(), commandengine.Request{
+		Context: commandengine.Context{ThreadID: threadID},
+		Stdin:   "hello from stdin\n",
+	}, message.OutboundPayload{})
+	if err != nil {
+		t.Fatalf("sendPayload() error = %v", err)
+	}
+	if actions.threadID != threadID {
+		t.Fatalf("threadID = %s, want %s", actions.threadID, threadID)
+	}
+	if got, want := actions.payload.Text.Text, "hello from stdin"; got != want {
+		t.Fatalf("payload text = %q, want %q", got, want)
+	}
+}

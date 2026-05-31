@@ -45,11 +45,17 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_ADDR"), "host.docker.internal:"; len(got) < len(want) || got[:len(want)] != want {
 		t.Fatalf("HOSTBRIDGE_ADDR = %q, want prefix %q", got, want)
 	}
+	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_V2_ADDR"), "https://host.docker.internal:"; len(got) < len(want) || got[:len(want)] != want {
+		t.Fatalf("HOSTBRIDGE_V2_ADDR = %q, want prefix %q", got, want)
+	}
 	if got, want := sandbox.User, "1000:1000"; got != want {
 		t.Fatalf("User = %q, want %q", got, want)
 	}
 	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_TLS_DIR"), "/ctgbot/hostbridge-tls"; got != want {
 		t.Fatalf("HOSTBRIDGE_TLS_DIR = %q, want %q", got, want)
+	}
+	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_V2_TLS_DIR"), "/ctgbot/hostbridge-tls"; got != want {
+		t.Fatalf("HOSTBRIDGE_V2_TLS_DIR = %q, want %q", got, want)
 	}
 	if got, want := findEnv(sandbox.Env, "CTGBOT_SANDBOX_ID"), threadID.String(); got != want {
 		t.Fatalf("CTGBOT_SANDBOX_ID = %q, want %q", got, want)
@@ -89,6 +95,9 @@ func TestSandboxDoesNotBindHostbridgeWithoutCommands(t *testing.T) {
 
 	if got := findEnv(sandbox.Env, "HOSTBRIDGE_ADDR"); got != "" {
 		t.Fatalf("HOSTBRIDGE_ADDR = %q, want empty", got)
+	}
+	if got := findEnv(sandbox.Env, "HOSTBRIDGE_V2_ADDR"); got != "" {
+		t.Fatalf("HOSTBRIDGE_V2_ADDR = %q, want empty", got)
 	}
 	if hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
 		t.Fatalf("unexpected hostbridge TLS mount in %#v", sandbox.Mounts)

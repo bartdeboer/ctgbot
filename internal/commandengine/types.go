@@ -16,10 +16,20 @@ const (
 	SourceCLI        Source = "cli"
 	SourceMessage    Source = "message"
 	SourceHostbridge Source = "hostbridge"
-	SourceScheduler  Source = "scheduler"
+	// SourceRemoteHostbridge is reserved for explicitly authenticated remote
+	// hostbridgev2 callers. It intentionally does not inherit SourceHostbridge
+	// policy; commands must opt into the remote surface deliberately.
+	SourceRemoteHostbridge Source = "remote_hostbridge"
+	SourceScheduler        Source = "scheduler"
 )
 
 type Actor = coremodel.Actor
+
+type OutputStream interface {
+	Stdout(line string)
+	Stderr(line string)
+	Event(kind string, payload any)
+}
 
 type Context struct {
 	Source    Source
@@ -34,6 +44,8 @@ type Request struct {
 	Command          any
 	CanonicalPattern string
 	Route            string
+	Stdin            string
+	OutputStream     OutputStream
 }
 
 // RouteMatch describes clir's best route match without executing a command builder.

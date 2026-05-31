@@ -465,6 +465,13 @@ func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Req
 	if !targetChat.Enabled {
 		return commandengine.Result{}, fmt.Errorf("target chat is disabled: %s", targetChat.ID)
 	}
+	text := strings.TrimSpace(cmd.Text)
+	if text == "" {
+		text = strings.TrimSpace(req.Stdin)
+	}
+	if text == "" {
+		return commandengine.Result{}, fmt.Errorf("missing message")
+	}
 	actor := req.Context.Actor.Resolved()
 	sourceThreadID := requestThreadID(req)
 	if !sourceThreadID.IsNull() {
@@ -483,7 +490,7 @@ func (c *Component) handleMessageSend(ctx context.Context, req commandengine.Req
 		Thread: *targetThread,
 		Payload: message.InboundPayload{
 			ProviderType: "thread",
-			Text:         message.TextMessage{Text: strings.TrimSpace(cmd.Text)},
+			Text:         message.TextMessage{Text: text},
 			Actor:        actor,
 		},
 		PromptContext: &component.InboundPromptContext{
@@ -560,9 +567,6 @@ func buildMessageSendCommand(req *clir.Request) (any, error) {
 		return nil, fmt.Errorf("missing thread")
 	}
 	text := strings.TrimSpace(strings.Join(req.Extra, " "))
-	if text == "" {
-		return nil, fmt.Errorf("missing message")
-	}
 	return messageSendCommand{
 		ThreadRef: threadRef,
 		Text:      text,
