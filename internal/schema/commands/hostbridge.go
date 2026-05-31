@@ -51,6 +51,14 @@ func HostbridgeCommands() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionEssential,
 		},
 		{
+			Pattern:               "send",
+			Help:                  "Send an outbound message from stdin",
+			Build:                 buildMessagePayload,
+			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:                agentPolicy(),
+			InstructionVisibility: commandengine.InstructionHidden,
+		},
+		{
 			Pattern:               "message <text>",
 			Help:                  "Legacy alias for send",
 			Build:                 buildMessagePayload,
@@ -151,9 +159,6 @@ func buildMessagePayload(req *clir.Request) (any, error) {
 			Syntax:      resolveSyntax(*language, *syntax),
 		},
 		Attachments: attachments,
-	}
-	if payload.IsZero() {
-		return nil, fmt.Errorf("message requires text or --attach")
 	}
 	return SendPayload{Payload: payload}, nil
 }

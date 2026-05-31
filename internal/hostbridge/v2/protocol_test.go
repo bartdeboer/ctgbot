@@ -52,10 +52,12 @@ func TestHandlerMapsPathQueryAndBodyToCommandArgv(t *testing.T) {
 		"--all",
 		"--max-messages",
 		"50",
-		"stdin with `backticks`",
 	}
 	if got := runner.argv; !equalStrings(got, want) {
 		t.Fatalf("argv = %#v, want %#v", got, want)
+	}
+	if got, want := runner.base.Stdin, "stdin with `backticks`"; got != want {
+		t.Fatalf("stdin = %q, want %q", got, want)
 	}
 }
 

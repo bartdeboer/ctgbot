@@ -270,6 +270,12 @@ func (c *Component) sendPayload(
 	if threadID.IsNull() {
 		return fmt.Errorf("missing thread id")
 	}
+	if strings.TrimSpace(payload.Text.Text) == "" && len(payload.Attachments) == 0 {
+		payload.Text.Text = strings.TrimSpace(req.Stdin)
+	}
+	if payload.IsZero() {
+		return fmt.Errorf("message requires text, stdin, or --attach")
+	}
 	return c.Actions.SendPayload(ctx, threadID, payload)
 }
 

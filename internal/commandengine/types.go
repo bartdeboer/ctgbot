@@ -44,6 +44,7 @@ type Request struct {
 	Command          any
 	CanonicalPattern string
 	Route            string
+	Stdin            string
 	OutputStream     OutputStream
 }
 

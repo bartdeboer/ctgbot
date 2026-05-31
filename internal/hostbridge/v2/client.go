@@ -98,18 +98,11 @@ func (c *Client) runURL(req RunRequest) (string, error) {
 	}
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
-	rawSegments := make([]string, 0, len(req.Command))
-	for _, part := range req.Command {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		rawSegments = append(rawSegments, url.PathEscape(part))
+	path, err := EncodeCommandPath(req.Command)
+	if err != nil {
+		return "", err
 	}
-	if len(rawSegments) == 0 {
-		return "", fmt.Errorf("missing command")
-	}
-	target := strings.TrimRight(parsed.String(), "/") + defaultRunPrefix + strings.Join(rawSegments, "/")
+	target := strings.TrimRight(parsed.String(), "/") + defaultRunPrefix + path
 	if query := req.Query.Encode(); query != "" {
 		target += "?" + query
 	}

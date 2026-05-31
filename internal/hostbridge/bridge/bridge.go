@@ -186,9 +186,7 @@ func (b *Bridge) Run(ctx context.Context, req commandengine.Request, argv []stri
 	if entry == nil || entry.commands == nil {
 		return commandengine.Result{}, fmt.Errorf("hostbridge command executor is unavailable for thread %s", threadID)
 	}
-	runner, ok := entry.commands.(interface {
-		Run(context.Context, commandengine.Request, []string) (commandengine.Result, error)
-	})
+	runner, ok := entry.commands.(commandengine.CommandRunner)
 	if !ok || runner == nil {
 		return commandengine.Result{}, fmt.Errorf("hostbridge command runner is unavailable for thread %s", threadID)
 	}

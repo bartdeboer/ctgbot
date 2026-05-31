@@ -17,7 +17,6 @@ import (
 )
 
 type e2eEchoCommand struct {
-	Text string
 }
 
 type e2eStreamCommand struct {
@@ -32,7 +31,7 @@ func TestClientRunsCommandThroughHTTPProtocol(t *testing.T) {
 		if req.Context.ChatID != chatID || req.Context.ThreadID != threadID || req.Context.SandboxID != sandboxID {
 			return commandengine.Result{}, fmt.Errorf("context ids were not forwarded")
 		}
-		return commandengine.Result{Text: "echo:" + cmd.Text}, nil
+		return commandengine.Result{Text: "echo:" + req.Stdin}, nil
 	})
 	server := httptest.NewServer(NewServer(engine, ServerConfig{
 		Source: commandengine.SourceHostbridge,
@@ -59,7 +58,7 @@ func TestClientRunsCommandThroughHTTPProtocol(t *testing.T) {
 
 func TestClientRequestsJSONResponse(t *testing.T) {
 	engine := newTestEngine(t, commandengine.SourceHostbridge, func(ctx context.Context, req commandengine.Request, cmd e2eEchoCommand) (commandengine.Result, error) {
-		return commandengine.Result{Text: "json:" + cmd.Text}, nil
+		return commandengine.Result{Text: "json:" + req.Stdin}, nil
 	})
 	server := httptest.NewServer(NewServer(engine, ServerConfig{
 		Source: commandengine.SourceHostbridge,
@@ -86,7 +85,7 @@ func TestClientUsesBearerTokenForRemoteHTTP(t *testing.T) {
 		if req.Context.Source != commandengine.SourceRemoteHostbridge {
 			return commandengine.Result{}, fmt.Errorf("source = %q", req.Context.Source)
 		}
-		return commandengine.Result{Text: "remote:" + cmd.Text}, nil
+		return commandengine.Result{Text: "remote:" + req.Stdin}, nil
 	})
 	server := httptest.NewServer(NewServer(engine, ServerConfig{
 		Source: commandengine.SourceRemoteHostbridge,
@@ -251,11 +250,11 @@ func newTestEngine(
 	t.Helper()
 	definitions := []commandengine.Definition{
 		{
-			Pattern: "echo <text>",
+			Pattern: "echo",
 			Sources: []commandengine.Source{source},
 			Policy:  simplerbac.Any(simplerbac.RoleAgent),
 			Build: func(req *clir.Request) (any, error) {
-				return e2eEchoCommand{Text: req.Params["text"]}, nil
+				return e2eEchoCommand{}, nil
 			},
 		},
 	}

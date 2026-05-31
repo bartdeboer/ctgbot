@@ -83,11 +83,11 @@ func TestBridgeServesHostbridgeV2HTTPCommands(t *testing.T) {
 
 	router, err := commandengine.NewRouter([]commandengine.Definition{
 		{
-			Pattern: "echo <text>",
+			Pattern: "echo",
 			Sources: []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:  simplerbac.Any(simplerbac.RoleAgent),
 			Build: func(req *clir.Request) (any, error) {
-				return testEchoCommand{Text: req.Params["text"]}, nil
+				return testEchoCommand{}, nil
 			},
 		},
 	}, commandengine.SourceHostbridge)
@@ -99,7 +99,7 @@ func TestBridgeServesHostbridgeV2HTTPCommands(t *testing.T) {
 		if req.Context.ThreadID != thread.ID || req.Context.SandboxID != thread.ID || req.Context.ChatID != chat.ID {
 			t.Fatalf("context = chat:%s thread:%s sandbox:%s", req.Context.ChatID, req.Context.ThreadID, req.Context.SandboxID)
 		}
-		return commandengine.Result{Text: "v2:" + cmd.Text}, nil
+		return commandengine.Result{Text: "v2:" + req.Stdin}, nil
 	}); err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}

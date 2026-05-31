@@ -14,7 +14,7 @@ type ServerConfig struct {
 	Auth      Authenticator
 }
 
-func NewServer(runner CommandRunner, cfg ServerConfig) *http.Server {
+func NewServer(runner commandengine.CommandRunner, cfg ServerConfig) *http.Server {
 	handler := NewHandler(runner)
 	handler.Source = cfg.Source
 	handler.Auth = cfg.Auth
