@@ -38,6 +38,17 @@ func (h HostbridgeConfig) SetTCPListenAddr(addr string) error {
 	return h.cfg.persistString("hostbridge.tcp_listen_addr", addr)
 }
 
+func (h HostbridgeConfig) RemoteListenAddr() string {
+	if h.cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(h.cfg.string("hostbridge.remote_listen_addr", ""))
+}
+
+func (h HostbridgeConfig) SetRemoteListenAddr(addr string) error {
+	return h.cfg.persistString("hostbridge.remote_listen_addr", strings.TrimSpace(addr))
+}
+
 func (h HostbridgeConfig) ResolveAllowedCommands(clientIdentity string) map[string]hostbridgeserver.AllowedCommand {
 	if h.cfg == nil {
 		return hostbridgeserver.DefaultAllowedCommands()

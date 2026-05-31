@@ -32,6 +32,7 @@ type GORMStorage struct {
 	messages                *gormMessages
 	artifacts               *gormArtifacts
 	scheduledJobs           *gormScheduledJobs
+	trustedControllers      *gormTrustedControllers
 }
 
 func New(db *gorm.DB) *GORMStorage {
@@ -56,6 +57,7 @@ func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
 		messages:                &gormMessages{db: db},
 		artifacts:               &gormArtifacts{db: db, artifactDir: artifactDir},
 		scheduledJobs:           &gormScheduledJobs{db: db},
+		trustedControllers:      &gormTrustedControllers{db: db},
 	}
 }
 
@@ -77,6 +79,7 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.ThreadMessage{},
 		&coremodel.Artifact{},
 		&coremodel.ScheduledJob{},
+		&coremodel.TrustedController{},
 	); err != nil {
 		return err
 	}
@@ -136,6 +139,10 @@ func (s *GORMStorage) Messages() repository.MessageRepository   { return s.messa
 func (s *GORMStorage) Artifacts() repository.ArtifactRepository { return s.artifacts }
 func (s *GORMStorage) ScheduledJobs() repository.ScheduledJobRepository {
 	return s.scheduledJobs
+}
+
+func (s *GORMStorage) TrustedControllers() repository.TrustedControllerRepository {
+	return s.trustedControllers
 }
 
 type gormChats struct{ db *gorm.DB }
@@ -877,6 +884,54 @@ func (r *gormScheduledJobs) DeleteByName(ctx context.Context, name string) (bool
 	result := r.db.WithContext(ctx).
 		Where("name = ?", clean(name)).
 		Delete(&coremodel.ScheduledJob{})
+	return result.RowsAffected > 0, result.Error
+}
+
+type gormTrustedControllers struct{ db *gorm.DB }
+
+func (r *gormTrustedControllers) Save(ctx context.Context, controller *coremodel.TrustedController) error {
+	if controller == nil {
+		return fmt.Errorf("missing trusted controller")
+	}
+	controller.ControllerID = clean(controller.ControllerID)
+	controller.DisplayName = clean(controller.DisplayName)
+	controller.Fingerprint = clean(controller.Fingerprint)
+	controller.CertificatePEM = clean(controller.CertificatePEM)
+	if controller.ID.IsNull() {
+		var existing coremodel.TrustedController
+		err := r.db.WithContext(ctx).Where("fingerprint = ? OR (controller_id <> '' AND controller_id = ?)", controller.Fingerprint, controller.ControllerID).First(&existing).Error
+		if err == nil {
+			controller.ID = existing.ID
+			controller.CreatedAt = existing.CreatedAt
+		} else if err != gorm.ErrRecordNotFound {
+			return err
+		}
+	}
+	ensureID(&controller.ID)
+	return r.db.WithContext(ctx).Save(controller).Error
+}
+
+func (r *gormTrustedControllers) GetByFingerprint(ctx context.Context, fingerprint string) (*coremodel.TrustedController, error) {
+	var controller coremodel.TrustedController
+	err := r.db.WithContext(ctx).Where("fingerprint = ? AND revoked_at IS NULL", clean(fingerprint)).First(&controller).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &controller, nil
+}
+
+func (r *gormTrustedControllers) List(ctx context.Context) ([]coremodel.TrustedController, error) {
+	var controllers []coremodel.TrustedController
+	err := r.db.WithContext(ctx).Order("display_name ASC").Find(&controllers).Error
+	return controllers, err
+}
+
+func (r *gormTrustedControllers) RevokeByFingerprint(ctx context.Context, fingerprint string) (bool, error) {
+	now := time.Now().UTC()
+	result := r.db.WithContext(ctx).Model(&coremodel.TrustedController{}).Where("fingerprint = ?", clean(fingerprint)).Update("revoked_at", &now)
 	return result.RowsAffected > 0, result.Error
 }
 

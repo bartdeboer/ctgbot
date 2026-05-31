@@ -20,7 +20,11 @@ const (
 	// hostbridgev2 callers. It intentionally does not inherit SourceHostbridge
 	// policy; commands must opt into the remote surface deliberately.
 	SourceRemoteHostbridge Source = "remote_hostbridge"
-	SourceScheduler        Source = "scheduler"
+	// SourceController identifies commands received from a ctgbot instance whose
+	// stable identity is trusted by this instance. Controller/node are directional
+	// roles: authority remains on the controlled instance.
+	SourceController Source = "controller"
+	SourceScheduler  Source = "scheduler"
 )
 
 type Actor = coremodel.Actor

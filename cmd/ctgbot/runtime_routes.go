@@ -34,6 +34,8 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component/telegram"
 	whispercppcomponent "github.com/bartdeboer/ctgbot/internal/component/whispercpp"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	nodelistener "github.com/bartdeboer/ctgbot/internal/hostbridge/node"
+	"github.com/bartdeboer/ctgbot/internal/identity"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	schedulerpkg "github.com/bartdeboer/ctgbot/internal/scheduler"
@@ -74,6 +76,27 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			}
 			appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logf)
 			group, groupCtx := errgroup.WithContext(runCtx)
+			if remoteAddr := strings.TrimSpace(rtSystem.Config.Hostbridge().RemoteListenAddr()); remoteAddr != "" {
+				identityManager := identity.NewManager(filepath.Join(rtSystem.StateRoot, "identity"), "")
+				instanceIdentity, err := identityManager.Ensure()
+				if err != nil {
+					return fmt.Errorf("prepare instance identity: %w", err)
+				}
+				controllerEngine, err := appService.ControllerCommandEngine(req.Context())
+				if err != nil {
+					return fmt.Errorf("prepare controller command engine: %w", err)
+				}
+				listener := &nodelistener.Listener{
+					Addr:     remoteAddr,
+					Runner:   controllerEngine,
+					Storage:  rtSystem.Storage,
+					Identity: instanceIdentity,
+					Logger:   rtSystem.Logger,
+				}
+				group.Go(func() error {
+					return ignoreRuntimeStop(groupCtx, listener.Run(groupCtx))
+				})
+			}
 			group.Go(func() error {
 				return ignoreRuntimeStop(groupCtx, schedulerpkg.New(appService, logf).Run(groupCtx))
 			})

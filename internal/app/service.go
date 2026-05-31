@@ -46,6 +46,7 @@ type Service interface {
 	RuntimeImageService
 	CLICommandSurfaces(ctx context.Context) ([]component.CommandSurface, error)
 	ScheduledCommandEngine(ctx context.Context) (*commandengine.Engine, error)
+	ControllerCommandEngine(ctx context.Context) (*commandengine.Engine, error)
 	ScheduledJobRepository() repository.ScheduledJobRepository
 }
 
