@@ -67,7 +67,10 @@ type HelpRequest struct {
 }
 
 type Result struct {
-	Text              string
+	Text string
+	// PassthroughPrompt is consumed only by the message broker path. It lets a
+	// matched command intentionally continue as a normal agent prompt without
+	// teaching commandengine anything about agent turns.
 	PassthroughPrompt string
 }
 
