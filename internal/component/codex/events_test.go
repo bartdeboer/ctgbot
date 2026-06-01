@@ -85,7 +85,10 @@ func TestEventWriterSuppressesCodexProtocolAgentMessages(t *testing.T) {
 
 	input := strings.Join([]string{
 		`{"type":"item.completed","item":{"type":"agent_message","text":"<tool_call>functions.exec_command agext:json {}</tool_call>"}}`,
+		`{"type":"item.completed","item":{"type":"agent_message","text":"{\"cmd\":\"git status\",\"yield_time_ms\":1000}"}}`,
+		`{"type":"item.completed","item":{"type":"agent_message","text":"{\"plan\":[{\"step\":\"inspect\",\"status\":\"in_progress\"}]}"}}`,
 		`{"type":"item.completed","item":{"type":"agent_message","text":"hello"}}`,
+		`{"type":"item.completed","item":{"type":"agent_message","text":"{\"ok\":true}"}}`,
 		`{"type":"item.completed","item":{"type":"agent_message","text":"<tool_result>{}</tool_result>"}}`,
 	}, "\n") + "\n"
 
@@ -94,12 +97,25 @@ func TestEventWriterSuppressesCodexProtocolAgentMessages(t *testing.T) {
 	}
 	writer.Flush()
 
-	if len(messages) != 1 || messages[0] != "hello" {
-		t.Fatalf("messages = %#v, want [hello]", messages)
+	wantMessages := []string{"hello", `{"ok":true}`}
+	if !equalStringSlices(messages, wantMessages) {
+		t.Fatalf("messages = %#v, want %#v", messages, wantMessages)
 	}
 	if !containsLog(logs, "codex json suppressed protocol agent message") {
 		t.Fatalf("missing suppression log: %#v", logs)
 	}
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestExtractThreadIDIgnoresInvalidLines(t *testing.T) {

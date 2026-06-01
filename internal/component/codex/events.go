@@ -165,7 +165,27 @@ func (w *eventWriter) log(format string, args ...any) {
 }
 
 func isCodexProtocolMessage(text string) bool {
-	return strings.Contains(text, "<tool_call>") || strings.Contains(text, "<tool_result>")
+	if strings.Contains(text, "<tool_call>") || strings.Contains(text, "<tool_result>") {
+		return true
+	}
+	return isCodexToolArgumentMessage(text)
+}
+
+func isCodexToolArgumentMessage(text string) bool {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(strings.TrimSpace(text)), &payload); err != nil {
+		return false
+	}
+	for _, key := range []string{
+		"cmd",        // exec_command
+		"plan",       // update_plan
+		"session_id", // write_stdin / shell session follow-up
+	} {
+		if _, ok := payload[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func parseEvent(line string) (codexEvent, error) {
