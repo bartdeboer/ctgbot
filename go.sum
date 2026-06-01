@@ -22,6 +22,8 @@ github.com/bartdeboer/go-clistate v0.0.6 h1:lLoiE5dxKxaDKWBzcKxyhiNlr/4VaentdkNV
 github.com/bartdeboer/go-clistate v0.0.6/go.mod h1:aokoc6hgbN5JryA3kfyF60CZacZyLmKNaPYu3qVbllg=
 github.com/bartdeboer/go-clistate v0.0.8 h1:Q/4hmHznGYInuPT8Gkt4kLpAT5vRBlaVhUnl0fK4DwQ=
 github.com/bartdeboer/go-clistate v0.0.8/go.mod h1:aokoc6hgbN5JryA3kfyF60CZacZyLmKNaPYu3qVbllg=
+github.com/bartdeboer/go-clistate v0.0.9-0.20260601112140-b7883cc78a3f h1:2BjFgC3i9J4wkPFbSD97+mTHO0mRTzNxn3I7vEFCupg=
+github.com/bartdeboer/go-clistate v0.0.9-0.20260601112140-b7883cc78a3f/go.mod h1:aokoc6hgbN5JryA3kfyF60CZacZyLmKNaPYu3qVbllg=
 github.com/bartdeboer/words v0.0.3 h1:kcTX6Go4p4WYNp3l7887YbPMuV/vRIhiMKDuxEdM/to=
 github.com/bartdeboer/words v0.0.3/go.mod h1:PZTW5H9DV7Fsy6ap/78IrcMRZ7/lwsAAtow2aFXHj9A=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

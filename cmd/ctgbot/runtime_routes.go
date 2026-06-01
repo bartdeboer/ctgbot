@@ -26,6 +26,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	llamacppagentcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacppagent"
 	modelcomponent "github.com/bartdeboer/ctgbot/internal/component/model"
+	opscomponent "github.com/bartdeboer/ctgbot/internal/component/ops"
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	schedulercomponent "github.com/bartdeboer/ctgbot/internal/component/scheduler"
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
@@ -201,6 +202,16 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(schedulercomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return schedulercomponent.New(ctx, registration, runtime, home, storage, rtSystem.Logger.Printf)
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(opscomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		_, _, _, _ = ctx, registration, runtime, home
+		logf := func(format string, args ...any) {}
+		if rtSystem.Logger != nil {
+			logf = rtSystem.Logger.Printf
+		}
+		return opscomponent.New(app.NewServiceWithLogger(storage, rtSystem, logf)), nil
 	}); err != nil {
 		return nil, err
 	}
