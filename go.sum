@@ -28,6 +28,8 @@ github.com/bartdeboer/go-clistate v0.0.9-0.20260601115451-50f8a1e3fe28 h1:reVLJZ
 github.com/bartdeboer/go-clistate v0.0.9-0.20260601115451-50f8a1e3fe28/go.mod h1:aokoc6hgbN5JryA3kfyF60CZacZyLmKNaPYu3qVbllg=
 github.com/bartdeboer/go-clistate v0.0.9-0.20260601131206-227d431f0976 h1:iI2zjDTaHToW2pIWhe263/QuczSQG+f0At2enuT6Ako=
 github.com/bartdeboer/go-clistate v0.0.9-0.20260601131206-227d431f0976/go.mod h1:aokoc6hgbN5JryA3kfyF60CZacZyLmKNaPYu3qVbllg=
+github.com/bartdeboer/go-clistate v0.0.9-0.20260601132401-bc878010276e h1:m10afVLo2IdrJAt6GwnEYERQTqR33KTtFRPcvG4ZMwY=
+github.com/bartdeboer/go-clistate v0.0.9-0.20260601132401-bc878010276e/go.mod h1:aokoc6hgbN5JryA3kfyF60CZacZyLmKNaPYu3qVbllg=
 github.com/bartdeboer/words v0.0.3 h1:kcTX6Go4p4WYNp3l7887YbPMuV/vRIhiMKDuxEdM/to=
 github.com/bartdeboer/words v0.0.3/go.mod h1:PZTW5H9DV7Fsy6ap/78IrcMRZ7/lwsAAtow2aFXHj9A=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
