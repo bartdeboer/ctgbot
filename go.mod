@@ -6,7 +6,7 @@ toolchain go1.24.11
 
 require (
 	github.com/bartdeboer/go-clir v0.3.0
-	github.com/bartdeboer/go-clistate v0.0.9-0.20260601112140-b7883cc78a3f
+	github.com/bartdeboer/go-clistate v0.0.9-0.20260601115451-50f8a1e3fe28
 	github.com/go-telegram/bot v1.17.0
 	golang.org/x/oauth2 v0.31.0
 	golang.org/x/sync v0.17.0
