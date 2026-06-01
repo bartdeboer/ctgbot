@@ -168,9 +168,12 @@ func (b *Broker) HandleResolvedInbound(ctx context.Context, inbound component.Re
 		if err != nil {
 			return failConversation(component.DeliveryResult{}, err)
 		}
-		handled, commandOutbound, err := b.tryHandleMessageCommand(ctx, inbound, inbound.Chat, inbound.Thread, runtime)
+		handled, passthroughPrompt, commandOutbound, err := b.tryHandleMessageCommand(ctx, inbound, inbound.Chat, inbound.Thread, runtime)
 		if err != nil {
 			return failConversation(component.DeliveryResult{Outbound: commandOutbound}, err)
+		}
+		if strings.TrimSpace(passthroughPrompt) != "" {
+			inbound.Payload.Text.Text = strings.TrimSpace(passthroughPrompt)
 		}
 		if handled {
 			return component.DeliveryResult{Outbound: commandOutbound}, nil

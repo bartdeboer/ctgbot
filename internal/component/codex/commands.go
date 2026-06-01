@@ -71,12 +71,12 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.RegisterPattern[agentcommon.Compact](registry, "compact", func(ctx context.Context, req commandengine.Request, cmd agentcommon.Compact) (commandengine.Result, error) {
-		return c.runProviderSlashCommand(ctx, req, providerSlashCommand("/compact", cmd.Text))
+		return commandengine.Result{PassthroughPrompt: providerSlashCommand("/compact", cmd.Text)}, nil
 	}); err != nil {
 		return err
 	}
 	if err := commandengine.RegisterPattern[agentcommon.Goal](registry, "goal", func(ctx context.Context, req commandengine.Request, cmd agentcommon.Goal) (commandengine.Result, error) {
-		return c.runProviderSlashCommand(ctx, req, providerSlashCommand("/goal", cmd.Text))
+		return commandengine.Result{PassthroughPrompt: providerSlashCommand("/goal", cmd.Text)}, nil
 	}); err != nil {
 		return err
 	}
@@ -142,70 +142,4 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 		lines = append(lines, "runtime_notice: "+strings.TrimSpace(notice))
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
-}
-
-func (c *Component) runProviderSlashCommand(ctx context.Context, req commandengine.Request, slash string) (commandengine.Result, error) {
-	if c == nil || c.runner == nil {
-		return commandengine.Result{}, fmt.Errorf("missing codex runner")
-	}
-	if c.Runtime == nil {
-		return commandengine.Result{}, fmt.Errorf("missing component runtime")
-	}
-	thread, workspacePath, err := agentcommon.ThreadWorkspace(ctx, c.Storage, c.ResolveWorkspace, req, Type)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	providerThreadID, err := c.StoredProviderThreadID(ctx, thread.ID)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	if providerThreadID == "" {
-		return commandengine.Result{}, fmt.Errorf("missing codex provider thread id")
-	}
-	runtimeHomePath := c.Runtime.RuntimeComponentHomePath()
-	runtimeWorkspacePath := c.Runtime.RuntimeWorkspacePath(workspacePath)
-	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath, component.TurnInstructions{ChatProvider: "Chat"})
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	settings, err := c.resolveThreadSettings(ctx, thread)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	if err := PrepareHome(c.config, HomeSpec{
-		HostHome:         c.Runtime.ComponentHome().Path,
-		RuntimeHome:      runtimeHomePath,
-		RuntimeWorkspace: runtimeWorkspacePath,
-		BootstrapText:    bootstrapText,
-		SandboxMode:      settings.SandboxMode,
-	}); err != nil {
-		return commandengine.Result{}, err
-	}
-	result, err := c.runner.RunTurn(ctx, commandRuntime{runtime: c.Runtime, threadID: thread.ID, workspacePath: workspacePath}, nil, TurnRequest{
-		ProviderThreadID: providerThreadID,
-		Prompt:           slash,
-		Options:          turnOptionsFromSettings(settings),
-	})
-	if saveErr := c.SaveStoredProviderThreadID(ctx, thread, result.ProviderThreadID); saveErr != nil && err == nil {
-		err = saveErr
-	}
-	if err != nil {
-		if isEmptyProviderSlashResponse(err) {
-			return commandengine.Result{Text: providerSlashCommandName(slash) + " completed with no response"}, nil
-		}
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: strings.TrimSpace(result.Reply)}, nil
-}
-
-func isEmptyProviderSlashResponse(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "returned an empty response")
-}
-
-func providerSlashCommandName(slash string) string {
-	fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(slash), "/"))
-	if len(fields) == 0 {
-		return "provider command"
-	}
-	return fields[0]
 }
