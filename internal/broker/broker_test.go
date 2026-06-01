@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -218,9 +219,20 @@ func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 }
 
 type fakeInterruptCommand struct{}
+type fakeCompactCommand struct{ Text string }
 
 func (c *fakeAgent) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
+
+		{
+			Pattern: "compact",
+			Help:    "Pass through compact to fake provider",
+			Build: func(req *clir.Request) (any, error) {
+				return fakeCompactCommand{Text: strings.TrimSpace(strings.Join(req.Extra, " "))}, nil
+			},
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+		},
 		{
 			Pattern: "interrupt",
 			Help:    "Interrupt the active fake turn",
@@ -239,6 +251,16 @@ func (c *fakeAgent) UsesLocalCommandRoutes() bool { return true }
 func (c *fakeAgent) RegisterCommandHandlers(registry *commandengine.Registry) error {
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
+	}
+	if err := commandengine.RegisterPattern[fakeCompactCommand](registry, "compact", func(ctx context.Context, req commandengine.Request, cmd fakeCompactCommand) (commandengine.Result, error) {
+		_, _ = ctx, req
+		prompt := "/compact"
+		if cmd.Text != "" {
+			prompt += " " + cmd.Text
+		}
+		return commandengine.Result{PassthroughPrompt: prompt}, nil
+	}); err != nil {
+		return err
 	}
 	return commandengine.RegisterPattern[fakeInterruptCommand](registry, "interrupt", func(ctx context.Context, req commandengine.Request, _ fakeInterruptCommand) (commandengine.Result, error) {
 		_, _ = ctx, req
@@ -1923,6 +1945,56 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 	}
 	if got, want := len(messages), 2; got != want {
 		t.Fatalf("stored messages = %d, want %d", got, want)
+	}
+}
+
+func TestHandleInboundPassthroughCommandRunsNormalAgentTurn(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentRecorder := &fakeAgentRecorder{}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := newTestBroker(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	for _, registration := range []*coremodel.Component{telegram, codex} {
+		if err := storage.Components().Save(context.Background(), registration); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	_, err := b.HandleInbound(context.Background(), component.InboundEvent{
+		ComponentID: telegram.ID,
+		ExternalID:  "msg-compact",
+		Payload: message.InboundPayload{
+			ProviderType:      "telegram",
+			ProviderChannelID: "chat-1",
+			ProviderThreadID:  "thread-7",
+			ProviderMessageID: "msg-compact",
+			Actor:             message.Actor{ID: "bart", Label: "bart", Roles: []simplerbac.Role{simplerbac.RoleUser}},
+			Text:              message.TextMessage{Text: "/codex compact preserve files"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("HandleInbound error = %v", err)
+	}
+	if got, want := agentRecorder.prompts, []string{"/compact preserve files"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("agent prompts = %#v, want %#v", got, want)
 	}
 }
 

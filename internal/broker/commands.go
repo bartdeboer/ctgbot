@@ -18,10 +18,10 @@ func (b *Broker) tryHandleMessageCommand(
 	chat coremodel.Chat,
 	thread coremodel.Thread,
 	runtime *ChatRuntime,
-) (bool, []coremodel.ThreadMessage, error) {
+) (bool, string, []coremodel.ThreadMessage, error) {
 	argv, ok := commandArgv(inbound.Payload.Text.Text)
 	if !ok {
-		return false, nil, nil
+		return false, "", nil, nil
 	}
 
 	result := commandengine.Result{Text: "command error: unknown command"}
@@ -66,9 +66,20 @@ func (b *Broker) tryHandleMessageCommand(
 		}
 	}
 
+	if passthrough := strings.TrimSpace(result.PassthroughPrompt); passthrough != "" {
+		b.logf(
+			"message command passthrough chat=%s thread=%s argv=%q passthrough_chars=%d",
+			chat.ID,
+			thread.ID,
+			strings.Join(argv, " "),
+			len(passthrough),
+		)
+		return false, passthrough, nil, nil
+	}
+
 	text := strings.TrimSpace(result.Text)
 	if text == "" {
-		return true, nil, nil
+		return true, "", nil, nil
 	}
 
 	message, err := b.storeAndRelayMessage(
@@ -86,7 +97,7 @@ func (b *Broker) tryHandleMessageCommand(
 		"ctgbot",
 	)
 	if err != nil {
-		return true, nil, err
+		return true, "", nil, err
 	}
 	b.logf(
 		"message command handled chat=%s thread=%s argv=%q result_chars=%d",
@@ -95,7 +106,7 @@ func (b *Broker) tryHandleMessageCommand(
 		strings.Join(argv, " "),
 		len(text),
 	)
-	return true, []coremodel.ThreadMessage{*message}, nil
+	return true, "", []coremodel.ThreadMessage{*message}, nil
 }
 
 func messageCommandActor(payload message.InboundPayload) commandengine.Actor {

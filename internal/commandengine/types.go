@@ -67,7 +67,8 @@ type HelpRequest struct {
 }
 
 type Result struct {
-	Text string
+	Text              string
+	PassthroughPrompt string
 }
 
 type BuildFunc func(req *clir.Request) (any, error)
