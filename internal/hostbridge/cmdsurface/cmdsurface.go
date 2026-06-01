@@ -130,6 +130,8 @@ func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 		return (*gmailv2component.Component)(nil), true
 	case indexingcomponent.Type:
 		return (*indexingcomponent.Component)(nil), true
+	case indexingcomponent.SearchType:
+		return (*indexingcomponent.SearchComponent)(nil), true
 	case llamacppcomponent.Type:
 		return (*llamacppcomponent.Component)(nil), true
 	case llamacppagentcomponent.Type:
