@@ -107,6 +107,23 @@ func AllowedCommandNames(allowed map[string]AllowedCommand) []string {
 	return names
 }
 
+func AllowedCommandUsages(allowed map[string]AllowedCommand) []string {
+	if len(allowed) == 0 {
+		return nil
+	}
+	names := AllowedCommandNames(allowed)
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		spec := allowed[name]
+		if normalized, ok := normalizeAllowedCommand(spec); ok && len(normalized.Subcommands) > 0 {
+			out = append(out, name+" [ "+strings.Join(subcommandNames(normalized.Subcommands), " | ")+" ]")
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
 func StaticAllowedCommandResolver(allowed map[string]AllowedCommand) AllowedCommandResolver {
 	if allowed == nil {
 		allowed = DefaultAllowedCommands()

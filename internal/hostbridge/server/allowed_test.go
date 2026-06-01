@@ -242,6 +242,26 @@ func TestBuildExecutionPlanSubcommandAllowsExtraArgs(t *testing.T) {
 	}
 }
 
+func TestAllowedCommandUsagesShowsSubcommands(t *testing.T) {
+	t.Parallel()
+
+	usages := AllowedCommandUsages(map[string]AllowedCommand{
+		"docker": {Name: "docker", AllowExtraArgs: true},
+		"git-ctgbot": {
+			Name: "git",
+			Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+				"push":   {},
+				"fetch":  {},
+				"status": {},
+			},
+		},
+	})
+	want := []string{"docker", "git-ctgbot [ fetch | push | status ]"}
+	if !equalStrings(usages, want) {
+		t.Fatalf("AllowedCommandUsages() = %#v, want %#v", usages, want)
+	}
+}
+
 func equalStrings(a []string, b []string) bool {
 	if len(a) != len(b) {
 		return false

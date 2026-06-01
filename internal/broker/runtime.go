@@ -215,7 +215,7 @@ func (r *agentTurnRuntime) Instructions() component.TurnInstructions {
 		if err == nil {
 			allowed = hostbridgeserver.MergeNamedAllowedCommands(extra)
 		}
-		instructions.HostbridgeCommandNames = hostbridgeserver.AllowedCommandNames(allowed)
+		instructions.HostbridgeCommandNames = hostbridgeserver.AllowedCommandUsages(allowed)
 		sort.Strings(instructions.HostbridgeCommandNames)
 	}
 	instructions.HostbridgeControlCommands = hostbridgeControlCommands(r.runtime)
