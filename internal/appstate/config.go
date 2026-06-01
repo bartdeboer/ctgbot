@@ -1,6 +1,7 @@
 package appstate
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -76,6 +77,27 @@ func (c *Config) structValue(key string, out any) bool {
 		return false
 	}
 	return c.store.GetStruct(key, out)
+}
+
+func (c *Config) ResolveStruct(key string, out any) (fmt.Stringer, bool, error) {
+	if c == nil || c.store == nil {
+		return nil, false, errMissingConfigStore()
+	}
+	return c.store.ResolveStruct(key, out)
+}
+
+func (c *Config) PersistOverlayStruct(layerName string, key string, val any) error {
+	if c == nil || c.store == nil {
+		return errMissingConfigStore()
+	}
+	return c.store.PersistOverlayStruct(layerName, key, val)
+}
+
+func (c *Config) UnsetOverlay(layerName string, key string) error {
+	if c == nil || c.store == nil {
+		return errMissingConfigStore()
+	}
+	return c.store.UnsetOverlay(layerName, key)
 }
 
 func (c *Config) persistString(key string, value string) error {

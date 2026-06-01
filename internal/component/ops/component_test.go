@@ -2,15 +2,19 @@ package ops
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/app"
+	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/go-clistate"
 )
 
 func TestOpsComponentsAddDefaultsToCurrentChatAndCommandRole(t *testing.T) {
@@ -65,6 +69,55 @@ func TestOpsComponentsRemoveRequiresChatContext(t *testing.T) {
 	}
 }
 
+func TestOpsConfigSetGetUnsetLayer(t *testing.T) {
+	cfg := newTestConfig(t)
+	engine := newTestEngine(t, New(&fakeService{}, cfg))
+
+	if _, err := engine.Run(context.Background(), baseRequest(modeluuid.New()), []string{"ops", "config", "set", "10-agent", "workspaces.agent.path", "workspaces/agent"}); err != nil {
+		t.Fatalf("config set error = %v", err)
+	}
+	result, err := engine.Run(context.Background(), baseRequest(modeluuid.New()), []string{"ops", "config", "get", "workspaces.agent.path"})
+	if err != nil {
+		t.Fatalf("config get error = %v", err)
+	}
+	if !strings.Contains(result.Text, `"workspaces/agent"`) || !strings.Contains(result.Text, "10-agent.json") {
+		t.Fatalf("config get text = %q, want value and layer source", result.Text)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.RootDir(), "config.d", "10-agent.json")); err != nil {
+		t.Fatalf("expected config.d layer file: %v", err)
+	}
+
+	if _, err := engine.Run(context.Background(), baseRequest(modeluuid.New()), []string{"ops", "config", "unset", "10-agent", "workspaces.agent.path"}); err != nil {
+		t.Fatalf("config unset error = %v", err)
+	}
+	result, err = engine.Run(context.Background(), baseRequest(modeluuid.New()), []string{"ops", "config", "get", "workspaces.agent.path"})
+	if err != nil {
+		t.Fatalf("config get after unset error = %v", err)
+	}
+	if !strings.Contains(result.Text, "not set") {
+		t.Fatalf("config get after unset text = %q, want not set", result.Text)
+	}
+}
+
+func TestOpsConfigLayersListsJSONLayers(t *testing.T) {
+	cfg := newTestConfig(t)
+	engine := newTestEngine(t, New(&fakeService{}, cfg))
+	if err := os.MkdirAll(filepath.Join(cfg.RootDir(), "config.d"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(config.d) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.RootDir(), "config.d", "10-agent.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatalf("WriteFile layer error = %v", err)
+	}
+
+	result, err := engine.Run(context.Background(), baseRequest(modeluuid.New()), []string{"ops", "config", "layers"})
+	if err != nil {
+		t.Fatalf("config layers error = %v", err)
+	}
+	if !strings.Contains(result.Text, "10-agent.json") {
+		t.Fatalf("config layers text = %q, want layer name", result.Text)
+	}
+}
+
 func newTestEngine(t *testing.T, surface *Component) *commandengine.Engine {
 	t.Helper()
 	engine, err := commandset.NewBoundEngineForSource(commandengine.SourceMessage, []commandset.BoundSurface{{
@@ -80,6 +133,31 @@ func newTestEngine(t *testing.T, surface *Component) *commandengine.Engine {
 
 func baseRequest(chatID modeluuid.UUID) commandengine.Request {
 	return commandengine.Request{Context: commandengine.Context{ChatID: chatID, Actor: coremodel.Actor{ID: "agent", Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}
+}
+
+func newTestConfig(t *testing.T) *appstate.Config {
+	t.Helper()
+	root := t.TempDir()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("Chdir() error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(wd) })
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatalf("NewCwd() error = %v", err)
+	}
+	cfg, err := appstate.NewConfig(filepath.Join(root, ".ctgbot"), store)
+	if err != nil {
+		t.Fatalf("NewConfig() error = %v", err)
+	}
+	if err := cfg.EnsurePaths(); err != nil {
+		t.Fatalf("EnsurePaths() error = %v", err)
+	}
+	return cfg
 }
 
 type fakeService struct {

@@ -211,7 +211,7 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 		if rtSystem.Logger != nil {
 			logf = rtSystem.Logger.Printf
 		}
-		return opscomponent.New(app.NewServiceWithLogger(storage, rtSystem, logf)), nil
+		return opscomponent.New(app.NewServiceWithLogger(storage, rtSystem, logf), rtSystem.Config), nil
 	}); err != nil {
 		return nil, err
 	}

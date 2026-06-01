@@ -28,6 +28,7 @@ type Service interface {
 
 type Component struct {
 	service Service
+	config  ConfigStore
 }
 
 var _ component.Component = (*Component)(nil)
@@ -55,10 +56,18 @@ func RegisterGobTypes(register func(any)) {
 	register(componentsAddCommand{})
 	register(componentsRemoveCommand{})
 	register(componentsListCommand{})
+	register(configGetCommand{})
+	register(configSetCommand{})
+	register(configUnsetCommand{})
+	register(configLayersCommand{})
 }
 
-func New(service Service) *Component {
-	return &Component{service: service}
+func New(service Service, config ...ConfigStore) *Component {
+	var cfg ConfigStore
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+	return &Component{service: service, config: cfg}
 }
 
 func (c *Component) Type() string { return Type }
@@ -93,6 +102,38 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Policy:                policy,
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
+		{
+			Pattern:               "config get <key>",
+			Help:                  "Show an effective config value and source",
+			Build:                 buildConfigGet,
+			Sources:               sources,
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern:               "config set <layer> <key> <value>",
+			Help:                  "Write a config.d layer value",
+			Build:                 buildConfigSet,
+			Sources:               sources,
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern:               "config unset <layer> <key>",
+			Help:                  "Remove a config.d layer value",
+			Build:                 buildConfigUnset,
+			Sources:               sources,
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern:               "config layers",
+			Help:                  "List config.d layers",
+			Build:                 func(req *clir.Request) (any, error) { _ = req; return configLayersCommand{}, nil },
+			Sources:               sources,
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
 	}
 }
 
@@ -106,7 +147,19 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.RegisterPattern[componentsRemoveCommand](registry, "components remove <component>", c.handleComponentsRemove); err != nil {
 		return err
 	}
-	return commandengine.RegisterPattern[componentsListCommand](registry, "components list", c.handleComponentsList)
+	if err := commandengine.RegisterPattern[componentsListCommand](registry, "components list", c.handleComponentsList); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[configGetCommand](registry, "config get <key>", c.handleConfigGet); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[configSetCommand](registry, "config set <layer> <key> <value>", c.handleConfigSet); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[configUnsetCommand](registry, "config unset <layer> <key>", c.handleConfigUnset); err != nil {
+		return err
+	}
+	return commandengine.RegisterPattern[configLayersCommand](registry, "config layers", c.handleConfigLayers)
 }
 
 func buildComponentsAdd(req *clir.Request) (any, error) {
