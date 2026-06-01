@@ -120,6 +120,7 @@ func normalizeAllowedCommand(spec AllowedCommand) (AllowedCommand, bool) {
 	spec.Dir = strings.TrimSpace(spec.Dir)
 	spec.Delay = strings.TrimSpace(spec.Delay)
 	spec.Args = cleanCommandArgs(spec.Args)
+	spec.Subcommands = cleanSubcommands(spec.Subcommands)
 	spec.Env = cleanCommandEnv(spec.Env)
 	if spec.Name == "" {
 		return AllowedCommand{}, false
@@ -128,6 +129,9 @@ func normalizeAllowedCommand(spec AllowedCommand) (AllowedCommand, bool) {
 }
 
 func buildPlanArgs(commandName string, spec AllowedCommand, runtimeArgs []string) ([]string, error) {
+	if len(spec.Subcommands) > 0 {
+		return buildSubcommandPlanArgs(commandName, spec, runtimeArgs)
+	}
 	if strings.TrimSpace(spec.ArgsPattern) == "" {
 		if hasArgTemplate(spec.Args) {
 			return nil, fmt.Errorf("command %s uses argument templates without args_pattern", commandName)
@@ -156,6 +160,68 @@ func buildPlanArgs(commandName string, spec AllowedCommand, runtimeArgs []string
 		planArgs = append(planArgs, extraArgs...)
 	}
 	return planArgs, nil
+}
+
+func buildSubcommandPlanArgs(commandName string, spec AllowedCommand, runtimeArgs []string) ([]string, error) {
+	if strings.TrimSpace(spec.ArgsPattern) != "" {
+		return nil, fmt.Errorf("command %s cannot combine args_pattern with subcommands", commandName)
+	}
+	if hasArgTemplate(spec.Args) {
+		return nil, fmt.Errorf("command %s uses argument templates without args_pattern", commandName)
+	}
+	if len(runtimeArgs) == 0 {
+		return nil, fmt.Errorf("command %s expects one of: %s", commandName, strings.Join(subcommandNames(spec.Subcommands), ", "))
+	}
+	subcommandName := strings.TrimSpace(runtimeArgs[0])
+	subcommand, ok := spec.Subcommands[subcommandName]
+	if !ok {
+		return nil, fmt.Errorf("subcommand not allowed for %s: %s", commandName, subcommandName)
+	}
+
+	planArgs := append([]string{}, spec.Args...)
+	subArgs, extraArgs, err := buildSubcommandArgs(commandName, subcommandName, subcommand, runtimeArgs[1:])
+	if err != nil {
+		return nil, err
+	}
+	planArgs = append(planArgs, subArgs...)
+	if len(extraArgs) > 0 {
+		if !spec.AllowExtraArgs && !subcommand.AllowExtraArgs {
+			return nil, fmt.Errorf("command does not allow extra args: %s %s", commandName, subcommandName)
+		}
+		planArgs = append(planArgs, extraArgs...)
+	}
+	return planArgs, nil
+}
+
+func buildSubcommandArgs(commandName string, subcommandName string, subcommand hostbridgepolicy.AllowedSubcommand, runtimeArgs []string) ([]string, []string, error) {
+	templateArgs := append([]string{}, subcommand.Args...)
+	if len(templateArgs) == 0 {
+		templateArgs = []string{subcommandName}
+	}
+	if strings.TrimSpace(subcommand.ArgsPattern) == "" {
+		if hasArgTemplate(templateArgs) {
+			return nil, nil, fmt.Errorf("command %s %s uses argument templates without args_pattern", commandName, subcommandName)
+		}
+		return templateArgs, append([]string{}, runtimeArgs...), nil
+	}
+	params, extraArgs, err := matchArgsPattern(commandName+" "+subcommandName, subcommand.ArgsPattern, runtimeArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	rendered, err := renderCommandArgs(commandName+" "+subcommandName, templateArgs, params)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rendered, extraArgs, nil
+}
+
+func subcommandNames(subcommands map[string]hostbridgepolicy.AllowedSubcommand) []string {
+	names := make([]string, 0, len(subcommands))
+	for name := range subcommands {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 var (
@@ -240,6 +306,26 @@ func cleanCommandArgs(args []string) []string {
 	}
 	out := make([]string, 0, len(args))
 	out = append(out, args...)
+	return out
+}
+
+func cleanSubcommands(subcommands map[string]hostbridgepolicy.AllowedSubcommand) map[string]hostbridgepolicy.AllowedSubcommand {
+	if len(subcommands) == 0 {
+		return nil
+	}
+	out := make(map[string]hostbridgepolicy.AllowedSubcommand, len(subcommands))
+	for name, subcommand := range subcommands {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		subcommand.Args = cleanCommandArgs(subcommand.Args)
+		subcommand.ArgsPattern = strings.TrimSpace(subcommand.ArgsPattern)
+		out[name] = subcommand
+	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }
 

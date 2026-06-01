@@ -3,6 +3,8 @@ package server
 import (
 	"encoding/json"
 	"testing"
+
+	hostbridgepolicy "github.com/bartdeboer/ctgbot/internal/hostbridgepolicy"
 )
 
 func TestAllowedCommandJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
@@ -17,6 +19,14 @@ func TestAllowedCommandJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 		"delete-branch": {
 			"name": "git",
 			"args_pattern": "<branch>"
+		},
+		"git-ctgbot": {
+			"name": "git",
+			"args": ["-C", "/workspace/src/ctgbot"],
+			"subcommands": {
+				"fetch": {},
+				"push": {"args": ["push", "--follow-tags"]}
+			}
 		}
 	}`), &allowed); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
@@ -27,6 +37,9 @@ func TestAllowedCommandJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 	}
 	if got, want := allowed["delete-branch"].ArgsPattern, "<branch>"; got != want {
 		t.Fatalf("args_pattern = %q, want %q", got, want)
+	}
+	if _, ok := allowed["git-ctgbot"].Subcommands["fetch"]; !ok {
+		t.Fatalf("subcommands were not decoded: %#v", allowed["git-ctgbot"])
 	}
 }
 
@@ -125,6 +138,105 @@ func TestBuildExecutionPlanPreservesExistingExtraArgBehavior(t *testing.T) {
 		t.Fatalf("BuildExecutionPlan() error = %v", err)
 	}
 	want := []string{"push", "--follow-tags"}
+	if !equalStrings(plan.Args, want) {
+		t.Fatalf("Args = %#v, want %#v", plan.Args, want)
+	}
+}
+
+func TestBuildExecutionPlanUsesNamedSubcommand(t *testing.T) {
+	t.Parallel()
+
+	plan, err := BuildExecutionPlan("git-ctgbot", []string{"fetch"}, AllowedCommand{
+		Name: "git",
+		Args: []string{"-C", "/workspace/src/ctgbot"},
+		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+			"fetch": {},
+			"pull":  {},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildExecutionPlan() error = %v", err)
+	}
+	want := []string{"-C", "/workspace/src/ctgbot", "fetch"}
+	if !equalStrings(plan.Args, want) {
+		t.Fatalf("Args = %#v, want %#v", plan.Args, want)
+	}
+}
+
+func TestBuildExecutionPlanUsesCustomSubcommandArgs(t *testing.T) {
+	t.Parallel()
+
+	plan, err := BuildExecutionPlan("git-ctgbot", []string{"push"}, AllowedCommand{
+		Name: "git",
+		Args: []string{"-C", "/workspace/src/ctgbot"},
+		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+			"push": {Args: []string{"push", "--follow-tags"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildExecutionPlan() error = %v", err)
+	}
+	want := []string{"-C", "/workspace/src/ctgbot", "push", "--follow-tags"}
+	if !equalStrings(plan.Args, want) {
+		t.Fatalf("Args = %#v, want %#v", plan.Args, want)
+	}
+}
+
+func TestBuildExecutionPlanSubcommandArgsPattern(t *testing.T) {
+	t.Parallel()
+
+	plan, err := BuildExecutionPlan("git-ctgbot", []string{"delete-branch", "feature/foo"}, AllowedCommand{
+		Name: "git",
+		Args: []string{"-C", "/workspace/src/ctgbot"},
+		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+			"delete-branch": {
+				ArgsPattern: "<branch>",
+				Args:        []string{"push", "origin", "--delete", "--", "{{branch}}"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildExecutionPlan() error = %v", err)
+	}
+	want := []string{"-C", "/workspace/src/ctgbot", "push", "origin", "--delete", "--", "feature/foo"}
+	if !equalStrings(plan.Args, want) {
+		t.Fatalf("Args = %#v, want %#v", plan.Args, want)
+	}
+}
+
+func TestBuildExecutionPlanSubcommandsRejectUnknownAndExtraArgs(t *testing.T) {
+	t.Parallel()
+
+	spec := AllowedCommand{
+		Name: "git",
+		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+			"fetch": {},
+		},
+	}
+	if _, err := BuildExecutionPlan("git-ctgbot", nil, spec); err == nil {
+		t.Fatalf("BuildExecutionPlan(missing subcommand) error = nil")
+	}
+	if _, err := BuildExecutionPlan("git-ctgbot", []string{"status"}, spec); err == nil {
+		t.Fatalf("BuildExecutionPlan(unknown subcommand) error = nil")
+	}
+	if _, err := BuildExecutionPlan("git-ctgbot", []string{"fetch", "--all"}, spec); err == nil {
+		t.Fatalf("BuildExecutionPlan(extra args) error = nil")
+	}
+}
+
+func TestBuildExecutionPlanSubcommandAllowsExtraArgs(t *testing.T) {
+	t.Parallel()
+
+	plan, err := BuildExecutionPlan("git-ctgbot", []string{"status", "--short"}, AllowedCommand{
+		Name: "git",
+		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+			"status": {AllowExtraArgs: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildExecutionPlan() error = %v", err)
+	}
+	want := []string{"status", "--short"}
 	if !equalStrings(plan.Args, want) {
 		t.Fatalf("Args = %#v, want %#v", plan.Args, want)
 	}
