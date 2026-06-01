@@ -221,6 +221,51 @@ func (s *store) saveEmbedding(ctx context.Context, embedding messageEmbedding) e
 	return s.db.WithContext(ctx).Save(&embedding).Error
 }
 
+func (s *store) searchEmbeddings(ctx context.Context, strategyID string, scope scope) ([]messageEmbedding, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("missing indexing store")
+	}
+	query := s.db.WithContext(ctx).Where("strategy_id = ?", strategyID)
+	if !scope.ChatID.IsNull() {
+		query = query.Where("chat_id = ?", scope.ChatID.String())
+	}
+	if !scope.ThreadID.IsNull() {
+		query = query.Where("thread_id = ?", scope.ThreadID.String())
+	}
+	var out []messageEmbedding
+	return out, query.Find(&out).Error
+}
+
+func (s *store) summariesByMessageID(ctx context.Context, strategyName string, messageIDs []string) (map[string]string, error) {
+	out := map[string]string{}
+	if s == nil || s.db == nil {
+		return out, fmt.Errorf("missing indexing store")
+	}
+	strategyName = normalizeName(strategyName)
+	if strategyName == "" || len(messageIDs) == 0 {
+		return out, nil
+	}
+	strategy, err := s.strategyByName(ctx, strategyName)
+	if err != nil {
+		return out, err
+	}
+	if strategy == nil || strategy.Type != StrategyTypeSummary {
+		return out, nil
+	}
+	ids := compactStrings(messageIDs)
+	if len(ids) == 0 {
+		return out, nil
+	}
+	var summaries []messageSummary
+	if err := s.db.WithContext(ctx).Where("strategy_id = ? AND message_id IN ?", strategy.ID, ids).Find(&summaries).Error; err != nil {
+		return out, err
+	}
+	for _, summary := range summaries {
+		out[summary.MessageID] = strings.TrimSpace(summary.Summary)
+	}
+	return out, nil
+}
+
 func (s *store) createRun(ctx context.Context, strategy indexStrategy) (*indexRun, error) {
 	run := indexRun{ID: newID(), StrategyID: strategy.ID, StrategyName: strategy.Name, Type: strategy.Type, Status: RunStatusRunning, StartedAt: time.Now().UTC()}
 	return &run, s.db.WithContext(ctx).Save(&run).Error

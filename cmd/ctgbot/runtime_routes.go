@@ -194,6 +194,11 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}); err != nil {
 		return nil, err
 	}
+	if err := registry.Add(indexingcomponent.SearchType, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		return indexingcomponent.NewSearch(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
+	}); err != nil {
+		return nil, err
+	}
 	if err := registry.Add(schedulercomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return schedulercomponent.New(ctx, registration, runtime, home, storage, rtSystem.Logger.Printf)
 	}); err != nil {
