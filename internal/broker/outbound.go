@@ -247,5 +247,8 @@ func conversationErrorText(err error) string {
 	if text == "" {
 		return ""
 	}
+	if strings.Contains(text, "returned an empty response") {
+		return text
+	}
 	return "conversation error: " + text
 }
