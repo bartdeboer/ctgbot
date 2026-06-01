@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -135,11 +136,14 @@ func parseConfigValue(raw string) (any, error) {
 }
 
 func formatConfigValue(value any) (string, error) {
-	data, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(value); err != nil {
 		return "", err
 	}
-	return string(data), nil
+	return strings.TrimSuffix(buf.String(), "\n"), nil
 }
 
 func listConfigLayers(cfg ConfigStore) ([]string, error) {

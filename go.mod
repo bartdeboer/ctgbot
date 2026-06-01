@@ -5,8 +5,9 @@ go 1.24.0
 toolchain go1.24.11
 
 require (
+	github.com/abadojack/whatlanggo v1.0.1
 	github.com/bartdeboer/go-clir v0.3.0
-	github.com/bartdeboer/go-clistate v0.0.9
+	github.com/bartdeboer/go-clistate v0.0.10
 	github.com/go-telegram/bot v1.17.0
 	golang.org/x/oauth2 v0.31.0
 	golang.org/x/sync v0.17.0
@@ -19,7 +20,6 @@ require (
 	cloud.google.com/go/auth v0.16.5 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.8.4 // indirect
-	github.com/abadojack/whatlanggo v1.0.1 // indirect
 	github.com/bartdeboer/words v0.0.3 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
