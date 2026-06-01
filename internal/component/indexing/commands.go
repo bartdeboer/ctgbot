@@ -49,6 +49,7 @@ func RegisterGobTypes(register func(any)) {
 	register(runCommand{})
 	register(statsCommand{})
 	register(clearCommand{})
+	register(searchCommand{})
 }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {

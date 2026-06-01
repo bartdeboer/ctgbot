@@ -6,10 +6,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -229,6 +232,117 @@ func TestSummaryStrategySummarizesLongMessages(t *testing.T) {
 	}
 }
 
+func TestSearchComponentEmbeddingSearchUsesIndexAndTitleStrategy(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "Docker containers keep runtime tools isolated."),
+		messageFixture(chatID, threadID, coremodel.MessageRoleAgent, "Gmail OAuth credentials need refresh handling."),
+	}
+	embedder := &keywordEmbeddingEngine{}
+	indexing := newTestComponent(t, newFakeResolver(map[string]component.Component{"llamacpp": embedder}), messages)
+	if err := indexing.store.saveStrategy(ctx, &indexStrategy{Name: DefaultSearchEmbeddingStrategy, Type: StrategyTypeEmbedding, ProviderRef: "llamacpp", Model: "keyword-embed"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := indexing.store.saveStrategy(ctx, &indexStrategy{Name: DefaultSearchTitleStrategy, Type: StrategyTypeSummary, ProviderRef: "llamacpp", Model: "qwen", TargetChars: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := indexing.RunStrategy(ctx, RunRequest{Strategy: DefaultSearchEmbeddingStrategy, Scope: scope{All: true}}); err != nil {
+		t.Fatal(err)
+	}
+	titleStrategy, err := indexing.store.strategyByName(ctx, DefaultSearchTitleStrategy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := indexing.store.saveSummary(ctx, messageSummary{MessageID: messages[0].ID.String(), StrategyID: titleStrategy.ID, ChatID: chatID.String(), ThreadID: threadID.String(), SourceHash: textHash(messages[0].Text), Summary: "Docker runtime isolation"}); err != nil {
+		t.Fatal(err)
+	}
+	search := newTestSearchComponent(t, newFakeResolver(map[string]component.Component{"indexing": indexing, "llamacpp": embedder}), messages)
+
+	results, err := search.Search(ctx, SearchRequest{
+		Query:             "docker runtime",
+		Mode:              searchModeEmbedding,
+		IndexingComponent: DefaultIndexingComponentRef,
+		EmbeddingStrategy: DefaultSearchEmbeddingStrategy,
+		TitleStrategy:     DefaultSearchTitleStrategy,
+		Scope:             scope{All: true},
+		Limit:             1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("results = %d, want 1", len(results))
+	}
+	if results[0].MessageID != messages[0].ID {
+		t.Fatalf("top result = %s, want %s", results[0].MessageID, messages[0].ID)
+	}
+	if results[0].Title != "Docker runtime isolation" {
+		t.Fatalf("title = %q", results[0].Title)
+	}
+}
+
+func TestSearchComponentKeywordSearchDoesNotRequireEmbeddingStrategy(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "Docker containers keep runtime tools isolated."),
+		messageFixture(chatID, threadID, coremodel.MessageRoleAgent, "Gmail OAuth credentials need refresh handling."),
+	}
+	indexing := newTestComponent(t, newFakeResolver(nil), messages)
+	search := newTestSearchComponent(t, newFakeResolver(map[string]component.Component{"indexing": indexing}), messages)
+
+	results, err := search.Search(ctx, SearchRequest{
+		Query:             "oauth",
+		Mode:              searchModeKeyword,
+		IndexingComponent: DefaultIndexingComponentRef,
+		TitleStrategy:     DefaultSearchTitleStrategy,
+		Scope:             scope{All: true},
+		Limit:             10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("results = %d, want 1", len(results))
+	}
+	if results[0].MessageID != messages[1].ID {
+		t.Fatalf("keyword result = %s, want %s", results[0].MessageID, messages[1].ID)
+	}
+}
+
+func TestSearchComponentRoutesAsSearchQueryCommand(t *testing.T) {
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	messages := []coremodel.ThreadMessage{
+		messageFixture(chatID, threadID, coremodel.MessageRoleUser, "Gmail OAuth credentials need refresh handling."),
+	}
+	indexing := newTestComponent(t, newFakeResolver(nil), messages)
+	search := newTestSearchComponent(t, newFakeResolver(map[string]component.Component{"indexing": indexing}), messages)
+	engine, err := commandset.NewBoundEngineForSource(commandengine.SourceHostbridge, []commandset.BoundSurface{{
+		Surface:       search,
+		ComponentRef:  "search",
+		ComponentType: SearchType,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := engine.Run(ctx, commandengine.Request{Context: commandengine.Context{
+		Source: commandengine.SourceHostbridge,
+		Actor:  commandengine.Actor{ID: "agent", Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+	}}, []string{"search", "oauth", "--mode", "keyword"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Text, "Gmail OAuth") {
+		t.Fatalf("result text = %q", result.Text)
+	}
+}
+
 func TestSummaryStrategyKeepsInferenceSessionOpenForRun(t *testing.T) {
 	ctx := context.Background()
 	chatID := modeluuid.New()
@@ -312,6 +426,18 @@ func newTestComponent(t *testing.T, resolver fakeResolver, messages []coremodel.
 		t.Fatal(err)
 	}
 	component := created.(*Component)
+	component.SetSearchMessageSource(fakeMessageSource{messages: messages})
+	return component
+}
+
+func newTestSearchComponent(t *testing.T, resolver fakeResolver, messages []coremodel.ThreadMessage) *SearchComponent {
+	t.Helper()
+	registration := coremodel.Component{ID: modeluuid.New(), Type: SearchType, Name: SearchType}
+	created, err := NewSearch(context.Background(), registration, nil, runtimepkg.Home{Path: t.TempDir()}, nil, resolver, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	component := created.(*SearchComponent)
 	component.SetSearchMessageSource(fakeMessageSource{messages: messages})
 	return component
 }
@@ -452,6 +578,30 @@ func (f *fakeEmbeddingEngine) BeginInferenceSession(ctx context.Context, options
 	_ = ctx
 	f.sessionRequests = append(f.sessionRequests, options)
 	return fakeInferenceSession{close: func() { f.sessionCloseCalls++ }}, nil
+}
+
+type keywordEmbeddingEngine struct{}
+
+func (f *keywordEmbeddingEngine) Type() string { return "keyword-embedder" }
+func (f *keywordEmbeddingEngine) Embed(ctx context.Context, req component.EmbeddingRequest) (component.EmbeddingResponse, error) {
+	_ = ctx
+	out := make([]component.Embedding, 0, len(req.Inputs))
+	for _, input := range req.Inputs {
+		out = append(out, component.Embedding{ID: input.ID, Model: req.Model, Dim: 2, Normalized: true, Vector: keywordVector(input.Text)})
+	}
+	return component.EmbeddingResponse{Embeddings: out}, nil
+}
+
+func keywordVector(text string) []float32 {
+	text = strings.ToLower(text)
+	switch {
+	case strings.Contains(text, "docker") || strings.Contains(text, "runtime") || strings.Contains(text, "container"):
+		return []float32{1, 0}
+	case strings.Contains(text, "gmail") || strings.Contains(text, "oauth"):
+		return []float32{0, 1}
+	default:
+		return []float32{0.5, 0.5}
+	}
 }
 
 type fakeCompletion struct {
