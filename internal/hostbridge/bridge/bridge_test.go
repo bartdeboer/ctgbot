@@ -137,8 +137,80 @@ func TestBridgeServesHostbridgeV2HTTPCommands(t *testing.T) {
 	}
 }
 
+func TestBridgeHostbridgeV2FallsBackToRunAlias(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	chat := &coremodel.Chat{Label: "chat", Enabled: true}
+	if err := storage.Chats().Save(ctx, chat); err != nil {
+		t.Fatalf("Save(chat) error = %v", err)
+	}
+	thread := &coremodel.Thread{ChatID: chat.ID, Label: "thread"}
+	if err := storage.Threads().Save(ctx, thread); err != nil {
+		t.Fatalf("Save(thread) error = %v", err)
+	}
+
+	router, err := commandengine.NewRouter([]commandengine.Definition{
+		{
+			Pattern: "run <command>",
+			Sources: []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleAgent),
+			Build: func(req *clir.Request) (any, error) {
+				return testRunCommand{
+					Command: req.Params["command"],
+					Args:    append([]string(nil), req.Extra...),
+				}, nil
+			},
+		},
+	}, commandengine.SourceHostbridge)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+	registry := commandengine.NewRegistry()
+	if err := commandengine.Register[testRunCommand](registry, func(ctx context.Context, req commandengine.Request, cmd testRunCommand) (commandengine.Result, error) {
+		return commandengine.Result{Text: "run:" + cmd.Command + " " + strings.Join(cmd.Args, " ")}, nil
+	}); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	engine := commandengine.NewEngine(router, registry)
+	bridge := NewBridge(t.TempDir(), storage, log.New(io.Discard, "", 0)).WithListenAddress("127.0.0.1:0")
+	t.Cleanup(func() {
+		_ = bridge.Close()
+	})
+
+	_, _, _, tlsDir, unregister, err := bridge.bindThread(thread.ID, engine)
+	if err != nil {
+		skipIfListenerUnavailable(t, err)
+		t.Fatalf("bindThread() error = %v", err)
+	}
+	defer unregister()
+
+	tlsConfig, err := hostbridgetls.LoadClientTLSConfig(tlsDir)
+	if err != nil {
+		t.Fatalf("LoadClientTLSConfig() error = %v", err)
+	}
+	client := &hostbridgev2.Client{
+		BaseURL:    "https://" + bridge.hostHTTPAddress,
+		HTTPClient: hostbridgev2HTTPClient(tlsConfig),
+	}
+	resp, err := client.Run(ctx, hostbridgev2.RunRequest{
+		Command:   []string{"git-ctgbot", "status"},
+		SandboxID: thread.ID,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if resp.Text != "run:git-ctgbot status" {
+		t.Fatalf("response text = %q, want run:git-ctgbot status", resp.Text)
+	}
+}
+
 type testEchoCommand struct {
 	Text string
+}
+
+type testRunCommand struct {
+	Command string
+	Args    []string
 }
 
 func hostbridgev2HTTPClient(tlsConfig *tls.Config) *http.Client {

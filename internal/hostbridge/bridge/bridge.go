@@ -190,7 +190,26 @@ func (b *Bridge) Run(ctx context.Context, req commandengine.Request, argv []stri
 	if !ok || runner == nil {
 		return commandengine.Result{}, fmt.Errorf("hostbridge command runner is unavailable for thread %s", threadID)
 	}
-	return runner.Run(ctx, prepared, argv)
+	result, err := runner.Run(ctx, prepared, argv)
+	if err == nil || !shouldTryRunAliasFallback(ctx, entry.commands, argv) {
+		return result, err
+	}
+	return runner.Run(ctx, prepared, append([]string{"run"}, argv...))
+}
+
+func shouldTryRunAliasFallback(ctx context.Context, commands commandengine.CommandExecutor, argv []string) bool {
+	if len(argv) == 0 || argv[0] == "run" {
+		return false
+	}
+	engine, ok := commands.(*commandengine.Engine)
+	if !ok || engine == nil || engine.Router == nil {
+		return false
+	}
+	match, err := engine.Router.Match(ctx, argv)
+	if err != nil {
+		return false
+	}
+	return !match.Matched
 }
 
 func (b *Bridge) Help(ctx context.Context, req commandengine.Request, scope []string) (commandengine.Result, error) {
