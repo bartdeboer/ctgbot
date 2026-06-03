@@ -19,6 +19,7 @@ import (
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
 	modelcomponent "github.com/bartdeboer/ctgbot/internal/component/model"
 	opscomponent "github.com/bartdeboer/ctgbot/internal/component/ops"
+	remotecomponent "github.com/bartdeboer/ctgbot/internal/component/remote"
 	schedulercomponent "github.com/bartdeboer/ctgbot/internal/component/scheduler"
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
@@ -59,6 +60,7 @@ func GlobalSurfaces() []componentpkg.CommandSurface {
 		componentadmin.New(nil, nil),
 		brokercomponent.New(nil),
 		messagingcomponent.New(nil, nil),
+		remotecomponent.New(nil),
 		(*configcomponent.Component)(nil),
 	}
 }
@@ -111,13 +113,14 @@ func RegisterGobTypes(register func(any)) {
 	llamacppagentcomponent.RegisterGobTypes(register)
 	modelcomponent.RegisterGobTypes(register)
 	opscomponent.RegisterGobTypes(register)
+	remotecomponent.RegisterGobTypes(register)
 	messagingcomponent.RegisterGobTypes(register)
 	supertoniccomponent.RegisterGobTypes(register)
 	whispercppcomponent.RegisterGobTypes(register)
 }
 
 func GlobalDirectPrefixes() []string {
-	return []string{"component", "status", "thread", "turn", "model", "sql"}
+	return []string{"component", "status", "thread", "turn", "model", "sql", "remote"}
 }
 
 func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {

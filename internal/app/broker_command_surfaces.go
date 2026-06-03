@@ -9,6 +9,7 @@ import (
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	allowlistfilter "github.com/bartdeboer/ctgbot/internal/component/filter/allowlist"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
+	remotecomponent "github.com/bartdeboer/ctgbot/internal/component/remote"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/messaging"
 )
@@ -17,6 +18,7 @@ func (s *service) CommandSurfaces(ctx context.Context, chat coremodel.Chat, inbo
 	surfaces := []component.CommandSurface{
 		componentadmin.New(s.Repository(), s),
 		messagingcomponent.New(messaging.New(s.Repository()), inbound),
+		remotecomponent.New(s),
 	}
 	if actions != nil {
 		surfaces = append(surfaces, brokercomponent.New(actions))

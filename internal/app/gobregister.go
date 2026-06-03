@@ -1,0 +1,26 @@
+package app
+
+func RegisterGobTypes(register func(any)) {
+	register(componentRegisterCommand{})
+	register(componentUnregisterCommand{})
+	register(componentRunCommand{})
+	register(chatCreateCommand{})
+	register(chatListCommand{})
+	register(chatDroppedCommand{})
+	register(chatBindCommand{})
+	register(chatWorkspaceSetCommand{})
+	register(chatWorkspaceClearCommand{})
+	register(chatComponentAddCommand{})
+	register(chatComponentRemoveCommand{})
+	register(chatComponentListCommand{})
+	register(chatComponentFilterAddCommand{})
+	register(chatComponentFilterRemoveCommand{})
+	register(chatComponentFilterClearCommand{})
+	register(chatComponentFilterListCommand{})
+	register(trustControllerCommand{})
+	register(showIdentityCommand{})
+	register(listTrustedControllersCommand{})
+	register(revokeTrustedControllerCommand{})
+	register(workspaceSetCommand{})
+	register(workspaceListCommand{})
+}

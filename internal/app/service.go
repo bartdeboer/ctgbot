@@ -10,6 +10,7 @@ import (
 	brokercomponent "github.com/bartdeboer/ctgbot/internal/component/broker"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	"github.com/bartdeboer/ctgbot/internal/identity"
 	"github.com/bartdeboer/ctgbot/internal/inbound"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -47,6 +48,7 @@ type Service interface {
 	CLICommandSurfaces(ctx context.Context) ([]component.CommandSurface, error)
 	ScheduledCommandEngine(ctx context.Context) (*commandengine.Engine, error)
 	ControllerCommandEngine(ctx context.Context) (*commandengine.Engine, error)
+	InstanceIdentity(ctx context.Context) (identity.Identity, error)
 	ScheduledJobRepository() repository.ScheduledJobRepository
 }
 

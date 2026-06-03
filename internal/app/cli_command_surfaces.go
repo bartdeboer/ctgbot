@@ -11,6 +11,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	componentadmin "github.com/bartdeboer/ctgbot/internal/component/admin"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
+	remotecomponent "github.com/bartdeboer/ctgbot/internal/component/remote"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
@@ -48,6 +49,7 @@ func (s *service) CLICommandSurfaces(ctx context.Context) ([]component.CommandSu
 	}
 	surfaces := []component.CommandSurface{
 		componentadmin.New(s.Repository(), s),
+		remotecomponent.New(s),
 		newWorkspaceCLISurface(s),
 		&cliCommandSurface{service: s},
 	}

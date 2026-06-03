@@ -249,3 +249,12 @@ func (s *service) identityManager() (*identity.Manager, error) {
 	}
 	return identity.NewManager(filepath.Join(cfg.Profile().Root(), "identity"), ""), nil
 }
+
+func (s *service) InstanceIdentity(ctx context.Context) (identity.Identity, error) {
+	_ = ctx
+	manager, err := s.identityManager()
+	if err != nil {
+		return identity.Identity{}, err
+	}
+	return manager.Ensure()
+}
