@@ -14,17 +14,17 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/hostbridge/transport"
 )
 
-// ConnTransport sends one opaque payload over one freshly-dialed connection.
+// DialTransport sends one opaque payload over one freshly-dialed connection.
 // The server closes the connection after writing the response; that close frames
 // the response for io.ReadAll.
-type ConnTransport struct {
+type DialTransport struct {
 	Address string
 	Dialer  transport.Dialer
 }
 
-func (t *ConnTransport) Send(ctx context.Context, payload []byte) ([]byte, error) {
+func (t *DialTransport) Send(ctx context.Context, payload []byte) ([]byte, error) {
 	if t == nil {
-		return nil, fmt.Errorf("missing gob connection transport")
+		return nil, fmt.Errorf("missing gob dial transport")
 	}
 	if t.Dialer == nil {
 		return nil, fmt.Errorf("missing gob connection dialer")
@@ -51,7 +51,7 @@ type CommandRunner struct {
 
 func NewCommandRunner(address string, tlsConfig *tls.Config) *CommandRunner {
 	return &CommandRunner{
-		Transport: &ConnTransport{
+		Transport: &DialTransport{
 			Address: address,
 			Dialer:  &Dialer{TLSConfig: tlsConfig},
 		},

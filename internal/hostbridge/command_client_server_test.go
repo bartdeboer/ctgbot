@@ -37,7 +37,7 @@ func TestCommandClientServerRoundTripExecutesConcreteCommand(t *testing.T) {
 	}()
 
 	runner := &gobtransport.CommandRunner{
-		Transport: &gobtransport.ConnTransport{Dialer: staticDialer{conn: clientConn}},
+		Transport: &gobtransport.DialTransport{Dialer: staticDialer{conn: clientConn}},
 	}
 	resp, err := runner.RunCommand(context.Background(), hostbridge.CommandRequest{
 		Request: commandengine.Request{

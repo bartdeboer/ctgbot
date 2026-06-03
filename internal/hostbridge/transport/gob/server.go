@@ -50,6 +50,7 @@ func (s *Server) ServeConn(ctx context.Context, conn io.ReadWriteCloser) error {
 }
 
 func connectionClientIdentity(conn io.ReadWriteCloser) string {
+	// Plain TCP connections intentionally have no client identity.
 	tlsConn, ok := conn.(*tls.Conn)
 	if !ok {
 		return ""
