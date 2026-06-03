@@ -707,31 +707,43 @@ func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID m
 		if threadRef == "" {
 			threadRef = thread.ID.String()
 		}
-		label := strings.TrimSpace(thread.ChatLabel)
-		if thread.ThreadLabel != "" {
-			if label != "" {
-				label += " / "
-			}
-			label += thread.ThreadLabel
-		}
-		if label == "" {
-			label = thread.ChatID.String()
-		}
 		marker := ""
 		if thread.ID == currentThreadID {
 			marker = " (current)"
 		}
 		last := strings.TrimSpace(thread.LastMessageText)
 		lines = append(lines,
-			fmt.Sprintf("- %s%s", threadRef, marker),
-			"  label: "+label,
-			"  thread_id: "+thread.ID.String(),
+			"- thread: "+formatThreadListIDLabel(threadRef, thread.ThreadLabel)+marker,
+			"  chat: "+formatThreadListIDLabel(threadListChatRef(thread), thread.ChatLabel),
 		)
 		if last != "" {
 			lines = append(lines, "  last: "+truncateThreadListText(last, 96))
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func threadListChatRef(thread messagingdomain.ThreadSummary) string {
+	ref := strings.TrimSpace(thread.ChatShortID)
+	if ref != "" {
+		return ref
+	}
+	if !thread.ChatID.IsNull() {
+		return thread.ChatID.String()
+	}
+	return "(unknown)"
+}
+
+func formatThreadListIDLabel(ref string, label string) string {
+	ref = strings.TrimSpace(ref)
+	label = strings.TrimSpace(label)
+	if ref == "" {
+		ref = "(unknown)"
+	}
+	if label == "" {
+		return ref
+	}
+	return ref + " - " + label
 }
 
 func truncateThreadListText(text string, maxRunes int) string {

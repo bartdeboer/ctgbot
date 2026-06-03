@@ -605,6 +605,7 @@ func TestFormatThreadListUsesReadableBlocks(t *testing.T) {
 			ID:              otherID,
 			ShortID:         "KyD48w",
 			ChatID:          chatID,
+			ChatShortID:     "t4KGe0",
 			ChatLabel:       "Codex #1",
 			ThreadLabel:     "ctgbot 2",
 			LastMessageAt:   time.Date(2026, 6, 3, 11, 0, 0, 0, time.UTC),
@@ -614,6 +615,7 @@ func TestFormatThreadListUsesReadableBlocks(t *testing.T) {
 			ID:              currentID,
 			ShortID:         "tbqCVf",
 			ChatID:          chatID,
+			ChatShortID:     "t4KGe0",
 			ChatLabel:       "Codex #1",
 			ThreadLabel:     "job search",
 			LastMessageAt:   time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC),
@@ -623,12 +625,11 @@ func TestFormatThreadListUsesReadableBlocks(t *testing.T) {
 
 	for _, want := range []string{
 		"Recent threads:",
-		"- tbqCVf (current)",
-		"  label: Codex #1 / job search",
-		"  thread_id: " + currentID.String(),
+		"- thread: tbqCVf - job search (current)",
+		"  chat: t4KGe0 - Codex #1",
 		"  last: line one line two with more context",
-		"- KyD48w",
-		"  label: Codex #1 / ctgbot 2",
+		"- thread: KyD48w - ctgbot 2",
+		"  chat: t4KGe0 - Codex #1",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("thread list missing %q:\n%s", want, out)

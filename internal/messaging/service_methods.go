@@ -461,6 +461,10 @@ func (s *Service) threadSummaries(ctx context.Context, activeOnly bool) ([]Threa
 	if err != nil {
 		return nil, err
 	}
+	chatResolver, err := s.chatShortIDResolver(ctx)
+	if err != nil {
+		return nil, err
+	}
 	chats, err := s.Storage.Chats().List(ctx)
 	if err != nil {
 		return nil, err
@@ -485,6 +489,7 @@ func (s *Service) threadSummaries(ctx context.Context, activeOnly bool) ([]Threa
 			summary := ThreadSummary{
 				ID:          thread.ID,
 				ChatID:      chat.ID,
+				ChatShortID: chatShortID(chatResolver, chat.ID),
 				ChatLabel:   chat.Label,
 				ThreadLabel: thread.Label,
 			}
