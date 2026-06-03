@@ -9,15 +9,17 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	gobtransport "github.com/bartdeboer/ctgbot/internal/hostbridge/transport/gob"
 )
 
 func DoCommand(ctx context.Context, address string, tlsDir string, req hostbridge.CommandRequest) (hostbridge.CommandResponse, error) {
-	conn, err := Connect(ctx, address, tlsDir)
-	if err != nil {
-		return hostbridge.CommandResponse{}, err
+	runner := &gobtransport.CommandRunner{
+		Transport: &gobtransport.ConnTransport{
+			Address: address,
+			Dialer:  &gobtransport.Dialer{TLSDir: tlsDir},
+		},
 	}
-	defer conn.Close()
-	return DoCommandConn(conn, req)
+	return runner.RunCommand(ctx, req)
 }
 
 func DoCommandConn(conn net.Conn, req hostbridge.CommandRequest) (hostbridge.CommandResponse, error) {

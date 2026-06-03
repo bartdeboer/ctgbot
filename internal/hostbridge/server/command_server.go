@@ -2,13 +2,11 @@ package server
 
 import (
 	"context"
-	"crypto/tls"
-	"encoding/gob"
-	"fmt"
 	"io"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	gobtransport "github.com/bartdeboer/ctgbot/internal/hostbridge/transport/gob"
 )
 
 type CommandExecutor interface {
@@ -37,23 +35,9 @@ func (s *CommandServer) HandleCommand(ctx context.Context, req hostbridge.Comman
 }
 
 func (s *CommandServer) ServeCommandConn(ctx context.Context, conn io.ReadWriteCloser) error {
-	if conn == nil {
-		return fmt.Errorf("missing connection")
-	}
-	defer conn.Close()
-	dec := gob.NewDecoder(conn)
-	enc := gob.NewEncoder(conn)
-
-	var req hostbridge.CommandRequest
-	if err := dec.Decode(&req); err != nil {
-		return fmt.Errorf("decode command request: %w", err)
-	}
-	clientIdentity := connectionClientIdentity(conn)
-	resp := s.handleCommand(ctx, clientIdentity, req)
-	if err := enc.Encode(resp); err != nil {
-		return fmt.Errorf("encode command response: %w", err)
-	}
-	return nil
+	return (&gobtransport.Server{
+		Handler: gobtransport.CommandHandlerFunc(s.handleCommand),
+	}).ServeConn(ctx, conn)
 }
 
 func (s *CommandServer) handleCommand(ctx context.Context, clientIdentity string, req hostbridge.CommandRequest) hostbridge.CommandResponse {
@@ -79,16 +63,4 @@ func (s *CommandServer) handleCommand(ctx context.Context, clientIdentity string
 		return hostbridge.CommandResponse{Error: err.Error()}
 	}
 	return hostbridge.CommandResponse{Result: result}
-}
-
-func connectionClientIdentity(conn io.ReadWriteCloser) string {
-	tlsConn, ok := conn.(*tls.Conn)
-	if !ok {
-		return ""
-	}
-	state := tlsConn.ConnectionState()
-	if len(state.PeerCertificates) == 0 {
-		return ""
-	}
-	return state.PeerCertificates[0].Subject.CommonName
 }
