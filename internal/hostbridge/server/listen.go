@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 )
 
@@ -18,7 +19,11 @@ func ListenTLS(address string, tlsConfig *tls.Config) (net.Listener, error) {
 	return tls.Listen("tcp", address, tlsConfig)
 }
 
-func ServeCommandListener(ctx context.Context, ln net.Listener, srv *CommandServer) error {
+type ConnServer interface {
+	ServeConn(ctx context.Context, conn io.ReadWriteCloser) error
+}
+
+func ServeCommandListener(ctx context.Context, ln net.Listener, srv ConnServer) error {
 	if ln == nil {
 		return fmt.Errorf("missing listener")
 	}
@@ -40,7 +45,7 @@ func ServeCommandListener(ctx context.Context, ln net.Listener, srv *CommandServ
 			}
 		}
 		go func() {
-			_ = srv.ServeCommandConn(ctx, conn)
+			_ = srv.ServeConn(ctx, conn)
 		}()
 	}
 }

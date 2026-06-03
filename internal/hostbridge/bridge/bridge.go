@@ -17,6 +17,7 @@ import (
 	_ "github.com/bartdeboer/ctgbot/internal/hostbridge/gobregister"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	hostbridgetls "github.com/bartdeboer/ctgbot/internal/hostbridge/tls"
+	gobtransport "github.com/bartdeboer/ctgbot/internal/hostbridge/transport/gob"
 	hostbridgev2 "github.com/bartdeboer/ctgbot/internal/hostbridge/v2"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
@@ -116,7 +117,8 @@ func (b *Bridge) DoCommand(
 	if req.Context.SandboxID.IsNull() {
 		req.Context.SandboxID = threadID
 	}
-	resp, err := hostbridgeclient.DoCommand(ctx, address, tlsDir, hostbridgeapi.CommandRequest{Request: req})
+	client := hostbridgeclient.New(gobtransport.NewCommandRunner(address, tlsDir))
+	resp, err := client.DoCommand(ctx, hostbridgeapi.CommandRequest{Request: req})
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -363,10 +365,11 @@ func (b *Bridge) ensureStarted() (containerAddress string, hostAddress string, e
 	}
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	srv := hostbridgeserver.NewCommandServer(b)
-	srv.Prepare = b.prepareRequest
+	commandServer := hostbridgeserver.NewCommandServer(b)
+	commandServer.Prepare = b.prepareRequest
+	gobServer := &gobtransport.Server{Handler: commandServer}
 	go func() {
-		err := hostbridgeserver.ServeCommandListener(runCtx, ln, srv)
+		err := hostbridgeserver.ServeCommandListener(runCtx, ln, gobServer)
 		if err != nil && runCtx.Err() == nil {
 			b.logf("hostbridge serve error: %v", err)
 		}

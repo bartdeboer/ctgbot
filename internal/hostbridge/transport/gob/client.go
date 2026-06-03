@@ -48,6 +48,15 @@ type CommandRunner struct {
 	Transport transport.ByteTransport
 }
 
+func NewCommandRunner(address string, tlsDir string) *CommandRunner {
+	return &CommandRunner{
+		Transport: &ConnTransport{
+			Address: address,
+			Dialer:  &Dialer{TLSDir: tlsDir},
+		},
+	}
+}
+
 func (r *CommandRunner) RunCommand(ctx context.Context, req hostbridge.CommandRequest) (hostbridge.CommandResponse, error) {
 	if r == nil {
 		return hostbridge.CommandResponse{}, fmt.Errorf("missing gob command runner")

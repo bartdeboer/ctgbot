@@ -7,10 +7,18 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
-	clientpkg "github.com/bartdeboer/ctgbot/internal/hostbridge/client"
 	serverpkg "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	gobtransport "github.com/bartdeboer/ctgbot/internal/hostbridge/transport/gob"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
+
+type staticDialer struct {
+	conn net.Conn
+}
+
+func (d staticDialer) Dial(context.Context, string) (net.Conn, error) {
+	return d.conn, nil
+}
 
 func TestCommandClientServerRoundTripExecutesConcreteCommand(t *testing.T) {
 	registry := commandengine.NewRegistry()
@@ -25,10 +33,13 @@ func TestCommandClientServerRoundTripExecutesConcreteCommand(t *testing.T) {
 
 	serverDone := make(chan error, 1)
 	go func() {
-		serverDone <- server.ServeCommandConn(context.Background(), serverConn)
+		serverDone <- (&gobtransport.Server{Handler: server}).ServeConn(context.Background(), serverConn)
 	}()
 
-	resp, err := clientpkg.DoCommandConn(clientConn, hostbridge.CommandRequest{
+	runner := &gobtransport.CommandRunner{
+		Transport: &gobtransport.ConnTransport{Dialer: staticDialer{conn: clientConn}},
+	}
+	resp, err := runner.RunCommand(context.Background(), hostbridge.CommandRequest{
 		Request: commandengine.Request{
 			Command: schemacommands.RunCommand{
 				Command: "echo",
@@ -37,7 +48,7 @@ func TestCommandClientServerRoundTripExecutesConcreteCommand(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("DoCommandConn() error = %v", err)
+		t.Fatalf("RunCommand() error = %v", err)
 	}
 	if err := <-serverDone; err != nil {
 		t.Fatalf("server error = %v", err)

@@ -2,11 +2,9 @@ package server
 
 import (
 	"context"
-	"io"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
-	gobtransport "github.com/bartdeboer/ctgbot/internal/hostbridge/transport/gob"
 )
 
 type CommandExecutor interface {
@@ -30,17 +28,7 @@ func NewCommandServerWithFactory(factory CommandExecutorFactory) *CommandServer 
 	return &CommandServer{ExecutorFactory: factory}
 }
 
-func (s *CommandServer) HandleCommand(ctx context.Context, req hostbridge.CommandRequest) hostbridge.CommandResponse {
-	return s.handleCommand(ctx, "", req)
-}
-
-func (s *CommandServer) ServeCommandConn(ctx context.Context, conn io.ReadWriteCloser) error {
-	return (&gobtransport.Server{
-		Handler: gobtransport.CommandHandlerFunc(s.handleCommand),
-	}).ServeConn(ctx, conn)
-}
-
-func (s *CommandServer) handleCommand(ctx context.Context, clientIdentity string, req hostbridge.CommandRequest) hostbridge.CommandResponse {
+func (s *CommandServer) HandleCommand(ctx context.Context, clientIdentity string, req hostbridge.CommandRequest) hostbridge.CommandResponse {
 	if s == nil {
 		return hostbridge.CommandResponse{Error: "hostbridge command executor is unavailable"}
 	}
