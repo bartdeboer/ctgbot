@@ -7,6 +7,10 @@ const (
 	RoleAgent    Role = "agent"
 	RoleUser     Role = "user"
 	RoleElevated Role = "elevated"
+	// RoleController identifies a trusted remote ctgbot controller. It is
+	// deliberately distinct from RoleRoot so command surfaces can opt into remote
+	// control without granting every local-root capability by default.
+	RoleController Role = "controller"
 )
 
 type Rule struct {

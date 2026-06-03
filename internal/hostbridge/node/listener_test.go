@@ -70,7 +70,7 @@ func TestTrustedControllerAuthRequiresStoredFingerprint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Authenticate trusted: %v", err)
 	}
-	if actor.ID != controllerID.Fingerprint || !actor.HasRole(simplerbac.RoleRoot) {
+	if actor.ID != controllerID.Fingerprint || !actor.HasRole(simplerbac.RoleController) {
 		t.Fatalf("actor = %+v", actor)
 	}
 	if _, err := auth.Authenticate(requestWithPeerCert(otherID.Certificate)); err == nil {

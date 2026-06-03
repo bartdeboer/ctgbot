@@ -194,7 +194,7 @@ func (a TrustedControllerAuth) authenticateFingerprint(ctx context.Context, fing
 	if label == "" {
 		label = fingerprint
 	}
-	return commandengine.Actor{ID: fingerprint, Label: label, Roles: []simplerbac.Role{simplerbac.RoleRoot}}, nil
+	return commandengine.Actor{ID: fingerprint, Label: label, Roles: []simplerbac.Role{simplerbac.RoleController}}, nil
 }
 
 func trustedControllerCommandPreparer(auth TrustedControllerAuth) hostbridgeserver.CommandRequestPreparer {

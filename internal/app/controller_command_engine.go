@@ -6,6 +6,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 // ControllerCommandEngine exposes the local operational command surface to
@@ -23,6 +24,7 @@ func (s *service) ControllerCommandEngine(ctx context.Context) (*commandengine.E
 	definitions := commandset.DefinitionsForSource(commandengine.SourceCLI, surfaces...)
 	for i := range definitions {
 		definitions[i].Sources = []commandengine.Source{commandengine.SourceController}
+		definitions[i].Policy = controllerPolicy(definitions[i].Policy)
 	}
 	if len(definitions) == 0 {
 		return nil, fmt.Errorf("no controller command definitions")
@@ -41,4 +43,18 @@ func (s *service) ControllerCommandEngine(ctx context.Context) (*commandengine.E
 		}
 	}
 	return commandengine.NewEngine(router, registry), nil
+}
+
+func controllerPolicy(policy simplerbac.Rule) simplerbac.Rule {
+	if len(policy.AnyRole) == 0 {
+		return policy
+	}
+	roles := append([]simplerbac.Role(nil), policy.AnyRole...)
+	for _, role := range roles {
+		if role == simplerbac.RoleController {
+			return policy
+		}
+	}
+	roles = append(roles, simplerbac.RoleController)
+	return simplerbac.Any(roles...)
 }
