@@ -722,16 +722,31 @@ func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID m
 			marker = " (current)"
 		}
 		last := strings.TrimSpace(thread.LastMessageText)
-		if len(last) > 80 {
-			last = last[:80]
+		lines = append(lines,
+			fmt.Sprintf("- %s%s", threadRef, marker),
+			"  label: "+label,
+			"  thread_id: "+thread.ID.String(),
+		)
+		if last != "" {
+			lines = append(lines, "  last: "+truncateThreadListText(last, 96))
 		}
-		if last == "" {
-			lines = append(lines, fmt.Sprintf("%s%s - %s", threadRef, marker, label))
-			continue
-		}
-		lines = append(lines, fmt.Sprintf("%s%s - %s - %s", threadRef, marker, label, last))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func truncateThreadListText(text string, maxRunes int) string {
+	text = strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+	if maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(text)
+	if len(runes) <= maxRunes {
+		return text
+	}
+	if maxRunes <= 1 {
+		return "…"
+	}
+	return string(runes[:maxRunes-1]) + "…"
 }
 
 func formatThreadStatus(status messagingdomain.ThreadStatus) string {

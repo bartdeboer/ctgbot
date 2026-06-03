@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -592,4 +593,57 @@ func testMessagingRequest(threadID modeluuid.UUID, roles ...simplerbac.Role) com
 			Roles: roles,
 		},
 	}}
+}
+
+func TestFormatThreadListUsesReadableBlocks(t *testing.T) {
+	currentID := mustParseModelUUID(t, "019e40823fd97d4df5185374324ebbdb")
+	otherID := mustParseModelUUID(t, "019d97a4ca3f78608c5c66c7ef2d6d28")
+	chatID := mustParseModelUUID(t, "019d6e9f2df65800fd6197bdae08f9f0")
+
+	out := formatThreadList([]messagingdomain.ThreadSummary{
+		{
+			ID:              otherID,
+			ShortID:         "KyD48w",
+			ChatID:          chatID,
+			ChatLabel:       "Codex #1",
+			ThreadLabel:     "ctgbot 2",
+			LastMessageAt:   time.Date(2026, 6, 3, 11, 0, 0, 0, time.UTC),
+			LastMessageText: "older message",
+		},
+		{
+			ID:              currentID,
+			ShortID:         "tbqCVf",
+			ChatID:          chatID,
+			ChatLabel:       "Codex #1",
+			ThreadLabel:     "job search",
+			LastMessageAt:   time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC),
+			LastMessageText: "line one\nline two with more context",
+		},
+	}, currentID)
+
+	for _, want := range []string{
+		"Recent threads:",
+		"- tbqCVf (current)",
+		"  label: Codex #1 / job search",
+		"  thread_id: " + currentID.String(),
+		"  last: line one line two with more context",
+		"- KyD48w",
+		"  label: Codex #1 / ctgbot 2",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("thread list missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Index(out, "tbqCVf") > strings.Index(out, "KyD48w") {
+		t.Fatalf("newest thread should be listed first:\n%s", out)
+	}
+}
+
+func mustParseModelUUID(t *testing.T, value string) modeluuid.UUID {
+	t.Helper()
+	id, err := modeluuid.Parse(value)
+	if err != nil {
+		t.Fatalf("Parse(%q) error = %v", value, err)
+	}
+	return id
 }
