@@ -14,6 +14,7 @@ import (
 	clientpkg "github.com/bartdeboer/ctgbot/internal/hostbridge/client"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge/cmdsurface"
 	_ "github.com/bartdeboer/ctgbot/internal/hostbridge/gobregister"
+	hostbridgetls "github.com/bartdeboer/ctgbot/internal/hostbridge/tls"
 	gobtransport "github.com/bartdeboer/ctgbot/internal/hostbridge/transport/gob"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
@@ -56,9 +57,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	tlsConfig, err := hostbridgetls.LoadClientTLSConfigIfPresent(getenv("HOSTBRIDGE_TLS_DIR", ""))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
 	client := clientpkg.New(gobtransport.NewCommandRunner(
 		getenv("HOSTBRIDGE_ADDR", "host.docker.internal:4568"),
-		getenv("HOSTBRIDGE_TLS_DIR", ""),
+		tlsConfig,
 	))
 	resp, err := client.DoCommand(context.Background(), hostbridge.CommandRequest{Request: req})
 	if err != nil {

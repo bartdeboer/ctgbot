@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -171,6 +172,15 @@ func LoadClientTLSConfig(dir string) (*tls.Config, error) {
 		RootCAs:      pool,
 		ServerName:   ServerName,
 	}, nil
+}
+
+// LoadClientTLSConfigIfPresent returns nil when dir is empty (plain TCP),
+// or a loaded *tls.Config when dir is set.
+func LoadClientTLSConfigIfPresent(dir string) (*tls.Config, error) {
+	if strings.TrimSpace(dir) == "" {
+		return nil, nil
+	}
+	return LoadClientTLSConfig(dir)
 }
 
 func ensureCA(certPath, keyPath string) (*x509.Certificate, *ecdsa.PrivateKey, error) {

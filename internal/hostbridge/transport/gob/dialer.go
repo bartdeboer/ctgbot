@@ -4,31 +4,23 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
-	"strings"
-
-	hostbridgetls "github.com/bartdeboer/ctgbot/internal/hostbridge/tls"
 )
 
-// Dialer opens plain TCP connections, or mTLS connections when TLSDir is set.
+// Dialer opens plain TCP connections, or mTLS connections when TLSConfig is set.
 type Dialer struct {
-	TLSDir string
+	TLSConfig *tls.Config
 }
 
 func (d *Dialer) Dial(ctx context.Context, address string) (net.Conn, error) {
-	dialer := &net.Dialer{}
-	if strings.TrimSpace(d.TLSDir) == "" {
-		return dialer.DialContext(ctx, "tcp", address)
+	nd := &net.Dialer{}
+	if d == nil || d.TLSConfig == nil {
+		return nd.DialContext(ctx, "tcp", address)
 	}
-	baseConn, err := dialer.DialContext(ctx, "tcp", address)
+	baseConn, err := nd.DialContext(ctx, "tcp", address)
 	if err != nil {
 		return nil, err
 	}
-	tlsConfig, err := hostbridgetls.LoadClientTLSConfig(d.TLSDir)
-	if err != nil {
-		_ = baseConn.Close()
-		return nil, err
-	}
-	conn := tls.Client(baseConn, tlsConfig)
+	conn := tls.Client(baseConn, d.TLSConfig)
 	if err := conn.HandshakeContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, err

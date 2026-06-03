@@ -114,10 +114,14 @@ func (b *Bridge) DoCommand(
 	}
 	defer unregister()
 
+	tlsConfig, err := hostbridgetls.LoadClientTLSConfigIfPresent(tlsDir)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
 	if req.Context.SandboxID.IsNull() {
 		req.Context.SandboxID = threadID
 	}
-	client := hostbridgeclient.New(gobtransport.NewCommandRunner(address, tlsDir))
+	client := hostbridgeclient.New(gobtransport.NewCommandRunner(address, tlsConfig))
 	resp, err := client.DoCommand(ctx, hostbridgeapi.CommandRequest{Request: req})
 	if err != nil {
 		return commandengine.Result{}, err

@@ -3,6 +3,7 @@ package gobtransport
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -48,11 +49,11 @@ type CommandRunner struct {
 	Transport transport.ByteTransport
 }
 
-func NewCommandRunner(address string, tlsDir string) *CommandRunner {
+func NewCommandRunner(address string, tlsConfig *tls.Config) *CommandRunner {
 	return &CommandRunner{
 		Transport: &ConnTransport{
 			Address: address,
-			Dialer:  &Dialer{TLSDir: tlsDir},
+			Dialer:  &Dialer{TLSConfig: tlsConfig},
 		},
 	}
 }
