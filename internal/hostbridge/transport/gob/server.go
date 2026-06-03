@@ -8,24 +8,12 @@ import (
 	"io"
 
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge/transport"
 )
-
-// CommandHandler handles one decoded command request. clientIdentity is derived
-// from the peer certificate when the connection is TLS.
-type CommandHandler interface {
-	HandleCommand(ctx context.Context, clientIdentity string, req hostbridge.CommandRequest) hostbridge.CommandResponse
-}
-
-// CommandHandlerFunc adapts a function to CommandHandler.
-type CommandHandlerFunc func(ctx context.Context, clientIdentity string, req hostbridge.CommandRequest) hostbridge.CommandResponse
-
-func (f CommandHandlerFunc) HandleCommand(ctx context.Context, clientIdentity string, req hostbridge.CommandRequest) hostbridge.CommandResponse {
-	return f(ctx, clientIdentity, req)
-}
 
 // Server decodes and encodes one gob hostbridge command per connection.
 type Server struct {
-	Handler CommandHandler
+	Handler transport.CommandHandler
 }
 
 func (s *Server) ServeConn(ctx context.Context, conn io.ReadWriteCloser) error {

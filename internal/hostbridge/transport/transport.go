@@ -19,6 +19,12 @@ type CommandRunner interface {
 	RunCommand(ctx context.Context, req hostbridge.CommandRequest) (hostbridge.CommandResponse, error)
 }
 
+// CommandHandler handles one decoded hostbridge command. clientIdentity is
+// transport-derived identity, such as a TLS peer certificate common name.
+type CommandHandler interface {
+	HandleCommand(ctx context.Context, clientIdentity string, req hostbridge.CommandRequest) hostbridge.CommandResponse
+}
+
 // Dialer opens a connection for connection-oriented byte transports.
 // Implementations own connection setup concerns such as TLS material loading.
 type Dialer interface {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge/transport"
 )
 
 type CommandExecutor interface {
@@ -52,3 +53,5 @@ func (s *CommandServer) HandleCommand(ctx context.Context, clientIdentity string
 	}
 	return hostbridge.CommandResponse{Result: result}
 }
+
+var _ transport.CommandHandler = (*CommandServer)(nil)
