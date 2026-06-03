@@ -14,6 +14,9 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge/transport"
+	gobtransport "github.com/bartdeboer/ctgbot/internal/hostbridge/transport/gob"
 	v2 "github.com/bartdeboer/ctgbot/internal/hostbridge/v2"
 	"github.com/bartdeboer/ctgbot/internal/identity"
 	"github.com/bartdeboer/ctgbot/internal/repository"
@@ -21,10 +24,11 @@ import (
 )
 
 const PairPath = "/v2/pair"
+const CommandsPath = "/commands"
 
 type Listener struct {
 	Addr     string
-	Runner   commandengine.CommandRunner
+	Runner   commandengine.CommandRuntime
 	Storage  repository.Storage
 	Identity identity.Identity
 	Logger   *log.Logger
@@ -51,9 +55,13 @@ func (l *Listener) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	pairing := &PairingHandler{Identity: l.Identity, Logger: l.Logger}
 	mux.Handle(PairPath, pairing)
+	auth := TrustedControllerAuth{Repository: l.Storage.TrustedControllers()}
+	commandServer := hostbridgeserver.NewCommandServer(l.Runner)
+	commandServer.Prepare = trustedControllerCommandPreparer(auth)
+	mux.Handle(CommandsPath, &gobtransport.HTTPHandler{Handler: commandServer})
 	commandHandler := v2.NewHandler(l.Runner)
 	commandHandler.Source = commandengine.SourceController
-	commandHandler.Auth = TrustedControllerAuth{Repository: l.Storage.TrustedControllers()}
+	commandHandler.Auth = auth
 	mux.Handle("/v2/run/", commandHandler)
 
 	srv := &http.Server{Handler: mux}
@@ -160,8 +168,22 @@ func (a TrustedControllerAuth) Authenticate(req *http.Request) (commandengine.Ac
 		return commandengine.Actor{}, fmt.Errorf("missing controller client certificate")
 	}
 	cert := req.TLS.PeerCertificates[0]
-	fingerprint := identity.Fingerprint(cert)
-	controller, err := a.Repository.GetByFingerprint(req.Context(), fingerprint)
+	return a.authenticateFingerprint(req.Context(), identity.Fingerprint(cert))
+}
+
+func (a TrustedControllerAuth) AuthenticatePeer(ctx context.Context, peer transport.PeerIdentity) (commandengine.Actor, error) {
+	if !peer.TLS || strings.TrimSpace(peer.FingerprintSHA256) == "" {
+		return commandengine.Actor{}, fmt.Errorf("missing controller client certificate")
+	}
+	return a.authenticateFingerprint(ctx, peer.FingerprintSHA256)
+}
+
+func (a TrustedControllerAuth) authenticateFingerprint(ctx context.Context, fingerprint string) (commandengine.Actor, error) {
+	if a.Repository == nil {
+		return commandengine.Actor{}, fmt.Errorf("missing trusted controller repository")
+	}
+	fingerprint = strings.TrimSpace(fingerprint)
+	controller, err := a.Repository.GetByFingerprint(ctx, fingerprint)
 	if err != nil {
 		return commandengine.Actor{}, err
 	}
@@ -173,6 +195,22 @@ func (a TrustedControllerAuth) Authenticate(req *http.Request) (commandengine.Ac
 		label = fingerprint
 	}
 	return commandengine.Actor{ID: fingerprint, Label: label, Roles: []simplerbac.Role{simplerbac.RoleRoot}}, nil
+}
+
+func trustedControllerCommandPreparer(auth TrustedControllerAuth) hostbridgeserver.CommandRequestPreparer {
+	return func(ctx context.Context, peer transport.PeerIdentity, req commandengine.Request) (commandengine.Request, error) {
+		actor, err := auth.AuthenticatePeer(ctx, peer)
+		if err != nil {
+			return commandengine.Request{}, err
+		}
+		// The remote command listener owns source and actor assignment. Never trust
+		// those fields from the serialized command request.
+		req.Context = commandengine.Context{
+			Source: commandengine.SourceController,
+			Actor:  actor,
+		}
+		return req, nil
+	}
 }
 
 func TrustedControllerRecord(resp PairResponse) coremodel.TrustedController {

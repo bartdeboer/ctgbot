@@ -12,6 +12,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	hostbridgetls "github.com/bartdeboer/ctgbot/internal/hostbridge/tls"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge/transport"
 	hostbridgev2 "github.com/bartdeboer/ctgbot/internal/hostbridge/v2"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
@@ -185,7 +186,7 @@ func TestPrepareRequestUsesTLSClientIdentityAsThread(t *testing.T) {
 	}
 	bridge := NewBridge(t.TempDir(), storage, log.New(io.Discard, "", 0))
 
-	req, err := bridge.prepareRequest(ctx, thread.ID.String(), commandengine.Request{})
+	req, err := bridge.prepareRequest(ctx, transport.PeerIdentity{CommonName: thread.ID.String()}, commandengine.Request{})
 	if err != nil {
 		t.Fatalf("prepareRequest() error = %v", err)
 	}
@@ -206,7 +207,7 @@ func TestPrepareRequestRejectsClaimedThreadMismatch(t *testing.T) {
 	authenticated := modeluuid.New()
 	claimed := modeluuid.New()
 
-	_, err := bridge.prepareRequest(ctx, authenticated.String(), commandengine.Request{
+	_, err := bridge.prepareRequest(ctx, transport.PeerIdentity{CommonName: authenticated.String()}, commandengine.Request{
 		Context: commandengine.Context{SandboxID: claimed},
 	})
 	if err == nil || !strings.Contains(err.Error(), "client identity does not match claimed sandbox id") {

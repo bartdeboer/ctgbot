@@ -19,10 +19,18 @@ type CommandRunner interface {
 	RunCommand(ctx context.Context, req hostbridge.CommandRequest) (hostbridge.CommandResponse, error)
 }
 
-// CommandHandler handles one decoded hostbridge command. clientIdentity is
-// transport-derived identity, such as a TLS peer certificate common name.
+// PeerIdentity is the transport-derived identity for one command request.
+// Local hostbridge v1 uses CommonName to bind a container to its thread.
+// Remote controller calls use FingerprintSHA256 to authorize stable instance identities.
+type PeerIdentity struct {
+	CommonName        string
+	FingerprintSHA256 string
+	TLS               bool
+}
+
+// CommandHandler handles one decoded hostbridge command.
 type CommandHandler interface {
-	HandleCommand(ctx context.Context, clientIdentity string, req hostbridge.CommandRequest) hostbridge.CommandResponse
+	HandleCommand(ctx context.Context, peer PeerIdentity, req hostbridge.CommandRequest) hostbridge.CommandResponse
 }
 
 // Dialer opens a connection for connection-oriented byte transports.

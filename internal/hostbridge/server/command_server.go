@@ -12,8 +12,8 @@ type CommandExecutor interface {
 	Execute(ctx context.Context, req commandengine.Request) (commandengine.Result, error)
 }
 
-type CommandExecutorFactory func(clientIdentity string) CommandExecutor
-type CommandRequestPreparer func(ctx context.Context, clientIdentity string, req commandengine.Request) (commandengine.Request, error)
+type CommandExecutorFactory func(peer transport.PeerIdentity) CommandExecutor
+type CommandRequestPreparer func(ctx context.Context, peer transport.PeerIdentity, req commandengine.Request) (commandengine.Request, error)
 
 type CommandServer struct {
 	Executor        CommandExecutor
@@ -29,20 +29,20 @@ func NewCommandServerWithFactory(factory CommandExecutorFactory) *CommandServer 
 	return &CommandServer{ExecutorFactory: factory}
 }
 
-func (s *CommandServer) HandleCommand(ctx context.Context, clientIdentity string, req hostbridge.CommandRequest) hostbridge.CommandResponse {
+func (s *CommandServer) HandleCommand(ctx context.Context, peer transport.PeerIdentity, req hostbridge.CommandRequest) hostbridge.CommandResponse {
 	if s == nil {
 		return hostbridge.CommandResponse{Error: "hostbridge command executor is unavailable"}
 	}
 	executor := s.Executor
 	if s.ExecutorFactory != nil {
-		executor = s.ExecutorFactory(clientIdentity)
+		executor = s.ExecutorFactory(peer)
 	}
 	if executor == nil {
 		return hostbridge.CommandResponse{Error: "hostbridge command executor is unavailable"}
 	}
 	if s.Prepare != nil {
 		var err error
-		req.Request, err = s.Prepare(ctx, clientIdentity, req.Request)
+		req.Request, err = s.Prepare(ctx, peer, req.Request)
 		if err != nil {
 			return hostbridge.CommandResponse{Error: err.Error()}
 		}

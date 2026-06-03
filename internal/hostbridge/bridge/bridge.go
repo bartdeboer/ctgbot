@@ -17,6 +17,7 @@ import (
 	_ "github.com/bartdeboer/ctgbot/internal/hostbridge/gobregister"
 	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
 	hostbridgetls "github.com/bartdeboer/ctgbot/internal/hostbridge/tls"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge/transport"
 	gobtransport "github.com/bartdeboer/ctgbot/internal/hostbridge/transport/gob"
 	hostbridgev2 "github.com/bartdeboer/ctgbot/internal/hostbridge/v2"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -173,8 +174,7 @@ func (b *Bridge) Run(ctx context.Context, req commandengine.Request, argv []stri
 	if b == nil {
 		return commandengine.Result{}, fmt.Errorf("missing hostbridge")
 	}
-	clientIdentity := strings.TrimSpace(req.Context.Actor.ID)
-	prepared, err := b.prepareRequest(ctx, clientIdentity, req)
+	prepared, err := b.prepareRequest(ctx, transport.PeerIdentity{CommonName: strings.TrimSpace(req.Context.Actor.ID)}, req)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -203,8 +203,7 @@ func (b *Bridge) Help(ctx context.Context, req commandengine.Request, scope []st
 	if b == nil {
 		return commandengine.Result{}, fmt.Errorf("missing hostbridge")
 	}
-	clientIdentity := strings.TrimSpace(req.Context.Actor.ID)
-	prepared, err := b.prepareRequest(ctx, clientIdentity, req)
+	prepared, err := b.prepareRequest(ctx, transport.PeerIdentity{CommonName: strings.TrimSpace(req.Context.Actor.ID)}, req)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -231,9 +230,10 @@ func (b *Bridge) Help(ctx context.Context, req commandengine.Request, scope []st
 
 func (b *Bridge) prepareRequest(
 	ctx context.Context,
-	clientIdentity string,
+	peer transport.PeerIdentity,
 	req commandengine.Request,
 ) (commandengine.Request, error) {
+	clientIdentity := strings.TrimSpace(peer.CommonName)
 	req.Context.Source = commandengine.SourceHostbridge
 	req.Context.Actor = commandengine.Actor{
 		ID:    clientIdentity,
