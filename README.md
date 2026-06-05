@@ -1,16 +1,30 @@
 # `ctgbot`
 
-`ctgbot` is an agentic engineering platform with an agent-first architecture and security by design.
+`ctgbot` is an open orchestration platform for organic agentic ecosystems.
 
-It routes conversations into isolated sandboxes where agents can freely install and run software.
-
-Runtime containers can be refreshed back to a clean state without losing conversation history.
+It gives AI agents persistent identities, isolated runtimes, and authenticated
+communication channels — the substrate for agent relationships and specializations
+that emerge through use rather than upfront design.
 
 <p align="center">
   <img src="docs/assets/ctgbot-architecture.svg" alt="ctgbot routes messages into isolated agent thread containers" width="900">
 </p>
 
 ctgbot is under active development. The architecture is usable today, but command names and component setup may still change.
+
+## Features
+
+- **Persistent agent identities** — agents accumulate context across sessions and develop specializations through use, not role assignments
+- **Container isolation per thread** — each agent conversation runs in its own Docker container; experiments stay contained and do not affect the host or other agents
+- **Inter-agent messaging** — agents send messages, files, and structured commands to other agent threads via `hostbridge`
+- **Organic agent ecosystems** — run a reviewer agent, a coder agent, an email agent, a docs agent side by side; their working relationships emerge from the workflow
+- **Explicit trust model** — sources, roles, and command surfaces are declared; no ambient authority; unknown channels are dropped until bound
+- **Component model** — agents, sources, relays, and integrations are components attached per chat; mix and match Claude, Codex, Gmail, LLaMA, and custom components
+- **Hostbridge** — typed, authenticated command bridge from agent containers to the host; agents cannot reach outside what is explicitly exposed
+- **Durable workspaces** — host project directories mounted into containers; conversation history persists across container refreshes
+- **Inbound filters** — allowlists and LLM guards attached per source binding
+- **Config overlays** — layer deployment defaults under `config.d/` without touching user config
+- **Remote agent nodes** — trusted controller/node model for running commands across ctgbot instances over mTLS
 
 ## Core model
 
@@ -22,15 +36,17 @@ ctgbot is under active development. The architecture is usable today, but comman
 
 ## What agents get
 
-A real engineering environment.
+A real engineering environment with a persistent place to work.
 
 Each sandboxed thread runs in its own container. Agents can install packages,
 run tests, build tools, inspect repositories, create artifacts, run services,
 exchange files, communicate with other threads, read message history, and use
 restricted `hostbridge` commands.
 
-Each thread has isolated runtime state. Experiments stay contained and do not
-dirty the host or other conversations.
+Agents are not ephemeral task runners. They accumulate context, maintain
+conversation history, and develop working knowledge across sessions. A reviewer
+agent that has spent weeks reviewing architecture proposals brings genuine
+accumulated context — not a blank slate instantiated for each task.
 
 ## What humans get
 
@@ -41,11 +57,20 @@ Unknown channels are dropped until explicitly bound.
 
 ctgbot is designed around explicit trust boundaries instead of ambient authority.
 
-## Design focus
+## Agent ecosystems
 
-ctgbot focuses on the environment an agent receives after the message arrives:
-isolated runtime state, durable workspaces, explicit components, controlled host
-access, and reproducible execution environments.
+ctgbot does not prescribe how agents relate to each other. Ecosystems emerge
+from the workflow. A typical setup might have:
+
+- a **coder agent** (Claude Code or Codex) with access to the repository
+- a **reviewer agent** that reads branches and sends feedback via inter-thread messages
+- an **email agent** routing inbound mail into threads
+- a **docs agent** maintaining documentation in a separate workspace
+- a **search agent** indexing and querying conversation history across threads
+
+Agents coordinate by sending messages to each other's threads. The reviewer
+asks the coder to push a branch; the coder reports back when it is ready. No
+upfront crew definition required — the pattern develops from use.
 
 ## Quick start: Telegram + Codex
 
@@ -178,6 +203,15 @@ thread and sandbox.
 `hostbridge` is the controlled bridge from an agent container back to ctgbot and
 the host. Agents use it to send files, message other threads, read message
 history, inspect available components, and run explicit host command aliases.
+
+Inter-agent communication happens through hostbridge. An agent in one container
+sends a message directly into another agent's thread:
+
+```bash
+hostbridge thread <thread_id> message send <<'EOF'
+Review request: feature/my-branch is ready.
+EOF
+```
 
 ### Workspace command aliases
 
@@ -330,18 +364,17 @@ Inside an agent runtime:
 
 ```bash
 hostbridge help
+hostbridge status
 hostbridge component list
 hostbridge component <component> help
 hostbridge thread list
+hostbridge thread <thread_id> message send
+hostbridge search "<query>"
 hostbridge message "hello"
 hostbridge message "Report attached" --attach /workspace/out/report.pdf
 hostbridge sendstdin
 hostbridge sendfile <path>
 ```
-
-## Why agents want ctgbot
-
-> I can be more useful when I have my own safe place to work.
 
 ## License
 
