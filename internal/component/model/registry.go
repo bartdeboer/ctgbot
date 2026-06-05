@@ -24,23 +24,24 @@ type Registry struct {
 }
 
 type ModelRecord struct {
-	URL         string                          `json:"url,omitempty"`
-	Filename    string                          `json:"filename,omitempty"`
-	Path        string                          `json:"path,omitempty"`
-	Mode        string                          `json:"mode,omitempty"`
-	Card        string                          `json:"card,omitempty"`
-	SHA256      string                          `json:"sha256,omitempty"`
-	MMProjPath  string                          `json:"mmproj_path,omitempty"`
-	HostPort    int                             `json:"host_port,omitempty"`
-	ContextSize int                             `json:"ctx_size,omitempty"`
-	UBatchSize  int                             `json:"ubatch_size,omitempty"`
-	GPULayers   int                             `json:"gpu_layers,omitempty"`
-	MaxTokens   int                             `json:"max_tokens,omitempty"`
-	Temperature float64                         `json:"temperature,omitempty"`
-	Pooling     string                          `json:"pooling,omitempty"`
-	Normalize   *bool                           `json:"normalize,omitempty"`
-	Toolloop    component.ModelToolloopProfile  `json:"toolloop,omitempty"`
-	ConfigKeys  map[string]ModelConfigKeyRecord `json:"config_keys,omitempty"`
+	URL              string                          `json:"url,omitempty"`
+	Filename         string                          `json:"filename,omitempty"`
+	Path             string                          `json:"path,omitempty"`
+	Mode             string                          `json:"mode,omitempty"`
+	Card             string                          `json:"card,omitempty"`
+	SHA256           string                          `json:"sha256,omitempty"`
+	MMProjPath       string                          `json:"mmproj_path,omitempty"`
+	ChatTemplatePath string                          `json:"chat_template_path,omitempty"`
+	HostPort         int                             `json:"host_port,omitempty"`
+	ContextSize      int                             `json:"ctx_size,omitempty"`
+	UBatchSize       int                             `json:"ubatch_size,omitempty"`
+	GPULayers        int                             `json:"gpu_layers,omitempty"`
+	MaxTokens        int                             `json:"max_tokens,omitempty"`
+	Temperature      float64                         `json:"temperature,omitempty"`
+	Pooling          string                          `json:"pooling,omitempty"`
+	Normalize        *bool                           `json:"normalize,omitempty"`
+	Toolloop         component.ModelToolloopProfile  `json:"toolloop,omitempty"`
+	ConfigKeys       map[string]ModelConfigKeyRecord `json:"config_keys,omitempty"`
 }
 
 type ModelConfigKeyRecord struct {
@@ -123,6 +124,7 @@ func cleanModelRecord(record ModelRecord) ModelRecord {
 	record.Card = strings.TrimSpace(record.Card)
 	record.SHA256 = strings.TrimSpace(record.SHA256)
 	record.MMProjPath = strings.TrimSpace(record.MMProjPath)
+	record.ChatTemplatePath = strings.TrimSpace(record.ChatTemplatePath)
 	record.Pooling = strings.TrimSpace(record.Pooling)
 	record.Toolloop = cleanModelToolloopProfile(record.Toolloop)
 	record.ConfigKeys = cleanModelConfigKeys(record.ConfigKeys)
@@ -135,20 +137,21 @@ func modelRecordFromComponent(model component.Model) ModelRecord {
 		normalize = nil
 	}
 	return ModelRecord{
-		URL:         model.URL,
-		Filename:    model.Filename,
-		Path:        model.Path,
-		Mode:        string(model.Mode),
-		SHA256:      model.SHA256,
-		MMProjPath:  model.MMProjPath,
-		HostPort:    model.HostPort,
-		ContextSize: model.ContextSize,
-		UBatchSize:  model.UBatchSize,
-		GPULayers:   model.GPULayers,
-		MaxTokens:   model.MaxTokens,
-		Temperature: model.Temperature,
-		Pooling:     model.Pooling,
-		Normalize:   normalize,
+		URL:              model.URL,
+		Filename:         model.Filename,
+		Path:             model.Path,
+		Mode:             string(model.Mode),
+		SHA256:           model.SHA256,
+		MMProjPath:       model.MMProjPath,
+		ChatTemplatePath: model.ChatTemplatePath,
+		HostPort:         model.HostPort,
+		ContextSize:      model.ContextSize,
+		UBatchSize:       model.UBatchSize,
+		GPULayers:        model.GPULayers,
+		MaxTokens:        model.MaxTokens,
+		Temperature:      model.Temperature,
+		Pooling:          model.Pooling,
+		Normalize:        normalize,
 	}
 }
 

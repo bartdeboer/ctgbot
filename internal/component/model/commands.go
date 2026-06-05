@@ -18,19 +18,20 @@ import (
 type listCommand struct{}
 
 type installCommand struct {
-	Name        string
-	URL         string
-	Path        string
-	Mode        component.ModelMode
-	Filename    string
-	SHA256      string
-	HostPort    int
-	ContextSize int
-	UBatchSize  int
-	GPULayers   int
-	Pooling     string
-	Normalize   bool
-	Default     bool
+	Name             string
+	URL              string
+	Path             string
+	Mode             component.ModelMode
+	Filename         string
+	SHA256           string
+	ChatTemplatePath string
+	HostPort         int
+	ContextSize      int
+	UBatchSize       int
+	GPULayers        int
+	Pooling          string
+	Normalize        bool
+	Default          bool
 }
 
 type modelCardCommand struct {
@@ -163,6 +164,7 @@ func buildModelCommand(req *clir.Request, name string) (installCommand, error) {
 	fs.SetOutput(io.Discard)
 	filename := fs.String("filename", "", "Downloaded model filename")
 	sha := fs.String("sha256", "", "Expected model sha256")
+	chatTemplatePath := fs.String("chat-template-path", "", "Jinja chat template file path for completion models")
 	hostPort := fs.Int("host-port", 0, "Host port for this model service")
 	ctxSize := fs.Int("ctx-size", 0, "llama.cpp context size")
 	gpuLayers := fs.Int("gpu-layers", 0, "llama.cpp GPU layers")
@@ -200,7 +202,7 @@ func buildModelCommand(req *clir.Request, name string) (installCommand, error) {
 	if parsed := parseModelMode(*modeFlag); parsed != "" {
 		mode = parsed
 	}
-	return installCommand{Name: modelName, Mode: mode, Filename: *filename, SHA256: *sha, HostPort: *hostPort, ContextSize: *ctxSize, UBatchSize: *ubatch, GPULayers: *gpuLayers, Pooling: *pooling, Normalize: *normalize, Default: *makeDefault}, nil
+	return installCommand{Name: modelName, Mode: mode, Filename: *filename, SHA256: *sha, ChatTemplatePath: *chatTemplatePath, HostPort: *hostPort, ContextSize: *ctxSize, UBatchSize: *ubatch, GPULayers: *gpuLayers, Pooling: *pooling, Normalize: *normalize, Default: *makeDefault}, nil
 }
 
 func buildModelCardCommand(req *clir.Request) (any, error) {
@@ -410,18 +412,19 @@ func formatModelConfigField(field configsurface.FieldSchema) string {
 func installRequest(cmd installCommand) component.ModelInstallRequest {
 	return component.ModelInstallRequest{
 		Model: component.Model{
-			Name:        cmd.Name,
-			URL:         cmd.URL,
-			Filename:    cmd.Filename,
-			Path:        cmd.Path,
-			Mode:        cmd.Mode,
-			SHA256:      cmd.SHA256,
-			HostPort:    cmd.HostPort,
-			ContextSize: cmd.ContextSize,
-			UBatchSize:  cmd.UBatchSize,
-			GPULayers:   cmd.GPULayers,
-			Pooling:     cmd.Pooling,
-			Normalize:   cmd.Normalize,
+			Name:             cmd.Name,
+			URL:              cmd.URL,
+			Filename:         cmd.Filename,
+			Path:             cmd.Path,
+			Mode:             cmd.Mode,
+			SHA256:           cmd.SHA256,
+			ChatTemplatePath: cmd.ChatTemplatePath,
+			HostPort:         cmd.HostPort,
+			ContextSize:      cmd.ContextSize,
+			UBatchSize:       cmd.UBatchSize,
+			GPULayers:        cmd.GPULayers,
+			Pooling:          cmd.Pooling,
+			Normalize:        cmd.Normalize,
 		},
 		Default: cmd.Default,
 	}

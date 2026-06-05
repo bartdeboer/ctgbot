@@ -133,11 +133,18 @@ func TestComponentConfigModelPathResolvesRelativeRegistryPaths(t *testing.T) {
 		t.Fatalf("WriteFile(component.json) error = %v", err)
 	}
 	modelPath := filepath.Join(modelRoot, "qwen", "model.gguf")
+	templatePath := filepath.Join(modelRoot, "templates", "qwen-no-prefill-think.jinja")
 	if err := os.MkdirAll(filepath.Dir(modelPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 	if err := os.WriteFile(modelPath, []byte("model"), 0o644); err != nil {
 		t.Fatalf("WriteFile(model) error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(templatePath), 0o755); err != nil {
+		t.Fatalf("MkdirAll(template) error = %v", err)
+	}
+	if err := os.WriteFile(templatePath, []byte("template"), 0o644); err != nil {
+		t.Fatalf("WriteFile(template) error = %v", err)
 	}
 	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: home}, nil)
 	if err != nil {
@@ -145,13 +152,16 @@ func TestComponentConfigModelPathResolvesRelativeRegistryPaths(t *testing.T) {
 	}
 	store := created.(*Component)
 	model, err := store.RegisterModel(context.Background(), component.ModelInstallRequest{
-		Model: component.Model{Name: "qwen", Path: "qwen/model.gguf"},
+		Model: component.Model{Name: "qwen", Path: "qwen/model.gguf", ChatTemplatePath: "templates/qwen-no-prefill-think.jinja"},
 	})
 	if err != nil {
 		t.Fatalf("RegisterModel() error = %v", err)
 	}
 	if got, want := model.Path, modelPath; got != want {
 		t.Fatalf("Path = %q, want %q", got, want)
+	}
+	if got, want := model.ChatTemplatePath, templatePath; got != want {
+		t.Fatalf("ChatTemplatePath = %q, want %q", got, want)
 	}
 }
 
@@ -307,12 +317,12 @@ func TestSetAndUnsetModelConfigKey(t *testing.T) {
 }
 
 func TestBuildRegisterCommandParsesEmbeddingFlags(t *testing.T) {
-	built, err := buildRegisterCommand(testRequest(map[string]string{"name": "qwen", "path": "/models/qwen.gguf"}, []string{"--embedding", "--pooling", "last", "--host-port", "19100", "--default"}))
+	built, err := buildRegisterCommand(testRequest(map[string]string{"name": "qwen", "path": "/models/qwen.gguf"}, []string{"--embedding", "--pooling", "last", "--host-port", "19100", "--chat-template-path", "/templates/qwen.jinja", "--default"}))
 	if err != nil {
 		t.Fatalf("buildRegisterCommand() error = %v", err)
 	}
 	cmd := built.(installCommand)
-	if cmd.Name != "qwen" || cmd.Mode != component.ModelModeEmbedding || cmd.Pooling != "last" || cmd.HostPort != 19100 || !cmd.Default {
+	if cmd.Name != "qwen" || cmd.Mode != component.ModelModeEmbedding || cmd.Pooling != "last" || cmd.HostPort != 19100 || cmd.ChatTemplatePath != "/templates/qwen.jinja" || !cmd.Default {
 		t.Fatalf("cmd = %#v", cmd)
 	}
 }

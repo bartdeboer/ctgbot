@@ -53,6 +53,63 @@ func TestServiceSpecUsesComponentConfig(t *testing.T) {
 	}
 }
 
+func TestServiceSpecMountsChatTemplateFileForCompletionModels(t *testing.T) {
+	t.Parallel()
+
+	spec := serviceSpec(resolvedModel{
+		Name:             "qwen",
+		ModelPath:        "/srv/models/qwen/model.gguf",
+		ChatTemplatePath: "/srv/templates/qwen35-no-prefill-think.jinja",
+		HostPort:         18080,
+		ContextSize:      4096,
+		GPULayers:        48,
+	})
+
+	wantArgs := []string{"--jinja", "--chat-template-file", "/templates/qwen35-no-prefill-think.jinja"}
+	for _, arg := range wantArgs {
+		if !slices.Contains(spec.Cmd, arg) {
+			t.Fatalf("Cmd missing %s: %#v", arg, spec.Cmd)
+		}
+	}
+	jinjaIndex := slices.Index(spec.Cmd, "--jinja")
+	templateIndex := slices.Index(spec.Cmd, "--chat-template-file")
+	if jinjaIndex < 0 || templateIndex < 0 || jinjaIndex > templateIndex {
+		t.Fatalf("--jinja must precede --chat-template-file: %#v", spec.Cmd)
+	}
+	found := false
+	for _, mount := range spec.Mounts {
+		if mount.Source == "/srv/templates" && mount.Target == "/templates" && mount.ReadOnly {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("template mount not found: %#v", spec.Mounts)
+	}
+}
+
+func TestServiceSpecIgnoresChatTemplateForEmbeddingModels(t *testing.T) {
+	t.Parallel()
+
+	spec := serviceSpec(resolvedModel{
+		Name:             "embed",
+		ModelPath:        "/srv/models/embed/model.gguf",
+		ChatTemplatePath: "/srv/templates/qwen.jinja",
+		Mode:             "embedding",
+		HostPort:         18081,
+		ContextSize:      4096,
+		GPULayers:        48,
+	})
+
+	if slices.Contains(spec.Cmd, "--chat-template-file") {
+		t.Fatalf("embedding cmd should not include chat template: %#v", spec.Cmd)
+	}
+	for _, mount := range spec.Mounts {
+		if mount.Target == "/templates" {
+			t.Fatalf("embedding mounts should not include templates: %#v", spec.Mounts)
+		}
+	}
+}
+
 func TestApplyReasoningModeSetsLlamaCppThinkingKwarg(t *testing.T) {
 	body := map[string]any{
 		"chat_template_kwargs": map[string]any{

@@ -218,8 +218,18 @@ func serviceSpec(config resolvedModel) backendruntime.ServiceSpec {
 		}
 	} else {
 		cmd = append(cmd, "--jinja")
+		if chatTemplatePath := strings.TrimSpace(config.ChatTemplatePath); chatTemplatePath != "" {
+			cmd = append(cmd, "--chat-template-file", "/templates/"+filepath.Base(chatTemplatePath))
+		}
 	}
 	mounts := []containerengine.Mount{{Source: modelDir, Target: "/models", ReadOnly: true}}
+	if chatTemplatePath := strings.TrimSpace(config.ChatTemplatePath); chatTemplatePath != "" && cleanModelMode(config.Mode) != "embedding" {
+		mounts = append(mounts, containerengine.Mount{
+			Source:   filepath.Dir(chatTemplatePath),
+			Target:   "/templates",
+			ReadOnly: true,
+		})
+	}
 	if mmprojPath := strings.TrimSpace(config.MMProjPath); mmprojPath != "" {
 		if filepath.Dir(mmprojPath) == modelDir {
 			cmd = append(cmd, "--mmproj", "/models/"+filepath.Base(mmprojPath))

@@ -12,6 +12,7 @@ type resolvedModel struct {
 	Name              string
 	ModelPath         string
 	MMProjPath        string
+	ChatTemplatePath  string
 	Mode              string
 	HostPort          int
 	ContextSize       int
@@ -86,6 +87,7 @@ func (c *Component) resolveStoredModel(model component.Model) resolvedModel {
 		Name:              cleanModelName(model.Name),
 		ModelPath:         strings.TrimSpace(model.Path),
 		MMProjPath:        firstNonEmpty(model.MMProjPath, c.componentConfig.MMProjPath),
+		ChatTemplatePath:  strings.TrimSpace(model.ChatTemplatePath),
 		Mode:              cleanModelMode(string(model.Mode)),
 		HostPort:          firstPositive(model.HostPort, c.componentConfig.HostPort),
 		ContextSize:       firstPositive(model.ContextSize, c.componentConfig.ContextSize),

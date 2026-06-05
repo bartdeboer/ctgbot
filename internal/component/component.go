@@ -178,21 +178,22 @@ const (
 )
 
 type Model struct {
-	Name        string
-	URL         string
-	Filename    string
-	Path        string
-	Mode        ModelMode
-	SHA256      string
-	MMProjPath  string
-	HostPort    int
-	ContextSize int
-	UBatchSize  int
-	GPULayers   int
-	MaxTokens   int
-	Temperature float64
-	Pooling     string
-	Normalize   bool
+	Name             string
+	URL              string
+	Filename         string
+	Path             string
+	Mode             ModelMode
+	SHA256           string
+	MMProjPath       string
+	ChatTemplatePath string
+	HostPort         int
+	ContextSize      int
+	UBatchSize       int
+	GPULayers        int
+	MaxTokens        int
+	Temperature      float64
+	Pooling          string
+	Normalize        bool
 }
 
 type ModelInstallRequest struct {

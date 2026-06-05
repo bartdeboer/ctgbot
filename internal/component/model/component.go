@@ -336,22 +336,27 @@ func (c *Component) resolve(name string, record ModelRecord) component.Model {
 			path = filepath.Join(c.config.ModelPath, name, filename)
 		}
 	}
+	chatTemplatePath := strings.TrimSpace(record.ChatTemplatePath)
+	if chatTemplatePath != "" && !filepath.IsAbs(chatTemplatePath) {
+		chatTemplatePath = c.resolveRelativeModelPath(chatTemplatePath)
+	}
 	return component.Model{
-		Name:        cleanModelName(name),
-		URL:         strings.TrimSpace(record.URL),
-		Filename:    strings.TrimSpace(record.Filename),
-		Path:        path,
-		Mode:        component.ModelMode(cleanModelMode(record.Mode)),
-		SHA256:      strings.TrimSpace(record.SHA256),
-		MMProjPath:  strings.TrimSpace(record.MMProjPath),
-		HostPort:    record.HostPort,
-		ContextSize: record.ContextSize,
-		UBatchSize:  record.UBatchSize,
-		GPULayers:   record.GPULayers,
-		MaxTokens:   record.MaxTokens,
-		Temperature: record.Temperature,
-		Pooling:     strings.TrimSpace(record.Pooling),
-		Normalize:   modelNormalize(record),
+		Name:             cleanModelName(name),
+		URL:              strings.TrimSpace(record.URL),
+		Filename:         strings.TrimSpace(record.Filename),
+		Path:             path,
+		Mode:             component.ModelMode(cleanModelMode(record.Mode)),
+		SHA256:           strings.TrimSpace(record.SHA256),
+		MMProjPath:       strings.TrimSpace(record.MMProjPath),
+		ChatTemplatePath: chatTemplatePath,
+		HostPort:         record.HostPort,
+		ContextSize:      record.ContextSize,
+		UBatchSize:       record.UBatchSize,
+		GPULayers:        record.GPULayers,
+		MaxTokens:        record.MaxTokens,
+		Temperature:      record.Temperature,
+		Pooling:          strings.TrimSpace(record.Pooling),
+		Normalize:        modelNormalize(record),
 	}
 }
 
