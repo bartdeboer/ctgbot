@@ -13,6 +13,28 @@ type ByteTransport interface {
 	Send(ctx context.Context, payload []byte) ([]byte, error)
 }
 
+// StreamEvent is one transport-level event delivered by a long-lived event stream.
+// Data is intentionally opaque at this layer; event codecs above the transport
+// decide whether it is JSON, gob, text, or another application payload.
+type StreamEvent struct {
+	ID   string
+	Type string
+	Data []byte
+}
+
+// EventSink receives events from an EventStreamTransport.
+type EventSink interface {
+	Event(ctx context.Context, event StreamEvent) error
+}
+
+// EventStreamTransport subscribes to a long-lived stream of transport events.
+// It is an optional capability: transports that only support one request/one
+// response implement ByteTransport, while SSE/WebSocket/gob-stream transports
+// can implement this interface as well.
+type EventStreamTransport interface {
+	Subscribe(ctx context.Context, payload []byte, sink EventSink) error
+}
+
 // CommandRunner executes one typed hostbridge command over an underlying transport.
 // Implementations own the command codec, such as gob or JSON.
 type CommandRunner interface {
