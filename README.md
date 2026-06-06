@@ -286,29 +286,45 @@ cat > .ctgbot/components/claude/claude/runtime.json <<'JSON'
 JSON
 ```
 
-### Gmail
+### Gmail v2
+
+Gmail v2 watches a mailbox, emits new mail as normal inbound source events,
+and exposes agent-safe commands for replies, message lookup, and sender policy.
+OAuth secrets and tokens are managed as component files, not pasted into chat.
 
 ```bash
-ctgbot component register gmail/personal --runtime local
+ctgbot component register gmailv2/work
 
-mkdir -p .ctgbot/components/gmail/personal
-cat > .ctgbot/components/gmail/personal/component.json <<'JSON'
+cat > component.json <<'JSON'
 {
   "mailbox_email": "you@example.com"
 }
 JSON
 
-cp oauth_client.json .ctgbot/components/gmail/personal/oauth_client.json
+cat oauth_client.json | hostbridge component gmailv2/work managed-file put oauth_client.json --type application/json
+cat component.json | hostbridge component gmailv2/work managed-file put component.json --type application/json
 
-ctgbot component gmail/personal auth
-ctgbot component gmail/personal auth status
-ctgbot chat <chat> component add source gmail/personal --external-channel-id you@example.com
+ctgbot component gmailv2/work auth
+hostbridge component gmailv2/work auth status
+hostbridge component gmailv2/work managed-file status
+ctgbot chat <chat> component add source gmailv2/work
 
 # From an agent runtime, send directly through Gmail:
-hostbridge gmail/personal message "Monthly report" \
+hostbridge gmailv2/work message "Monthly report" \
   --to you@example.com \
   --subject "Monthly report" \
   --attach "/workspace/out/report.pdf;type=application/pdf"
+```
+
+Useful Gmail v2 commands from an agent runtime:
+
+```bash
+hostbridge gmailv2/work query "from:sender@example.com newer_than:7d"
+hostbridge gmailv2/work fetch <gmailMessageId>
+hostbridge gmailv2/work message view <storedMessageId>
+hostbridge gmailv2/work message display <storedMessageId>
+hostbridge gmailv2/work sender trust sender@example.com
+hostbridge gmailv2/work sender list
 ```
 
 ### Inbound filters
@@ -318,7 +334,7 @@ Filters are attached to specific chat/source bindings.
 ```bash
 # Sender allowlist.
 ctgbot component register filters/allowlist --runtime local
-ctgbot chat <chat> component gmail/personal filter add filters/allowlist
+ctgbot chat <chat> component gmailv2/work filter add filters/allowlist
 
 # LLM guard using a completion provider.
 ctgbot component register llamacpp/qwen3-q5 --runtime backend
@@ -331,7 +347,7 @@ cat > .ctgbot/components/guard/qwen/component.json <<'JSON'
 }
 JSON
 
-ctgbot chat <chat> component gmail/personal filter add guard/qwen
+ctgbot chat <chat> component gmailv2/work filter add guard/qwen
 ```
 
 Allowlist commands:
