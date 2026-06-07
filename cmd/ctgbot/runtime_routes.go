@@ -22,6 +22,7 @@ import (
 	guardcomponent "github.com/bartdeboer/ctgbot/internal/component/filter/guard"
 	"github.com/bartdeboer/ctgbot/internal/component/gmail"
 	"github.com/bartdeboer/ctgbot/internal/component/gmailv2"
+	heartbeatcomponent "github.com/bartdeboer/ctgbot/internal/component/heartbeat"
 	indexingcomponent "github.com/bartdeboer/ctgbot/internal/component/indexing"
 	"github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	llamacppagentcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacppagent"
@@ -187,6 +188,16 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(semanticcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
 		return semanticcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(heartbeatcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+		logf := func(format string, args ...any) {}
+		if rtSystem.Logger != nil {
+			logf = rtSystem.Logger.Printf
+		}
+		appService := app.NewServiceWithLogger(storage, rtSystem, logf)
+		return heartbeatcomponent.New(ctx, registration, runtime, home, storage, broker.New(appService, logf))
 	}); err != nil {
 		return nil, err
 	}

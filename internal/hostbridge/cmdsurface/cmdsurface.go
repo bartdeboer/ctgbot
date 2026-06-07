@@ -13,6 +13,7 @@ import (
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	gmailcomponent "github.com/bartdeboer/ctgbot/internal/component/gmail"
 	gmailv2component "github.com/bartdeboer/ctgbot/internal/component/gmailv2"
+	heartbeatcomponent "github.com/bartdeboer/ctgbot/internal/component/heartbeat"
 	indexingcomponent "github.com/bartdeboer/ctgbot/internal/component/indexing"
 	llamacppcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	llamacppagentcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacppagent"
@@ -105,6 +106,7 @@ func RegisterGobTypes(register func(any)) {
 	sqlcomponent.RegisterGobTypes(register)
 	gmailcomponent.RegisterGobTypes(register)
 	gmailv2component.RegisterGobTypes(register)
+	heartbeatcomponent.RegisterGobTypes(register)
 	indexingcomponent.RegisterGobTypes(register)
 	schedulercomponent.RegisterGobTypes(register)
 	semanticcomponent.RegisterGobTypes(register)
@@ -133,6 +135,8 @@ func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 		return (*gmailcomponent.Component)(nil), true
 	case gmailv2component.Type:
 		return (*gmailv2component.Component)(nil), true
+	case heartbeatcomponent.Type:
+		return (*heartbeatcomponent.Component)(nil), true
 	case indexingcomponent.Type:
 		return (*indexingcomponent.Component)(nil), true
 	case indexingcomponent.SearchType:
