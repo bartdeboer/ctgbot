@@ -25,6 +25,7 @@ import (
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
 	sqlcomponent "github.com/bartdeboer/ctgbot/internal/component/sql"
 	supertoniccomponent "github.com/bartdeboer/ctgbot/internal/component/supertonic"
+	theatercomponent "github.com/bartdeboer/ctgbot/internal/component/theater"
 	whispercppcomponent "github.com/bartdeboer/ctgbot/internal/component/whispercpp"
 	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -118,6 +119,7 @@ func RegisterGobTypes(register func(any)) {
 	remotecomponent.RegisterGobTypes(register)
 	messagingcomponent.RegisterGobTypes(register)
 	supertoniccomponent.RegisterGobTypes(register)
+	theatercomponent.RegisterGobTypes(register)
 	whispercppcomponent.RegisterGobTypes(register)
 }
 
@@ -155,6 +157,8 @@ func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 		return (*semanticcomponent.Component)(nil), true
 	case supertoniccomponent.Type:
 		return (*supertoniccomponent.Component)(nil), true
+	case theatercomponent.Type:
+		return (*theatercomponent.Component)(nil), true
 	case whispercppcomponent.Type:
 		return (*whispercppcomponent.Component)(nil), true
 	default:

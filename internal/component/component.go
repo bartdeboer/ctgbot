@@ -42,6 +42,13 @@ type UpdateFeed interface {
 	NewUpdates(ctx context.Context, req UpdateRequest) ([]UpdateNotice, error)
 }
 
+// UpdateFeedReceiver accepts the active pull-based update feeds available in a
+// runtime. Components such as heartbeat can summarize notices without knowing
+// which components produced them.
+type UpdateFeedReceiver interface {
+	SetUpdateFeeds(feeds []UpdateFeed)
+}
+
 // ChatPayloadSender is the narrow broker capability a command component needs
 // when it wants to send a normal outbound chat payload, like hostbridge send or sendfile do.
 type ChatPayloadSender interface {

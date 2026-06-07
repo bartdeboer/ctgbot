@@ -16,7 +16,7 @@ func (s *service) ScheduledCommandEngine(ctx context.Context) (*commandengine.En
 	if err != nil {
 		return nil, err
 	}
-	var bound []commandset.BoundSurface
+	var loadedComponents []*component.Loaded
 	for _, registration := range registrations {
 		loaded, err := s.ResolveComponent(ctx, registration.ID)
 		if err != nil {
@@ -28,6 +28,18 @@ func (s *service) ScheduledCommandEngine(ctx context.Context) (*commandengine.En
 		if receiver, ok := loaded.Component.(component.SearchMessageSourceReceiver); ok {
 			receiver.SetSearchMessageSource(s)
 		}
+		loadedComponents = append(loadedComponents, loaded)
+	}
+
+	updateFeeds := scheduledUpdateFeeds(loadedComponents)
+	for _, loaded := range loadedComponents {
+		if receiver, ok := loaded.Component.(component.UpdateFeedReceiver); ok {
+			receiver.SetUpdateFeeds(updateFeeds)
+		}
+	}
+
+	var bound []commandset.BoundSurface
+	for _, loaded := range loadedComponents {
 		surface, ok := loaded.Component.(component.CommandSurface)
 		if !ok {
 			continue
@@ -39,4 +51,17 @@ func (s *service) ScheduledCommandEngine(ctx context.Context) (*commandengine.En
 		})
 	}
 	return commandset.NewBoundEngineForSource(commandengine.SourceScheduler, bound)
+}
+
+func scheduledUpdateFeeds(loaded []*component.Loaded) []component.UpdateFeed {
+	var feeds []component.UpdateFeed
+	for _, item := range loaded {
+		if item == nil || item.Component == nil {
+			continue
+		}
+		if feed, ok := item.Component.(component.UpdateFeed); ok {
+			feeds = append(feeds, feed)
+		}
+	}
+	return feeds
 }

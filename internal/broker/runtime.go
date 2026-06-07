@@ -98,6 +98,13 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 			}
 		}
 	}
+	updateFeeds := activeUpdateFeeds(components)
+	for _, instance := range components {
+		if receiver, ok := instance.Component.(component.UpdateFeedReceiver); ok {
+			receiver.SetUpdateFeeds(updateFeeds)
+		}
+	}
+
 	if runtimeWorkspace == "" {
 		runtimeWorkspace = workspace
 	}
@@ -330,4 +337,17 @@ func (r *agentTurnRuntime) context() context.Context {
 		return r.ctx
 	}
 	return context.Background()
+}
+
+func activeUpdateFeeds(components []*component.Loaded) []component.UpdateFeed {
+	var feeds []component.UpdateFeed
+	for _, instance := range components {
+		if instance == nil || instance.Component == nil {
+			continue
+		}
+		if feed, ok := instance.Component.(component.UpdateFeed); ok {
+			feeds = append(feeds, feed)
+		}
+	}
+	return feeds
 }
