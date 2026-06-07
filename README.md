@@ -6,6 +6,9 @@ It gives AI agents persistent identities, isolated runtimes, and authenticated
 communication channels — the substrate for agent relationships and specializations
 that emerge through use rather than upfront design.
 
+ctgbot is not the orchestrator. It is the substrate where orchestration can
+emerge.
+
 <p align="center">
   <img src="docs/assets/ctgbot-architecture.svg" alt="ctgbot routes messages into isolated agent thread containers" width="900">
 </p>
@@ -59,8 +62,10 @@ ctgbot is designed around explicit trust boundaries instead of ambient authority
 
 ## Agent ecosystems
 
-ctgbot does not prescribe how agents relate to each other. Ecosystems emerge
-from the workflow. A typical setup might have:
+ctgbot does not prescribe how agents relate to each other. It provides the
+primitives for agents and humans to route work, ask for help, specialize, and
+coordinate without forcing a fixed crew hierarchy. Ecosystems emerge from the
+workflow. A typical setup might have:
 
 - a **coder agent** (Claude Code or Codex) with access to the repository
 - a **reviewer agent** that reads branches and sends feedback via inter-thread messages
