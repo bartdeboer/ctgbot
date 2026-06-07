@@ -25,6 +25,9 @@ func (s *service) ScheduledCommandEngine(ctx context.Context) (*commandengine.En
 		if loaded == nil {
 			continue
 		}
+		if receiver, ok := loaded.Component.(component.SearchMessageSourceReceiver); ok {
+			receiver.SetSearchMessageSource(s)
+		}
 		surface, ok := loaded.Component.(component.CommandSurface)
 		if !ok {
 			continue

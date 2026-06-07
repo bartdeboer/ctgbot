@@ -62,6 +62,8 @@ func (r fakeResolver) ResolveComponent(ctx context.Context, id modeluuid.UUID) (
 		impl = fakeImageProvider{ref: registration.Ref()}
 	case "plain":
 		impl = fakeComponent{typ: "plain"}
+	case "needs-source":
+		impl = &fakeScheduledMessageSourceReceiver{}
 	default:
 		return nil, fmt.Errorf("unknown component type: %s", registration.Type)
 	}
@@ -196,6 +198,39 @@ func (fakeCLI) RegisterCommandHandlers(registry *commandengine.Registry) error {
 	})
 }
 
+type fakeScheduledMessageSourceReceiver struct {
+	messages component.SearchMessageSource
+}
+
+type fakeScheduledSourceCommand struct{}
+
+func (f *fakeScheduledMessageSourceReceiver) Type() string                 { return "needs-source" }
+func (f *fakeScheduledMessageSourceReceiver) UsesLocalCommandRoutes() bool { return true }
+func (f *fakeScheduledMessageSourceReceiver) SetSearchMessageSource(source component.SearchMessageSource) {
+	f.messages = source
+}
+func (f *fakeScheduledMessageSourceReceiver) CommandDefinitions() []commandengine.Definition {
+	return []commandengine.Definition{{
+		Pattern: "check-source",
+		Help:    "Check scheduled message source injection",
+		Build: func(req *clir.Request) (any, error) {
+			_ = req
+			return fakeScheduledSourceCommand{}, nil
+		},
+		Sources: []commandengine.Source{commandengine.SourceScheduler},
+		Policy:  simplerbac.Any(simplerbac.RoleRoot),
+	}}
+}
+func (f *fakeScheduledMessageSourceReceiver) RegisterCommandHandlers(registry *commandengine.Registry) error {
+	return commandengine.RegisterPattern[fakeScheduledSourceCommand](registry, "check-source", func(ctx context.Context, req commandengine.Request, cmd fakeScheduledSourceCommand) (commandengine.Result, error) {
+		_, _, _ = req, cmd, ctx
+		if f.messages == nil {
+			return commandengine.Result{}, fmt.Errorf("missing message source")
+		}
+		return commandengine.Result{Text: "message source injected"}, nil
+	})
+}
+
 type fakeImageProvider struct{ ref string }
 
 func (f fakeImageProvider) Type() string { return "image" }
@@ -206,6 +241,28 @@ func (f fakeImageProvider) RuntimeImageTargets(ctx context.Context) ([]runtimeim
 		Image:      "ctgbot-fake:latest",
 		Dockerfile: "fake.Dockerfile",
 	}}, nil
+}
+
+func TestScheduledCommandEngineInjectsSearchMessageSource(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	svc := app.NewService(storage, fakeResolver{storage: storage})
+	_ = saveComponent(t, storage, "needs-source", "needs-source")
+
+	engine, err := svc.ScheduledCommandEngine(ctx)
+	if err != nil {
+		t.Fatalf("ScheduledCommandEngine() error = %v", err)
+	}
+	result, err := engine.Run(ctx, commandengine.Request{Context: commandengine.Context{
+		Source: commandengine.SourceScheduler,
+		Actor:  coremodel.Actor{ID: "scheduler", Roles: []simplerbac.Role{simplerbac.RoleRoot}},
+	}}, []string{"needs-source", "check-source"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.Text != "message source injected" {
+		t.Fatalf("result = %q, want message source injected", result.Text)
+	}
 }
 
 func TestServiceAddListRemoveClearChatComponentFilters(t *testing.T) {
