@@ -7,7 +7,7 @@ communication channels — the substrate for agent relationships and specializat
 that emerge through use rather than upfront design.
 
 ctgbot is not the orchestrator. It is the substrate where orchestration can
-emerge.
+emerge — where agents gain a sense of purpose over just executing tasks.
 
 <p align="center">
   <img src="docs/assets/ctgbot-architecture.svg" alt="ctgbot routes messages into isolated agent thread containers" width="900">
@@ -20,13 +20,14 @@ ctgbot is under active development. The architecture is usable today, but comman
 - **Persistent agent identities** — agents accumulate context across sessions and develop specializations through use, not role assignments
 - **Container isolation per thread** — each agent conversation runs in its own Docker container; experiments stay contained and do not affect the host or other agents
 - **Inter-agent messaging** — agents send messages, files, and structured commands to other agent threads via `hostbridge`
-- **Organic agent ecosystems** — run a reviewer agent, a coder agent, an email agent, a docs agent side by side; their working relationships emerge from the workflow
+- **Organic agent ecosystems** — agent specializations and working relationships emerge from use rather than upfront role definitions; no crew hierarchy required
 - **Explicit trust model** — sources, roles, and command surfaces are declared; no ambient authority; unknown channels are dropped until bound
 - **Component model** — agents, sources, relays, and integrations are components attached per chat; mix and match Claude, Codex, Gmail, LLaMA, and custom components
 - **Hostbridge** — typed, authenticated command bridge from agent containers to the host; agents cannot reach outside what is explicitly exposed
 - **Durable workspaces** — host project directories mounted into containers; conversation history persists across container refreshes
 - **Inbound filters** — allowlists and LLM guards attached per source binding
 - **Config overlays** — layer deployment defaults under `config.d/` without touching user config
+- **Semantic long-term memory** — all conversation history is indexed and searchable across threads and agents; agents recover context from past sessions with `hostbridge search "<query>"`, surviving context compaction and session boundaries
 - **Remote agent nodes** — trusted controller/node model for running commands across ctgbot instances over mTLS
 
 ## Core model
