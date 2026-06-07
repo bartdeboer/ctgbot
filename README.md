@@ -7,7 +7,7 @@ communication channels — the substrate for agent relationships and specializat
 that emerge through use rather than upfront design.
 
 ctgbot is not the orchestrator. It is the substrate where orchestration can
-emerge — where agents gain a sense of purpose over just executing tasks.
+emerge — where agents can gain a sense of purpose beyond just executing tasks.
 
 <p align="center">
   <img src="docs/assets/ctgbot-architecture.svg" alt="ctgbot routes messages into isolated agent thread containers" width="900">
