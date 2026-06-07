@@ -18,6 +18,30 @@ type Component interface {
 	Type() string
 }
 
+// UpdateRequest identifies the subscriber asking for pull-based update notices.
+// Components that implement UpdateFeed own their cursor/read-state semantics.
+type UpdateRequest struct {
+	ThreadID modeluuid.UUID
+}
+
+// UpdateNotice is a compact summary of new activity available to a thread.
+// It is intentionally small: heartbeat and UI surfaces can show that something
+// changed without injecting the changed content into the agent context.
+type UpdateNotice struct {
+	Source string
+	Ref    string
+	Label  string
+	Kind   string
+	Count  int
+}
+
+// UpdateFeed is an optional component capability for pull-based update checks.
+// It answers "what has changed for this thread since its last interaction?"
+// without pushing content or mutating the subscriber's read cursor.
+type UpdateFeed interface {
+	NewUpdates(ctx context.Context, req UpdateRequest) ([]UpdateNotice, error)
+}
+
 // ChatPayloadSender is the narrow broker capability a command component needs
 // when it wants to send a normal outbound chat payload, like hostbridge send or sendfile do.
 type ChatPayloadSender interface {
