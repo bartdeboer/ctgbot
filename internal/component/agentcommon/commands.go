@@ -48,6 +48,16 @@ func AgentCommandPolicy() simplerbac.Rule {
 	return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser)
 }
 
+
+func AgentCommandDescriptions(name string) []commandengine.Description {
+	return []commandengine.Description{{
+		Pattern: "",
+		Help:    strings.TrimSpace(name) + " commands",
+		Sources: AgentCommandSources(),
+		Policy:  AgentCommandPolicy(),
+	}}
+}
+
 func AgentCommandDefinitions(opts AgentCommandOptions) []commandengine.Definition {
 	type entry struct {
 		pattern string

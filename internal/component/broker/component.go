@@ -33,6 +33,7 @@ type Component struct {
 
 var _ component.Component = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
+var _ component.CommandDescriptionSurface = (*Component)(nil)
 
 type helpCommand struct{}
 type refreshCommand struct{}
@@ -132,6 +133,10 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		}
 	}
 	return out
+}
+
+func (c *Component) CommandDescriptions() []commandengine.Description {
+	return schemacommands.HostbridgeCommandDescriptions()
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {

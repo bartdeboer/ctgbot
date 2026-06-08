@@ -87,6 +87,15 @@ func HostbridgeCommands() []commandengine.Definition {
 	return definitions
 }
 
+func HostbridgeCommandDescriptions() []commandengine.Description {
+	return []commandengine.Description{{
+		Pattern: "turn",
+		Help:    "current turn metadata and controls",
+		Sources: []commandengine.Source{commandengine.SourceHostbridge},
+		Policy:  agentPolicy(),
+	}}
+}
+
 func RunCommandDefinition() commandengine.Definition {
 	return commandengine.Definition{
 		Pattern:               "run <command>",

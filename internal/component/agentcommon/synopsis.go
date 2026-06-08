@@ -8,18 +8,19 @@ import (
 // HostbridgeSynopsis renders command patterns as a compact command-tree synopsis.
 // Inputs may be full commands ("hostbridge codex status") or command tails
 // ("codex status"). Empty inputs render as "hostbridge [\n  <none>\n]".
-func HostbridgeSynopsis(patterns []string) string {
-	return CommandSynopsis("hostbridge", stripCommandPrefix(patterns, "hostbridge"))
+func HostbridgeSynopsis(patterns []string, familyDescriptions ...map[string]string) string {
+	return CommandSynopsis("hostbridge", stripCommandPrefix(patterns, "hostbridge"), familyDescriptions...)
 }
 
 // CommandSynopsis renders route-like command patterns as a readable trie.
 // It is intended for developer instructions where agents benefit from a compact
 // grammar rather than a long flat list.
-func CommandSynopsis(root string, patterns []string) string {
+func CommandSynopsis(root string, patterns []string, familyDescriptions ...map[string]string) string {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		root = "commands"
 	}
+	descriptions := firstFamilyDescriptions(familyDescriptions)
 	trie := newSynopsisNode("")
 	for _, pattern := range patterns {
 		for _, expanded := range expandSynopsisPattern(pattern) {
@@ -31,7 +32,7 @@ func CommandSynopsis(root string, patterns []string) string {
 	}
 	lines := []string{root + " ["}
 	for _, child := range trie.orderedChildren() {
-		lines = append(lines, "  "+renderSynopsisInline(child))
+		lines = append(lines, renderSynopsisRootChild(child, descriptions)...)
 	}
 	lines = append(lines, "]")
 	return strings.Join(lines, "\n")
@@ -92,6 +93,43 @@ func renderSynopsisInline(n *synopsisNode) string {
 		parts = append(parts, renderSynopsisInline(child))
 	}
 	return n.token + " [ " + strings.Join(parts, " | ") + " ]"
+}
+
+func renderSynopsisRootChild(n *synopsisNode, descriptions map[string]string) []string {
+	if n == nil {
+		return nil
+	}
+	description := strings.TrimSpace(descriptions[n.token])
+	if description == "" || len(n.children) == 0 {
+		return []string{"  " + renderSynopsisInline(n)}
+	}
+	parts := make([]string, 0, len(n.children)+1)
+	if n.terminal {
+		parts = append(parts, ".")
+	}
+	for _, child := range n.orderedChildren() {
+		parts = append(parts, renderSynopsisInline(child))
+	}
+	return []string{
+		"  " + n.token + " [ # " + description,
+		"    " + strings.Join(parts, " | "),
+		"  ]",
+	}
+}
+
+func firstFamilyDescriptions(values []map[string]string) map[string]string {
+	if len(values) == 0 || values[0] == nil {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(values[0]))
+	for key, value := range values[0] {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key != "" && value != "" {
+			out[key] = value
+		}
+	}
+	return out
 }
 
 func stripCommandPrefix(patterns []string, prefix string) []string {

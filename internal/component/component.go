@@ -504,12 +504,13 @@ type ThreadRuntimeControlRequest struct {
 }
 
 type TurnInstructions struct {
-	ChatProvider              string
-	MessagePrefix             string
-	KeepRepliesConcise        bool
-	HostbridgeCommandNames    []string
-	HostbridgeControlCommands []string
-	RuntimeNotices            []string
+	ChatProvider                 string
+	MessagePrefix                string
+	KeepRepliesConcise           bool
+	HostbridgeCommandNames       []string
+	HostbridgeControlCommands    []string
+	HostbridgeFamilyDescriptions map[string]string
+	RuntimeNotices               []string
 }
 
 type TurnRuntime interface {

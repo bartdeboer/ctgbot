@@ -444,7 +444,7 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 		if len(instructions.HostbridgeCommandNames) > 0 {
 			controlCommands = append(controlCommands, "hostbridge run <alias> [args...]")
 		}
-		controlSynopsis = agentcommon.HostbridgeSynopsis(controlCommands)
+		controlSynopsis = agentcommon.HostbridgeSynopsis(controlCommands, instructions.HostbridgeFamilyDescriptions)
 	}
 	text, err := codexbootstrap.Text(codexbootstrap.TemplateData{
 		Workspace:                 workspace,

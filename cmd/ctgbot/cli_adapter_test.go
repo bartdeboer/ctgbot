@@ -30,7 +30,7 @@ func TestCLICommandSurfacesExposeProcessAndServiceCommands(t *testing.T) {
 	}
 	for _, want := range []string{
 		"run - Run the ctgbot runtime",
-		"component [ <component> | list | register | unregister | help ] - Show component command help",
+		"component [ <component> | list | register | unregister | help ] - component setup and inspection",
 		"config [ get | list | set | help ] - Global config commands",
 		"image [ build | list | help ] - image commands",
 	} {
@@ -43,8 +43,8 @@ func TestCLICommandSurfacesExposeProcessAndServiceCommands(t *testing.T) {
 	if err := runCLICommand(context.Background(), []string{"component", "help"}, store, nil, &componentHelp); err != nil {
 		t.Fatalf("component help: %v", err)
 	}
-	if out := componentHelp.String(); !strings.Contains(out, "component [ <component> | list | register | unregister | help ] - Show component command help") {
-		t.Fatalf("component help missing compact component group in:\n%s", out)
+	if out := componentHelp.String(); !strings.Contains(out, "component setup and inspection") || !strings.Contains(out, "component [ <component> | list | register | unregister | help ] - Show component command help") {
+		t.Fatalf("component help missing component description/group in:\n%s", out)
 	}
 
 	var register bytes.Buffer

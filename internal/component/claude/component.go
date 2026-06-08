@@ -256,7 +256,7 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 		if len(instructions.HostbridgeCommandNames) > 0 {
 			controlCommands = append(controlCommands, "hostbridge run <alias> [args...]")
 		}
-		controlSynopsis = agentcommon.HostbridgeSynopsis(controlCommands)
+		controlSynopsis = agentcommon.HostbridgeSynopsis(controlCommands, instructions.HostbridgeFamilyDescriptions)
 	}
 	lines := []string{
 		"You are Claude Code running inside ctgbot.",

@@ -39,6 +39,7 @@ type Component struct {
 
 var _ component.Component = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
+var _ component.CommandDescriptionSurface = (*Component)(nil)
 
 type HelpCommand struct{}
 
@@ -99,6 +100,15 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		componentCommand("component <component> managed-file status", "Show managed file presence", buildManagedFileStatus, componentReadSources(), commandengine.InstructionDiscoverable),
 		componentCommand("component <component> managed-file put <file>", "Write a declared managed file from stdin", buildManagedFilePut, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
 	}
+}
+
+func (c *Component) CommandDescriptions() []commandengine.Description {
+	return []commandengine.Description{{
+		Pattern: "component",
+		Help:    "component setup and inspection",
+		Sources: componentReadSources(),
+		Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+	}}
 }
 
 func componentReadSources() []commandengine.Source {
