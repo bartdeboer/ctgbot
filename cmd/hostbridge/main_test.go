@@ -235,8 +235,8 @@ func TestHostbridgeScopedHelpHidesHiddenCodexAliases(t *testing.T) {
 			}
 
 			out := buf.String()
-			if !strings.Contains(out, "codex status") {
-				t.Fatalf("FPrintHelp(%v) missing visible codex command in %q", tc.argv, out)
+			if !strings.Contains(out, "codex [ chat | compact | config | container | goal | interrupt | status | help ]") {
+				t.Fatalf("FPrintHelp(%v) missing compact codex group in %q", tc.argv, out)
 			}
 			for _, notWant := range []string{"codex purge", "codex refresh"} {
 				if strings.Contains(out, notWant) {
@@ -267,8 +267,8 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			name: "root help is navigation index",
 			argv: []string{"help"},
 			contains: []string{
-				"codex help - Codex commands",
-				"thread help - Thread commands",
+				"codex [ chat | compact | config | container | goal | interrupt | status | help ] - Codex commands",
+				"thread [ <thread> | config | label | list | status | help ] - Thread commands",
 				"status - Show current thread status",
 			},
 		},
@@ -291,15 +291,13 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			},
 		},
 		{
-			name: "thread root shows important nested commands",
+			name: "thread root shows compact command family",
 			argv: []string{"thread", "help"},
 			contains: []string{
-				"thread <thread> message send",
+				"thread [ <thread> | config | label | list | status | help ] - Thread commands",
 			},
 			occursOnce: []string{
-				"thread list - List recent active threads",
-				"thread status - Show current thread status",
-				"thread <thread> message send - Send a message into another thread",
+				"thread [ <thread> | config | label | list | status | help ] - Thread commands",
 			},
 		},
 	}
