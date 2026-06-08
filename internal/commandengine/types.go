@@ -93,6 +93,8 @@ const (
 
 // Description registers a non-executable route that contributes help metadata.
 // It describes a command family or path without adding a runnable command.
+// The missing Build field is intentional: descriptions are metadata only and
+// must never become executable.
 type Description struct {
 	Pattern  string
 	Help     string

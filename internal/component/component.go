@@ -399,7 +399,9 @@ type CommandSurface interface {
 
 // CommandDescriptionSurface optionally exposes non-executable route metadata
 // for command families and paths. Descriptions participate in help/discovery,
-// but never execute.
+// but never execute. Bound local components may use Pattern: ""; commandset
+// namespaces that to the bound component prefix. Global surfaces should use an
+// explicit non-empty pattern.
 type CommandDescriptionSurface interface {
 	CommandDescriptions() []commandengine.Description
 }
