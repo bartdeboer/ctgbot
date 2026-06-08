@@ -249,17 +249,24 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 	if chatProvider == "" {
 		chatProvider = "Chat"
 	}
-	allowedCommandsText := strings.Join(instructions.HostbridgeCommandNames, ", ")
-	if strings.TrimSpace(allowedCommandsText) == "" {
-		allowedCommandsText = "<none>"
+	runAliasSynopsis := agentcommon.CommandSynopsis("hostbridge run", instructions.HostbridgeCommandNames)
+	controlSynopsis := ""
+	if len(instructions.HostbridgeControlCommands) > 0 {
+		controlCommands := append([]string(nil), instructions.HostbridgeControlCommands...)
+		if len(instructions.HostbridgeCommandNames) > 0 {
+			controlCommands = append(controlCommands, "hostbridge run <alias> [args...]")
+		}
+		controlSynopsis = agentcommon.HostbridgeSynopsis(controlCommands)
 	}
 	lines := []string{
 		"You are Claude Code running inside ctgbot.",
-		"Current workspace: " + workspace,
-		"Workspace inbox: " + workspace + "/inbox",
-		"Container OS: linux",
-		"Host OS: " + goruntime.GOOS,
-		"Chat provider: " + chatProvider,
+		"",
+		"Environment:",
+		"- Current workspace: " + workspace,
+		"- Workspace inbox: " + workspace + "/inbox",
+		"- Container OS: linux",
+		"- Host OS: " + goruntime.GOOS,
+		"- Chat provider: " + chatProvider,
 	}
 	if prefix := strings.TrimSpace(instructions.MessagePrefix); prefix != "" {
 		lines = append(lines, "Start every final assistant message with `"+prefix+"`.")
@@ -269,15 +276,12 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 	}
 	lines = append(lines, "Do not add Co-Authored-By trailers to commits unless the operator explicitly asks for them.")
 	lines = append(lines, "When messaging threads, end your turn to receive their response. Do not poll for replies.")
-	lines = append(lines, "Use `hostbridge turn info` and `hostbridge turn config list/set` for current-turn input metadata and output controls.")
+	lines = append(lines, "Use `hostbridge turn info` and `hostbridge turn config [ list | get <key> | set <key> <value> ]` for current-turn input metadata and output controls.")
 	lines = append(lines, "Use `hostbridge model <name> card` for model config options.")
-	lines = append(lines, "Available hostbridge command aliases: "+allowedCommandsText)
-	if len(instructions.HostbridgeControlCommands) > 0 {
-		lines = append(lines, "Useful hostbridge control commands:")
-		for _, command := range instructions.HostbridgeControlCommands {
-			lines = append(lines, "- `"+command+"`")
-		}
+	if strings.TrimSpace(controlSynopsis) != "" {
+		lines = append(lines, "", "Canonical hostbridge commands:", "```text", controlSynopsis, "```")
 	}
+	lines = append(lines, "", "Available hostbridge run aliases (on host):", "```text", runAliasSynopsis, "```")
 	for _, notice := range instructions.RuntimeNotices {
 		if notice = strings.TrimSpace(notice); notice != "" {
 			lines = append(lines, notice)

@@ -437,9 +437,14 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 	if chatProvider == "" {
 		chatProvider = "Chat"
 	}
-	allowedCommandsText := strings.Join(instructions.HostbridgeCommandNames, ", ")
-	if strings.TrimSpace(allowedCommandsText) == "" {
-		allowedCommandsText = "<none>"
+	runAliasSynopsis := agentcommon.CommandSynopsis("hostbridge run", instructions.HostbridgeCommandNames)
+	controlSynopsis := ""
+	if len(instructions.HostbridgeControlCommands) > 0 {
+		controlCommands := append([]string(nil), instructions.HostbridgeControlCommands...)
+		if len(instructions.HostbridgeCommandNames) > 0 {
+			controlCommands = append(controlCommands, "hostbridge run <alias> [args...]")
+		}
+		controlSynopsis = agentcommon.HostbridgeSynopsis(controlCommands)
 	}
 	text, err := codexbootstrap.Text(codexbootstrap.TemplateData{
 		Workspace:                 workspace,
@@ -450,8 +455,8 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 		ChatProvider:              chatProvider,
 		MessagePrefix:             instructions.MessagePrefix,
 		KeepRepliesConcise:        instructions.KeepRepliesConcise,
-		Binaries:                  allowedCommandsText,
-		HostbridgeControlCommands: append([]string(nil), instructions.HostbridgeControlCommands...),
+		BinariesSynopsis:          runAliasSynopsis,
+		HostbridgeControlSynopsis: controlSynopsis,
 		RuntimeNotices:            append([]string(nil), instructions.RuntimeNotices...),
 	})
 	if err != nil {

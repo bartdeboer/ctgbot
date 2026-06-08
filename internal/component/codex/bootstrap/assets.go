@@ -17,8 +17,8 @@ type TemplateData struct {
 	ContainerOS               string
 	HostOS                    string
 	HostbridgeAddr            string
-	Binaries                  string
-	HostbridgeControlCommands []string
+	BinariesSynopsis          string
+	HostbridgeControlSynopsis string
 	ChatProvider              string
 	MessagePrefix             string
 	KeepRepliesConcise        bool

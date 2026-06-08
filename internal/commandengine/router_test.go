@@ -161,6 +161,49 @@ func TestParseHelpRequestUsesClirConvention(t *testing.T) {
 	}
 }
 
+func TestRouterLiteralRouteWinsOverParameterizedSibling(t *testing.T) {
+	router, err := NewRouter([]Definition{
+		{
+			Pattern: "thread list",
+			Help:    "List threads",
+			Build: func(req *clir.Request) (any, error) {
+				_ = req
+				return testCommand{Value: "literal-list"}, nil
+			},
+			Sources: []Source{SourceHostbridge},
+			Policy:  simplerbac.Public(),
+		},
+		{
+			Pattern: "thread <thread> message send",
+			Help:    "Send message",
+			Build: func(req *clir.Request) (any, error) {
+				return testCommand{Value: req.Params["thread"]}, nil
+			},
+			Sources: []Source{SourceHostbridge},
+			Policy:  simplerbac.Public(),
+		},
+	}, SourceHostbridge)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	literal, err := router.Parse(context.Background(), Request{}, []string{"thread", "list"})
+	if err != nil {
+		t.Fatalf("Parse(thread list) error = %v", err)
+	}
+	if cmd, ok := literal.Command.(testCommand); !ok || cmd.Value != "literal-list" {
+		t.Fatalf("thread list command = %#v, want literal route", literal.Command)
+	}
+
+	parameterized, err := router.Parse(context.Background(), Request{}, []string{"thread", "abc123", "message", "send"})
+	if err != nil {
+		t.Fatalf("Parse(thread abc123 message send) error = %v", err)
+	}
+	if cmd, ok := parameterized.Command.(testCommand); !ok || cmd.Value != "abc123" {
+		t.Fatalf("thread abc123 message send command = %#v, want parameter route", parameterized.Command)
+	}
+}
+
 func testDefinition(help string, pattern string, aliases ...Route) Definition {
 	return Definition{
 		Pattern: pattern,

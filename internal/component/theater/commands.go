@@ -25,7 +25,7 @@ type readCommand struct {
 	Name  string
 	Limit int
 }
-type statusCommand struct{}
+type statusCommand struct{ Name string }
 
 func RegisterGobTypes(register func(any)) {
 	register(createCommand{})
@@ -58,7 +58,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
-			Pattern:               "subscribe <name>",
+			Pattern:               "<name> subscribe",
 			Help:                  "Subscribe this thread to a theater",
 			Build:                 buildName[subscribeCommand](func(name string) subscribeCommand { return subscribeCommand{Name: name} }),
 			Sources:               sources,
@@ -66,7 +66,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
-			Pattern:               "unsubscribe <name>",
+			Pattern:               "<name> unsubscribe",
 			Help:                  "Unsubscribe this thread from a theater",
 			Build:                 buildName[unsubscribeCommand](func(name string) unsubscribeCommand { return unsubscribeCommand{Name: name} }),
 			Sources:               sources,
@@ -74,7 +74,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
-			Pattern:               "post <name>",
+			Pattern:               "<name> post",
 			Help:                  "Post a message to a theater; stdin is used when message args are omitted",
 			Build:                 buildPost,
 			Sources:               sources,
@@ -82,7 +82,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
-			Pattern:               "read <name>",
+			Pattern:               "<name> read",
 			Help:                  "Read recent theater messages",
 			Build:                 buildRead,
 			Sources:               sources,
@@ -93,6 +93,14 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Pattern:               "status",
 			Help:                  "Show theater subscriptions for this thread",
 			Build:                 func(req *clir.Request) (any, error) { _ = req; return statusCommand{}, nil },
+			Sources:               sources,
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern:               "<name> status",
+			Help:                  "Show this thread's status for a theater",
+			Build:                 buildName[statusCommand](func(name string) statusCommand { return statusCommand{Name: name} }),
 			Sources:               sources,
 			Policy:                policy,
 			InstructionVisibility: commandengine.InstructionImportant,
@@ -110,19 +118,22 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.RegisterPattern[listCommand](registry, "list", c.handleList); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[subscribeCommand](registry, "subscribe <name>", c.handleSubscribe); err != nil {
+	if err := commandengine.RegisterPattern[subscribeCommand](registry, "<name> subscribe", c.handleSubscribe); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[unsubscribeCommand](registry, "unsubscribe <name>", c.handleUnsubscribe); err != nil {
+	if err := commandengine.RegisterPattern[unsubscribeCommand](registry, "<name> unsubscribe", c.handleUnsubscribe); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[postCommand](registry, "post <name>", c.handlePost); err != nil {
+	if err := commandengine.RegisterPattern[postCommand](registry, "<name> post", c.handlePost); err != nil {
 		return err
 	}
-	if err := commandengine.RegisterPattern[readCommand](registry, "read <name>", c.handleRead); err != nil {
+	if err := commandengine.RegisterPattern[readCommand](registry, "<name> read", c.handleRead); err != nil {
 		return err
 	}
-	return commandengine.RegisterPattern[statusCommand](registry, "status", c.handleStatus)
+	if err := commandengine.RegisterPattern[statusCommand](registry, "status", c.handleStatus); err != nil {
+		return err
+	}
+	return commandengine.RegisterPattern[statusCommand](registry, "<name> status", c.handleStatus)
 }
 
 func buildName[T any](wrap func(string) T) commandengine.BuildFunc {
@@ -147,7 +158,7 @@ func buildPost(req *clir.Request) (any, error) {
 }
 
 func buildRead(req *clir.Request) (any, error) {
-	fs := flag.NewFlagSet("theater read", flag.ContinueOnError)
+	fs := flag.NewFlagSet("theater <name> read", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 20, "Maximum number of messages to read")
 	if err := fs.Parse(req.Extra); err != nil {
@@ -267,10 +278,20 @@ func (c *Component) handleRead(ctx context.Context, req commandengine.Request, c
 }
 
 func (c *Component) handleStatus(ctx context.Context, req commandengine.Request, cmd statusCommand) (commandengine.Result, error) {
-	_ = cmd
 	threadID, err := currentThreadID(req)
 	if err != nil {
 		return commandengine.Result{}, err
+	}
+	if strings.TrimSpace(cmd.Name) != "" {
+		theater, err := c.store.theaterByName(ctx, cmd.Name)
+		if err != nil {
+			return commandengine.Result{}, err
+		}
+		pending, err := c.store.pendingCount(ctx, theater.ID, threadID)
+		if err != nil {
+			return commandengine.Result{}, err
+		}
+		return commandengine.Result{Text: fmt.Sprintf("theater: %s\npending=%d", theater.Name, pending)}, nil
 	}
 	subscriptions, err := c.store.subscriptions(ctx, threadID)
 	if err != nil {
