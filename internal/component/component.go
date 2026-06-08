@@ -397,6 +397,15 @@ type CommandSurface interface {
 	RegisterCommandHandlers(registry *commandengine.Registry) error
 }
 
+// CommandDescriptionSurface optionally exposes non-executable route metadata
+// for command families and paths. Descriptions participate in help/discovery,
+// but never execute. Bound local components may use Pattern: ""; commandset
+// namespaces that to the bound component prefix. Global surfaces should use an
+// explicit non-empty pattern.
+type CommandDescriptionSurface interface {
+	CommandDescriptions() []commandengine.Description
+}
+
 type Skill struct {
 	Name        string
 	Description string
@@ -495,12 +504,13 @@ type ThreadRuntimeControlRequest struct {
 }
 
 type TurnInstructions struct {
-	ChatProvider              string
-	MessagePrefix             string
-	KeepRepliesConcise        bool
-	HostbridgeCommandNames    []string
-	HostbridgeControlCommands []string
-	RuntimeNotices            []string
+	ChatProvider                 string
+	MessagePrefix                string
+	KeepRepliesConcise           bool
+	HostbridgeCommandNames       []string
+	HostbridgeControlCommands    []string
+	HostbridgeFamilyDescriptions map[string]string
+	RuntimeNotices               []string
 }
 
 type TurnRuntime interface {

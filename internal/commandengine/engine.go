@@ -85,3 +85,10 @@ func (e *Engine) Definitions() []Definition {
 	}
 	return e.Router.Definitions()
 }
+
+func (e *Engine) Descriptions() []Description {
+	if e == nil || e.Router == nil {
+		return nil
+	}
+	return e.Router.Descriptions()
+}

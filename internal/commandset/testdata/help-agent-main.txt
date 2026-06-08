@@ -1,14 +1,14 @@
 Available commands:
 codex [ chat | compact | config | container | goal | interrupt | status | help ] - Codex commands
-component [ <component> | list | help ] - Show component command help
+component [ <component> | list | help ] - component setup and inspection
 config [ get | list | set | help ] - Global config commands
-heartbeat [ now | start | status | stop | help ] - heartbeat commands
+heartbeat [ now | start | status | stop | help ] - autonomous keepalive and self-scheduling
 run <command> - Run a whitelisted host command
 search <query> - Search indexed chat messages
 send - Send an outbound message from stdin
 send <text> - Send an outbound message; hostbridge reads stdin when message args are omitted
 sendfile <path> - Send an outbound file; hostbridge reads stdin when path is omitted
 status - Show current thread status
-theater [ <name> | create | list | status | help ] - theater commands
-thread [ <thread> | config | label | list | status | help ] - Thread commands
-turn [ config | info | help ] - Current turn commands
+theater [ <name> | create | list | status | help ] - publish/subscribe message channels between agents
+thread [ <thread> | config | label | list | status | help ] - direct messaging to other agent threads
+turn [ config | info | help ] - current turn metadata and controls

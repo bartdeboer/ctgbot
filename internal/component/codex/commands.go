@@ -14,6 +14,7 @@ import (
 )
 
 var _ component.CommandSurface = (*Component)(nil)
+var _ component.CommandDescriptionSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 var _ configsurface.ConfigSurface = (*Component)(nil)
 var _ agentcommon.KeepRunningSetter = (*Component)(nil)
@@ -48,6 +49,10 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		SupportsUnset: true,
 	})...)
 	return definitions
+}
+
+func (c *Component) CommandDescriptions() []commandengine.Description {
+	return agentcommon.AgentCommandDescriptions("Codex")
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }

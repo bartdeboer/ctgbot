@@ -418,6 +418,14 @@ func TestCodexBootstrapFixtureMainDeveloperInstructions(t *testing.T) {
 			"hostbridge turn config set <key> <value>",
 			"hostbridge turn info",
 		},
+		HostbridgeFamilyDescriptions: map[string]string{
+			"codex":     "Codex commands",
+			"component": "component setup and inspection",
+			"heartbeat": "autonomous keepalive and self-scheduling",
+			"theater":   "publish/subscribe message channels between agents",
+			"thread":    "direct messaging to other agent threads",
+			"turn":      "current turn metadata and controls",
+		},
 		RuntimeNotices: []string{"[Runtime notice] image stale"},
 	})
 	if err != nil {

@@ -437,14 +437,14 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 	if chatProvider == "" {
 		chatProvider = "Chat"
 	}
-	runAliasSynopsis := agentcommon.CommandSynopsis("hostbridge run", instructions.HostbridgeCommandNames)
+	runAliasSynopsis := commandengine.CommandSynopsis("hostbridge run", instructions.HostbridgeCommandNames)
 	controlSynopsis := ""
 	if len(instructions.HostbridgeControlCommands) > 0 {
 		controlCommands := append([]string(nil), instructions.HostbridgeControlCommands...)
 		if len(instructions.HostbridgeCommandNames) > 0 {
 			controlCommands = append(controlCommands, "hostbridge run <alias> [args...]")
 		}
-		controlSynopsis = agentcommon.HostbridgeSynopsis(controlCommands)
+		controlSynopsis = commandengine.CommandSynopsis("hostbridge", controlCommands, instructions.HostbridgeFamilyDescriptions)
 	}
 	text, err := codexbootstrap.Text(codexbootstrap.TemplateData{
 		Workspace:                 workspace,

@@ -91,6 +91,38 @@ const (
 	InstructionEssential    InstructionVisibility = "essential"
 )
 
+// Description registers a non-executable route that contributes help metadata.
+// It describes a command family or path without adding a runnable command.
+// The missing Build field is intentional: descriptions are metadata only and
+// must never become executable.
+type Description struct {
+	Pattern  string
+	Help     string
+	Absolute bool
+	Hidden   bool
+	Sources  []Source
+	Policy   simplerbac.Rule
+}
+
+func (d Description) Validate() error {
+	if NormalizePattern(d.Pattern) == "" {
+		return fmt.Errorf("missing command description pattern")
+	}
+	if len(d.Sources) == 0 {
+		return fmt.Errorf("command description %s has no sources", NormalizePattern(d.Pattern))
+	}
+	return nil
+}
+
+func (d Description) AllowsSource(source Source) bool {
+	for _, candidate := range d.Sources {
+		if candidate == source {
+			return true
+		}
+	}
+	return false
+}
+
 type Definition struct {
 	Pattern               string
 	Help                  string

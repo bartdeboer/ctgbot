@@ -31,6 +31,7 @@ type Component struct {
 
 var _ component.Component = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
+var _ component.CommandDescriptionSurface = (*Component)(nil)
 
 type listCommand struct {
 	Limit int
@@ -232,6 +233,15 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
 	}
+}
+
+func (c *Component) CommandDescriptions() []commandengine.Description {
+	return []commandengine.Description{{
+		Pattern: "thread",
+		Help:    "direct messaging to other agent threads",
+		Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+		Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+	}}
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {

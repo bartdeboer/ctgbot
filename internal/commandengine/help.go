@@ -37,7 +37,7 @@ func compactHelpRoutes(routes []clir.RouteInfo) []clir.RouteInfo {
 	var order []string
 	for _, route := range normalized {
 		parts := strings.Fields(NormalizePattern(route.Pattern))
-		if len(parts) < 2 || isHelpParam(parts[0]) {
+		if len(parts) == 0 || isHelpParam(parts[0]) {
 			continue
 		}
 		prefix := parts[0]
@@ -47,10 +47,13 @@ func compactHelpRoutes(routes []clir.RouteInfo) []clir.RouteInfo {
 			groups[prefix] = g
 			order = append(order, prefix)
 		}
-		g.children[parts[1]] = struct{}{}
-		if len(parts) == 1 && strings.TrimSpace(route.Description) != "" {
-			g.description = strings.TrimSpace(route.Description)
+		if len(parts) == 1 {
+			if strings.TrimSpace(route.Description) != "" {
+				g.description = strings.TrimSpace(route.Description)
+			}
+			continue
 		}
+		g.children[parts[1]] = struct{}{}
 		if len(parts) == 2 && parts[1] == "help" && strings.TrimSpace(route.Description) != "" && g.description == "" {
 			g.description = strings.TrimSpace(route.Description)
 		}
@@ -87,7 +90,7 @@ func compactHelpRoutes(routes []clir.RouteInfo) []clir.RouteInfo {
 	emitted := map[string]struct{}{}
 	for _, route := range normalized {
 		parts := strings.Fields(NormalizePattern(route.Pattern))
-		if len(parts) >= 2 {
+		if len(parts) >= 1 {
 			if compact, ok := grouped[parts[0]]; ok {
 				if _, seen := emitted[parts[0]]; !seen {
 					out = append(out, compact)

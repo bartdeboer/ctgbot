@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 const Type = "heartbeat"
@@ -23,6 +25,7 @@ type Component struct {
 
 var _ component.Component = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
+var _ component.CommandDescriptionSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 var _ component.ChatPayloadSenderReceiver = (*Component)(nil)
 var _ component.UpdateFeedReceiver = (*Component)(nil)
@@ -38,6 +41,16 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 func (c *Component) Type() string { return Type }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
+
+func (c *Component) CommandDescriptions() []commandengine.Description {
+	policy := simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent)
+	return []commandengine.Description{{
+		Pattern: "",
+		Help:    "autonomous keepalive and self-scheduling",
+		Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+		Policy:  policy,
+	}}
+}
 
 func (c *Component) SetChatPayloadSender(sender component.ChatPayloadSender) {
 	if c != nil {

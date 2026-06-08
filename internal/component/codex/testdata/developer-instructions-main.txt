@@ -14,15 +14,27 @@ You are operating inside a dedicated Docker container for this conversation.
 - Canonical hostbridge control commands for this chat:
 ```
 hostbridge [
-  codex [ chat purge | compact | config [ get <key> | list | set <key> <value> | unset <key> ] | goal | interrupt | status ]
-  component [ help | list | <component> help ]
-  heartbeat [ now | start <interval> | status | stop ]
+  codex [ # Codex commands
+    chat purge | compact | config [ get <key> | list | set <key> <value> | unset <key> ] | goal | interrupt | status
+  ]
+  component [ # component setup and inspection
+    help | list | <component> help
+  ]
+  heartbeat [ # autonomous keepalive and self-scheduling
+    now | start <interval> | status | stop
+  ]
   search <query>
   send <text>
   sendfile <path>
-  theater [ create <name> | list | <name> [ post <message> | read | status | subscribe | unsubscribe ] | status ]
-  thread [ help | list | <thread> message send ]
-  turn [ config [ get <key> | list | set <key> <value> ] | info ]
+  theater [ # publish/subscribe message channels between agents
+    create <name> | list | <name> [ post <message> | read | status | subscribe | unsubscribe ] | status
+  ]
+  thread [ # direct messaging to other agent threads
+    help | list | <thread> message send
+  ]
+  turn [ # current turn metadata and controls
+    config [ get <key> | list | set <key> <value> ] | info
+  ]
   run <alias> [args...]
 ]
 ```

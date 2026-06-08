@@ -226,6 +226,7 @@ func (r *agentTurnRuntime) Instructions() component.TurnInstructions {
 		sort.Strings(instructions.HostbridgeCommandNames)
 	}
 	instructions.HostbridgeControlCommands = hostbridgeControlCommands(r.runtime)
+	instructions.HostbridgeFamilyDescriptions = hostbridgeFamilyDescriptions(r.runtime)
 	return instructions
 }
 
@@ -245,6 +246,16 @@ func hostbridgeControlCommands(runtime *ChatRuntime) []string {
 		out = append(out, "hostbridge "+pattern)
 	}
 	return out
+}
+
+func hostbridgeFamilyDescriptions(runtime *ChatRuntime) map[string]string {
+	if runtime == nil || runtime.AgentCommands == nil {
+		return nil
+	}
+	return commandset.InstructionFamilyDescriptions(
+		runtime.AgentCommands.Descriptions(),
+		coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+	)
 }
 
 func (r *agentTurnRuntime) Send(ctx context.Context, payload message.OutboundPayload) error {

@@ -1,6 +1,7 @@
 package commandset
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -226,4 +227,48 @@ func helpLinesContain(lines []string, substr string) bool {
 		}
 	}
 	return false
+}
+
+type describedLocalSurface struct{}
+
+func (describedLocalSurface) UsesLocalCommandRoutes() bool { return true }
+
+func (describedLocalSurface) CommandDescriptions() []commandengine.Description {
+	return []commandengine.Description{{
+		Pattern: "",
+		Help:    "Widget family commands",
+		Sources: []commandengine.Source{commandengine.SourceHostbridge},
+		Policy:  simplerbac.Any(simplerbac.RoleAgent),
+	}}
+}
+
+func (describedLocalSurface) CommandDefinitions() []commandengine.Definition {
+	return []commandengine.Definition{
+		testInstructionDefinition("status", commandengine.InstructionImportant, simplerbac.Any(simplerbac.RoleAgent)),
+		testInstructionDefinition("reset", commandengine.InstructionImportant, simplerbac.Any(simplerbac.RoleAgent)),
+	}
+}
+
+func (describedLocalSurface) RegisterCommandHandlers(registry *commandengine.Registry) error {
+	_ = registry
+	return nil
+}
+
+func TestBoundRouterNamespacesLocalDescriptionRoutes(t *testing.T) {
+	router, err := NewBoundRouterForSource(commandengine.SourceHostbridge, []BoundSurface{{
+		Surface:       describedLocalSurface{},
+		ComponentRef:  "widget/work",
+		ComponentType: "widget",
+	}})
+	if err != nil {
+		t.Fatalf("NewBoundRouterForSource() error = %v", err)
+	}
+	var buf strings.Builder
+	if err := router.FPrintHelp(context.Background(), &buf, nil, commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}); err != nil {
+		t.Fatalf("FPrintHelp() error = %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "widget [ reset | status | help ] - Widget family commands") {
+		t.Fatalf("help output = %q, want visible namespaced description", out)
+	}
 }
