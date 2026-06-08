@@ -33,11 +33,12 @@ You are operating inside a dedicated Docker container for this conversation.
   - `hostbridge sendfile <path>`
   - `hostbridge theater create <name>`
   - `hostbridge theater list`
-  - `hostbridge theater post <name> <message>`
-  - `hostbridge theater read <name>`
+  - `hostbridge theater <name> post <message>`
+  - `hostbridge theater <name> read`
+  - `hostbridge theater <name> status`
   - `hostbridge theater status`
-  - `hostbridge theater subscribe <name>`
-  - `hostbridge theater unsubscribe <name>`
+  - `hostbridge theater <name> subscribe`
+  - `hostbridge theater <name> unsubscribe`
   - `hostbridge thread help`
   - `hostbridge thread list`
   - `hostbridge thread <thread> message send`

@@ -23,10 +23,10 @@ func TestTheaterCreateSubscribePostReadFlow(t *testing.T) {
 	if result, err := engine.Run(ctx, base, []string{Type, "create", "qwen-parser-lab"}); err != nil || result.Text != "theater created: qwen-parser-lab" {
 		t.Fatalf("create result=%q err=%v", result.Text, err)
 	}
-	if result, err := engine.Run(ctx, base, []string{Type, "subscribe", "qwen-parser-lab"}); err != nil || result.Text != "subscribed: qwen-parser-lab" {
+	if result, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "subscribe"}); err != nil || result.Text != "subscribed: qwen-parser-lab" {
 		t.Fatalf("subscribe result=%q err=%v", result.Text, err)
 	}
-	if _, err := engine.Run(ctx, base, []string{Type, "post", "qwen-parser-lab", "parser", "image", "ready"}); err != nil {
+	if _, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "post", "parser", "image", "ready"}); err != nil {
 		t.Fatalf("post error = %v", err)
 	}
 
@@ -37,8 +37,15 @@ func TestTheaterCreateSubscribePostReadFlow(t *testing.T) {
 	if len(updates) != 1 || updates[0].Source != Type || updates[0].Label != "qwen-parser-lab" || updates[0].Count != 1 {
 		t.Fatalf("updates = %#v, want one theater update", updates)
 	}
+	status, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "status"})
+	if err != nil {
+		t.Fatalf("named status error = %v", err)
+	}
+	if !strings.Contains(status.Text, "pending=1") {
+		t.Fatalf("named status = %q, want pending count", status.Text)
+	}
 
-	read, err := engine.Run(ctx, base, []string{Type, "read", "qwen-parser-lab"})
+	read, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "read"})
 	if err != nil {
 		t.Fatalf("read error = %v", err)
 	}
@@ -65,10 +72,10 @@ func TestTheaterPostUsesStdin(t *testing.T) {
 	}
 	postReq := base
 	postReq.Stdin = "hello from stdin"
-	if _, err := engine.Run(ctx, postReq, []string{Type, "post", "lab"}); err != nil {
+	if _, err := engine.Run(ctx, postReq, []string{Type, "lab", "post"}); err != nil {
 		t.Fatalf("post stdin error = %v", err)
 	}
-	read, err := engine.Run(ctx, base, []string{Type, "read", "lab"})
+	read, err := engine.Run(ctx, base, []string{Type, "lab", "read"})
 	if err != nil {
 		t.Fatal(err)
 	}
