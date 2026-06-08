@@ -11,9 +11,10 @@ import (
 )
 
 type Router struct {
-	source               Source
-	clir                 *clir.Router
-	definitionsByPattern map[string]Definition
+	source                Source
+	clir                  *clir.Router
+	definitionsByPattern  map[string]Definition
+	descriptionsByPattern map[string]Description
 }
 
 type parseState struct {
@@ -22,14 +23,15 @@ type parseState struct {
 
 type parseStateKey struct{}
 
-func NewRouter(definitions []Definition, source Source) (*Router, error) {
+func NewRouter(definitions []Definition, source Source, descriptions ...Description) (*Router, error) {
 	if source == "" {
 		return nil, fmt.Errorf("missing command source")
 	}
 	router := &Router{
-		source:               source,
-		clir:                 clir.New(),
-		definitionsByPattern: map[string]Definition{},
+		source:                source,
+		clir:                  clir.New(),
+		definitionsByPattern:  map[string]Definition{},
+		descriptionsByPattern: map[string]Description{},
 	}
 	router.clir.SetHelpEntryFormatter(func(w io.Writer, routes []clir.RouteInfo) {
 		writeHelpCompactLines(w, routes, source)
@@ -61,7 +63,27 @@ func NewRouter(definitions []Definition, source Source) (*Router, error) {
 			})
 		}
 	}
+	var describedRoutes []registeredDescription
+	for _, description := range descriptions {
+		if err := description.Validate(); err != nil {
+			return nil, err
+		}
+		if !description.AllowsSource(source) {
+			continue
+		}
+		pattern := NormalizePattern(description.Pattern)
+		if previous, ok := seenRoutes[pattern]; ok {
+			return nil, fmt.Errorf("duplicate command route %q in %s and description", pattern, previous)
+		}
+		seenRoutes[pattern] = "description"
+		router.descriptionsByPattern[pattern] = description
+		describedRoutes = append(describedRoutes, registeredDescription{description: description, pattern: pattern})
+	}
+
 	router.clir.Routes(func(b *clir.Builder) {
+		for _, described := range describedRoutes {
+			b.Describe(described.pattern, described.description.Help, clirDescriptionOptions(described.description)...)
+		}
 		for _, registered := range routes {
 			registered := registered
 			b.Handle(registered.pattern, registered.definition.Help, func(req *clir.Request) error {
@@ -105,10 +127,23 @@ func clirRouteOptions(definition Definition, route Route) []clir.RouteOption {
 	return opts
 }
 
+func clirDescriptionOptions(description Description) []clir.RouteOption {
+	var opts []clir.RouteOption
+	if description.Hidden {
+		opts = append(opts, clir.Hidden())
+	}
+	return opts
+}
+
 type registeredRoute struct {
 	definition Definition
 	route      Route
 	pattern    string
+}
+
+type registeredDescription struct {
+	description Description
+	pattern     string
 }
 
 func (r *Router) Parse(ctx context.Context, base Request, argv []string) (Request, error) {
@@ -206,6 +241,17 @@ func (r *Router) helpAllowedForActor(actor Actor) func(clir.RouteInfo) bool {
 		if pattern == "" {
 			return false
 		}
+		for _, description := range r.descriptionsByPattern {
+			if description.Hidden {
+				continue
+			}
+			if err := description.Policy.Check(actor); err != nil {
+				continue
+			}
+			if helpPatternCoversRoute(pattern, description.Pattern) {
+				return true
+			}
+		}
 		for _, definition := range r.definitionsByPattern {
 			if err := definition.Policy.Check(actor); err != nil {
 				continue
@@ -235,6 +281,20 @@ func helpPatternCoversRoute(helpPattern string, routePattern string) bool {
 		}
 	}
 	return true
+}
+
+func (r *Router) Descriptions() []Description {
+	if r == nil {
+		return nil
+	}
+	out := make([]Description, 0, len(r.descriptionsByPattern))
+	for _, description := range r.descriptionsByPattern {
+		out = append(out, description)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return NormalizePattern(out[i].Pattern) < NormalizePattern(out[j].Pattern)
+	})
+	return out
 }
 
 func (r *Router) Definitions() []Definition {

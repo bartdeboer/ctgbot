@@ -26,9 +26,25 @@ func DefinitionsForSource(source commandengine.Source, surfaces ...component.Com
 	return filterDefinitionsBySource(definitions, source)
 }
 
+func DescriptionsForSource(source commandengine.Source, surfaces ...component.CommandSurface) []commandengine.Description {
+	var descriptions []commandengine.Description
+	for _, surface := range surfaces {
+		describer, ok := surface.(component.CommandDescriptionSurface)
+		if !ok || describer == nil {
+			continue
+		}
+		descriptions = append(descriptions, describer.CommandDescriptions()...)
+	}
+	return filterDescriptionsBySource(descriptions, source)
+}
+
 func DefinitionsForBoundSource(source commandengine.Source, bound []BoundSurface, globals ...component.CommandSurface) []commandengine.Definition {
 	definitions, _ := buildBoundDefinitions(source, bound, globals...)
 	return definitions
+}
+
+func DescriptionsForBoundSource(source commandengine.Source, bound []BoundSurface, globals ...component.CommandSurface) []commandengine.Description {
+	return buildBoundDescriptions(source, bound, globals...)
 }
 
 func NewRouterForSource(source commandengine.Source, surfaces ...component.CommandSurface) (*commandengine.Router, error) {
@@ -36,7 +52,7 @@ func NewRouterForSource(source commandengine.Source, surfaces ...component.Comma
 	if len(definitions) == 0 {
 		return nil, fmt.Errorf("no command definitions for source %s", source)
 	}
-	return commandengine.NewRouter(definitions, source)
+	return commandengine.NewRouter(definitions, source, DescriptionsForSource(source, surfaces...)...)
 }
 
 func NewBoundRouterForSource(source commandengine.Source, bound []BoundSurface, globals ...component.CommandSurface) (*commandengine.Router, error) {
@@ -44,7 +60,7 @@ func NewBoundRouterForSource(source commandengine.Source, bound []BoundSurface, 
 	if len(definitions) == 0 {
 		return nil, fmt.Errorf("no command definitions for source %s", source)
 	}
-	return commandengine.NewRouter(definitions, source)
+	return commandengine.NewRouter(definitions, source, DescriptionsForBoundSource(source, bound, globals...)...)
 }
 
 func NewEngineForSource(source commandengine.Source, surfaces ...component.CommandSurface) (*commandengine.Engine, error) {
@@ -75,7 +91,7 @@ func NewBoundEngineForSource(source commandengine.Source, bound []BoundSurface, 
 	if len(definitions) == 0 {
 		return nil, fmt.Errorf("no command definitions for source %s", source)
 	}
-	router, err := commandengine.NewRouter(definitions, source)
+	router, err := commandengine.NewRouter(definitions, source, buildBoundDescriptions(source, bound, globals...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +102,46 @@ func NewBoundEngineForSource(source commandengine.Source, bound []BoundSurface, 
 		}
 	}
 	return commandengine.NewEngine(router, registry).WithActiveComponentRefs(activeComponentRefs(bound)), nil
+}
+
+func buildBoundDescriptions(source commandengine.Source, bound []BoundSurface, globals ...component.CommandSurface) []commandengine.Description {
+	var descriptions []commandengine.Description
+	for _, surface := range globals {
+		descriptions = append(descriptions, DescriptionsForSource(source, surface)...)
+	}
+	typeCounts := map[string]int{}
+	for _, binding := range bound {
+		if !isLocalCommandSurface(binding.Surface) {
+			continue
+		}
+		if len(DefinitionsForSource(source, binding.Surface)) == 0 {
+			continue
+		}
+		componentType := strings.TrimSpace(binding.ComponentType)
+		if componentType != "" {
+			typeCounts[componentType]++
+		}
+	}
+	for _, binding := range bound {
+		desc := DescriptionsForSource(source, binding.Surface)
+		if len(desc) == 0 {
+			continue
+		}
+		if !isLocalCommandSurface(binding.Surface) {
+			descriptions = append(descriptions, desc...)
+			continue
+		}
+		componentType := strings.TrimSpace(binding.ComponentType)
+		fullPrefix := strings.TrimSpace(binding.ComponentRef)
+		visiblePrefix := fullPrefix
+		if typeCounts[componentType] <= 1 && componentType != "" {
+			visiblePrefix = componentType
+		}
+		for _, description := range desc {
+			descriptions = append(descriptions, namespaceDescription(description, visiblePrefix, fullPrefix)...)
+		}
+	}
+	return descriptions
 }
 
 type handlerRegistrar func(registry *commandengine.Registry) error
@@ -200,6 +256,23 @@ func namespaceDefinition(definition commandengine.Definition, visiblePrefix stri
 	return wrapped
 }
 
+func namespaceDescription(description commandengine.Description, visiblePrefix string, fullPrefix string) []commandengine.Description {
+	localPattern := commandengine.NormalizePattern(description.Pattern)
+	if description.Absolute {
+		description.Pattern = localPattern
+		return []commandengine.Description{description}
+	}
+	full := description
+	full.Pattern = prefixedPattern(fullPrefix, localPattern)
+	if strings.TrimSpace(visiblePrefix) == strings.TrimSpace(fullPrefix) {
+		return []commandengine.Description{full}
+	}
+	full.Hidden = true
+	visible := description
+	visible.Pattern = prefixedPattern(visiblePrefix, localPattern)
+	return []commandengine.Description{full, visible}
+}
+
 func namespaceAliases(aliases []commandengine.Route, visiblePrefix string, fullPrefix string) []commandengine.Route {
 	out := make([]commandengine.Route, 0, len(aliases)*2)
 	for _, alias := range aliases {
@@ -225,6 +298,16 @@ func namespaceAliases(aliases []commandengine.Route, visiblePrefix string, fullP
 
 func prefixedPattern(prefix string, pattern string) string {
 	return commandengine.JoinPattern(prefix, pattern)
+}
+
+func filterDescriptionsBySource(descriptions []commandengine.Description, source commandengine.Source) []commandengine.Description {
+	out := make([]commandengine.Description, 0, len(descriptions))
+	for _, description := range descriptions {
+		if description.AllowsSource(source) {
+			out = append(out, description)
+		}
+	}
+	return out
 }
 
 func filterDefinitionsBySource(definitions []commandengine.Definition, source commandengine.Source) []commandengine.Definition {
@@ -298,6 +381,28 @@ func InstructionRoutePatterns(definitions []commandengine.Definition, actor core
 				add(root + " help")
 			}
 		}
+	}
+	return out
+}
+
+func InstructionFamilyDescriptions(descriptions []commandengine.Description, actor coremodel.Actor) map[string]string {
+	out := map[string]string{}
+	for _, description := range descriptions {
+		if description.Hidden {
+			continue
+		}
+		if err := description.Policy.Check(actor); err != nil {
+			continue
+		}
+		pattern := commandengine.NormalizePattern(description.Pattern)
+		if pattern == "" || strings.Contains(pattern, " ") {
+			continue
+		}
+		help := strings.TrimSpace(description.Help)
+		if help == "" {
+			continue
+		}
+		out[pattern] = help
 	}
 	return out
 }

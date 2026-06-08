@@ -169,3 +169,21 @@ func containsPattern(values []string, want string) bool {
 	}
 	return false
 }
+
+func TestInstructionFamilyDescriptionsFiltersPolicyAndRootPatterns(t *testing.T) {
+	descriptions := []commandengine.Description{
+		{Pattern: "theater", Help: "Theater commands", Policy: simplerbac.Any(simplerbac.RoleAgent)},
+		{Pattern: "root", Help: "Root commands", Policy: simplerbac.Any(simplerbac.RoleRoot)},
+		{Pattern: "thread message", Help: "Nested commands", Policy: simplerbac.Any(simplerbac.RoleAgent)},
+		{Pattern: "hidden", Help: "Hidden commands", Policy: simplerbac.Any(simplerbac.RoleAgent), Hidden: true},
+	}
+	got := InstructionFamilyDescriptions(descriptions, coremodel.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}})
+	if got["theater"] != "Theater commands" {
+		t.Fatalf("theater description = %q", got["theater"])
+	}
+	for _, notWant := range []string{"root", "thread message", "hidden"} {
+		if _, ok := got[notWant]; ok {
+			t.Fatalf("InstructionFamilyDescriptions() unexpectedly contains %q in %#v", notWant, got)
+		}
+	}
+}

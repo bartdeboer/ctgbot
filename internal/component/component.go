@@ -397,6 +397,13 @@ type CommandSurface interface {
 	RegisterCommandHandlers(registry *commandengine.Registry) error
 }
 
+// CommandDescriptionSurface optionally exposes non-executable route metadata
+// for command families and paths. Descriptions participate in help/discovery,
+// but never execute.
+type CommandDescriptionSurface interface {
+	CommandDescriptions() []commandengine.Description
+}
+
 type Skill struct {
 	Name        string
 	Description string

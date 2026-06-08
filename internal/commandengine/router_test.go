@@ -204,6 +204,41 @@ func TestRouterLiteralRouteWinsOverParameterizedSibling(t *testing.T) {
 	}
 }
 
+func TestRouterDescriptionRouteDescribesCompactGroup(t *testing.T) {
+	router, err := NewRouter([]Definition{
+		{
+			Pattern: "tool run",
+			Help:    "Run tool",
+			Build:   func(req *clir.Request) (any, error) { _ = req; return testCommand{}, nil },
+			Sources: []Source{SourceHostbridge},
+			Policy:  simplerbac.Public(),
+		},
+		{
+			Pattern: "tool status",
+			Help:    "Show tool status",
+			Build:   func(req *clir.Request) (any, error) { _ = req; return testCommand{}, nil },
+			Sources: []Source{SourceHostbridge},
+			Policy:  simplerbac.Public(),
+		},
+	}, SourceHostbridge, Description{
+		Pattern: "tool",
+		Help:    "Tool family description",
+		Sources: []Source{SourceHostbridge},
+		Policy:  simplerbac.Public(),
+	})
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+	var buf bytes.Buffer
+	if err := router.FPrintHelp(context.Background(), &buf, nil, Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}); err != nil {
+		t.Fatalf("FPrintHelp() error = %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "tool [ run | status | help ] - Tool family description") {
+		t.Fatalf("help output = %q, want description route to describe compact group", out)
+	}
+}
+
 func testDefinition(help string, pattern string, aliases ...Route) Definition {
 	return Definition{
 		Pattern: pattern,
