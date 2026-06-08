@@ -23,27 +23,15 @@ Canonical hostbridge commands:
 
 ```text
 hostbridge [
-  codex [
-    chat purge
-    compact
-    config [ get <key> | list | set <key> <value> | unset <key> ]
-    goal
-    interrupt
-    status
-  ]
-  component [ help | list | <component> help ]
-  heartbeat [ now | start <interval> | status | stop ]
-  search <query>
-  send <text>
-  sendfile <path>
-  theater [
-    create <name>
-    list
-    <name> [ post <message> | read | status | subscribe | unsubscribe ]
-    status
-  ]
-  thread [ help | list | <thread> message send ]
-  turn [ config [ get <key> | list | set <key> <value> ] | info ]
+codex [ chat purge | compact | config [ get <key> | list | set <key> <value> | unset <key> ] | goal | interrupt | status ]
+component [ help | list | <component> help ]
+heartbeat [ now | start <interval> | status | stop ]
+search <query>
+send <text>
+sendfile <path>
+theater [ create <name> | list | <name> [ post <message> | read | status | subscribe | unsubscribe ] | status ]
+thread [ help | list | <thread> message send ]
+turn [ config [ get <key> | list | set <key> <value> ] | info ]
 ]
 ```
 
@@ -51,13 +39,13 @@ Available hostbridge run aliases:
 
 ```text
 hostbridge [
-  deployer
-  docker
-  git-ctgbot [ fetch | pull | push | status ]
-  git-ctgbot-ui [ fetch | pull | push | status ]
-  git-job-search [ fetch | pull | push | status ]
-  ls
-  pwd
+deployer
+docker
+git-ctgbot [ fetch | pull | push | status ]
+git-ctgbot-ui [ fetch | pull | push | status ]
+git-job-search [ fetch | pull | push | status ]
+ls
+pwd
 ]
 ```
 

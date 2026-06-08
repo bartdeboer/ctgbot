@@ -31,7 +31,7 @@ func CommandSynopsis(root string, patterns []string) string {
 	}
 	lines := []string{root + " ["}
 	for _, child := range trie.orderedChildren() {
-		lines = append(lines, renderSynopsisChild(child, "  ")...)
+		lines = append(lines, renderSynopsisInline(child))
 	}
 	lines = append(lines, "]")
 	return strings.Join(lines, "\n")
@@ -71,28 +71,6 @@ func (n *synopsisNode) orderedChildren() []*synopsisNode {
 		}
 	}
 	return out
-}
-
-func renderSynopsisChild(n *synopsisNode, indent string) []string {
-	if n == nil {
-		return nil
-	}
-	if len(n.children) == 0 {
-		return []string{indent + n.token}
-	}
-	inline := renderSynopsisInline(n)
-	if len(inline) <= 88 && !strings.Contains(inline, "\n") {
-		return []string{indent + inline}
-	}
-	lines := []string{indent + n.token + " ["}
-	if n.terminal {
-		lines = append(lines, indent+"  .")
-	}
-	for _, child := range n.orderedChildren() {
-		lines = append(lines, renderSynopsisChild(child, indent+"  ")...)
-	}
-	lines = append(lines, indent+"]")
-	return lines
 }
 
 func renderSynopsisInline(n *synopsisNode) string {
