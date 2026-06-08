@@ -237,6 +237,9 @@ func TestRouterDescriptionRouteDescribesCompactGroup(t *testing.T) {
 	if !strings.Contains(out, "tool [ run | status | help ] - Tool family description") {
 		t.Fatalf("help output = %q, want description route to describe compact group", out)
 	}
+	if strings.Contains(out, "\ntool - ") {
+		t.Fatalf("help output = %q, description route must not appear as a standalone line", out)
+	}
 }
 
 func testDefinition(help string, pattern string, aliases ...Route) Definition {

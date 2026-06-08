@@ -90,7 +90,7 @@ func compactHelpRoutes(routes []clir.RouteInfo) []clir.RouteInfo {
 	emitted := map[string]struct{}{}
 	for _, route := range normalized {
 		parts := strings.Fields(NormalizePattern(route.Pattern))
-		if len(parts) >= 2 {
+		if len(parts) >= 1 {
 			if compact, ok := grouped[parts[0]]; ok {
 				if _, seen := emitted[parts[0]]; !seen {
 					out = append(out, compact)
