@@ -84,14 +84,13 @@ func TestHandleTurnStopsRuntimeWhenKeepRunningDisabled(t *testing.T) {
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
 			Core: agentcommon.Core{
-	Registration: registration,
-	Runtime:      runtime,
-	Storage:      storage,
+				Registration: registration,
+				Runtime:      runtime,
+				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
 			},
 			config: cfg,
 			runner: executor,
@@ -144,14 +143,13 @@ func TestHandleTurnKeepsRuntimeRunningWhenEnabled(t *testing.T) {
 		}
 		c := &Component{
 			Core: agentcommon.Core{
-	Registration: registration,
-	Runtime:      runtime,
-	Storage:      storage,
+				Registration: registration,
+				Runtime:      runtime,
+				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
 			},
 			config: cfg,
 			runner: executor,
@@ -198,14 +196,13 @@ func TestHandleTurnUsesThreadComponentStateOptions(t *testing.T) {
 		}
 		c := &Component{
 			Core: agentcommon.Core{
-	Registration: registration,
-	Runtime:      runtime,
-	Storage:      storage,
+				Registration: registration,
+				Runtime:      runtime,
+				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
 			},
 			config: cfg,
 			runner: executor,
@@ -248,14 +245,13 @@ func TestHandleTurnInjectsRuntimeNoticesIntoBootstrap(t *testing.T) {
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
 			Core: agentcommon.Core{
-	Registration: registration,
-	Runtime:      runtime,
-	Storage:      storage,
+				Registration: registration,
+				Runtime:      runtime,
+				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
 			},
 			config: cfg,
 			runner: executor,
@@ -300,14 +296,13 @@ func TestHandleTurnIgnoresStopFailureAfterSuccessfulReply(t *testing.T) {
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
 			Core: agentcommon.Core{
-	Registration: registration,
-	Runtime:      runtime,
-	Storage:      storage,
+				Registration: registration,
+				Runtime:      runtime,
+				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
 			},
 			config: cfg,
 			runner: executor,
@@ -371,6 +366,89 @@ func TestAuthStatusRunsComponentScopedLoginStatus(t *testing.T) {
 			t.Fatalf("expected config.toml: %v", err)
 		}
 	})
+}
+
+func TestCodexBootstrapFixtureMainDeveloperInstructions(t *testing.T) {
+	text, err := codexBootstrap("/workspace", "/profile/components/codex/codex", component.TurnInstructions{
+		ChatProvider:       "Telegram",
+		MessagePrefix:      "🤖",
+		KeepRepliesConcise: true,
+		HostbridgeCommandNames: []string{
+			"deployer",
+			"docker",
+			"git-ctgbot [ fetch | pull | push | status ]",
+			"git-ctgbot-ui [ fetch | pull | push | status ]",
+			"git-job-search [ fetch | pull | push | status ]",
+			"ls",
+			"pwd",
+		},
+		HostbridgeControlCommands: []string{
+			"hostbridge codex chat purge",
+			"hostbridge codex compact",
+			"hostbridge codex config get <key>",
+			"hostbridge codex config list",
+			"hostbridge codex config set <key> <value>",
+			"hostbridge codex config unset <key>",
+			"hostbridge codex goal",
+			"hostbridge codex interrupt",
+			"hostbridge codex status",
+			"hostbridge component help",
+			"hostbridge component list",
+			"hostbridge component <component> help",
+			"hostbridge heartbeat now",
+			"hostbridge heartbeat start <interval>",
+			"hostbridge heartbeat status",
+			"hostbridge heartbeat stop",
+			"hostbridge search <query>",
+			"hostbridge send <text>",
+			"hostbridge sendfile <path>",
+			"hostbridge theater create <name>",
+			"hostbridge theater list",
+			"hostbridge theater post <name> <message>",
+			"hostbridge theater read <name>",
+			"hostbridge theater status",
+			"hostbridge theater subscribe <name>",
+			"hostbridge theater unsubscribe <name>",
+			"hostbridge thread help",
+			"hostbridge thread list",
+			"hostbridge thread <thread> message send",
+			"hostbridge turn config get <key>",
+			"hostbridge turn config list",
+			"hostbridge turn config set <key> <value>",
+			"hostbridge turn info",
+		},
+		RuntimeNotices: []string{"[Runtime notice] image stale"},
+	})
+	if err != nil {
+		t.Fatalf("codexBootstrap() error = %v", err)
+	}
+	assertCodexTextFixture(t, "developer-instructions-main.txt", text)
+}
+
+func assertCodexTextFixture(t *testing.T, name string, got string) {
+	t.Helper()
+	path := filepath.Join("testdata", name)
+	got = normalizeCodexFixtureText(got)
+	if os.Getenv("CTGBOT_UPDATE_TESTDATA") == "1" {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll(%q): %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(got+"\n"), 0o644); err != nil {
+			t.Fatalf("WriteFile(%q): %v", path, err)
+		}
+	}
+	wantBytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q): %v", path, err)
+	}
+	want := normalizeCodexFixtureText(string(wantBytes))
+	if got != want {
+		t.Fatalf("fixture %s mismatch\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
+	}
+}
+
+func normalizeCodexFixtureText(text string) string {
+	return strings.TrimSuffix(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 }
 
 func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
