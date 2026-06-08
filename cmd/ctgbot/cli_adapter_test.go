@@ -31,7 +31,7 @@ func TestCLICommandSurfacesExposeProcessAndServiceCommands(t *testing.T) {
 	for _, want := range []string{
 		"run - Run the ctgbot runtime",
 		"component [ <component> | list | register | unregister | help ] - component setup and inspection",
-		"config [ get | list | set | help ] - Global config commands",
+		"config [ get | list | set | help ] - global instance config",
 		"image [ build | list | help ] - image commands",
 	} {
 		if !strings.Contains(help.String(), want) {

@@ -10,6 +10,7 @@ import (
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	configschema "github.com/bartdeboer/ctgbot/internal/schema/config"
 	"github.com/bartdeboer/ctgbot/internal/schema/routers"
+	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
 const Type = "config"
@@ -20,6 +21,7 @@ type Component struct {
 
 var _ component.Component = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
+var _ component.CommandDescriptionSurface = (*Component)(nil)
 
 func New(cfg *appstate.Config) (*Component, error) {
 	if cfg == nil {
@@ -46,6 +48,15 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		}
 	}
 	return out
+}
+
+func (c *Component) CommandDescriptions() []commandengine.Description {
+	return []commandengine.Description{{
+		Pattern: "config",
+		Help:    "global instance config",
+		Sources: []commandengine.Source{commandengine.SourceCLI, commandengine.SourceMessage, commandengine.SourceHostbridge},
+		Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+	}}
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {

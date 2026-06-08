@@ -90,7 +90,7 @@ func HostbridgeCommands() []commandengine.Definition {
 func HostbridgeCommandDescriptions() []commandengine.Description {
 	return []commandengine.Description{{
 		Pattern: "turn",
-		Help:    "current turn metadata and controls",
+		Help:    "current turn metadata and output controls",
 		Sources: []commandengine.Source{commandengine.SourceHostbridge},
 		Policy:  agentPolicy(),
 	}}

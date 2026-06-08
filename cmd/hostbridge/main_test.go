@@ -267,7 +267,7 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			name: "root help is navigation index",
 			argv: []string{"help"},
 			contains: []string{
-				"codex [ chat | compact | config | container | goal | interrupt | status | help ] - Codex commands",
+				"codex [ chat | compact | config | container | goal | interrupt | status | help ] - agent lifecycle and config",
 				"thread [ <thread> | config | label | list | status | help ] - direct messaging to other agent threads",
 				"status - Show current thread status",
 			},

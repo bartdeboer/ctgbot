@@ -48,11 +48,10 @@ func AgentCommandPolicy() simplerbac.Rule {
 	return simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser)
 }
 
-
 func AgentCommandDescriptions(name string) []commandengine.Description {
 	return []commandengine.Description{{
 		Pattern: "",
-		Help:    strings.TrimSpace(name) + " commands",
+		Help:    "agent lifecycle and config",
 		Sources: AgentCommandSources(),
 		Policy:  AgentCommandPolicy(),
 	}}
@@ -228,7 +227,7 @@ func agentCommandSourcesFor(pattern string) []commandengine.Source {
 
 func agentInstructionVisibility(pattern string) commandengine.InstructionVisibility {
 	switch commandengine.NormalizePattern(pattern) {
-	case "container refresh", "chat purge", "compact", "goal", "interrupt", "status":
+	case "container refresh", "container start", "container stop", "chat purge", "compact", "goal", "interrupt", "status":
 		return commandengine.InstructionImportant
 	default:
 		return commandengine.InstructionDiscoverable

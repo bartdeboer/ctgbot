@@ -65,8 +65,9 @@ func CommandDefinitions(options DefinitionOptions) []commandengine.Definition {
 				}
 				return ConfigSet{Key: key, Value: strings.TrimSpace(req.Params["value"])}, nil
 			},
-			Sources: append([]commandengine.Source{}, options.Sources...),
-			Policy:  options.Policy,
+			Sources:               append([]commandengine.Source{}, options.Sources...),
+			Policy:                options.Policy,
+			InstructionVisibility: commandengine.InstructionImportant,
 		},
 	}
 	if options.SupportsUnset {
@@ -80,8 +81,9 @@ func CommandDefinitions(options DefinitionOptions) []commandengine.Definition {
 				}
 				return ConfigUnset{Key: key}, nil
 			},
-			Sources: append([]commandengine.Source{}, options.Sources...),
-			Policy:  options.Policy,
+			Sources:               append([]commandengine.Source{}, options.Sources...),
+			Policy:                options.Policy,
+			InstructionVisibility: commandengine.InstructionImportant,
 		})
 	}
 	return definitions

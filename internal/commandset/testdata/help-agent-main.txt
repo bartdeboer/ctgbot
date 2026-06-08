@@ -1,7 +1,7 @@
 Available commands:
-codex [ chat | compact | config | container | goal | interrupt | status | help ] - Codex commands
+codex [ chat | compact | config | container | goal | interrupt | status | help ] - agent lifecycle and config
 component [ <component> | list | help ] - component setup and inspection
-config [ get | list | set | help ] - Global config commands
+config [ get | list | set | help ] - global instance config
 heartbeat [ now | start | status | stop | help ] - autonomous keepalive and self-scheduling
 run <command> - Run a whitelisted host command
 search <query> - Search indexed chat messages
@@ -11,4 +11,4 @@ sendfile <path> - Send an outbound file; hostbridge reads stdin when path is omi
 status - Show current thread status
 theater [ <name> | create | list | status | help ] - publish/subscribe message channels between agents
 thread [ <thread> | config | label | list | status | help ] - direct messaging to other agent threads
-turn [ config | info | help ] - current turn metadata and controls
+turn [ config | info | help ] - current turn metadata and output controls

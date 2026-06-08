@@ -14,8 +14,8 @@ You are operating inside a dedicated Docker container for this conversation.
 - Canonical hostbridge control commands for this chat:
 ```
 hostbridge [
-  codex [ # Codex commands
-    chat purge | compact | config [ get <key> | list | set <key> <value> | unset <key> ] | goal | interrupt | status
+  codex [ # agent lifecycle and config
+    chat purge | compact | config [ get <key> | list | set <key> <value> | unset <key> ] | container [ start | stop ] | goal | interrupt | status
   ]
   component [ # component setup and inspection
     help | list | <component> help
@@ -30,9 +30,9 @@ hostbridge [
     create <name> | list | <name> [ post <message> | read | status | subscribe | unsubscribe ] | status
   ]
   thread [ # direct messaging to other agent threads
-    help | list | <thread> message send
+    help | list | status | label set | <thread> [ label set | config [ get <key> | list | set <key> <value> | unset <key> ] | message send ] | config [ get <key> | list | set <key> <value> | unset <key> ]
   ]
-  turn [ # current turn metadata and controls
+  turn [ # current turn metadata and output controls
     config [ get <key> | list | set <key> <value> ] | info
   ]
   run <alias> [args...]

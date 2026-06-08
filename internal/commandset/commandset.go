@@ -367,7 +367,12 @@ func InstructionRoutePatterns(definitions []commandengine.Definition, actor core
 	for _, definition := range eligible {
 		visibility := definition.InstructionVisibilityOrDefault()
 		if visibility == commandengine.InstructionEssential || visibility == commandengine.InstructionImportant {
-			add(firstVisibleRoutePattern(definition))
+			for _, route := range definition.Routes() {
+				if route.Hidden {
+					continue
+				}
+				add(route.Pattern)
+			}
 		}
 		for _, route := range definition.Routes() {
 			if route.Hidden {
@@ -435,16 +440,6 @@ func instructionRootCounts(definitions []commandengine.Definition) map[string]in
 		}
 	}
 	return counts
-}
-
-func firstVisibleRoutePattern(definition commandengine.Definition) string {
-	for _, route := range definition.Routes() {
-		if route.Hidden {
-			continue
-		}
-		return commandengine.NormalizePattern(route.Pattern)
-	}
-	return ""
 }
 
 func isHelpRoutePattern(pattern string) bool {
