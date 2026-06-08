@@ -1,12 +1,13 @@
-package agentcommon
+package commandengine
 
 import (
 	"strings"
 	"testing"
 )
 
-func TestHostbridgeSynopsisRendersCommandTrie(t *testing.T) {
-	got := HostbridgeSynopsis(
+func TestCommandSynopsisRendersCommandTrie(t *testing.T) {
+	got := CommandSynopsis(
+		"hostbridge",
 		[]string{
 			"hostbridge codex chat purge",
 			"hostbridge codex compact",
@@ -31,7 +32,7 @@ func TestHostbridgeSynopsisRendersCommandTrie(t *testing.T) {
 		"<name> [ post <message> | read | subscribe ]",
 	} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("HostbridgeSynopsis() missing %q:\n%s", want, got)
+			t.Fatalf("CommandSynopsis() missing %q:\n%s", want, got)
 		}
 	}
 }

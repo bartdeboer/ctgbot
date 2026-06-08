@@ -249,14 +249,14 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 	if chatProvider == "" {
 		chatProvider = "Chat"
 	}
-	runAliasSynopsis := agentcommon.CommandSynopsis("hostbridge run", instructions.HostbridgeCommandNames)
+	runAliasSynopsis := commandengine.CommandSynopsis("hostbridge run", instructions.HostbridgeCommandNames)
 	controlSynopsis := ""
 	if len(instructions.HostbridgeControlCommands) > 0 {
 		controlCommands := append([]string(nil), instructions.HostbridgeControlCommands...)
 		if len(instructions.HostbridgeCommandNames) > 0 {
 			controlCommands = append(controlCommands, "hostbridge run <alias> [args...]")
 		}
-		controlSynopsis = agentcommon.HostbridgeSynopsis(controlCommands, instructions.HostbridgeFamilyDescriptions)
+		controlSynopsis = commandengine.CommandSynopsis("hostbridge", controlCommands, instructions.HostbridgeFamilyDescriptions)
 	}
 	lines := []string{
 		"You are Claude Code running inside ctgbot.",

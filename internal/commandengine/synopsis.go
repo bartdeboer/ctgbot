@@ -1,25 +1,20 @@
-package agentcommon
+package commandengine
 
 import (
 	"sort"
 	"strings"
 )
 
-// HostbridgeSynopsis renders command patterns as a compact command-tree synopsis.
-// Inputs may be full commands ("hostbridge codex status") or command tails
-// ("codex status"). Empty inputs render as "hostbridge [\n  <none>\n]".
-func HostbridgeSynopsis(patterns []string, familyDescriptions ...map[string]string) string {
-	return CommandSynopsis("hostbridge", stripCommandPrefix(patterns, "hostbridge"), familyDescriptions...)
-}
-
 // CommandSynopsis renders route-like command patterns as a readable trie.
 // It is intended for developer instructions where agents benefit from a compact
-// grammar rather than a long flat list.
+// grammar rather than a long flat list. Inputs may be full commands prefixed by
+// root ("hostbridge codex status") or command tails ("codex status").
 func CommandSynopsis(root string, patterns []string, familyDescriptions ...map[string]string) string {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		root = "commands"
 	}
+	patterns = stripCommandPrefix(patterns, root)
 	descriptions := firstFamilyDescriptions(familyDescriptions)
 	trie := newSynopsisNode("")
 	for _, pattern := range patterns {
