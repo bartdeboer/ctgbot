@@ -17,7 +17,7 @@ The `hostbridge` command is available.
 
 General shape:
 
-- `hostbridge <allowed-command> [args...]`
+- `hostbridge <command> [args...]`
 - `hostbridge help`
 - `hostbridge message "hello" [--type <mime-type>] [--syntax <syntax>] [--attach <path[;type=<mime-type>][;syntax=<syntax>][;name=<filename>]>]`
 - `hostbridge sendfile /workspace/out/report.pdf [--caption "Weekly report"] [--type <mime-type>] [--syntax <syntax>]`
@@ -31,7 +31,7 @@ Canonical hostbridge commands:
 ```
 {{- end }}
 
-Available hostbridge run aliases:
+Available hostbridge run aliases (on host):
 
 ```text
 {{ .BinariesSynopsis }}

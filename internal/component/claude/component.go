@@ -249,7 +249,7 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 	if chatProvider == "" {
 		chatProvider = "Chat"
 	}
-	runAliasSynopsis := agentcommon.HostbridgeSynopsis(instructions.HostbridgeCommandNames)
+	runAliasSynopsis := agentcommon.CommandSynopsis("hostbridge run", instructions.HostbridgeCommandNames)
 	controlSynopsis := ""
 	if len(instructions.HostbridgeControlCommands) > 0 {
 		controlSynopsis = agentcommon.HostbridgeSynopsis(instructions.HostbridgeControlCommands)
@@ -277,7 +277,7 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 	if strings.TrimSpace(controlSynopsis) != "" {
 		lines = append(lines, "", "Canonical hostbridge commands:", "```text", controlSynopsis, "```")
 	}
-	lines = append(lines, "", "Available hostbridge run aliases:", "```text", runAliasSynopsis, "```")
+	lines = append(lines, "", "Available hostbridge run aliases (on host):", "```text", runAliasSynopsis, "```")
 	for _, notice := range instructions.RuntimeNotices {
 		if notice = strings.TrimSpace(notice); notice != "" {
 			lines = append(lines, notice)

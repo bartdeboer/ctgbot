@@ -437,7 +437,7 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 	if chatProvider == "" {
 		chatProvider = "Chat"
 	}
-	runAliasSynopsis := agentcommon.HostbridgeSynopsis(instructions.HostbridgeCommandNames)
+	runAliasSynopsis := agentcommon.CommandSynopsis("hostbridge run", instructions.HostbridgeCommandNames)
 	controlSynopsis := ""
 	if len(instructions.HostbridgeControlCommands) > 0 {
 		controlSynopsis = agentcommon.HostbridgeSynopsis(instructions.HostbridgeControlCommands)
