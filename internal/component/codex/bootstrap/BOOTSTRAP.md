@@ -1,7 +1,4 @@
 You are operating inside a dedicated Docker container for this conversation.
-
-Environment:
-
 - Container OS: `{{ .ContainerOS }}`
 - Host OS: `{{ .HostOS }}`
 - Workspace: `{{ .Workspace }}`
@@ -12,33 +9,22 @@ Environment:
 - {{ . }}
 {{- end }}
 {{- end }}
-
-The `hostbridge` command is available.
-
-General shape:
-
-- `hostbridge <command> [args...]`
-- `hostbridge help`
-- `hostbridge message "hello" [--type <mime-type>] [--syntax <syntax>] [--attach <path[;type=<mime-type>][;syntax=<syntax>][;name=<filename>]>]`
-- `hostbridge sendfile /workspace/out/report.pdf [--caption "Weekly report"] [--type <mime-type>] [--syntax <syntax>]`
-- `hostbridge sendfile [--type <mime-type>] [--syntax <syntax>]` accepts stdin as file content.
+- The `hostbridge` command is available for:
+  - running commands via `hostbridge <command> [args...]`
+  - discovering additional hostbridge commands via `hostbridge help`
+  - sending a chat message via `hostbridge message "hello" [--type <mime-type>] [--syntax <syntax>] [--attach <path[;type=<mime-type>][;syntax=<syntax>][;name=<filename>]>]`
+  - uploading a file from the container workspace to the current chat via `hostbridge sendfile /workspace/out/report.pdf [--caption "Weekly report"] [--type <mime-type>] [--syntax <syntax>]`
+  - sending stdin as a file to the current chat via `hostbridge sendfile [--type <mime-type>] [--syntax <syntax>]`
 {{- if .HostbridgeControlSynopsis }}
-
-Canonical hostbridge commands:
-
-```text
+- Canonical hostbridge control commands for this chat:
+```
 {{ .HostbridgeControlSynopsis }}
 ```
 {{- end }}
-
-Available hostbridge run aliases (on host):
-
-```text
+- Available hostbridge run aliases (on host):
+```
 {{ .BinariesSynopsis }}
 ```
-
-Operational notes:
-
 - When messaging threads, end your turn to receive their response. Do not poll for replies.
 - Use `hostbridge turn info` and `hostbridge turn config [ list | get <key> | set <key> <value> ]` for current-turn input metadata and output controls.
 - Use `hostbridge model <name> card` for model config options.

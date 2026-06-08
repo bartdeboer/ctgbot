@@ -31,7 +31,7 @@ func CommandSynopsis(root string, patterns []string) string {
 	}
 	lines := []string{root + " ["}
 	for _, child := range trie.orderedChildren() {
-		lines = append(lines, renderSynopsisInline(child))
+		lines = append(lines, "  "+renderSynopsisInline(child))
 	}
 	lines = append(lines, "]")
 	return strings.Join(lines, "\n")
@@ -122,6 +122,9 @@ func expandSynopsisPattern(pattern string) []string {
 	prefix := strings.TrimSpace(pattern[:open])
 	suffix := strings.TrimSpace(pattern[close+1:])
 	body := strings.TrimSpace(pattern[open+1 : close])
+	if !strings.Contains(body, "|") {
+		return []string{pattern}
+	}
 	choices := strings.Split(body, "|")
 	out := make([]string, 0, len(choices))
 	for _, choice := range choices {

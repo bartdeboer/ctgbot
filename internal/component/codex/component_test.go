@@ -466,12 +466,12 @@ func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
 	}
 	for _, want := range []string{
 		"The `hostbridge` command is available",
-		"General shape:",
-		"`hostbridge help`",
-		"Canonical hostbridge commands:",
+		"discovering additional hostbridge commands via `hostbridge help`",
+		"Canonical hostbridge control commands for this chat:",
 		"hostbridge [",
 		"codex status",
 		"config list",
+		"run <alias> [args...]",
 		"Available hostbridge run aliases (on host):",
 		"hostbridge run [",
 		"git-push-ctgbot",
