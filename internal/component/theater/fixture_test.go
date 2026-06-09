@@ -76,10 +76,10 @@ func TestTheaterFixtureMainSnapshot(t *testing.T) {
 			ActorLabel: "ctgbot 2",
 			Text: strings.Join([]string{
 				"Files made available:",
-				"- /workspace/inbox/qwen-events.jsonl",
-				"- /workspace/inbox/qwen-result.json",
+				"- /workspace/theaters/qwen-parser-lab/artifacts/qwen-events.jsonl",
+				"- /workspace/theaters/qwen-parser-lab/artifacts/qwen-result.json",
 				"Artifact published:",
-				"- /workspace/WORKSPACE-DOCS/orchantic/logo-concept-02.png",
+				"- /workspace/theaters/qwen-parser-lab/design/orchantic/logo-concept-02.png",
 			}, "\n"),
 			CreatedAt: time.Date(2026, 6, 9, 9, 21, 0, 0, time.UTC),
 		},
