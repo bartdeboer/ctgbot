@@ -290,6 +290,10 @@ type ResolvedInboundQueuer interface {
 	QueueResolvedInbound(ctx context.Context, inbound ResolvedInbound) error
 }
 
+type ResolvedInboundQueuerReceiver interface {
+	SetResolvedInboundQueuer(queuer ResolvedInboundQueuer)
+}
+
 type InboundSource interface {
 	Component
 	RunInbound(ctx context.Context, emit InboundEmitter) error

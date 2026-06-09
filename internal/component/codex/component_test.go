@@ -406,6 +406,7 @@ func TestCodexBootstrapFixtureMainDeveloperInstructions(t *testing.T) {
 			"hostbridge sendfile <path>",
 			"hostbridge theater create <name>",
 			"hostbridge theater list",
+			"hostbridge theater <name> bind",
 			"hostbridge theater <name> post <message>",
 			"hostbridge theater <name> read",
 			"hostbridge theater <name> status",

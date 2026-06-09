@@ -59,6 +59,9 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		if receiver, ok := instance.Component.(component.ChatPayloadSenderReceiver); ok {
 			receiver.SetChatPayloadSender(b)
 		}
+		if receiver, ok := instance.Component.(component.ResolvedInboundQueuerReceiver); ok {
+			receiver.SetResolvedInboundQueuer(b)
+		}
 		if receiver, ok := instance.Component.(component.SearchMessageSourceReceiver); ok {
 			receiver.SetSearchMessageSource(b.App)
 		}

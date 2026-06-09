@@ -11,6 +11,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
@@ -20,15 +21,13 @@ func TestTheaterFixtureMainSnapshot(t *testing.T) {
 	engine := newTestEngine(t, c)
 	viewerThreadID := mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000000101")
 	qwenThreadID := mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000000102")
-	claudeThreadID := mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000000103")
-	codexThreadID := mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000000104")
 	base := testRequest(viewerThreadID)
 
-	lab, _, err := c.store.createTheater(ctx, "qwen-parser-lab", "/workspace/theaters/qwen-parser-lab")
+	lab, _, err := c.store.createTheater(ctx, "qwen-parser-lab", "/workspace/theaters/qwen-parser-lab", qwenThreadID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	orchantic, _, err := c.store.createTheater(ctx, "orchantic-logo", "/workspace/theaters/orchantic-logo")
+	orchantic, _, err := c.store.createTheater(ctx, "orchantic-logo", "/workspace/theaters/orchantic-logo", modeluuid.Nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,40 +38,48 @@ func TestTheaterFixtureMainSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	messages := []messageRecord{
+	messages := []coremodel.ThreadMessage{
 		{
-			ID:         "msg-001",
-			TheaterID:  lab.ID,
-			ThreadID:   claudeThreadID.String(),
+			ID:         mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000001001"),
+			ThreadID:   qwenThreadID,
 			ActorID:    "thread:claude-2",
 			ActorLabel: "Claude #1",
+			Direction:  coremodel.MessageDirectionInbound,
+			Role:       coremodel.MessageRoleUser,
+			Kind:       coremodel.MessageKindMessage,
 			Text:       "Parser image cf23967 completed. Final summaries now land as assistant content after tool calls.",
 			CreatedAt:  time.Date(2026, 6, 9, 9, 0, 0, 0, time.UTC),
 		},
 		{
-			ID:         "msg-002",
-			TheaterID:  lab.ID,
-			ThreadID:   codexThreadID.String(),
+			ID:         mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000001002"),
+			ThreadID:   qwenThreadID,
 			ActorID:    "thread:llamacpp-1",
 			ActorLabel: "llamacpp 1",
+			Direction:  coremodel.MessageDirectionInbound,
+			Role:       coremodel.MessageRoleUser,
+			Kind:       coremodel.MessageKindMessage,
 			Text:       "New image available: ghcr.io/bartdeboer/llama-cpp:server-cuda-tagged-thinking-tools-168643697",
 			CreatedAt:  time.Date(2026, 6, 9, 9, 7, 0, 0, time.UTC),
 		},
 		{
-			ID:         "msg-003",
-			TheaterID:  lab.ID,
-			ThreadID:   qwenThreadID.String(),
+			ID:         mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000001003"),
+			ThreadID:   qwenThreadID,
 			ActorID:    "thread:qwen-1",
 			ActorLabel: "qwen 1",
+			Direction:  coremodel.MessageDirectionInbound,
+			Role:       coremodel.MessageRoleUser,
+			Kind:       coremodel.MessageKindMessage,
 			Text:       "Smoke task passed: word_stats_168643697 builds, tests pass, and CLI output matched expected values.",
 			CreatedAt:  time.Date(2026, 6, 9, 9, 13, 0, 0, time.UTC),
 		},
 		{
-			ID:         "msg-004",
-			TheaterID:  lab.ID,
-			ThreadID:   codexThreadID.String(),
+			ID:         mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000001004"),
+			ThreadID:   qwenThreadID,
 			ActorID:    "thread:ctgbot-2",
 			ActorLabel: "ctgbot 2",
+			Direction:  coremodel.MessageDirectionInbound,
+			Role:       coremodel.MessageRoleUser,
+			Kind:       coremodel.MessageKindMessage,
 			Text: strings.Join([]string{
 				"Files made available:",
 				"- /workspace/theaters/qwen-parser-lab/artifacts/qwen-events.jsonl",
@@ -83,8 +90,10 @@ func TestTheaterFixtureMainSnapshot(t *testing.T) {
 			CreatedAt: time.Date(2026, 6, 9, 9, 21, 0, 0, time.UTC),
 		},
 	}
-	if err := c.store.db.WithContext(ctx).Create(&messages).Error; err != nil {
-		t.Fatal(err)
+	for i := range messages {
+		if err := c.storage.Messages().Append(ctx, &messages[i]); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	assertTheaterFixture(t, "list.txt", runTheaterFixtureCommand(t, ctx, engine, base, []string{Type, "list"}))

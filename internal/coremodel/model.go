@@ -228,6 +228,7 @@ type ThreadMessage struct {
 	Direction    MessageDirection
 	Role         MessageRole
 	Kind         MessageKind
+	ProviderType string
 	ComponentID  modeluuid.UUID `gorm:"index"`
 	ExternalID   string         `gorm:"index"`
 	ActorID      string

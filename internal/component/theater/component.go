@@ -17,26 +17,36 @@ const Type = "theater"
 type Component struct {
 	registration coremodel.Component
 	store        *store
+	storage      repository.Storage
+	inbound      component.ResolvedInboundQueuer
 }
 
 var _ component.Component = (*Component)(nil)
+var _ component.Agent = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.CommandDescriptionSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
+var _ component.ResolvedInboundQueuerReceiver = (*Component)(nil)
 var _ component.UpdateFeed = (*Component)(nil)
 
 func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-	_, _, _ = ctx, runtime, storage
+	_, _ = ctx, runtime
 	store, err := openStore(home.Path)
 	if err != nil {
 		return nil, err
 	}
-	return &Component{registration: registration, store: store}, nil
+	return &Component{registration: registration, store: store, storage: storage}, nil
 }
 
 func (c *Component) Type() string { return Type }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
+
+func (c *Component) SetResolvedInboundQueuer(queuer component.ResolvedInboundQueuer) {
+	if c != nil {
+		c.inbound = queuer
+	}
+}
 
 func (c *Component) CommandDescriptions() []commandengine.Description {
 	return []commandengine.Description{{
@@ -51,5 +61,5 @@ func (c *Component) NewUpdates(ctx context.Context, req component.UpdateRequest)
 	if c == nil || c.store == nil {
 		return nil, fmt.Errorf("missing theater store")
 	}
-	return c.store.pendingUpdates(ctx, req.ThreadID)
+	return c.pendingUpdates(ctx, req.ThreadID)
 }

@@ -8,6 +8,9 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
@@ -20,6 +23,7 @@ type createCommand struct {
 type listCommand struct{}
 type subscribeCommand struct{ Name string }
 type unsubscribeCommand struct{ Name string }
+type bindCommand struct{ Name string }
 type postCommand struct {
 	Name string
 	Text string
@@ -35,6 +39,7 @@ func RegisterGobTypes(register func(any)) {
 	register(listCommand{})
 	register(subscribeCommand{})
 	register(unsubscribeCommand{})
+	register(bindCommand{})
 	register(postCommand{})
 	register(readCommand{})
 	register(statusCommand{})
@@ -72,6 +77,14 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Pattern:               "<name> unsubscribe",
 			Help:                  "Unsubscribe this thread from a theater",
 			Build:                 buildName[unsubscribeCommand](func(name string) unsubscribeCommand { return unsubscribeCommand{Name: name} }),
+			Sources:               sources,
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern:               "<name> bind",
+			Help:                  "Bind this thread as the theater's message thread",
+			Build:                 buildName[bindCommand](func(name string) bindCommand { return bindCommand{Name: name} }),
 			Sources:               sources,
 			Policy:                policy,
 			InstructionVisibility: commandengine.InstructionImportant,
@@ -144,6 +157,9 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.RegisterPattern[unsubscribeCommand](registry, "<name> unsubscribe", c.handleUnsubscribe); err != nil {
 		return err
 	}
+	if err := commandengine.RegisterPattern[bindCommand](registry, "<name> bind", c.handleBind); err != nil {
+		return err
+	}
 	if err := commandengine.RegisterPattern[postCommand](registry, "<name> post", c.handlePost); err != nil {
 		return err
 	}
@@ -195,8 +211,7 @@ func buildRead(req *clir.Request) (any, error) {
 }
 
 func (c *Component) handleCreate(ctx context.Context, req commandengine.Request, cmd createCommand) (commandengine.Result, error) {
-	_ = req
-	theater, created, err := c.store.createTheater(ctx, cmd.Name, cmd.Workspace)
+	theater, created, err := c.store.createTheater(ctx, cmd.Name, cmd.Workspace, requestThreadID(req))
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -217,7 +232,11 @@ func (c *Component) handleList(ctx context.Context, req commandengine.Request, c
 	}
 	lines := []string{"theaters"}
 	for _, theater := range theaters {
-		lines = append(lines, "- "+theater.Name)
+		line := "- " + theater.Name
+		if strings.TrimSpace(theater.ThreadID) != "" {
+			line += " thread_id=" + strings.TrimSpace(theater.ThreadID)
+		}
+		lines = append(lines, line)
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
@@ -260,7 +279,7 @@ func (c *Component) handleUnsubscribe(ctx context.Context, req commandengine.Req
 	return commandengine.Result{Text: "unsubscribed: " + theater.Name}, nil
 }
 
-func (c *Component) handlePost(ctx context.Context, req commandengine.Request, cmd postCommand) (commandengine.Result, error) {
+func (c *Component) handleBind(ctx context.Context, req commandengine.Request, cmd bindCommand) (commandengine.Result, error) {
 	threadID, err := currentThreadID(req)
 	if err != nil {
 		return commandengine.Result{}, err
@@ -269,16 +288,64 @@ func (c *Component) handlePost(ctx context.Context, req commandengine.Request, c
 	if err != nil {
 		return commandengine.Result{}, err
 	}
+	if err := c.store.bindThread(ctx, theater, threadID); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "theater thread bound: " + theater.Name}, nil
+}
+
+func (c *Component) handlePost(ctx context.Context, req commandengine.Request, cmd postCommand) (commandengine.Result, error) {
+	theater, err := c.store.theaterByName(ctx, cmd.Name)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	threadID, ok, err := theaterThreadID(theater)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if !ok {
+		return commandengine.Result{}, fmt.Errorf("theater has no message thread: %s", theater.Name)
+	}
 	text := strings.TrimSpace(cmd.Text)
 	if text == "" {
 		text = strings.TrimSpace(req.Stdin)
 	}
-	actor := req.Context.Actor.Resolved()
-	message, err := c.store.post(ctx, theater, threadID, actor.ID, actor.Label, text)
+	if text == "" {
+		return commandengine.Result{}, fmt.Errorf("missing theater message")
+	}
+	if c == nil || c.storage == nil {
+		return commandengine.Result{}, fmt.Errorf("missing theater storage")
+	}
+	if c.inbound == nil {
+		return commandengine.Result{}, fmt.Errorf("missing inbound broker")
+	}
+	thread, err := c.storage.Threads().GetByID(ctx, threadID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: "theater message posted: " + message.ID}, nil
+	chat, err := c.storage.Chats().GetByID(ctx, thread.ChatID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	actor := req.Context.Actor.Resolved()
+	if err := c.inbound.QueueResolvedInbound(ctx, component.ResolvedInbound{
+		Chat:   *chat,
+		Thread: *thread,
+		Payload: message.InboundPayload{
+			ProviderType: "theater",
+			Text:         message.TextMessage{Text: text},
+			Actor:        actor,
+		},
+		PromptContext: &component.InboundPromptContext{
+			Kind:      "Theater message",
+			FromLabel: actor.Label,
+			FromID:    actor.ID,
+		},
+		Metadata: []string{"theater=" + theater.Name},
+	}); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "theater message queued: " + theater.Name}, nil
 }
 
 func (c *Component) handleRead(ctx context.Context, req commandengine.Request, cmd readCommand) (commandengine.Result, error) {
@@ -287,12 +354,26 @@ func (c *Component) handleRead(ctx context.Context, req commandengine.Request, c
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	messages, err := c.store.read(ctx, theater, threadID, cmd.Limit)
+	theaterThreadID, ok, err := theaterThreadID(theater)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if !ok {
+		return commandengine.Result{}, fmt.Errorf("theater has no message thread: %s", theater.Name)
+	}
+	if c == nil || c.storage == nil {
+		return commandengine.Result{}, fmt.Errorf("missing theater storage")
+	}
+	messages, err := c.storage.Messages().ListByThreadIDSince(ctx, theaterThreadID, nil, cmd.Limit)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
 	if len(messages) == 0 {
 		return commandengine.Result{Text: "no theater messages: " + theater.Name}, nil
+	}
+	last := messages[len(messages)-1].CreatedAt.UTC()
+	if err := c.store.markRead(ctx, theater, threadID, last); err != nil {
+		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: formatMessages(theater.Name, messages)}, nil
 }
@@ -307,7 +388,7 @@ func (c *Component) handleStatus(ctx context.Context, req commandengine.Request,
 		if err != nil {
 			return commandengine.Result{}, err
 		}
-		pending, err := c.store.pendingCount(ctx, theater.ID, threadID)
+		pending, err := c.pendingCount(ctx, theater, threadID)
 		if err != nil {
 			return commandengine.Result{}, err
 		}
@@ -315,6 +396,9 @@ func (c *Component) handleStatus(ctx context.Context, req commandengine.Request,
 		lines := []string{"theater: " + theater.Name}
 		if workspacePath != "" {
 			lines = append(lines, "workspace: "+workspacePath)
+		}
+		if strings.TrimSpace(theater.ThreadID) != "" {
+			lines = append(lines, "thread_id: "+strings.TrimSpace(theater.ThreadID))
 		}
 		lines = append(lines, fmt.Sprintf("unread messages: %d", pending))
 		return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
@@ -332,7 +416,7 @@ func (c *Component) handleStatus(ctx context.Context, req commandengine.Request,
 		if err != nil {
 			return commandengine.Result{}, err
 		}
-		pending, err := c.store.pendingCount(ctx, theater.ID, threadID)
+		pending, err := c.pendingCount(ctx, theater, threadID)
 		if err != nil {
 			return commandengine.Result{}, err
 		}
@@ -356,17 +440,32 @@ func currentThreadID(req commandengine.Request) (modeluuid.UUID, error) {
 	return threadID, nil
 }
 
-func formatMessages(theaterName string, messages []messageRecord) string {
+func (c *Component) pendingCount(ctx context.Context, theater theaterRecord, subscriberThreadID modeluuid.UUID) (int64, error) {
+	if c == nil || c.storage == nil {
+		return 0, fmt.Errorf("missing theater storage")
+	}
+	theaterThreadID, ok, err := theaterThreadID(theater)
+	if err != nil || !ok {
+		return 0, err
+	}
+	subscription, ok, err := c.store.subscription(ctx, theater, subscriberThreadID)
+	if err != nil || !ok {
+		return 0, err
+	}
+	return c.storage.Messages().CountByThreadIDSince(ctx, theaterThreadID, subscription.LastReadAt)
+}
+
+func formatMessages(theaterName string, messages []coremodel.ThreadMessage) string {
 	lines := []string{"theater: " + theaterName}
-	for _, message := range messages {
-		label := strings.TrimSpace(message.ActorLabel)
+	for _, msg := range messages {
+		label := strings.TrimSpace(msg.ActorLabel)
 		if label == "" {
-			label = strings.TrimSpace(message.ActorID)
+			label = strings.TrimSpace(msg.ActorID)
 		}
 		if label == "" {
 			label = "unknown"
 		}
-		lines = append(lines, fmt.Sprintf("[%s] %s: %s", message.CreatedAt.UTC().Format("2006-01-02 15:04"), label, message.Text))
+		lines = append(lines, fmt.Sprintf("[%s] %s: %s", msg.CreatedAt.UTC().Format("2006-01-02 15:04"), label, msg.Text))
 	}
 	return strings.Join(lines, "\n")
 }

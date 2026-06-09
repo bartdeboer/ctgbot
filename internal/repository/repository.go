@@ -110,6 +110,8 @@ type ThreadComponentStateRepository interface {
 type MessageRepository interface {
 	Append(ctx context.Context, message *coremodel.ThreadMessage) error
 	ListByThreadID(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
+	ListByThreadIDSince(ctx context.Context, threadID modeluuid.UUID, since *time.Time, limit int) ([]coremodel.ThreadMessage, error)
+	CountByThreadIDSince(ctx context.Context, threadID modeluuid.UUID, since *time.Time) (int64, error)
 	DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error)
 }
 

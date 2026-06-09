@@ -29,6 +29,7 @@ func storeInboundMessageWithStorage(ctx context.Context, storage repository.Stor
 		Direction:    coremodel.MessageDirectionInbound,
 		Role:         coremodel.MessageRoleUser,
 		Kind:         inboundKind(inbound),
+		ProviderType: strings.TrimSpace(inbound.Payload.ProviderType),
 		ComponentID:  inbound.ComponentID,
 		ExternalID:   strings.TrimSpace(inbound.ExternalID),
 		ActorLabel:   strings.TrimSpace(actor.Label),
