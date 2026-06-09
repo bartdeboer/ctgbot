@@ -53,6 +53,16 @@ type messageRecord struct {
 
 func (messageRecord) TableName() string { return "theater_messages" }
 
+type threadBindingRecord struct {
+	ID        string `gorm:"primaryKey"`
+	TheaterID string `gorm:"index"`
+	ThreadID  string `gorm:"uniqueIndex"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (threadBindingRecord) TableName() string { return "theater_thread_bindings" }
+
 type pendingUpdate struct {
 	TheaterID string
 	Name      string
@@ -72,7 +82,7 @@ func openStore(homePath string) (*store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open theater db: %w", err)
 	}
-	if err := db.AutoMigrate(&theaterRecord{}, &subscriptionRecord{}, &messageRecord{}); err != nil {
+	if err := db.AutoMigrate(&theaterRecord{}, &subscriptionRecord{}, &messageRecord{}, &threadBindingRecord{}); err != nil {
 		return nil, fmt.Errorf("migrate theater db: %w", err)
 	}
 	return &store{db: db}, nil
@@ -270,4 +280,72 @@ func (s *store) pendingCount(ctx context.Context, theaterID string, threadID mod
 		return 0, err
 	}
 	return count, nil
+}
+
+func (s *store) bindThread(ctx context.Context, theater theaterRecord, threadID modeluuid.UUID) (bool, error) {
+	if threadID.IsNull() {
+		return false, fmt.Errorf("missing thread id")
+	}
+	var existing threadBindingRecord
+	err := s.db.WithContext(ctx).Where("thread_id = ?", threadID.String()).First(&existing).Error
+	if err == nil {
+		if existing.TheaterID == theater.ID {
+			return false, nil
+		}
+		existing.TheaterID = theater.ID
+		if err := s.db.WithContext(ctx).Save(&existing).Error; err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	if err != gorm.ErrRecordNotFound {
+		return false, err
+	}
+	record := threadBindingRecord{ID: newID(), TheaterID: theater.ID, ThreadID: threadID.String()}
+	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *store) unbindThread(ctx context.Context, theater theaterRecord, threadID modeluuid.UUID) (bool, error) {
+	if threadID.IsNull() {
+		return false, fmt.Errorf("missing thread id")
+	}
+	result := s.db.WithContext(ctx).Where("theater_id = ? and thread_id = ?", theater.ID, threadID.String()).Delete(&threadBindingRecord{})
+	return result.RowsAffected > 0, result.Error
+}
+
+func (s *store) theaterForThread(ctx context.Context, threadID modeluuid.UUID) (theaterRecord, bool, error) {
+	if threadID.IsNull() {
+		return theaterRecord{}, false, nil
+	}
+	var binding threadBindingRecord
+	if err := s.db.WithContext(ctx).Where("thread_id = ?", threadID.String()).First(&binding).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return theaterRecord{}, false, nil
+		}
+		return theaterRecord{}, false, err
+	}
+	theater, err := s.theaterByID(ctx, binding.TheaterID)
+	if err != nil {
+		return theaterRecord{}, false, err
+	}
+	return theater, true, nil
+}
+
+func (s *store) boundThreads(ctx context.Context, theater theaterRecord) ([]modeluuid.UUID, error) {
+	var records []threadBindingRecord
+	if err := s.db.WithContext(ctx).Where("theater_id = ?", theater.ID).Order("created_at asc").Find(&records).Error; err != nil {
+		return nil, err
+	}
+	out := make([]modeluuid.UUID, 0, len(records))
+	for _, record := range records {
+		threadID, err := modeluuid.Parse(record.ThreadID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, threadID)
+	}
+	return out, nil
 }

@@ -17,9 +17,12 @@ const Type = "theater"
 type Component struct {
 	registration coremodel.Component
 	store        *store
+	sender       component.ChatPayloadSender
 }
 
 var _ component.Component = (*Component)(nil)
+var _ component.Agent = (*Component)(nil)
+var _ component.ChatPayloadSenderReceiver = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.CommandDescriptionSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
@@ -37,6 +40,12 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 func (c *Component) Type() string { return Type }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
+
+func (c *Component) SetChatPayloadSender(sender component.ChatPayloadSender) {
+	if c != nil {
+		c.sender = sender
+	}
+}
 
 func (c *Component) CommandDescriptions() []commandengine.Description {
 	return []commandengine.Description{{

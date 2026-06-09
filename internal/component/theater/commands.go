@@ -20,6 +20,9 @@ type createCommand struct {
 type listCommand struct{}
 type subscribeCommand struct{ Name string }
 type unsubscribeCommand struct{ Name string }
+type bindThreadCommand struct{ Name string }
+type unbindThreadCommand struct{ Name string }
+type listThreadsCommand struct{ Name string }
 type postCommand struct {
 	Name string
 	Text string
@@ -35,6 +38,9 @@ func RegisterGobTypes(register func(any)) {
 	register(listCommand{})
 	register(subscribeCommand{})
 	register(unsubscribeCommand{})
+	register(bindThreadCommand{})
+	register(unbindThreadCommand{})
+	register(listThreadsCommand{})
 	register(postCommand{})
 	register(readCommand{})
 	register(statusCommand{})
@@ -72,6 +78,30 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Pattern:               "<name> unsubscribe",
 			Help:                  "Unsubscribe this thread from a theater",
 			Build:                 buildName[unsubscribeCommand](func(name string) unsubscribeCommand { return unsubscribeCommand{Name: name} }),
+			Sources:               sources,
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern:               "<name> thread bind",
+			Help:                  "Bind this thread as a live theater board",
+			Build:                 buildName[bindThreadCommand](func(name string) bindThreadCommand { return bindThreadCommand{Name: name} }),
+			Sources:               sources,
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern:               "<name> thread unbind",
+			Help:                  "Unbind this thread from a live theater board",
+			Build:                 buildName[unbindThreadCommand](func(name string) unbindThreadCommand { return unbindThreadCommand{Name: name} }),
+			Sources:               sources,
+			Policy:                policy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern:               "<name> thread list",
+			Help:                  "List live board threads bound to a theater",
+			Build:                 buildName[listThreadsCommand](func(name string) listThreadsCommand { return listThreadsCommand{Name: name} }),
 			Sources:               sources,
 			Policy:                policy,
 			InstructionVisibility: commandengine.InstructionImportant,
@@ -142,6 +172,15 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.RegisterPattern[unsubscribeCommand](registry, "<name> unsubscribe", c.handleUnsubscribe); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[bindThreadCommand](registry, "<name> thread bind", c.handleBindThread); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[unbindThreadCommand](registry, "<name> thread unbind", c.handleUnbindThread); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[listThreadsCommand](registry, "<name> thread list", c.handleListThreads); err != nil {
 		return err
 	}
 	if err := commandengine.RegisterPattern[postCommand](registry, "<name> post", c.handlePost); err != nil {
@@ -260,6 +299,64 @@ func (c *Component) handleUnsubscribe(ctx context.Context, req commandengine.Req
 	return commandengine.Result{Text: "unsubscribed: " + theater.Name}, nil
 }
 
+func (c *Component) handleBindThread(ctx context.Context, req commandengine.Request, cmd bindThreadCommand) (commandengine.Result, error) {
+	threadID, err := currentThreadID(req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	theater, err := c.store.theaterByName(ctx, cmd.Name)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	changed, err := c.store.bindThread(ctx, theater, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if !changed {
+		return commandengine.Result{Text: "thread already bound to theater: " + theater.Name}, nil
+	}
+	return commandengine.Result{Text: "thread bound to theater: " + theater.Name}, nil
+}
+
+func (c *Component) handleUnbindThread(ctx context.Context, req commandengine.Request, cmd unbindThreadCommand) (commandengine.Result, error) {
+	threadID, err := currentThreadID(req)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	theater, err := c.store.theaterByName(ctx, cmd.Name)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	deleted, err := c.store.unbindThread(ctx, theater, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if !deleted {
+		return commandengine.Result{Text: "thread not bound to theater: " + theater.Name}, nil
+	}
+	return commandengine.Result{Text: "thread unbound from theater: " + theater.Name}, nil
+}
+
+func (c *Component) handleListThreads(ctx context.Context, req commandengine.Request, cmd listThreadsCommand) (commandengine.Result, error) {
+	_, _ = req, cmd
+	theater, err := c.store.theaterByName(ctx, cmd.Name)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	threadIDs, err := c.store.boundThreads(ctx, theater)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if len(threadIDs) == 0 {
+		return commandengine.Result{Text: "no theater board threads: " + theater.Name}, nil
+	}
+	lines := []string{"theater board threads: " + theater.Name}
+	for _, threadID := range threadIDs {
+		lines = append(lines, "- "+threadID.String())
+	}
+	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
+}
+
 func (c *Component) handlePost(ctx context.Context, req commandengine.Request, cmd postCommand) (commandengine.Result, error) {
 	threadID, err := currentThreadID(req)
 	if err != nil {
@@ -276,6 +373,9 @@ func (c *Component) handlePost(ctx context.Context, req commandengine.Request, c
 	actor := req.Context.Actor.Resolved()
 	message, err := c.store.post(ctx, theater, threadID, actor.ID, actor.Label, text)
 	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if err := c.relayMessage(ctx, theater, message, threadID); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "theater message posted: " + message.ID}, nil
