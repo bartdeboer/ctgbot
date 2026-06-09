@@ -90,6 +90,24 @@ func TestTheaterPostUsesStdin(t *testing.T) {
 	}
 }
 
+func TestTheaterStatusSurfacesMissingMessageThread(t *testing.T) {
+	ctx := context.Background()
+	component := newTestComponent(t)
+	engine := newTestEngine(t, component)
+	threadID := modeluuid.New()
+	base := testRequest(threadID)
+	if _, _, err := component.store.createTheater(ctx, "lab", "", modeluuid.Nil); err != nil {
+		t.Fatal(err)
+	}
+	status, err := engine.Run(ctx, base, []string{Type, "lab", "status"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(status.Text, "thread_id: not bound (run theater lab bind from the message thread)") {
+		t.Fatalf("status = %q, want missing thread guidance", status.Text)
+	}
+}
+
 func TestTheaterAgentEchoesOnlyInternalPosts(t *testing.T) {
 	ctx := context.Background()
 	c := newTestComponent(t)

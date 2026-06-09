@@ -81,6 +81,8 @@ func (s *store) createTheater(ctx context.Context, name string, workspacePath st
 			existing.WorkspacePath = workspacePath
 			changed = true
 		}
+		// Creating an existing theater may fill in a missing thread binding, but
+		// never overwrites an explicit binding. Use theater <name> bind for that.
 		if !threadID.IsNull() && strings.TrimSpace(existing.ThreadID) == "" {
 			existing.ThreadID = threadID.String()
 			changed = true

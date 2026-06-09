@@ -399,6 +399,8 @@ func (c *Component) handleStatus(ctx context.Context, req commandengine.Request,
 		}
 		if strings.TrimSpace(theater.ThreadID) != "" {
 			lines = append(lines, "thread_id: "+strings.TrimSpace(theater.ThreadID))
+		} else {
+			lines = append(lines, "thread_id: not bound (run theater "+theater.Name+" bind from the message thread)")
 		}
 		lines = append(lines, fmt.Sprintf("unread messages: %d", pending))
 		return commandengine.Result{Text: strings.Join(lines, "\n")}, nil

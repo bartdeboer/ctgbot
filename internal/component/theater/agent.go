@@ -10,6 +10,9 @@ import (
 
 func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
 	_ = ctx
+	// A theater is intended to be the sole agent on its backing message
+	// thread. The broker may run multiple agents for a thread; co-binding a
+	// theater with an LLM would make both react to the same internal post.
 	if !isInternalProvider(turn.Inbound.ProviderType) {
 		return nil, nil
 	}
