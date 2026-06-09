@@ -142,6 +142,35 @@ func TestTheaterAgentEchoesOnlyInternalPosts(t *testing.T) {
 	}
 }
 
+func TestTheaterAgentAutoCreatesTheaterForThread(t *testing.T) {
+	ctx := context.Background()
+	c := newTestComponent(t)
+	threadID := modeluuid.New()
+	result, err := c.HandleTurn(ctx, component.Turn{
+		Thread: coremodel.Thread{ID: threadID, Label: "Qwen Parser Lab"},
+		Inbound: coremodel.ThreadMessage{
+			ThreadID:     threadID,
+			ProviderType: "telegram",
+			ActorID:      "bart",
+			ActorLabel:   "Bart",
+			Text:         "hello theater",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != nil {
+		t.Fatalf("result = %#v, want no echo for external provider", result)
+	}
+	theater, err := c.store.theaterByName(ctx, "qwen parser lab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if theater.ThreadID != threadID.String() {
+		t.Fatalf("thread id = %q, want %s", theater.ThreadID, threadID)
+	}
+}
+
 func newTestComponent(t *testing.T) *Component {
 	t.Helper()
 	store, err := openStore(t.TempDir())

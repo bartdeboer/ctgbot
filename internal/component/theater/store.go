@@ -124,6 +124,74 @@ func (s *store) theaterByName(ctx context.Context, name string) (theaterRecord, 
 	return record, nil
 }
 
+func (s *store) findTheaterByName(ctx context.Context, name string) (theaterRecord, bool, error) {
+	if s == nil || s.db == nil {
+		return theaterRecord{}, false, fmt.Errorf("missing theater store")
+	}
+	name = normalizeName(name)
+	if name == "" {
+		return theaterRecord{}, false, fmt.Errorf("missing theater name")
+	}
+	var record theaterRecord
+	if err := s.db.WithContext(ctx).Where("name = ?", name).First(&record).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return theaterRecord{}, false, nil
+		}
+		return theaterRecord{}, false, err
+	}
+	return record, true, nil
+}
+
+func (s *store) theaterByThreadID(ctx context.Context, threadID modeluuid.UUID) (theaterRecord, bool, error) {
+	if s == nil || s.db == nil {
+		return theaterRecord{}, false, fmt.Errorf("missing theater store")
+	}
+	if threadID.IsNull() {
+		return theaterRecord{}, false, nil
+	}
+	var record theaterRecord
+	if err := s.db.WithContext(ctx).Where("thread_id = ?", threadID.String()).First(&record).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return theaterRecord{}, false, nil
+		}
+		return theaterRecord{}, false, err
+	}
+	return record, true, nil
+}
+
+func (s *store) ensureTheaterForThread(ctx context.Context, label string, threadID modeluuid.UUID) (theaterRecord, bool, error) {
+	if threadID.IsNull() {
+		return theaterRecord{}, false, fmt.Errorf("missing thread id")
+	}
+	if existing, ok, err := s.theaterByThreadID(ctx, threadID); err != nil || ok {
+		return existing, false, err
+	}
+	name := normalizeName(label)
+	if name == "" {
+		name = "thread-" + threadID.String()
+	}
+	if theater, ok, err := s.findTheaterByName(ctx, name); err != nil {
+		return theaterRecord{}, false, err
+	} else if ok {
+		if strings.TrimSpace(theater.ThreadID) == "" {
+			theater.ThreadID = threadID.String()
+			if err := s.db.WithContext(ctx).Save(&theater).Error; err != nil {
+				return theaterRecord{}, false, err
+			}
+			return theater, true, nil
+		}
+		if strings.TrimSpace(theater.ThreadID) == threadID.String() {
+			return theater, false, nil
+		}
+		name = name + "-" + threadID.String()
+	}
+	record := theaterRecord{ID: newID(), Name: name, Label: name, ThreadID: threadID.String()}
+	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
+		return theaterRecord{}, false, err
+	}
+	return record, true, nil
+}
+
 func (s *store) theaterByID(ctx context.Context, id string) (theaterRecord, error) {
 	if s == nil || s.db == nil {
 		return theaterRecord{}, fmt.Errorf("missing theater store")
