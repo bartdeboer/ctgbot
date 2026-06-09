@@ -87,33 +87,16 @@ func TestTheaterFixtureMainSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list := runTheaterFixtureCommand(t, ctx, engine, base, []string{Type, "list"})
-	status := runTheaterFixtureCommand(t, ctx, engine, base, []string{Type, "qwen-parser-lab", "status"})
+	assertTheaterFixture(t, "list.txt", runTheaterFixtureCommand(t, ctx, engine, base, []string{Type, "list"}))
+	assertTheaterFixture(t, "status-qwen-parser-lab.txt", runTheaterFixtureCommand(t, ctx, engine, base, []string{Type, "qwen-parser-lab", "status"}))
+
 	updates, err := c.NewUpdates(ctx, component.UpdateRequest{ThreadID: viewerThreadID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	read := runTheaterFixtureCommand(t, ctx, engine, base, []string{Type, "qwen-parser-lab", "read", "--limit", "10"})
-	afterReadStatus := runTheaterFixtureCommand(t, ctx, engine, base, []string{Type, "status"})
-
-	got := strings.Join([]string{
-		"# hostbridge theater list",
-		list,
-		"",
-		"# hostbridge theater qwen-parser-lab status",
-		status,
-		"",
-		"# heartbeat update notices before read",
-		formatTheaterFixtureUpdates(updates),
-		"",
-		"# hostbridge theater qwen-parser-lab read --limit 10",
-		read,
-		"",
-		"# hostbridge theater status after read",
-		afterReadStatus,
-	}, "\n")
-
-	assertTheaterFixture(t, "theater-main.txt", got)
+	assertTheaterFixture(t, "updates-before-read.txt", formatTheaterFixtureUpdates(updates))
+	assertTheaterFixture(t, "read-qwen-parser-lab.txt", runTheaterFixtureCommand(t, ctx, engine, base, []string{Type, "qwen-parser-lab", "read", "--limit", "10"}))
+	assertTheaterFixture(t, "status-after-read.txt", runTheaterFixtureCommand(t, ctx, engine, base, []string{Type, "status"}))
 }
 
 func mustParseTheaterFixtureUUID(t *testing.T, value string) modeluuid.UUID {

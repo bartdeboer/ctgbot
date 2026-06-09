@@ -41,7 +41,7 @@ func TestTheaterCreateSubscribePostReadFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("named status error = %v", err)
 	}
-	if !strings.Contains(status.Text, "pending=1") {
+	if !strings.Contains(status.Text, "unread messages: 1") {
 		t.Fatalf("named status = %q, want pending count", status.Text)
 	}
 

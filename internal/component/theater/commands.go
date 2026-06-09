@@ -291,7 +291,7 @@ func (c *Component) handleStatus(ctx context.Context, req commandengine.Request,
 		if err != nil {
 			return commandengine.Result{}, err
 		}
-		return commandengine.Result{Text: fmt.Sprintf("theater: %s\npending=%d", theater.Name, pending)}, nil
+		return commandengine.Result{Text: fmt.Sprintf("theater: %s\nunread messages: %d", theater.Name, pending)}, nil
 	}
 	subscriptions, err := c.store.subscriptions(ctx, threadID)
 	if err != nil {
@@ -310,7 +310,7 @@ func (c *Component) handleStatus(ctx context.Context, req commandengine.Request,
 		if err != nil {
 			return commandengine.Result{}, err
 		}
-		lines = append(lines, fmt.Sprintf("- %s pending=%d", theater.Name, pending))
+		lines = append(lines, fmt.Sprintf("- %s unread messages: %d", theater.Name, pending))
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
