@@ -17,6 +17,7 @@ import (
 func TestTheaterFixtureMainSnapshot(t *testing.T) {
 	ctx := context.Background()
 	c := newTestComponent(t)
+	c.workspaceRoot = "/workspace/theaters"
 	engine := newTestEngine(t, c)
 	viewerThreadID := mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000000101")
 	qwenThreadID := mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000000102")
@@ -24,11 +25,11 @@ func TestTheaterFixtureMainSnapshot(t *testing.T) {
 	codexThreadID := mustParseTheaterFixtureUUID(t, "00000000-0000-0000-0000-000000000104")
 	base := testRequest(viewerThreadID)
 
-	lab, _, err := c.store.createTheater(ctx, "qwen-parser-lab")
+	lab, _, err := c.store.createTheater(ctx, "qwen-parser-lab", c.workspacePath("qwen-parser-lab"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	orchantic, _, err := c.store.createTheater(ctx, "orchantic-logo")
+	orchantic, _, err := c.store.createTheater(ctx, "orchantic-logo", c.workspacePath("orchantic-logo"))
 	if err != nil {
 		t.Fatal(err)
 	}

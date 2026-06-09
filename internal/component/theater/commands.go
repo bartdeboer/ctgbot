@@ -176,8 +176,12 @@ func buildRead(req *clir.Request) (any, error) {
 
 func (c *Component) handleCreate(ctx context.Context, req commandengine.Request, cmd createCommand) (commandengine.Result, error) {
 	_ = req
-	theater, created, err := c.store.createTheater(ctx, cmd.Name)
+	workspacePath := c.workspacePath(cmd.Name)
+	theater, created, err := c.store.createTheater(ctx, cmd.Name, workspacePath)
 	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if err := ensureWorkspace(theater.WorkspacePath, theater.Name); err != nil {
 		return commandengine.Result{}, err
 	}
 	if !created {
@@ -291,7 +295,11 @@ func (c *Component) handleStatus(ctx context.Context, req commandengine.Request,
 		if err != nil {
 			return commandengine.Result{}, err
 		}
-		return commandengine.Result{Text: fmt.Sprintf("theater: %s\nunread messages: %d", theater.Name, pending)}, nil
+		workspacePath := strings.TrimSpace(theater.WorkspacePath)
+		if workspacePath == "" {
+			workspacePath = c.workspacePath(theater.Name)
+		}
+		return commandengine.Result{Text: fmt.Sprintf("theater: %s\nworkspace: %s\nunread messages: %d", theater.Name, workspacePath, pending)}, nil
 	}
 	subscriptions, err := c.store.subscriptions(ctx, threadID)
 	if err != nil {

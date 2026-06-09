@@ -1,2 +1,3 @@
 theater: qwen-parser-lab
+workspace: /workspace/theaters/qwen-parser-lab
 unread messages: 4

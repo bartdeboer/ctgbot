@@ -20,11 +20,12 @@ const StoreFilename = "theater.db"
 type store struct{ db *gorm.DB }
 
 type theaterRecord struct {
-	ID        string `gorm:"primaryKey"`
-	Name      string `gorm:"uniqueIndex"`
-	Label     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID            string `gorm:"primaryKey"`
+	Name          string `gorm:"uniqueIndex"`
+	Label         string
+	WorkspacePath string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 func (theaterRecord) TableName() string { return "theaters" }
@@ -83,21 +84,28 @@ func normalizeName(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
-func (s *store) createTheater(ctx context.Context, name string) (theaterRecord, bool, error) {
+func (s *store) createTheater(ctx context.Context, name string, workspacePath string) (theaterRecord, bool, error) {
 	if s == nil || s.db == nil {
 		return theaterRecord{}, false, fmt.Errorf("missing theater store")
 	}
 	name = normalizeName(name)
+	workspacePath = strings.TrimSpace(workspacePath)
 	if name == "" {
 		return theaterRecord{}, false, fmt.Errorf("missing theater name")
 	}
 	var existing theaterRecord
 	if err := s.db.WithContext(ctx).Where("name = ?", name).First(&existing).Error; err == nil {
+		if strings.TrimSpace(existing.WorkspacePath) == "" && workspacePath != "" {
+			existing.WorkspacePath = workspacePath
+			if err := s.db.WithContext(ctx).Save(&existing).Error; err != nil {
+				return theaterRecord{}, false, err
+			}
+		}
 		return existing, false, nil
 	} else if err != nil && err != gorm.ErrRecordNotFound {
 		return theaterRecord{}, false, err
 	}
-	record := theaterRecord{ID: newID(), Name: name, Label: name}
+	record := theaterRecord{ID: newID(), Name: name, Label: name, WorkspacePath: workspacePath}
 	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
 		return theaterRecord{}, false, err
 	}

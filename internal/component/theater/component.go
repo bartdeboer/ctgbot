@@ -3,6 +3,8 @@ package theater
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
@@ -12,11 +14,15 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
-const Type = "theater"
+const (
+	Type                        = "theater"
+	defaultTheaterWorkspaceRoot = "/workspace/theaters"
+)
 
 type Component struct {
 	registration coremodel.Component
 	store        *store
+	workspaceRoot string
 }
 
 var _ component.Component = (*Component)(nil)
@@ -31,12 +37,20 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if err != nil {
 		return nil, err
 	}
-	return &Component{registration: registration, store: store}, nil
+	return &Component{registration: registration, store: store, workspaceRoot: defaultTheaterWorkspaceRoot}, nil
 }
 
 func (c *Component) Type() string { return Type }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
+
+func (c *Component) workspacePath(name string) string {
+	root := defaultTheaterWorkspaceRoot
+	if c != nil && strings.TrimSpace(c.workspaceRoot) != "" {
+		root = strings.TrimSpace(c.workspaceRoot)
+	}
+	return filepath.Join(root, normalizeName(name))
+}
 
 func (c *Component) CommandDescriptions() []commandengine.Description {
 	return []commandengine.Description{{
