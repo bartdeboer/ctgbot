@@ -95,7 +95,7 @@ func (s *store) createTheater(ctx context.Context, name string, workspacePath st
 	}
 	var existing theaterRecord
 	if err := s.db.WithContext(ctx).Where("name = ?", name).First(&existing).Error; err == nil {
-		if strings.TrimSpace(existing.WorkspacePath) == "" && workspacePath != "" {
+		if workspacePath != "" && strings.TrimSpace(existing.WorkspacePath) != workspacePath {
 			existing.WorkspacePath = workspacePath
 			if err := s.db.WithContext(ctx).Save(&existing).Error; err != nil {
 				return theaterRecord{}, false, err

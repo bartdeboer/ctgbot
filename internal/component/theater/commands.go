@@ -13,7 +13,10 @@ import (
 	"github.com/bartdeboer/go-clir"
 )
 
-type createCommand struct{ Name string }
+type createCommand struct {
+	Name      string
+	Workspace string
+}
 type listCommand struct{}
 type subscribeCommand struct{ Name string }
 type unsubscribeCommand struct{ Name string }
@@ -44,7 +47,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		{
 			Pattern:               "create <name>",
 			Help:                  "Create a collaboration theater",
-			Build:                 buildName[createCommand](func(name string) createCommand { return createCommand{Name: name} }),
+			Build:                 buildCreate,
 			Sources:               sources,
 			Policy:                policy,
 			InstructionVisibility: commandengine.InstructionImportant,
@@ -106,6 +109,23 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
 	}
+}
+
+func buildCreate(req *clir.Request) (any, error) {
+	fs := flag.NewFlagSet("theater create", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	workspace := fs.String("workspace", "", "Optional shared folder path for theater context")
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, err
+	}
+	if extra := strings.TrimSpace(strings.Join(fs.Args(), " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected theater create arguments: %s", extra)
+	}
+	name := normalizeName(req.Params["name"])
+	if name == "" {
+		return nil, fmt.Errorf("missing theater name")
+	}
+	return createCommand{Name: name, Workspace: strings.TrimSpace(*workspace)}, nil
 }
 
 func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) error {
@@ -176,12 +196,8 @@ func buildRead(req *clir.Request) (any, error) {
 
 func (c *Component) handleCreate(ctx context.Context, req commandengine.Request, cmd createCommand) (commandengine.Result, error) {
 	_ = req
-	workspacePath := c.workspacePath(cmd.Name)
-	theater, created, err := c.store.createTheater(ctx, cmd.Name, workspacePath)
+	theater, created, err := c.store.createTheater(ctx, cmd.Name, cmd.Workspace)
 	if err != nil {
-		return commandengine.Result{}, err
-	}
-	if err := ensureWorkspace(theater.WorkspacePath, theater.Name); err != nil {
 		return commandengine.Result{}, err
 	}
 	if !created {
@@ -296,10 +312,12 @@ func (c *Component) handleStatus(ctx context.Context, req commandengine.Request,
 			return commandengine.Result{}, err
 		}
 		workspacePath := strings.TrimSpace(theater.WorkspacePath)
-		if workspacePath == "" {
-			workspacePath = c.workspacePath(theater.Name)
+		lines := []string{"theater: " + theater.Name}
+		if workspacePath != "" {
+			lines = append(lines, "workspace: "+workspacePath)
 		}
-		return commandengine.Result{Text: fmt.Sprintf("theater: %s\nworkspace: %s\nunread messages: %d", theater.Name, workspacePath, pending)}, nil
+		lines = append(lines, fmt.Sprintf("unread messages: %d", pending))
+		return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 	}
 	subscriptions, err := c.store.subscriptions(ctx, threadID)
 	if err != nil {

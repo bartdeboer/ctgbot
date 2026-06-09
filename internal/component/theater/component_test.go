@@ -2,8 +2,6 @@ package theater
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -22,13 +20,8 @@ func TestTheaterCreateSubscribePostReadFlow(t *testing.T) {
 	threadID := modeluuid.New()
 	base := testRequest(threadID)
 
-	if result, err := engine.Run(ctx, base, []string{Type, "create", "qwen-parser-lab"}); err != nil || result.Text != "theater created: qwen-parser-lab" {
+	if result, err := engine.Run(ctx, base, []string{Type, "create", "qwen-parser-lab", "--workspace", "/tmp/qwen-parser-lab"}); err != nil || result.Text != "theater created: qwen-parser-lab" {
 		t.Fatalf("create result=%q err=%v", result.Text, err)
-	}
-	for _, path := range []string{"README.md", "AGENTS.md", "SKILLS"} {
-		if _, err := os.Stat(filepath.Join(component.workspacePath("qwen-parser-lab"), path)); err != nil {
-			t.Fatalf("expected theater workspace path %s: %v", path, err)
-		}
 	}
 	if result, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "subscribe"}); err != nil || result.Text != "subscribed: qwen-parser-lab" {
 		t.Fatalf("subscribe result=%q err=%v", result.Text, err)
@@ -50,6 +43,9 @@ func TestTheaterCreateSubscribePostReadFlow(t *testing.T) {
 	}
 	if !strings.Contains(status.Text, "unread messages: 1") {
 		t.Fatalf("named status = %q, want pending count", status.Text)
+	}
+	if !strings.Contains(status.Text, "workspace: /tmp/qwen-parser-lab") {
+		t.Fatalf("named status = %q, want workspace path", status.Text)
 	}
 
 	read, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "read"})
@@ -97,7 +93,7 @@ func newTestComponent(t *testing.T) *Component {
 	if err != nil {
 		t.Fatalf("openStore() error = %v", err)
 	}
-	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, store: store, workspaceRoot: filepath.Join(t.TempDir(), "theaters")}
+	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, store: store}
 }
 
 func newTestEngine(t *testing.T, c *Component) *commandengine.Engine {
