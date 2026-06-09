@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -19,46 +18,17 @@ const StoreFilename = "theater.db"
 
 type store struct{ db *gorm.DB }
 
-type theaterRecord struct {
-	ID            string `gorm:"primaryKey"`
-	Name          string `gorm:"uniqueIndex"`
-	Label         string
-	WorkspacePath string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-}
-
-func (theaterRecord) TableName() string { return "theaters" }
-
 type subscriptionRecord struct {
-	ID         string `gorm:"primaryKey"`
-	TheaterID  string `gorm:"uniqueIndex:idx_theater_subscription;index"`
-	ThreadID   string `gorm:"uniqueIndex:idx_theater_subscription;index"`
-	LastReadAt *time.Time
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID                 string `gorm:"primaryKey"`
+	SubscriberThreadID string `gorm:"uniqueIndex:idx_theater_thread_subscription;index"`
+	TargetThreadID     string `gorm:"uniqueIndex:idx_theater_thread_subscription;index"`
+	Label              string
+	LastReadAt         *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
-func (subscriptionRecord) TableName() string { return "theater_subscriptions" }
-
-type messageRecord struct {
-	ID         string `gorm:"primaryKey"`
-	TheaterID  string `gorm:"index"`
-	ThreadID   string `gorm:"index"`
-	ActorID    string
-	ActorLabel string
-	Text       string
-	CreatedAt  time.Time `gorm:"index"`
-}
-
-func (messageRecord) TableName() string { return "theater_messages" }
-
-type pendingUpdate struct {
-	TheaterID string
-	Name      string
-	Label     string
-	Count     int64
-}
+func (subscriptionRecord) TableName() string { return "theater_thread_subscriptions" }
 
 func openStore(homePath string) (*store, error) {
 	homePath = strings.TrimSpace(homePath)
@@ -72,7 +42,7 @@ func openStore(homePath string) (*store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open theater db: %w", err)
 	}
-	if err := db.AutoMigrate(&theaterRecord{}, &subscriptionRecord{}, &messageRecord{}); err != nil {
+	if err := db.AutoMigrate(&subscriptionRecord{}); err != nil {
 		return nil, fmt.Errorf("migrate theater db: %w", err)
 	}
 	return &store{db: db}, nil
@@ -80,194 +50,79 @@ func openStore(homePath string) (*store, error) {
 
 func newID() string { return modeluuid.New().String() }
 
-func normalizeName(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
-}
-
-func (s *store) createTheater(ctx context.Context, name string, workspacePath string) (theaterRecord, bool, error) {
-	if s == nil || s.db == nil {
-		return theaterRecord{}, false, fmt.Errorf("missing theater store")
+func (s *store) subscribe(ctx context.Context, subscriberThreadID modeluuid.UUID, targetThreadID modeluuid.UUID, label string) (bool, error) {
+	if subscriberThreadID.IsNull() {
+		return false, fmt.Errorf("missing subscriber thread id")
 	}
-	name = normalizeName(name)
-	workspacePath = strings.TrimSpace(workspacePath)
-	if name == "" {
-		return theaterRecord{}, false, fmt.Errorf("missing theater name")
+	if targetThreadID.IsNull() {
+		return false, fmt.Errorf("missing target thread id")
 	}
-	var existing theaterRecord
-	if err := s.db.WithContext(ctx).Where("name = ?", name).First(&existing).Error; err == nil {
-		if workspacePath != "" && strings.TrimSpace(existing.WorkspacePath) != workspacePath {
-			existing.WorkspacePath = workspacePath
-			if err := s.db.WithContext(ctx).Save(&existing).Error; err != nil {
-				return theaterRecord{}, false, err
-			}
-		}
-		return existing, false, nil
-	} else if err != nil && err != gorm.ErrRecordNotFound {
-		return theaterRecord{}, false, err
-	}
-	record := theaterRecord{ID: newID(), Name: name, Label: name, WorkspacePath: workspacePath}
-	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
-		return theaterRecord{}, false, err
-	}
-	return record, true, nil
-}
-
-func (s *store) theaterByName(ctx context.Context, name string) (theaterRecord, error) {
-	if s == nil || s.db == nil {
-		return theaterRecord{}, fmt.Errorf("missing theater store")
-	}
-	name = normalizeName(name)
-	if name == "" {
-		return theaterRecord{}, fmt.Errorf("missing theater name")
-	}
-	var record theaterRecord
-	if err := s.db.WithContext(ctx).Where("name = ?", name).First(&record).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return theaterRecord{}, fmt.Errorf("theater not found: %s", name)
-		}
-		return theaterRecord{}, err
-	}
-	return record, nil
-}
-
-func (s *store) theaterByID(ctx context.Context, id string) (theaterRecord, error) {
-	if s == nil || s.db == nil {
-		return theaterRecord{}, fmt.Errorf("missing theater store")
-	}
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return theaterRecord{}, fmt.Errorf("missing theater id")
-	}
-	var record theaterRecord
-	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&record).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return theaterRecord{}, fmt.Errorf("theater not found: %s", id)
-		}
-		return theaterRecord{}, err
-	}
-	return record, nil
-}
-
-func (s *store) listTheaters(ctx context.Context) ([]theaterRecord, error) {
-	var records []theaterRecord
-	if err := s.db.WithContext(ctx).Order("name asc").Find(&records).Error; err != nil {
-		return nil, err
-	}
-	return records, nil
-}
-
-func (s *store) subscribe(ctx context.Context, theater theaterRecord, threadID modeluuid.UUID) (bool, error) {
-	if threadID.IsNull() {
-		return false, fmt.Errorf("missing thread id")
+	label = strings.TrimSpace(label)
+	if label == "" {
+		label = targetThreadID.String()
 	}
 	var existing subscriptionRecord
-	err := s.db.WithContext(ctx).Where("theater_id = ? and thread_id = ?", theater.ID, threadID.String()).First(&existing).Error
+	err := s.db.WithContext(ctx).Where("subscriber_thread_id = ? and target_thread_id = ?", subscriberThreadID.String(), targetThreadID.String()).First(&existing).Error
 	if err == nil {
+		if strings.TrimSpace(existing.Label) != label {
+			existing.Label = label
+			if err := s.db.WithContext(ctx).Save(&existing).Error; err != nil {
+				return false, err
+			}
+		}
 		return false, nil
 	}
 	if err != gorm.ErrRecordNotFound {
 		return false, err
 	}
-	record := subscriptionRecord{ID: newID(), TheaterID: theater.ID, ThreadID: threadID.String()}
+	record := subscriptionRecord{ID: newID(), SubscriberThreadID: subscriberThreadID.String(), TargetThreadID: targetThreadID.String(), Label: label}
 	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func (s *store) unsubscribe(ctx context.Context, theater theaterRecord, threadID modeluuid.UUID) (bool, error) {
-	result := s.db.WithContext(ctx).Where("theater_id = ? and thread_id = ?", theater.ID, threadID.String()).Delete(&subscriptionRecord{})
+func (s *store) unsubscribe(ctx context.Context, subscriberThreadID modeluuid.UUID, targetThreadID modeluuid.UUID) (bool, error) {
+	if subscriberThreadID.IsNull() {
+		return false, fmt.Errorf("missing subscriber thread id")
+	}
+	if targetThreadID.IsNull() {
+		return false, fmt.Errorf("missing target thread id")
+	}
+	result := s.db.WithContext(ctx).Where("subscriber_thread_id = ? and target_thread_id = ?", subscriberThreadID.String(), targetThreadID.String()).Delete(&subscriptionRecord{})
 	return result.RowsAffected > 0, result.Error
 }
 
-func (s *store) post(ctx context.Context, theater theaterRecord, threadID modeluuid.UUID, actorID string, actorLabel string, text string) (messageRecord, error) {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return messageRecord{}, fmt.Errorf("missing theater message")
+func (s *store) subscriptions(ctx context.Context, subscriberThreadID modeluuid.UUID) ([]subscriptionRecord, error) {
+	if subscriberThreadID.IsNull() {
+		return nil, fmt.Errorf("missing subscriber thread id")
 	}
-	record := messageRecord{ID: newID(), TheaterID: theater.ID, ThreadID: threadID.String(), ActorID: strings.TrimSpace(actorID), ActorLabel: strings.TrimSpace(actorLabel), Text: text, CreatedAt: time.Now().UTC()}
-	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
-		return messageRecord{}, err
-	}
-	return record, nil
-}
-
-func (s *store) read(ctx context.Context, theater theaterRecord, threadID modeluuid.UUID, limit int) ([]messageRecord, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	var desc []messageRecord
-	if err := s.db.WithContext(ctx).Where("theater_id = ?", theater.ID).Order("created_at desc").Limit(limit).Find(&desc).Error; err != nil {
-		return nil, err
-	}
-	records := make([]messageRecord, len(desc))
-	for i := range desc {
-		records[len(desc)-1-i] = desc[i]
-	}
-	if len(records) > 0 && !threadID.IsNull() {
-		last := records[len(records)-1].CreatedAt.UTC()
-		_ = s.db.WithContext(ctx).Model(&subscriptionRecord{}).Where("theater_id = ? and thread_id = ?", theater.ID, threadID.String()).Update("last_read_at", last).Error
-	}
-	return records, nil
-}
-
-func (s *store) subscriptions(ctx context.Context, threadID modeluuid.UUID) ([]subscriptionRecord, error) {
 	var records []subscriptionRecord
-	if threadID.IsNull() {
-		return nil, fmt.Errorf("missing thread id")
-	}
-	if err := s.db.WithContext(ctx).Where("thread_id = ?", threadID.String()).Find(&records).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("subscriber_thread_id = ?", subscriberThreadID.String()).Order("label asc").Find(&records).Error; err != nil {
 		return nil, err
 	}
 	return records, nil
 }
 
-func (s *store) pendingUpdates(ctx context.Context, threadID modeluuid.UUID) ([]component.UpdateNotice, error) {
-	if threadID.IsNull() {
-		return nil, nil
+func (s *store) subscription(ctx context.Context, subscriberThreadID modeluuid.UUID, targetThreadID modeluuid.UUID) (subscriptionRecord, bool, error) {
+	if subscriberThreadID.IsNull() || targetThreadID.IsNull() {
+		return subscriptionRecord{}, false, nil
 	}
-	var rows []pendingUpdate
-	query := `
-SELECT t.id AS theater_id, t.name, t.label, COUNT(m.id) AS count
-FROM theater_subscriptions s
-JOIN theaters t ON t.id = s.theater_id
-JOIN theater_messages m ON m.theater_id = t.id
-WHERE s.thread_id = ?
-  AND (s.last_read_at IS NULL OR m.created_at > s.last_read_at)
-GROUP BY t.id, t.name, t.label
-ORDER BY t.name ASC`
-	if err := s.db.WithContext(ctx).Raw(query, threadID.String()).Scan(&rows).Error; err != nil {
-		return nil, err
-	}
-	out := make([]component.UpdateNotice, 0, len(rows))
-	for _, row := range rows {
-		if row.Count <= 0 {
-			continue
+	var record subscriptionRecord
+	if err := s.db.WithContext(ctx).Where("subscriber_thread_id = ? and target_thread_id = ?", subscriberThreadID.String(), targetThreadID.String()).First(&record).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return subscriptionRecord{}, false, nil
 		}
-		label := strings.TrimSpace(row.Label)
-		if label == "" {
-			label = row.Name
-		}
-		out = append(out, component.UpdateNotice{Source: Type, Ref: row.Name, Label: label, Kind: "message", Count: int(row.Count)})
+		return subscriptionRecord{}, false, err
 	}
-	return out, nil
+	return record, true, nil
 }
 
-func (s *store) pendingCount(ctx context.Context, theaterID string, threadID modeluuid.UUID) (int64, error) {
-	var subscription subscriptionRecord
-	if err := s.db.WithContext(ctx).Where("theater_id = ? and thread_id = ?", theaterID, threadID.String()).First(&subscription).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return 0, nil
-		}
-		return 0, err
+func (s *store) markRead(ctx context.Context, subscriberThreadID modeluuid.UUID, targetThreadID modeluuid.UUID, at time.Time) error {
+	if subscriberThreadID.IsNull() || targetThreadID.IsNull() || at.IsZero() {
+		return nil
 	}
-	query := s.db.WithContext(ctx).Model(&messageRecord{}).Where("theater_id = ?", theaterID)
-	if subscription.LastReadAt != nil {
-		query = query.Where("created_at > ?", subscription.LastReadAt.UTC())
-	}
-	var count int64
-	if err := query.Count(&count).Error; err != nil {
-		return 0, err
-	}
-	return count, nil
+	return s.db.WithContext(ctx).Model(&subscriptionRecord{}).
+		Where("subscriber_thread_id = ? and target_thread_id = ?", subscriberThreadID.String(), targetThreadID.String()).
+		Update("last_read_at", at.UTC()).Error
 }

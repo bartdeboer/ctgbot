@@ -26,8 +26,8 @@ hostbridge [
   search <query>
   send <text>
   sendfile <path>
-  theater [ # publish/subscribe message channels between agents
-    create <name> | list | <name> [ post <message> | read | status | subscribe | unsubscribe ] | status
+  theater [ # thread subscriptions and shared message boards
+    list | status | <thread> [ read | status | subscribe | unsubscribe ]
   ]
   thread [ # direct messaging to other agent threads
     help | list | status | label set | <thread> [ label set | config [ get <key> | list | set <key> <value> | unset <key> ] | message send ] | config [ get <key> | list | set <key> <value> | unset <key> ]

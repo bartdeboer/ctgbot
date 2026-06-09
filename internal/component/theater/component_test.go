@@ -4,86 +4,89 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	messagingdomain "github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
+	"github.com/bartdeboer/ctgbot/internal/repository"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
-func TestTheaterCreateSubscribePostReadFlow(t *testing.T) {
+func TestTheaterSubscribeReadFlow(t *testing.T) {
 	ctx := context.Background()
 	component := newTestComponent(t)
 	engine := newTestEngine(t, component)
-	threadID := modeluuid.New()
-	base := testRequest(threadID)
+	viewer := createTestThread(t, ctx, component.storage, "Codex #1", "ctgbot 2")
+	target := createTestThread(t, ctx, component.storage, "Theaters", "qwen-parser-lab")
+	base := testRequest(viewer.ID)
 
-	if result, err := engine.Run(ctx, base, []string{Type, "create", "qwen-parser-lab", "--workspace", "/tmp/qwen-parser-lab"}); err != nil || result.Text != "theater created: qwen-parser-lab" {
-		t.Fatalf("create result=%q err=%v", result.Text, err)
+	appendTestMessage(t, ctx, component.storage, target, "Claude #1", "Parser image completed.", time.Date(2026, 6, 9, 9, 0, 0, 0, time.UTC))
+	appendTestMessage(t, ctx, component.storage, target, "qwen 1", "Smoke task passed.", time.Date(2026, 6, 9, 9, 13, 0, 0, time.UTC))
+
+	result, err := engine.Run(ctx, base, []string{Type, target.ID.String(), "subscribe"})
+	if err != nil {
+		t.Fatalf("subscribe error = %v", err)
 	}
-	if result, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "subscribe"}); err != nil || result.Text != "subscribed: qwen-parser-lab" {
-		t.Fatalf("subscribe result=%q err=%v", result.Text, err)
-	}
-	if _, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "post", "parser", "image", "ready"}); err != nil {
-		t.Fatalf("post error = %v", err)
+	if result.Text != "subscribed: qwen-parser-lab" {
+		t.Fatalf("subscribe = %q", result.Text)
 	}
 
-	updates, err := component.NewUpdates(ctx, componentUpdateRequest(threadID))
+	updates, err := component.NewUpdates(ctx, componentUpdateRequest(viewer.ID))
 	if err != nil {
 		t.Fatalf("NewUpdates() error = %v", err)
 	}
-	if len(updates) != 1 || updates[0].Source != Type || updates[0].Label != "qwen-parser-lab" || updates[0].Count != 1 {
-		t.Fatalf("updates = %#v, want one theater update", updates)
-	}
-	status, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "status"})
-	if err != nil {
-		t.Fatalf("named status error = %v", err)
-	}
-	if !strings.Contains(status.Text, "unread messages: 1") {
-		t.Fatalf("named status = %q, want pending count", status.Text)
-	}
-	if !strings.Contains(status.Text, "workspace: /tmp/qwen-parser-lab") {
-		t.Fatalf("named status = %q, want workspace path", status.Text)
+	if len(updates) != 1 || updates[0].Label != "qwen-parser-lab" || updates[0].Count != 2 {
+		t.Fatalf("updates = %#v", updates)
 	}
 
-	read, err := engine.Run(ctx, base, []string{Type, "qwen-parser-lab", "read"})
+	status, err := engine.Run(ctx, base, []string{Type, target.ID.String(), "status"})
+	if err != nil {
+		t.Fatalf("target status error = %v", err)
+	}
+	if !strings.Contains(status.Text, "unread messages: 2") {
+		t.Fatalf("target status = %q", status.Text)
+	}
+
+	read, err := engine.Run(ctx, base, []string{Type, target.ID.String(), "read", "--limit", "1"})
 	if err != nil {
 		t.Fatalf("read error = %v", err)
 	}
-	if !strings.Contains(read.Text, "tester: parser image ready") {
-		t.Fatalf("read = %q, want posted message", read.Text)
+	if strings.Contains(read.Text, "Parser image completed.") || !strings.Contains(read.Text, "qwen 1: Smoke task passed.") {
+		t.Fatalf("read = %q, want only latest message", read.Text)
 	}
-	updates, err = component.NewUpdates(ctx, componentUpdateRequest(threadID))
+
+	updates, err = component.NewUpdates(ctx, componentUpdateRequest(viewer.ID))
 	if err != nil {
 		t.Fatalf("NewUpdates after read error = %v", err)
 	}
 	if len(updates) != 0 {
 		t.Fatalf("updates after read = %#v, want none", updates)
 	}
+
+	result, err = engine.Run(ctx, base, []string{Type, target.ID.String(), "unsubscribe"})
+	if err != nil {
+		t.Fatalf("unsubscribe error = %v", err)
+	}
+	if result.Text != "unsubscribed: qwen-parser-lab" {
+		t.Fatalf("unsubscribe = %q", result.Text)
+	}
 }
 
-func TestTheaterPostUsesStdin(t *testing.T) {
+func TestTheaterStatusWithoutSubscriptions(t *testing.T) {
 	ctx := context.Background()
 	component := newTestComponent(t)
 	engine := newTestEngine(t, component)
-	threadID := modeluuid.New()
-	base := testRequest(threadID)
-	if _, err := engine.Run(ctx, base, []string{Type, "create", "lab"}); err != nil {
-		t.Fatal(err)
-	}
-	postReq := base
-	postReq.Stdin = "hello from stdin"
-	if _, err := engine.Run(ctx, postReq, []string{Type, "lab", "post"}); err != nil {
-		t.Fatalf("post stdin error = %v", err)
-	}
-	read, err := engine.Run(ctx, base, []string{Type, "lab", "read"})
+	viewer := createTestThread(t, ctx, component.storage, "Codex #1", "ctgbot 2")
+	result, err := engine.Run(ctx, testRequest(viewer.ID), []string{Type, "status"})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("status error = %v", err)
 	}
-	if !strings.Contains(read.Text, "hello from stdin") {
-		t.Fatalf("read = %q, want stdin message", read.Text)
+	if result.Text != "no theater subscriptions" {
+		t.Fatalf("status = %q", result.Text)
 	}
 }
 
@@ -93,7 +96,8 @@ func newTestComponent(t *testing.T) *Component {
 	if err != nil {
 		t.Fatalf("openStore() error = %v", err)
 	}
-	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, store: store}
+	storage := repository.NewMemory()
+	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, store: store, storage: storage, messages: messagingdomain.New(storage)}
 }
 
 func newTestEngine(t *testing.T, c *Component) *commandengine.Engine {
@@ -111,4 +115,41 @@ func testRequest(threadID modeluuid.UUID) commandengine.Request {
 
 func componentUpdateRequest(threadID modeluuid.UUID) component.UpdateRequest {
 	return component.UpdateRequest{ThreadID: threadID}
+}
+
+func createTestThread(t *testing.T, ctx context.Context, storage repository.Storage, chatLabel string, threadLabel string) coremodel.Thread {
+	t.Helper()
+	return createTestThreadWithID(t, ctx, storage, modeluuid.New(), chatLabel, modeluuid.New(), threadLabel)
+}
+
+func createTestThreadWithID(t *testing.T, ctx context.Context, storage repository.Storage, chatID modeluuid.UUID, chatLabel string, threadID modeluuid.UUID, threadLabel string) coremodel.Thread {
+	t.Helper()
+	chat := &coremodel.Chat{ID: chatID, Label: chatLabel, Enabled: true}
+	if err := storage.Chats().Save(ctx, chat); err != nil {
+		t.Fatalf("save chat: %v", err)
+	}
+	thread := &coremodel.Thread{ID: threadID, ChatID: chat.ID, Label: threadLabel}
+	if err := storage.Threads().Save(ctx, thread); err != nil {
+		t.Fatalf("save thread: %v", err)
+	}
+	return *thread
+}
+
+func appendTestMessage(t *testing.T, ctx context.Context, storage repository.Storage, thread coremodel.Thread, actorLabel string, text string, createdAt time.Time) {
+	t.Helper()
+	message := &coremodel.ThreadMessage{
+		ID:         modeluuid.New(),
+		ChatID:     thread.ChatID,
+		ThreadID:   thread.ID,
+		Direction:  coremodel.MessageDirectionInbound,
+		Role:       coremodel.MessageRoleAgent,
+		Kind:       coremodel.MessageKindMessage,
+		ActorID:    actorLabel,
+		ActorLabel: actorLabel,
+		Text:       text,
+		CreatedAt:  createdAt,
+	}
+	if err := storage.Messages().Append(ctx, message); err != nil {
+		t.Fatalf("append message: %v", err)
+	}
 }

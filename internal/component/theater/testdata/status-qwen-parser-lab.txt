@@ -1,3 +1,3 @@
 theater: qwen-parser-lab
-workspace: /workspace/theaters/qwen-parser-lab
+thread_id: 0000000000000000000008I
 unread messages: 4

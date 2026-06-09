@@ -23,12 +23,11 @@ component list
 component <component> help
 
 theater list
-theater create <name>
-theater <name> post <message>
-theater <name> read
-theater <name> status
-theater <name> subscribe
-theater <name> unsubscribe
+theater status
+theater <thread> read
+theater <thread> status
+theater <thread> subscribe
+theater <thread> unsubscribe
 ```
 
 Rationale:
@@ -47,7 +46,7 @@ When an escape hatch is needed, prefer a flag over ceremonial path words:
 
 ```text
 thread --id list message send
-theater --name status read
+theater --thread status read
 ```
 
 Avoid `select`-style AST serialization:

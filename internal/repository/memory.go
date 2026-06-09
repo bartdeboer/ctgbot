@@ -989,6 +989,23 @@ func (r memoryMessages) ListByThreadID(ctx context.Context, threadID modeluuid.U
 	return out, nil
 }
 
+func (r memoryMessages) CountByThreadIDSince(ctx context.Context, threadID modeluuid.UUID, since *time.Time) (int64, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var count int64
+	for _, message := range r.s.messages {
+		if message.ThreadID != threadID {
+			continue
+		}
+		if since != nil && !message.CreatedAt.After(*since) {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
 func (r memoryMessages) DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error) {
 	_ = ctx
 	r.s.mu.Lock()

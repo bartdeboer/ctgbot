@@ -14,13 +14,13 @@ func TestCommandSynopsisRendersCommandTrie(t *testing.T) {
 			"hostbridge codex config get <key>",
 			"hostbridge codex config list",
 			"hostbridge codex config set <key> <value>",
-			"hostbridge theater create <name>",
-			"hostbridge theater <name> post <message>",
-			"hostbridge theater <name> read",
-			"hostbridge theater <name> subscribe",
+			"hostbridge theater list",
+			"hostbridge theater status",
+			"hostbridge theater <thread> read",
+			"hostbridge theater <thread> subscribe",
 		},
 		map[string]string{
-			"theater": "publish/subscribe message channels between agents",
+			"theater": "thread subscriptions and shared message boards",
 		},
 	)
 	for _, want := range []string{
@@ -28,8 +28,8 @@ func TestCommandSynopsisRendersCommandTrie(t *testing.T) {
 		"codex [",
 		"chat purge",
 		"config [ get <key> | list | set <key> <value> ]",
-		"theater [ # publish/subscribe message channels between agents",
-		"<name> [ post <message> | read | subscribe ]",
+		"theater [ # thread subscriptions and shared message boards",
+		"<thread> [ read | subscribe ]",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("CommandSynopsis() missing %q:\n%s", want, got)
