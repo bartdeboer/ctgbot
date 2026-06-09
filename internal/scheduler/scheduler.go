@@ -141,15 +141,23 @@ func RunJob(ctx context.Context, engine *commandengine.Engine, job coremodel.Sch
 }
 
 func NewJob(name string, every string, argv []string, now time.Time) (coremodel.ScheduledJob, error) {
-	commandJSON, err := json.Marshal(argv)
+	commandJSON, err := commandJSON(argv)
 	if err != nil {
 		return coremodel.ScheduledJob{}, err
 	}
-	job := coremodel.ScheduledJob{Name: name, Enabled: true, Every: every, CommandJSON: string(commandJSON)}
+	job := coremodel.ScheduledJob{Name: name, Enabled: true, ScheduleType: ScheduleTypeInterval, Every: every, CommandJSON: commandJSON}
 	if err := PrepareJob(&job, now); err != nil {
 		return coremodel.ScheduledJob{}, err
 	}
 	return job, nil
+}
+
+func commandJSON(argv []string) (string, error) {
+	commandJSON, err := json.Marshal(argv)
+	if err != nil {
+		return "", err
+	}
+	return string(commandJSON), nil
 }
 
 func PrepareJob(job *coremodel.ScheduledJob, now time.Time) error {
@@ -157,16 +165,13 @@ func PrepareJob(job *coremodel.ScheduledJob, now time.Time) error {
 		return fmt.Errorf("missing scheduled job")
 	}
 	job.Name = strings.TrimSpace(job.Name)
-	job.Every = strings.TrimSpace(job.Every)
+	normalizeSchedule(job)
 	job.CommandJSON = strings.TrimSpace(job.CommandJSON)
 	if job.Name == "" {
 		return fmt.Errorf("missing job name")
 	}
-	if job.Every == "" {
-		return fmt.Errorf("missing schedule interval")
-	}
-	if _, err := time.ParseDuration(job.Every); err != nil {
-		return fmt.Errorf("parse --every: %w", err)
+	if err := validateSchedule(*job); err != nil {
+		return err
 	}
 	if _, err := Argv(*job); err != nil {
 		return err
@@ -176,6 +181,13 @@ func PrepareJob(job *coremodel.ScheduledJob, now time.Time) error {
 	}
 	if job.NextRunAt == nil {
 		next := now.UTC()
+		if job.ScheduleType == ScheduleTypeCron {
+			var err error
+			next, err = nextRun(*job, now)
+			if err != nil {
+				return err
+			}
+		}
 		job.NextRunAt = &next
 	}
 	if job.LastStatus == "" {
@@ -202,12 +214,15 @@ func FinishJob(ctx context.Context, jobs repository.ScheduledJobRepository, job 
 	if finishedAt.IsZero() {
 		finishedAt = time.Now().UTC()
 	}
-	every, err := time.ParseDuration(job.Every)
-	if err != nil {
+	normalizeSchedule(&job)
+	if err := validateSchedule(job); err != nil {
 		return err
 	}
 	job.LastRunAt = &finishedAt
-	next := finishedAt.Add(every)
+	next, err := nextRun(job, finishedAt)
+	if err != nil {
+		return err
+	}
 	job.NextRunAt = &next
 	if runErr != nil {
 		job.LastStatus = coremodel.ScheduledJobStatusFailed

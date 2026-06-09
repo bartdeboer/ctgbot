@@ -293,15 +293,18 @@ type TrustedController struct {
 }
 
 type ScheduledJob struct {
-	ID          modeluuid.UUID `gorm:"primaryKey"`
-	Name        string         `gorm:"uniqueIndex"`
-	Enabled     bool           `gorm:"index"`
-	Every       string
-	CommandJSON string
-	LastRunAt   *time.Time
-	NextRunAt   *time.Time `gorm:"index"`
-	LastStatus  string
-	LastError   string
+	ID           modeluuid.UUID `gorm:"primaryKey"`
+	Name         string         `gorm:"uniqueIndex"`
+	Enabled      bool           `gorm:"index"`
+	ScheduleType string
+	Every        string
+	Cron         string
+	Timezone     string
+	CommandJSON  string
+	LastRunAt    *time.Time
+	NextRunAt    *time.Time `gorm:"index"`
+	LastStatus   string
+	LastError    string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

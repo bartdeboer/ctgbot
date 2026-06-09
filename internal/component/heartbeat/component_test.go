@@ -51,6 +51,33 @@ func TestHeartbeatStartCreatesScheduledTickForCurrentThread(t *testing.T) {
 	}
 }
 
+func TestHeartbeatStartCronCreatesScheduledTickForCurrentThread(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	c := newTestComponent(storage, nil)
+	engine := newTestEngine(t, c, commandengine.SourceMessage)
+	threadID := modeluuid.New()
+
+	result, err := engine.Run(ctx, testRequest(threadID), []string{Type, "start", "cron", "0 8 * * *", "--tz", "Europe/Amsterdam"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if !strings.Contains(result.Text, `heartbeat started: cron="0 8 * * *" timezone=Europe/Amsterdam`) {
+		t.Fatalf("result = %q, want cron started", result.Text)
+	}
+
+	jobs, err := storage.ScheduledJobs().List(ctx)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("jobs len = %d, want 1", len(jobs))
+	}
+	if jobs[0].ScheduleType != schedulerpkg.ScheduleTypeCron || jobs[0].Cron != "0 8 * * *" || jobs[0].Timezone != "Europe/Amsterdam" {
+		t.Fatalf("job = %#v, want cron schedule", jobs[0])
+	}
+}
+
 func TestHeartbeatTickSendsPayloadToThread(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()

@@ -20,6 +20,10 @@ import (
 
 type nowCommand struct{}
 type startCommand struct{ Every string }
+type startCronCommand struct {
+	Expr     string
+	Timezone string
+}
 type stopCommand struct{}
 type statusCommand struct{}
 type tickCommand struct{ ThreadID string }
@@ -27,6 +31,7 @@ type tickCommand struct{ ThreadID string }
 func RegisterGobTypes(register func(any)) {
 	register(nowCommand{})
 	register(startCommand{})
+	register(startCronCommand{})
 	register(stopCommand{})
 	register(statusCommand{})
 	register(tickCommand{})
@@ -48,6 +53,14 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Pattern:               "start <interval>",
 			Help:                  "Start recurring heartbeat messages for this thread",
 			Build:                 buildStartCommand,
+			Sources:               userSources,
+			Policy:                userPolicy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern:               "start cron <expr>",
+			Help:                  "Start recurring heartbeat messages using a cron expression",
+			Build:                 buildStartCronCommand,
 			Sources:               userSources,
 			Policy:                userPolicy,
 			InstructionVisibility: commandengine.InstructionImportant,
@@ -95,6 +108,9 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.RegisterPattern[startCommand](registry, "start <interval>", c.handleStart); err != nil {
 		return err
 	}
+	if err := commandengine.RegisterPattern[startCronCommand](registry, "start cron <expr>", c.handleStartCron); err != nil {
+		return err
+	}
 	if err := commandengine.RegisterPattern[stopCommand](registry, "stop", c.handleStop); err != nil {
 		return err
 	}
@@ -124,6 +140,24 @@ func buildStartCommand(req *clir.Request) (any, error) {
 	return startCommand{Every: every}, nil
 }
 
+func buildStartCronCommand(req *clir.Request) (any, error) {
+	fs := flag.NewFlagSet("heartbeat start cron", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	timezone := fs.String("tz", "", "Cron timezone, for example Europe/Amsterdam")
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, err
+	}
+	extra := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	if extra != "" {
+		return nil, fmt.Errorf("unexpected heartbeat start cron arguments: %s", extra)
+	}
+	expr := strings.TrimSpace(req.Params["expr"])
+	if expr == "" {
+		return nil, fmt.Errorf("missing cron expression")
+	}
+	return startCronCommand{Expr: expr, Timezone: strings.TrimSpace(*timezone)}, nil
+}
+
 func (c *Component) handleNow(ctx context.Context, req commandengine.Request, cmd nowCommand) (commandengine.Result, error) {
 	_ = cmd
 	threadID := requestThreadID(req)
@@ -150,6 +184,24 @@ func (c *Component) handleStart(ctx context.Context, req commandengine.Request, 
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: fmt.Sprintf("heartbeat started: every=%s thread_id=%s", job.Every, threadID)}, nil
+}
+
+func (c *Component) handleStartCron(ctx context.Context, req commandengine.Request, cmd startCronCommand) (commandengine.Result, error) {
+	if c == nil || c.jobs == nil {
+		return commandengine.Result{}, fmt.Errorf("missing scheduled job repository")
+	}
+	threadID := requestThreadID(req)
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("heartbeat start requires a current thread")
+	}
+	job, err := schedulerpkg.NewCronJob(jobName(threadID), cmd.Expr, cmd.Timezone, []string{c.commandPrefix(), "tick", threadID.String()}, time.Now().UTC())
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if err := c.jobs.Save(ctx, &job); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("heartbeat started: cron=%q timezone=%s thread_id=%s", job.Cron, job.Timezone, threadID)}, nil
 }
 
 func (c *Component) handleStop(ctx context.Context, req commandengine.Request, cmd stopCommand) (commandengine.Result, error) {
@@ -312,12 +364,16 @@ func jobName(threadID modeluuid.UUID) string {
 }
 
 func formatJobStatus(job coremodel.ScheduledJob) string {
-	lines := []string{
-		"heartbeat is running",
-		"every: " + job.Every,
-		"enabled: " + fmt.Sprintf("%t", job.Enabled),
-		"status: " + firstNonEmpty(job.LastStatus, coremodel.ScheduledJobStatusNever),
+	lines := []string{"heartbeat is running"}
+	if strings.TrimSpace(job.ScheduleType) == schedulerpkg.ScheduleTypeCron {
+		lines = append(lines, "cron: "+job.Cron, "timezone: "+firstNonEmpty(job.Timezone, schedulerpkg.DefaultTimezone))
+	} else {
+		lines = append(lines, "every: "+job.Every)
 	}
+	lines = append(lines,
+		"enabled: "+fmt.Sprintf("%t", job.Enabled),
+		"status: "+firstNonEmpty(job.LastStatus, coremodel.ScheduledJobStatusNever),
+	)
 	if job.NextRunAt != nil {
 		lines = append(lines, "next: "+job.NextRunAt.UTC().Format(time.RFC3339))
 	}

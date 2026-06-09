@@ -6,19 +6,23 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	schedulerpkg "github.com/bartdeboer/ctgbot/internal/scheduler"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
 )
 
 type jobAddCommand struct {
-	Name    string
-	Every   string
-	Command []string
+	Name     string
+	Every    string
+	Cron     string
+	Timezone string
+	Command  []string
 }
 
 type jobListCommand struct{}
@@ -84,6 +88,8 @@ func buildJobAddCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("scheduler job add", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	every := fs.String("every", "", "Run interval, for example 24h")
+	cronExpr := fs.String("cron", "", "Cron expression, for example \"0 8 * * *\"")
+	timezone := fs.String("tz", "", "Cron timezone, for example Europe/Amsterdam")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -91,12 +97,12 @@ func buildJobAddCommand(req *clir.Request) (any, error) {
 	if len(argv) > 0 && argv[0] == "--" {
 		argv = argv[1:]
 	}
-	cmd := jobAddCommand{Name: strings.TrimSpace(req.Params["name"]), Every: strings.TrimSpace(*every), Command: argv}
+	cmd := jobAddCommand{Name: strings.TrimSpace(req.Params["name"]), Every: strings.TrimSpace(*every), Cron: strings.TrimSpace(*cronExpr), Timezone: strings.TrimSpace(*timezone), Command: argv}
 	if cmd.Name == "" {
 		return nil, fmt.Errorf("missing job name")
 	}
-	if cmd.Every == "" {
-		return nil, fmt.Errorf("missing --every")
+	if (cmd.Every == "") == (cmd.Cron == "") {
+		return nil, fmt.Errorf("set exactly one of --every or --cron")
 	}
 	if len(cmd.Command) == 0 {
 		return nil, fmt.Errorf("missing scheduled command")
@@ -105,7 +111,15 @@ func buildJobAddCommand(req *clir.Request) (any, error) {
 }
 
 func (c *Component) handleJobAdd(ctx context.Context, req commandengine.Request, cmd jobAddCommand) (commandengine.Result, error) {
-	job, err := schedulerpkg.NewJob(cmd.Name, cmd.Every, cmd.Command, time.Now().UTC())
+	var (
+		job coremodel.ScheduledJob
+		err error
+	)
+	if strings.TrimSpace(cmd.Cron) != "" {
+		job, err = schedulerpkg.NewCronJob(cmd.Name, cmd.Cron, cmd.Timezone, cmd.Command, time.Now().UTC())
+	} else {
+		job, err = schedulerpkg.NewJob(cmd.Name, cmd.Every, cmd.Command, time.Now().UTC())
+	}
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -127,7 +141,7 @@ func (c *Component) handleJobList(ctx context.Context, req commandengine.Request
 	for _, job := range jobs {
 		var argv []string
 		_ = json.Unmarshal([]byte(job.CommandJSON), &argv)
-		line := fmt.Sprintf("%s every=%s enabled=%t next=%s status=%s command=%s", job.Name, job.Every, job.Enabled, formatTime(job.NextRunAt), job.LastStatus, strings.Join(argv, " "))
+		line := fmt.Sprintf("%s %s enabled=%t next=%s status=%s command=%s", job.Name, formatSchedule(job), job.Enabled, formatTime(job.NextRunAt), job.LastStatus, strings.Join(argv, " "))
 		if strings.TrimSpace(job.LastError) != "" {
 			line += " error=" + job.LastError
 		}
@@ -152,4 +166,17 @@ func formatTime(t *time.Time) string {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+func formatSchedule(job coremodel.ScheduledJob) string {
+	switch strings.TrimSpace(job.ScheduleType) {
+	case schedulerpkg.ScheduleTypeCron:
+		parts := []string{"cron=" + strconv.Quote(job.Cron)}
+		if strings.TrimSpace(job.Timezone) != "" {
+			parts = append(parts, "tz="+job.Timezone)
+		}
+		return strings.Join(parts, " ")
+	default:
+		return "every=" + job.Every
+	}
 }

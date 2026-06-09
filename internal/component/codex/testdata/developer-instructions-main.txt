@@ -21,7 +21,7 @@ hostbridge [
     help | list | <component> help
   ]
   heartbeat [ # autonomous keepalive and self-scheduling
-    now | start <interval> | status | stop
+    now | start [ <interval> | cron <expr> ] | status | stop
   ]
   search <query>
   send <text>

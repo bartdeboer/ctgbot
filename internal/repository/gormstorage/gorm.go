@@ -839,7 +839,10 @@ func (r *gormScheduledJobs) Save(ctx context.Context, job *coremodel.ScheduledJo
 		return fmt.Errorf("missing scheduled job")
 	}
 	job.Name = clean(job.Name)
+	job.ScheduleType = clean(job.ScheduleType)
 	job.Every = clean(job.Every)
+	job.Cron = clean(job.Cron)
+	job.Timezone = clean(job.Timezone)
 	job.CommandJSON = clean(job.CommandJSON)
 	if job.ID.IsNull() {
 		var existing coremodel.ScheduledJob

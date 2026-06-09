@@ -56,6 +56,15 @@ func TestSchedulerCommandBuilders(t *testing.T) {
 	if cmd.Name != "nightly" || cmd.Every != "24h" || strings.Join(cmd.Command, " ") != "indexing run default --all" {
 		t.Fatalf("cmd = %#v", cmd)
 	}
+
+	cmdAny, err = buildJobAddCommand(&clir.Request{Params: map[string]string{"name": "morning"}, Extra: []string{"--cron", "0 8 * * *", "--tz", "Europe/Amsterdam", "--", "heartbeat", "tick", "thread-1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd = cmdAny.(jobAddCommand)
+	if cmd.Name != "morning" || cmd.Cron != "0 8 * * *" || cmd.Timezone != "Europe/Amsterdam" || strings.Join(cmd.Command, " ") != "heartbeat tick thread-1" {
+		t.Fatalf("cron cmd = %#v", cmd)
+	}
 }
 
 func newTestComponent(t *testing.T) *Component {
