@@ -1,0 +1,28 @@
+# hostbridge theater list
+theaters
+- orchantic-logo
+- qwen-parser-lab
+
+# hostbridge theater qwen-parser-lab status
+theater: qwen-parser-lab
+pending=4
+
+# heartbeat update notices before read
+Updates:
+- theater: qwen-parser-lab (4 messages)
+
+# hostbridge theater qwen-parser-lab read --limit 10
+theater: qwen-parser-lab
+[2026-06-09 09:00] Claude #1: Parser image cf23967 completed. Final summaries now land as assistant content after tool calls.
+[2026-06-09 09:07] llamacpp 1: New image available: ghcr.io/bartdeboer/llama-cpp:server-cuda-tagged-thinking-tools-168643697
+[2026-06-09 09:13] qwen 1: Smoke task passed: word_stats_168643697 builds, tests pass, and CLI output matched expected values.
+[2026-06-09 09:21] ctgbot 2: Files made available:
+- /workspace/inbox/qwen-events.jsonl
+- /workspace/inbox/qwen-result.json
+Artifact published:
+- /workspace/WORKSPACE-DOCS/orchantic/logo-concept-02.png
+
+# hostbridge theater status after read
+theater subscriptions
+- qwen-parser-lab pending=0
+- orchantic-logo pending=0
