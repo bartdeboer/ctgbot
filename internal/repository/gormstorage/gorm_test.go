@@ -551,3 +551,49 @@ func newTestStoreWithArtifactDir(t *testing.T) *GORMStorage {
 	}
 	return store
 }
+
+func TestMessagesListByThreadIDPage(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	chatID := modeluuid.New()
+	threadID := modeluuid.New()
+	base := time.Date(2026, 6, 10, 10, 0, 0, 0, time.UTC)
+	var ids []modeluuid.UUID
+	for i, text := range []string{"one", "two", "three", "four", "five"} {
+		id := modeluuid.New()
+		ids = append(ids, id)
+		if err := store.Messages().Append(ctx, &coremodel.ThreadMessage{ID: id, ChatID: chatID, ThreadID: threadID, Text: text, CreatedAt: base.Add(time.Duration(i) * time.Minute)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	latest, next, err := store.Messages().ListByThreadIDPage(ctx, threadID, modeluuid.Nil, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := gormMessageTexts(latest); strings.Join(got, ",") != "four,five" {
+		t.Fatalf("latest messages = %#v", got)
+	}
+	if next != "" {
+		t.Fatalf("latest next cursor = %q, want empty", next)
+	}
+
+	page, next, err := store.Messages().ListByThreadIDPage(ctx, threadID, ids[1], 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := gormMessageTexts(page); strings.Join(got, ",") != "three,four" {
+		t.Fatalf("page messages = %#v", got)
+	}
+	if next == "" {
+		t.Fatal("next cursor is empty, want cursor for remaining messages")
+	}
+}
+
+func gormMessageTexts(messages []coremodel.ThreadMessage) []string {
+	out := make([]string, 0, len(messages))
+	for _, message := range messages {
+		out = append(out, message.Text)
+	}
+	return out
+}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	messagingdomain "github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clir"
@@ -18,6 +19,7 @@ type subscribeCommand struct{ ThreadRef string }
 type unsubscribeCommand struct{ ThreadRef string }
 type readCommand struct {
 	ThreadRef string
+	Cursor    string
 	Limit     int
 }
 type statusCommand struct{ ThreadRef string }
@@ -125,6 +127,8 @@ func buildThreadRef[T any](wrap func(string) T) commandengine.BuildFunc {
 func buildRead(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("theater <thread> read", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
+	cursor := fs.String("cursor", "", "Optional message cursor")
+	after := fs.String("after", "", "Optional message cursor alias")
 	limit := fs.Int("limit", 20, "Maximum number of messages to read")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
@@ -136,7 +140,11 @@ func buildRead(req *clir.Request) (any, error) {
 	if threadRef == "" {
 		return nil, fmt.Errorf("missing thread")
 	}
-	return readCommand{ThreadRef: threadRef, Limit: *limit}, nil
+	readCursor := strings.TrimSpace(*cursor)
+	if readCursor == "" {
+		readCursor = strings.TrimSpace(*after)
+	}
+	return readCommand{ThreadRef: threadRef, Cursor: readCursor, Limit: *limit}, nil
 }
 
 func (c *Component) handleSubscribe(ctx context.Context, req commandengine.Request, cmd subscribeCommand) (commandengine.Result, error) {
@@ -186,11 +194,11 @@ func (c *Component) handleRead(ctx context.Context, req commandengine.Request, c
 	if c == nil || c.storage == nil {
 		return commandengine.Result{}, fmt.Errorf("missing theater storage")
 	}
-	messages, err := c.storage.Messages().ListByThreadID(ctx, targetThread.ID)
+	page, err := c.messages.ListMessages(ctx, req.Context.Actor, targetThread.ID, messagingdomain.ListMessagesRequest{Cursor: cmd.Cursor, Limit: cmd.Limit})
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	messages = recentMessages(messages, cmd.Limit)
+	messages := page.Messages
 	if len(messages) == 0 {
 		return commandengine.Result{Text: "no theater messages: " + threadLabel(*targetThread)}, nil
 	}
@@ -200,7 +208,7 @@ func (c *Component) handleRead(ctx context.Context, req commandengine.Request, c
 			return commandengine.Result{}, err
 		}
 	}
-	return commandengine.Result{Text: formatMessages(threadLabel(*targetThread), messages)}, nil
+	return commandengine.Result{Text: formatMessages(threadLabel(*targetThread), messages, page.NextCursor)}, nil
 }
 
 func (c *Component) handleList(ctx context.Context, req commandengine.Request, cmd listCommand) (commandengine.Result, error) {
@@ -302,14 +310,7 @@ func threadLabel(thread coremodel.Thread) string {
 	return label
 }
 
-func recentMessages(messages []coremodel.ThreadMessage, limit int) []coremodel.ThreadMessage {
-	if limit <= 0 || len(messages) <= limit {
-		return messages
-	}
-	return messages[len(messages)-limit:]
-}
-
-func formatMessages(theaterName string, messages []coremodel.ThreadMessage) string {
+func formatMessages(theaterName string, messages []coremodel.ThreadMessage, nextCursor string) string {
 	lines := []string{"theater: " + theaterName}
 	for _, msg := range messages {
 		label := strings.TrimSpace(msg.ActorLabel)
@@ -320,6 +321,9 @@ func formatMessages(theaterName string, messages []coremodel.ThreadMessage) stri
 			label = "unknown"
 		}
 		lines = append(lines, fmt.Sprintf("[%s] %s: %s", msg.CreatedAt.UTC().Format("2006-01-02 15:04"), label, msg.Text))
+	}
+	if strings.TrimSpace(nextCursor) != "" {
+		lines = append(lines, "", "next cursor: "+strings.TrimSpace(nextCursor))
 	}
 	return strings.Join(lines, "\n")
 }

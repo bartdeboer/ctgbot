@@ -72,44 +72,28 @@ func (s *Service) ListMessages(ctx context.Context, actor coremodel.Actor, threa
 	if limit > 200 {
 		limit = 200
 	}
-	messages, err := s.Storage.Messages().ListByThreadID(ctx, thread.ID)
-	if err != nil {
-		return MessagePage{}, err
-	}
-	if len(messages) == 0 {
-		return MessagePage{}, nil
-	}
-
 	cursor := strings.TrimSpace(req.Cursor)
-	start := 0
-	if cursor == "" {
-		if len(messages) > limit {
-			start = len(messages) - limit
+	afterMessageID := modeluuid.Nil
+	if cursor != "" {
+		if parsed, err := modeluuid.Parse(cursor); err == nil {
+			afterMessageID = parsed
+		} else {
+			messages, err := s.Storage.Messages().ListByThreadID(ctx, thread.ID)
+			if err != nil {
+				return MessagePage{}, err
+			}
+			index, err := resolveMessageCursor(messages, cursor)
+			if err != nil {
+				return MessagePage{}, err
+			}
+			afterMessageID = messages[index].ID
 		}
-		return MessagePage{
-			Messages: cloneThreadMessages(messages[start:]),
-		}, nil
 	}
-
-	index, err := resolveMessageCursor(messages, cursor)
+	messages, nextCursor, err := s.Storage.Messages().ListByThreadIDPage(ctx, thread.ID, afterMessageID, limit)
 	if err != nil {
 		return MessagePage{}, err
 	}
-	start = index + 1
-	if start >= len(messages) {
-		return MessagePage{Messages: []coremodel.ThreadMessage{}}, nil
-	}
-	end := start + limit
-	if end > len(messages) {
-		end = len(messages)
-	}
-	page := MessagePage{
-		Messages: cloneThreadMessages(messages[start:end]),
-	}
-	if end < len(messages) && len(page.Messages) > 0 {
-		page.NextCursor = page.Messages[len(page.Messages)-1].ID.String()
-	}
-	return page, nil
+	return MessagePage{Messages: cloneThreadMessages(messages), NextCursor: nextCursor}, nil
 }
 
 func (s *Service) PurgeThread(ctx context.Context, actor coremodel.Actor, threadID modeluuid.UUID) (PurgeThreadResult, error) {

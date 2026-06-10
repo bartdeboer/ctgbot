@@ -989,6 +989,46 @@ func (r memoryMessages) ListByThreadID(ctx context.Context, threadID modeluuid.U
 	return out, nil
 }
 
+func (r memoryMessages) ListByThreadIDPage(ctx context.Context, threadID modeluuid.UUID, afterMessageID modeluuid.UUID, limit int) ([]coremodel.ThreadMessage, string, error) {
+	messages, err := r.ListByThreadID(ctx, threadID)
+	if err != nil {
+		return nil, "", err
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	start := 0
+	if afterMessageID.IsNull() {
+		if len(messages) > limit {
+			start = len(messages) - limit
+		}
+		return append([]coremodel.ThreadMessage(nil), messages[start:]...), "", nil
+	}
+	for i, message := range messages {
+		if message.ID == afterMessageID {
+			start = i + 1
+			break
+		}
+		if i == len(messages)-1 {
+			return nil, "", &ShortIDNotFoundError{Ref: afterMessageID.String()}
+		}
+	}
+	if start >= len(messages) {
+		return []coremodel.ThreadMessage{}, "", nil
+	}
+	end := start + limit
+	next := ""
+	if end < len(messages) {
+		next = messages[end-1].ID.String()
+	} else {
+		end = len(messages)
+	}
+	return append([]coremodel.ThreadMessage(nil), messages[start:end]...), next, nil
+}
+
 func (r memoryMessages) CountByThreadIDSince(ctx context.Context, threadID modeluuid.UUID, since *time.Time) (int64, error) {
 	_ = ctx
 	r.s.mu.Lock()
