@@ -331,7 +331,7 @@ func (b *Broker) runAgentTurn(
 	inbound coremodel.ThreadMessage,
 	prompt string,
 	turnRuntime *agentTurnRuntime,
-) (*coremodel.ThreadMessage, error) {
+) (*component.TurnResult, error) {
 	if agentBinding.Completion != nil {
 		prompt, err := b.completionPrompt(ctx, thread.ID, inbound)
 		if err != nil {
@@ -343,7 +343,7 @@ func (b *Broker) runAgentTurn(
 		if err != nil || result == nil {
 			return nil, err
 		}
-		return result.Final, nil
+		return &component.TurnResult{Final: result.Final}, nil
 	}
 	if agentBinding.TurnHandler == nil {
 		return nil, nil
@@ -368,7 +368,7 @@ func (b *Broker) runAgentTurn(
 	if err != nil || result == nil {
 		return nil, err
 	}
-	return result.Final, nil
+	return result, nil
 }
 
 func agentType(binding AgentBinding) string {

@@ -447,7 +447,11 @@ func (t Turn) PromptText() string {
 }
 
 type TurnResult struct {
+	// Final is persisted to thread history and relayed to outbound providers.
 	Final *coremodel.ThreadMessage
+	// Relay is sent to outbound providers without being persisted. Use it for
+	// transient mirrors where the canonical event is already stored as inbound.
+	Relay *coremodel.ThreadMessage
 }
 
 type CompletionRole string

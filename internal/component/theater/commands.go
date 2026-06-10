@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -187,7 +186,7 @@ func (c *Component) handleRead(ctx context.Context, req commandengine.Request, c
 	if c == nil || c.storage == nil {
 		return commandengine.Result{}, fmt.Errorf("missing theater storage")
 	}
-	messages, err := c.threadMessages(ctx, targetThread.ID)
+	messages, err := c.storage.Messages().ListByThreadID(ctx, targetThread.ID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -277,45 +276,7 @@ func (c *Component) pendingCount(ctx context.Context, subscriberThreadID modeluu
 	if err != nil || !ok {
 		return 0, err
 	}
-	return c.unreadCount(ctx, targetThreadID, subscription.LastReadAt)
-}
-
-func (c *Component) unreadCount(ctx context.Context, targetThreadID modeluuid.UUID, since *time.Time) (int64, error) {
-	messages, err := c.threadMessages(ctx, targetThreadID)
-	if err != nil {
-		return 0, err
-	}
-	var count int64
-	for _, message := range messages {
-		if since != nil && !message.CreatedAt.After(*since) {
-			continue
-		}
-		count++
-	}
-	return count, nil
-}
-
-func (c *Component) threadMessages(ctx context.Context, targetThreadID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
-	messages, err := c.storage.Messages().ListByThreadID(ctx, targetThreadID)
-	if err != nil {
-		return nil, err
-	}
-	return c.visibleMessages(messages), nil
-}
-
-func (c *Component) visibleMessages(messages []coremodel.ThreadMessage) []coremodel.ThreadMessage {
-	out := make([]coremodel.ThreadMessage, 0, len(messages))
-	for _, message := range messages {
-		if isTheaterRelayMessage(message) {
-			continue
-		}
-		out = append(out, message)
-	}
-	return out
-}
-
-func isTheaterRelayMessage(message coremodel.ThreadMessage) bool {
-	return message.Direction == coremodel.MessageDirectionOutbound && strings.TrimSpace(message.ActorID) == Type
+	return c.storage.Messages().CountByThreadIDSince(ctx, targetThreadID, subscription.LastReadAt)
 }
 
 func requestThreadID(req commandengine.Request) modeluuid.UUID {

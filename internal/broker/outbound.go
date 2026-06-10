@@ -102,6 +102,19 @@ func (b *Broker) storeAndRelayMessageWithAttachments(ctx context.Context, runtim
 	return &threadMessage, nil
 }
 
+func (b *Broker) relayOnlyMessage(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, threadMessage coremodel.ThreadMessage) error {
+	_ = chat
+	if runtime == nil {
+		return nil
+	}
+	text := strings.TrimSpace(threadMessage.Text)
+	if text == "" {
+		return nil
+	}
+	payload := message.OutboundPayload{Text: message.TextMessage{Text: text}}
+	return b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, payload)
+}
+
 func (b *Broker) deliverPayload(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, payload message.OutboundPayload, componentID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
 	if runtime == nil || payload.IsZero() {
 		return nil, nil

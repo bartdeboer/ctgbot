@@ -171,6 +171,7 @@ type fakeAgentRecorder struct {
 	homes        []runtimepkg.Home
 	streamText   string
 	finalText    string
+	relayText    string
 	entered      chan struct{}
 	release      <-chan struct{}
 	interrupted  chan struct{}
@@ -199,6 +200,9 @@ func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}
 	if home, ok := turn.Runtime.ComponentHome(c.componentID); ok {
 		c.recorder.homes = append(c.recorder.homes, home)
+	}
+	if relayText := strings.TrimSpace(c.recorder.relayText); relayText != "" {
+		return &component.TurnResult{Relay: &coremodel.ThreadMessage{Text: relayText}}, nil
 	}
 	streamText := strings.TrimSpace(c.recorder.streamText)
 	if streamText == "" {
@@ -606,6 +610,70 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	}
 	if got, want := len(messages), 3; got != want {
 		t.Fatalf("stored messages = %d, want %d", got, want)
+	}
+}
+
+func TestRelayOnlyTurnResultRelaysWithoutStoring(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentRecorder := &fakeAgentRecorder{relayText: "mirror only"}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := newTestBroker(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Components().Save(context.Background(), codex); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
+		ComponentID: telegram.ID,
+		ExternalID:  "msg-1",
+		Payload: message.InboundPayload{
+			ProviderType:      "telegram",
+			ProviderChannelID: "chat-1",
+			ProviderThreadID:  "thread-7",
+			ProviderMessageID: "msg-1",
+			Actor:             message.Actor{ID: "bart", Label: "bart", Roles: []simplerbac.Role{simplerbac.RoleUser}},
+			Text:              message.TextMessage{Text: "hello"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("HandleInbound() error = %v", err)
+	}
+	if outcome.Dropped {
+		t.Fatal("expected routed event, got dropped")
+	}
+	if got, want := len(messengerRecorder.payloads), 1; got != want {
+		t.Fatalf("relay payloads = %d, want %d", got, want)
+	}
+	if got, want := messengerRecorder.payloads[0].Text.Text, "mirror only"; got != want {
+		t.Fatalf("relay text = %q, want %q", got, want)
+	}
+	messages, err := storage.Messages().ListByThreadID(context.Background(), outcome.Inbound.ThreadID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(messages), 1; got != want {
+		t.Fatalf("stored messages = %d, want only inbound message", got)
 	}
 }
 

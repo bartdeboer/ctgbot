@@ -34,12 +34,21 @@ func (b *Broker) runStoredThreadTurn(
 	for _, agentBinding := range runtime.Agents {
 		turnRuntime.componentID = agentBinding.ComponentID
 		turnRuntime.lastText = ""
-		final, err := b.runAgentTurn(ctx, agentBinding, chat, thread, turnInbound, prompt, turnRuntime)
+		result, err := b.runAgentTurn(ctx, agentBinding, chat, thread, turnInbound, prompt, turnRuntime)
 		outbound = append(outbound, turnRuntime.outputs...)
 		turnRuntime.outputs = nil
 		if err != nil {
 			return outbound, err
 		}
+		if result == nil {
+			continue
+		}
+		if result.Relay != nil && strings.TrimSpace(result.Relay.Text) != "" {
+			if err := b.relayOnlyMessage(ctx, runtime, chat, thread, *result.Relay); err != nil {
+				return outbound, err
+			}
+		}
+		final := result.Final
 		if final == nil || strings.TrimSpace(final.Text) == "" {
 			continue
 		}
