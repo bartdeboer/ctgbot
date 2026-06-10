@@ -19,7 +19,6 @@ const Type = "heartbeat"
 type Component struct {
 	registration      coremodel.Component
 	intents           repository.TimedIntentRepository
-	jobs              repository.ScheduledJobRepository
 	chatPayloadSender component.ChatPayloadSender
 	updateFeeds       []component.UpdateFeed
 }
@@ -36,7 +35,7 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if storage == nil {
 		return nil, fmt.Errorf("missing heartbeat storage")
 	}
-	return &Component{registration: registration, intents: storage.TimedIntents(), jobs: storage.ScheduledJobs(), chatPayloadSender: sender, updateFeeds: feeds}, nil
+	return &Component{registration: registration, intents: storage.TimedIntents(), chatPayloadSender: sender, updateFeeds: feeds}, nil
 }
 
 func (c *Component) Type() string { return Type }

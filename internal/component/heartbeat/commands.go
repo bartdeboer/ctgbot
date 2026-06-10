@@ -147,9 +147,6 @@ func (c *Component) handleStart(ctx context.Context, req commandengine.Request, 
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if c.jobs != nil {
-		_, _ = c.jobs.DeleteByName(ctx, jobName(threadID))
-	}
 	return commandengine.Result{Text: fmt.Sprintf("heartbeat started: every=%s thread_id=%s", intent.Every, threadID)}, nil
 }
 
@@ -167,14 +164,7 @@ func (c *Component) handleStop(ctx context.Context, req commandengine.Request, c
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	legacyDeleted := false
-	if c.jobs != nil {
-		legacyDeleted, err = c.jobs.DeleteByName(ctx, jobName(threadID))
-		if err != nil {
-			return commandengine.Result{}, err
-		}
-	}
-	if !deleted && !legacyDeleted {
+	if !deleted {
 		return commandengine.Result{Text: "heartbeat is not running"}, nil
 	}
 	return commandengine.Result{Text: "heartbeat stopped"}, nil
@@ -302,10 +292,6 @@ func parseRequiredThreadID(value string) (modeluuid.UUID, error) {
 		return modeluuid.Nil, fmt.Errorf("missing thread id")
 	}
 	return id, nil
-}
-
-func jobName(threadID modeluuid.UUID) string {
-	return "heartbeat:" + threadID.String()
 }
 
 func formatIntentStatus(intent coremodel.TimedIntent) string {

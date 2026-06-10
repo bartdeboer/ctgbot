@@ -89,7 +89,7 @@ func TestHeartbeatNowIncludesUpdateFeeds(t *testing.T) {
 }
 
 func newTestComponent(storage *repository.MemoryStorage, sender componentpkg.ChatPayloadSender) *Component {
-	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, intents: storage.TimedIntents(), jobs: storage.ScheduledJobs(), chatPayloadSender: sender}
+	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, intents: storage.TimedIntents(), chatPayloadSender: sender}
 }
 
 func newTestEngine(t *testing.T, c *Component, source commandengine.Source) *commandengine.Engine {

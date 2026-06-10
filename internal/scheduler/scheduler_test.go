@@ -10,10 +10,8 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
-	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	"github.com/bartdeboer/ctgbot/internal/timedintent"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -56,37 +54,6 @@ func TestRunDueQueuesJobsSequentially(t *testing.T) {
 		if job.LastStatus != coremodel.ScheduledJobStatusSuccess || job.LastRunAt == nil || job.NextRunAt == nil {
 			t.Fatalf("job = %#v, want completed job", job)
 		}
-	}
-}
-
-func TestMigrateLegacyHeartbeatJobsCreatesTimedIntent(t *testing.T) {
-	ctx := context.Background()
-	storage := repository.NewMemory()
-	threadID := modeluuid.New()
-	now := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
-	job, err := NewJob("heartbeat:"+threadID.String(), "30m", []string{"heartbeat", "tick", threadID.String()}, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := storage.ScheduledJobs().Save(ctx, &job); err != nil {
-		t.Fatal(err)
-	}
-	if err := migrateLegacyHeartbeatJobs(ctx, storage.ScheduledJobs(), storage.TimedIntents(), nil); err != nil {
-		t.Fatalf("migrateLegacyHeartbeatJobs() error = %v", err)
-	}
-	jobs, err := storage.ScheduledJobs().List(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(jobs) != 0 {
-		t.Fatalf("scheduled jobs len = %d, want 0", len(jobs))
-	}
-	intent, err := storage.TimedIntents().GetByTargetKindKey(ctx, threadID, timedintent.KindHeartbeat, timedintent.KeyDefault)
-	if err != nil {
-		t.Fatalf("GetByTargetKindKey() error = %v", err)
-	}
-	if got, want := intent.Every, "30m"; got != want {
-		t.Fatalf("intent every = %q, want %q", got, want)
 	}
 }
 
