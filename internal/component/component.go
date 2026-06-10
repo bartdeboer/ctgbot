@@ -3,6 +3,7 @@ package component
 import (
 	"context"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -356,10 +357,6 @@ type TurnHandler interface {
 	HandleTurn(ctx context.Context, turn Turn) (*TurnResult, error)
 }
 
-// Agent is kept as a compatibility alias for older component assertions.
-// New code should use TurnHandler.
-type Agent = TurnHandler
-
 // CompletionEngine receives a normalized completion prompt.
 //
 // The prompt shape intentionally aligns with OpenAI-style chat completions so
@@ -435,8 +432,18 @@ type Turn struct {
 	Chat    coremodel.Chat
 	Thread  coremodel.Thread
 	Inbound coremodel.ThreadMessage
+	// Prompt is the prepared text for LLM-style turn handlers. Inbound remains
+	// the canonical stored message so non-LLM handlers can inspect the raw post.
+	Prompt  string
 	History []coremodel.ThreadMessage
 	Runtime TurnRuntime
+}
+
+func (t Turn) PromptText() string {
+	if strings.TrimSpace(t.Prompt) != "" {
+		return t.Prompt
+	}
+	return t.Inbound.Text
 }
 
 type TurnResult struct {

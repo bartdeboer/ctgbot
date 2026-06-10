@@ -696,7 +696,7 @@ func (a *hostbridgeMediaAgent) HandleTurn(ctx context.Context, turn component.Tu
 	}
 
 	a.state.turnCalls++
-	a.state.prompt = turn.Inbound.Text
+	a.state.prompt = turn.PromptText()
 	return nil, nil
 }
 
@@ -752,7 +752,7 @@ func (a *hostbridgeAgent) HandleTurn(ctx context.Context, turn component.Turn) (
 	}
 
 	a.state.turnCalls++
-	a.state.prompt = turn.Inbound.Text
+	a.state.prompt = turn.PromptText()
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
 			Kind:        coremodel.MessageKindMessage,
@@ -788,7 +788,7 @@ func (a *hostbridgeRunAgent) HandleTurn(ctx context.Context, turn component.Turn
 	}
 
 	a.state.turnCalls++
-	a.state.prompt = turn.Inbound.Text
+	a.state.prompt = turn.PromptText()
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{
 			Kind:        coremodel.MessageKindMessage,

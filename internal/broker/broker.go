@@ -307,7 +307,7 @@ func (b *Broker) handleResolvedInboundTurn(
 	if len(savedPaths) > 0 {
 		turnPrompt = injectFilesIntoPrompt(savedPaths, turnPrompt)
 	}
-	turnInbound.Text = prepareTurnInbound(inbound, turnPrompt)
+	preparedPrompt := prepareTurnInbound(inbound, turnPrompt)
 
 	if runtime == nil {
 		runtime, err = b.runtimeForChat(ctx, chat)
@@ -315,7 +315,7 @@ func (b *Broker) handleResolvedInboundTurn(
 			return failConversation(storedInbound, nil, err)
 		}
 	}
-	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound, voiceInput, detectedInputLanguage, turnInputFiles)
+	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound, preparedPrompt, voiceInput, detectedInputLanguage, turnInputFiles)
 	if err != nil {
 		return failConversation(storedInbound, outbound, err)
 	}
@@ -329,6 +329,7 @@ func (b *Broker) runAgentTurn(
 	chat coremodel.Chat,
 	thread coremodel.Thread,
 	inbound coremodel.ThreadMessage,
+	prompt string,
 	turnRuntime *agentTurnRuntime,
 ) (*coremodel.ThreadMessage, error) {
 	if agentBinding.Completion != nil {
@@ -360,6 +361,7 @@ func (b *Broker) runAgentTurn(
 		Chat:    chat,
 		Thread:  thread,
 		Inbound: inbound,
+		Prompt:  prompt,
 		History: history,
 		Runtime: turnRuntime,
 	})

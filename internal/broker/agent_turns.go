@@ -13,6 +13,7 @@ func (b *Broker) runStoredThreadTurn(
 	chat coremodel.Chat,
 	thread coremodel.Thread,
 	turnInbound coremodel.ThreadMessage,
+	prompt string,
 	voiceInput bool,
 	detectedInputLanguage string,
 	inputFiles []turnInputFile,
@@ -33,7 +34,7 @@ func (b *Broker) runStoredThreadTurn(
 	for _, agentBinding := range runtime.Agents {
 		turnRuntime.componentID = agentBinding.ComponentID
 		turnRuntime.lastText = ""
-		final, err := b.runAgentTurn(ctx, agentBinding, chat, thread, turnInbound, turnRuntime)
+		final, err := b.runAgentTurn(ctx, agentBinding, chat, thread, turnInbound, prompt, turnRuntime)
 		outbound = append(outbound, turnRuntime.outputs...)
 		turnRuntime.outputs = nil
 		if err != nil {

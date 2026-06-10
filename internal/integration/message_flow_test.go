@@ -541,9 +541,9 @@ func (a *failingAgent) HandleTurn(ctx context.Context, turn component.Turn) (*co
 	_ = ctx
 	a.state.mu.Lock()
 	a.state.turnCalls++
-	a.state.prompt = turn.Inbound.Text
+	a.state.prompt = turn.PromptText()
 	a.state.mu.Unlock()
-	if strings.TrimSpace(turn.Inbound.Text) == "boom" {
+	if strings.TrimSpace(turn.PromptText()) == "boom" {
 		return nil, fmt.Errorf("boom")
 	}
 	return &component.TurnResult{
@@ -588,12 +588,12 @@ func (a *mockAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if _, err := os.Stat(filepath.Join(homeFromRuntime.Path, "auth.json")); err != nil {
 		return nil, fmt.Errorf("missing auth.json: %w", err)
 	}
-	if err := a.runtime.Exec(ctx, turn.Runtime.WorkspacePath(), turn.Thread.ID, turn.Runtime.Commands(), io.Discard, io.Discard, "mock-agent", "reply", strings.TrimSpace(turn.Inbound.Text)); err != nil {
+	if err := a.runtime.Exec(ctx, turn.Runtime.WorkspacePath(), turn.Thread.ID, turn.Runtime.Commands(), io.Discard, io.Discard, "mock-agent", "reply", strings.TrimSpace(turn.PromptText())); err != nil {
 		return nil, err
 	}
 	a.state.mu.Lock()
 	a.state.turnCalls++
-	a.state.prompt = turn.Inbound.Text
+	a.state.prompt = turn.PromptText()
 	a.state.mu.Unlock()
 	return &component.TurnResult{
 		Final: &coremodel.ThreadMessage{

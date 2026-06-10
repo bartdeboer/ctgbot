@@ -157,7 +157,9 @@ func appendTestMessage(t *testing.T, ctx context.Context, storage repository.Sto
 func TestTheaterHandleTurnRelaysInternalThreadPosts(t *testing.T) {
 	component := newTestComponent(t)
 	component.registration.ID = modeluuid.New()
-	result, err := component.HandleTurn(context.Background(), componentTurn("thread", "Claude #1", "parser image ready"))
+	turn := componentTurn("thread", "Claude #1", "parser image ready")
+	turn.Prompt = "[Internal thread message]\nFrom: Claude #1\n\nMessage: parser image ready"
+	result, err := component.HandleTurn(context.Background(), turn)
 	if err != nil {
 		t.Fatalf("HandleTurn() error = %v", err)
 	}

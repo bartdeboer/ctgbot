@@ -129,7 +129,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if c == nil || c.runtime == nil {
 		return nil, fmt.Errorf("missing llamacppagent runtime")
 	}
-	prompt := strings.TrimSpace(turn.Inbound.Text)
+	prompt := strings.TrimSpace(turn.PromptText())
 	if prompt == "" {
 		return nil, nil
 	}

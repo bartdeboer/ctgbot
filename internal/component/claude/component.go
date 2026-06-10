@@ -178,7 +178,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if c.Runtime == nil {
 		return nil, fmt.Errorf("missing component runtime")
 	}
-	prompt := strings.TrimSpace(turn.Inbound.Text)
+	prompt := strings.TrimSpace(turn.PromptText())
 	if prompt == "" {
 		return nil, nil
 	}

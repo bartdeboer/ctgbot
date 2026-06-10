@@ -185,7 +185,7 @@ type fakeAgent struct {
 func (c *fakeAgent) Type() string { return "codex" }
 func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
 	_ = ctx
-	c.recorder.prompts = append(c.recorder.prompts, turn.Inbound.Text)
+	c.recorder.prompts = append(c.recorder.prompts, turn.PromptText())
 	for _, cmd := range c.recorder.turnCommands {
 		if _, err := turn.Runtime.Commands().Execute(context.Background(), commandengine.Request{Command: cmd}); err != nil {
 			return nil, err

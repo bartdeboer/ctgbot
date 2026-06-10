@@ -304,9 +304,9 @@ func (c *Component) threadMessages(ctx context.Context, targetThreadID modeluuid
 }
 
 func (c *Component) visibleMessages(messages []coremodel.ThreadMessage) []coremodel.ThreadMessage {
-	out := messages[:0]
+	out := make([]coremodel.ThreadMessage, 0, len(messages))
 	for _, message := range messages {
-		if c.isOwnRelayMessage(message) {
+		if isTheaterRelayMessage(message) {
 			continue
 		}
 		out = append(out, message)
@@ -314,11 +314,8 @@ func (c *Component) visibleMessages(messages []coremodel.ThreadMessage) []coremo
 	return out
 }
 
-func (c *Component) isOwnRelayMessage(message coremodel.ThreadMessage) bool {
-	if message.Direction != coremodel.MessageDirectionOutbound || message.ComponentID.IsNull() || c.registration.ID.IsNull() {
-		return false
-	}
-	return message.ComponentID == c.registration.ID
+func isTheaterRelayMessage(message coremodel.ThreadMessage) bool {
+	return message.Direction == coremodel.MessageDirectionOutbound && strings.TrimSpace(message.ActorID) == Type
 }
 
 func requestThreadID(req commandengine.Request) modeluuid.UUID {
