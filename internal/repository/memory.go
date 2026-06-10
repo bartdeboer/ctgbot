@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -995,10 +996,7 @@ func (r memoryMessages) ListByThreadIDPage(ctx context.Context, threadID modeluu
 		return nil, "", err
 	}
 	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 200 {
-		limit = 200
+		return nil, "", fmt.Errorf("message page limit must be positive")
 	}
 	start := 0
 	if afterMessageID.IsNull() {
@@ -1007,14 +1005,16 @@ func (r memoryMessages) ListByThreadIDPage(ctx context.Context, threadID modeluu
 		}
 		return append([]coremodel.ThreadMessage(nil), messages[start:]...), "", nil
 	}
+	found := false
 	for i, message := range messages {
 		if message.ID == afterMessageID {
 			start = i + 1
+			found = true
 			break
 		}
-		if i == len(messages)-1 {
-			return nil, "", &ShortIDNotFoundError{Ref: afterMessageID.String()}
-		}
+	}
+	if !found {
+		return nil, "", &ShortIDNotFoundError{Ref: afterMessageID.String()}
 	}
 	if start >= len(messages) {
 		return []coremodel.ThreadMessage{}, "", nil

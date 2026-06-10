@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -72,4 +73,23 @@ func messageTexts(messages []coremodel.ThreadMessage) []string {
 		out = append(out, message.Text)
 	}
 	return out
+}
+
+func TestListMessagesUnknownCursorReturnsRepositoryNotFound(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	chat := &coremodel.Chat{ID: modeluuid.New(), Label: "team", Enabled: true}
+	if err := storage.Chats().Save(ctx, chat); err != nil {
+		t.Fatal(err)
+	}
+	thread := &coremodel.Thread{ID: modeluuid.New(), ChatID: chat.ID, Label: "board"}
+	if err := storage.Threads().Save(ctx, thread); err != nil {
+		t.Fatal(err)
+	}
+	service := New(storage)
+	_, err := service.ListMessages(ctx, coremodel.Actor{ID: "agent"}, thread.ID, ListMessagesRequest{Cursor: modeluuid.New().String(), Limit: 2})
+	var notFound *repository.ShortIDNotFoundError
+	if !errors.As(err, &notFound) {
+		t.Fatalf("error = %v, want ShortIDNotFoundError", err)
+	}
 }

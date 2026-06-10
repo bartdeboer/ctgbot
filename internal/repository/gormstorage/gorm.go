@@ -703,15 +703,15 @@ func (r *gormMessages) ListByThreadID(ctx context.Context, threadID modeluuid.UU
 
 func (r *gormMessages) ListByThreadIDPage(ctx context.Context, threadID modeluuid.UUID, afterMessageID modeluuid.UUID, limit int) ([]coremodel.ThreadMessage, string, error) {
 	if limit <= 0 {
-		limit = 20
-	}
-	if limit > 200 {
-		limit = 200
+		return nil, "", fmt.Errorf("message page limit must be positive")
 	}
 	query := r.db.WithContext(ctx).Where("thread_id = ?", threadID)
 	if !afterMessageID.IsNull() {
 		var cursor coremodel.ThreadMessage
 		if err := r.db.WithContext(ctx).Where("thread_id = ? and id = ?", threadID, afterMessageID).First(&cursor).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, "", &repository.ShortIDNotFoundError{Ref: afterMessageID.String()}
+			}
 			return nil, "", err
 		}
 		query = query.Where("created_at > ? OR (created_at = ? AND id > ?)", cursor.CreatedAt, cursor.CreatedAt, cursor.ID)
@@ -725,14 +725,15 @@ func (r *gormMessages) ListByThreadIDPage(ctx context.Context, threadID modeluui
 	}
 	next := ""
 	if len(rows) > limit {
-		next = rows[limit-1].ID.String()
+		if !afterMessageID.IsNull() {
+			next = rows[limit-1].ID.String()
+		}
 		rows = rows[:limit]
 	}
 	if afterMessageID.IsNull() {
 		for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
 			rows[i], rows[j] = rows[j], rows[i]
 		}
-		next = ""
 	}
 	return rows, next, nil
 }

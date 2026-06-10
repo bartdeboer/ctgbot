@@ -110,6 +110,10 @@ type ThreadComponentStateRepository interface {
 type MessageRepository interface {
 	Append(ctx context.Context, message *coremodel.ThreadMessage) error
 	ListByThreadID(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
+	// ListByThreadIDPage returns a forward page ordered by (created_at, id).
+	// A null afterMessageID returns the latest page in ascending order. A non-null
+	// afterMessageID returns messages after that cursor plus a next cursor when
+	// more newer messages remain. Backward/older paging is intentionally separate.
 	ListByThreadIDPage(ctx context.Context, threadID modeluuid.UUID, afterMessageID modeluuid.UUID, limit int) ([]coremodel.ThreadMessage, string, error)
 	CountByThreadIDSince(ctx context.Context, threadID modeluuid.UUID, since *time.Time) (int64, error)
 	DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error)
