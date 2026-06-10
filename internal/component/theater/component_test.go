@@ -172,6 +172,9 @@ func TestTheaterHandleTurnRelaysInternalThreadPosts(t *testing.T) {
 	if result.Final.ComponentID != component.registration.ID {
 		t.Fatalf("component id = %s, want %s", result.Final.ComponentID, component.registration.ID)
 	}
+	if got, want := result.Final.MetadataJSON, "relay=theater"; got != want {
+		t.Fatalf("metadata = %q, want %q", got, want)
+	}
 }
 
 func TestTheaterHandleTurnIgnoresExternalProviderPosts(t *testing.T) {

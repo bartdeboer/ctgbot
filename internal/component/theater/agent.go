@@ -20,12 +20,13 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		return nil, nil
 	}
 	return &component.TurnResult{Final: &coremodel.ThreadMessage{
-		Role:        coremodel.MessageRoleAgent,
-		Kind:        coremodel.MessageKindMessage,
-		ComponentID: c.registration.ID,
-		ActorID:     Type,
-		ActorLabel:  "theater",
-		Text:        formatRelayText(turn.Inbound),
+		Role:         coremodel.MessageRoleAgent,
+		Kind:         coremodel.MessageKindMessage,
+		ComponentID:  c.registration.ID,
+		ActorID:      Type,
+		ActorLabel:   "theater",
+		Text:         formatRelayText(turn.Inbound),
+		MetadataJSON: "relay=theater",
 	}}, nil
 }
 
