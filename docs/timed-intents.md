@@ -263,6 +263,75 @@ new rows. The standing intent row never disappears; only its clock moves.
 - Delivery authority is described under "There is no `command` delivery":
   turn wakes carry none; maintenance runs as the owning component.
 
+## Implementation boundary
+
+The database is the source of truth and the query engine. Go is the policy
+engine.
+
+This means there should be no long-lived in-memory mirror of timed intents. The
+runner reads due rows from storage, plans delivery in Go, writes the resulting
+state, and sleeps again.
+
+The database owns only structural mechanics:
+
+- uniqueness for replacement identity, e.g. `(target_thread_id, kind, key)`;
+- `ListDue(now)`: enabled rows with `next_due_at <= now`, ordered by due time;
+- `NextDue()`: minimum next due time for sleeping efficiently;
+- lookup/delete/upsert by target/kind/key;
+- durable persistence across restarts.
+
+The database must not know what a heartbeat means. If explaining a rule requires
+words such as heartbeat, attention, turn, theater, or reason, that rule belongs
+in Go.
+
+Policy code should be mostly pure and table-testable:
+
+```go
+NextAfterDelivery(intent, now) (*time.Time, done)
+ShouldExpire(intent, now) bool
+ComposeReasons(intents, notices) []string
+```
+
+The one write-path policy is the idle floor reset: when the broker observes a
+completed turn for a thread, it moves that thread's heartbeat intent to
+`now + Every` if heartbeat is enabled.
+
+The runner loop should stay thin:
+
+```text
+due := store.ListDue(now)
+
+deliver maintenance intents individually
+group due turn intents by target thread
+skip targets with pending/running turns
+for each free target:
+  collect fresh UpdateFeed notices
+  enqueue one provider=wakeup inbound turn with composed reasons
+  advance or complete delivered intents
+
+sleep until min(store.NextDue(), poke)
+```
+
+`poke` is a single in-process notification channel signaled after writers
+upsert/delete/reset intents. It is not a cache; it only wakes the timer loop so
+it can re-read from storage.
+
+### Delivery guarantees
+
+The first implementation should not build transactional claim/lock machinery or
+two-phase acknowledgement unless a real multi-runner deployment appears.
+ctgbot runs one scheduler loop in one process, and duplicate delivery after a
+crash is acceptable:
+
+- a duplicated heartbeat wake is harmless;
+- a duplicated turn wake is coalesced and cheap;
+- a duplicated maintenance keepalive ping is harmless if handlers are
+  idempotent.
+
+So v1 can use deliver-then-advance with at-least-once semantics. Document that
+choice in code so future refactors do not add distributed-scheduler ceremony
+prematurely.
+
 ## Worked examples
 
 Heartbeat, 30 minutes:
