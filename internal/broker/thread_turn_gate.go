@@ -61,6 +61,16 @@ func (g *ThreadTurnGate) Acquire(ctx context.Context, threadID modeluuid.UUID) (
 	}
 }
 
+func (g *ThreadTurnGate) Busy(threadID modeluuid.UUID) bool {
+	if g == nil || threadID.IsNull() {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	gate := g.gates[threadID]
+	return gate != nil && len(gate.sem) > 0
+}
+
 func (g *ThreadTurnGate) retain(threadID modeluuid.UUID) *threadTurnSemaphore {
 	g.mu.Lock()
 	defer g.mu.Unlock()

@@ -13,8 +13,8 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
-	schedulerpkg "github.com/bartdeboer/ctgbot/internal/scheduler"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/timedintent"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -135,37 +135,46 @@ func (c *Component) handleNow(ctx context.Context, req commandengine.Request, cm
 }
 
 func (c *Component) handleStart(ctx context.Context, req commandengine.Request, cmd startCommand) (commandengine.Result, error) {
-	if c == nil || c.jobs == nil {
-		return commandengine.Result{}, fmt.Errorf("missing scheduled job repository")
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
 	}
 	threadID := requestThreadID(req)
 	if threadID.IsNull() {
 		return commandengine.Result{}, fmt.Errorf("heartbeat start requires a current thread")
 	}
-	job, err := schedulerpkg.NewJob(jobName(threadID), cmd.Every, []string{c.commandPrefix(), "tick", threadID.String()}, time.Now().UTC())
+	service := timedintent.New(c.intents, nil, nil, nil)
+	intent, err := service.StartHeartbeat(ctx, threadID, cmd.Every, req.Context.Actor.Resolved())
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := c.jobs.Save(ctx, &job); err != nil {
-		return commandengine.Result{}, err
+	if c.jobs != nil {
+		_, _ = c.jobs.DeleteByName(ctx, jobName(threadID))
 	}
-	return commandengine.Result{Text: fmt.Sprintf("heartbeat started: every=%s thread_id=%s", job.Every, threadID)}, nil
+	return commandengine.Result{Text: fmt.Sprintf("heartbeat started: every=%s thread_id=%s", intent.Every, threadID)}, nil
 }
 
 func (c *Component) handleStop(ctx context.Context, req commandengine.Request, cmd stopCommand) (commandengine.Result, error) {
 	_ = cmd
-	if c == nil || c.jobs == nil {
-		return commandengine.Result{}, fmt.Errorf("missing scheduled job repository")
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
 	}
 	threadID := requestThreadID(req)
 	if threadID.IsNull() {
 		return commandengine.Result{}, fmt.Errorf("heartbeat stop requires a current thread")
 	}
-	deleted, err := c.jobs.DeleteByName(ctx, jobName(threadID))
+	service := timedintent.New(c.intents, nil, nil, nil)
+	deleted, err := service.StopHeartbeat(ctx, threadID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if !deleted {
+	legacyDeleted := false
+	if c.jobs != nil {
+		legacyDeleted, err = c.jobs.DeleteByName(ctx, jobName(threadID))
+		if err != nil {
+			return commandengine.Result{}, err
+		}
+	}
+	if !deleted && !legacyDeleted {
 		return commandengine.Result{Text: "heartbeat is not running"}, nil
 	}
 	return commandengine.Result{Text: "heartbeat stopped"}, nil
@@ -173,25 +182,22 @@ func (c *Component) handleStop(ctx context.Context, req commandengine.Request, c
 
 func (c *Component) handleStatus(ctx context.Context, req commandengine.Request, cmd statusCommand) (commandengine.Result, error) {
 	_ = cmd
-	if c == nil || c.jobs == nil {
-		return commandengine.Result{}, fmt.Errorf("missing scheduled job repository")
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
 	}
 	threadID := requestThreadID(req)
 	if threadID.IsNull() {
 		return commandengine.Result{}, fmt.Errorf("heartbeat status requires a current thread")
 	}
-	jobs, err := c.jobs.List(ctx)
+	service := timedintent.New(c.intents, nil, nil, nil)
+	intent, found, err := service.Heartbeat(ctx, threadID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	name := jobName(threadID)
-	for _, job := range jobs {
-		if job.Name != name {
-			continue
-		}
-		return commandengine.Result{Text: formatJobStatus(job)}, nil
+	if !found {
+		return commandengine.Result{Text: "heartbeat is not running"}, nil
 	}
-	return commandengine.Result{Text: "heartbeat is not running"}, nil
+	return commandengine.Result{Text: formatIntentStatus(*intent)}, nil
 }
 
 func (c *Component) handleTick(ctx context.Context, req commandengine.Request, cmd tickCommand) (commandengine.Result, error) {
@@ -298,34 +304,25 @@ func parseRequiredThreadID(value string) (modeluuid.UUID, error) {
 	return id, nil
 }
 
-func (c *Component) commandPrefix() string {
-	if c != nil {
-		if ref := strings.TrimSpace(c.registration.Ref()); ref != "" {
-			return ref
-		}
-	}
-	return Type
-}
-
 func jobName(threadID modeluuid.UUID) string {
 	return "heartbeat:" + threadID.String()
 }
 
-func formatJobStatus(job coremodel.ScheduledJob) string {
+func formatIntentStatus(intent coremodel.TimedIntent) string {
 	lines := []string{
 		"heartbeat is running",
-		"every: " + job.Every,
-		"enabled: " + fmt.Sprintf("%t", job.Enabled),
-		"status: " + firstNonEmpty(job.LastStatus, coremodel.ScheduledJobStatusNever),
+		"every: " + intent.Every,
+		"enabled: " + fmt.Sprintf("%t", intent.Enabled),
+		"status: " + firstNonEmpty(intent.LastStatus, coremodel.TimedIntentStatusNever),
 	}
-	if job.NextRunAt != nil {
-		lines = append(lines, "next: "+job.NextRunAt.UTC().Format(time.RFC3339))
+	if intent.NextDueAt != nil {
+		lines = append(lines, "next: "+intent.NextDueAt.UTC().Format(time.RFC3339))
 	}
-	if job.LastRunAt != nil {
-		lines = append(lines, "last: "+job.LastRunAt.UTC().Format(time.RFC3339))
+	if intent.LastRunAt != nil {
+		lines = append(lines, "last: "+intent.LastRunAt.UTC().Format(time.RFC3339))
 	}
-	if strings.TrimSpace(job.LastError) != "" {
-		lines = append(lines, "error: "+strings.TrimSpace(job.LastError))
+	if strings.TrimSpace(intent.LastError) != "" {
+		lines = append(lines, "error: "+strings.TrimSpace(intent.LastError))
 	}
 	return strings.Join(lines, "\n")
 }

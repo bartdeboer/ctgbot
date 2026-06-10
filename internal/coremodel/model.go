@@ -267,6 +267,10 @@ const (
 	ScheduledJobStatusNever   = "never"
 	ScheduledJobStatusSuccess = "success"
 	ScheduledJobStatusFailed  = "failed"
+	TimedIntentStatusNever    = "never"
+	TimedIntentStatusSuccess  = "success"
+	TimedIntentStatusFailed   = "failed"
+	TimedIntentStatusExpired  = "expired"
 )
 
 // ScheduledJob is the persisted control-plane record for commands that should
@@ -302,6 +306,37 @@ type ScheduledJob struct {
 	NextRunAt   *time.Time `gorm:"index"`
 	LastStatus  string
 	LastError   string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type TimedIntent struct {
+	ID             modeluuid.UUID `gorm:"primaryKey"`
+	TargetThreadID modeluuid.UUID `gorm:"uniqueIndex:idx_timed_intent_target_kind_key;index"`
+	OwnerThreadID  modeluuid.UUID `gorm:"index"`
+	OwnerActorID   string
+
+	Kind string `gorm:"uniqueIndex:idx_timed_intent_target_kind_key"`
+	Key  string `gorm:"uniqueIndex:idx_timed_intent_target_kind_key"`
+
+	Enabled   bool       `gorm:"index"`
+	NextDueAt *time.Time `gorm:"index"`
+	Every     string
+	Cron      string
+	Timezone  string
+	ExpiresAt *time.Time `gorm:"index"`
+	MaxRuns   int
+	RunCount  int
+
+	Delivery   string
+	HandlerRef string
+	ParamsJSON string
+	Label      string
+
+	LastRunAt  *time.Time
+	LastStatus string
+	LastError  string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

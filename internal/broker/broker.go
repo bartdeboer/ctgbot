@@ -19,9 +19,10 @@ import (
 )
 
 type Broker struct {
-	App   App
-	Turns *ThreadTurnGate
-	Logf  func(format string, args ...any)
+	App           App
+	Turns         *ThreadTurnGate
+	Logf          func(format string, args ...any)
+	TurnCompleted func(ctx context.Context, threadID modeluuid.UUID)
 }
 
 type EventOutcome struct {
@@ -318,6 +319,9 @@ func (b *Broker) handleResolvedInboundTurn(
 	outbound, err := b.runStoredThreadTurn(ctx, runtime, chat, thread, turnInbound, preparedPrompt, voiceInput, detectedInputLanguage, turnInputFiles)
 	if err != nil {
 		return failConversation(storedInbound, outbound, err)
+	}
+	if b.TurnCompleted != nil {
+		b.TurnCompleted(ctx, thread.ID)
 	}
 
 	return EventOutcome{Inbound: storedInbound, Outbound: outbound}, nil

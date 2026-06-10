@@ -14,10 +14,11 @@ import (
 
 const Type = "heartbeat"
 
-// Component owns the heartbeat command surface. Recurrence is deliberately
-// delegated to the scheduler repository; heartbeat owns what a tick means.
+// Component owns the heartbeat command surface. Recurrence is persisted as a
+// timed intent; heartbeat owns the user-facing command surface and update text.
 type Component struct {
 	registration      coremodel.Component
+	intents           repository.TimedIntentRepository
 	jobs              repository.ScheduledJobRepository
 	chatPayloadSender component.ChatPayloadSender
 	updateFeeds       []component.UpdateFeed
@@ -35,7 +36,7 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if storage == nil {
 		return nil, fmt.Errorf("missing heartbeat storage")
 	}
-	return &Component{registration: registration, jobs: storage.ScheduledJobs(), chatPayloadSender: sender, updateFeeds: feeds}, nil
+	return &Component{registration: registration, intents: storage.TimedIntents(), jobs: storage.ScheduledJobs(), chatPayloadSender: sender, updateFeeds: feeds}, nil
 }
 
 func (c *Component) Type() string { return Type }

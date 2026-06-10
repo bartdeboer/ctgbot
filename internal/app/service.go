@@ -47,9 +47,11 @@ type Service interface {
 	RuntimeImageService
 	CLICommandSurfaces(ctx context.Context) ([]component.CommandSurface, error)
 	ScheduledCommandEngine(ctx context.Context) (*commandengine.Engine, error)
+	UpdateFeeds(ctx context.Context) ([]component.UpdateFeed, error)
 	ControllerCommandEngine(ctx context.Context) (*commandengine.Engine, error)
 	InstanceIdentity(ctx context.Context) (identity.Identity, error)
 	ScheduledJobRepository() repository.ScheduledJobRepository
+	TimedIntentRepository() repository.TimedIntentRepository
 }
 
 type ChatAdminService interface {
@@ -151,6 +153,13 @@ func (s *service) ScheduledJobRepository() repository.ScheduledJobRepository {
 		return nil
 	}
 	return s.Storage.ScheduledJobs()
+}
+
+func (s *service) TimedIntentRepository() repository.TimedIntentRepository {
+	if s == nil || s.Storage == nil {
+		return nil
+	}
+	return s.Storage.TimedIntents()
 }
 
 func (s *service) ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error) {

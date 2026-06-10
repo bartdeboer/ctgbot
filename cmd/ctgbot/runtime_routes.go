@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/app"
 	"github.com/bartdeboer/ctgbot/internal/broker"
@@ -39,10 +40,12 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	nodelistener "github.com/bartdeboer/ctgbot/internal/hostbridge/node"
 	"github.com/bartdeboer/ctgbot/internal/identity"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	schedulerpkg "github.com/bartdeboer/ctgbot/internal/scheduler"
 	systempkg "github.com/bartdeboer/ctgbot/internal/system"
+	"github.com/bartdeboer/ctgbot/internal/timedintent"
 	"github.com/bartdeboer/go-clir"
 	"github.com/bartdeboer/go-clistate"
 	"golang.org/x/sync/errgroup"
@@ -100,11 +103,18 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 					return ignoreRuntimeStop(groupCtx, listener.Run(groupCtx))
 				})
 			}
+			mainBroker := broker.New(appService, logf)
+			timedService := timedintent.New(appService.TimedIntentRepository(), mainBroker, appService, logf)
+			mainBroker.TurnCompleted = func(ctx context.Context, threadID modeluuid.UUID) {
+				if err := timedService.ResetHeartbeatFloor(ctx, threadID, time.Now().UTC()); err != nil {
+					logf("heartbeat idle floor reset failed thread=%s err=%v", threadID, err)
+				}
+			}
 			group.Go(func() error {
-				return ignoreRuntimeStop(groupCtx, schedulerpkg.New(appService, logf).Run(groupCtx))
+				return ignoreRuntimeStop(groupCtx, schedulerpkg.New(appService, logf, schedulerpkg.WithTimedIntentService(timedService)).Run(groupCtx))
 			})
 			group.Go(func() error {
-				return ignoreRuntimeStop(groupCtx, broker.New(appService, logf).Run(groupCtx))
+				return ignoreRuntimeStop(groupCtx, mainBroker.Run(groupCtx))
 			})
 			return group.Wait()
 		})

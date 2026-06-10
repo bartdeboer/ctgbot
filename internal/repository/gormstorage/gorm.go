@@ -32,6 +32,7 @@ type GORMStorage struct {
 	messages                *gormMessages
 	artifacts               *gormArtifacts
 	scheduledJobs           *gormScheduledJobs
+	timedIntents            *gormTimedIntents
 	trustedControllers      *gormTrustedControllers
 }
 
@@ -57,6 +58,7 @@ func NewWithArtifactDir(db *gorm.DB, artifactDir string) *GORMStorage {
 		messages:                &gormMessages{db: db},
 		artifacts:               &gormArtifacts{db: db, artifactDir: artifactDir},
 		scheduledJobs:           &gormScheduledJobs{db: db},
+		timedIntents:            &gormTimedIntents{db: db},
 		trustedControllers:      &gormTrustedControllers{db: db},
 	}
 }
@@ -79,6 +81,7 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.ThreadMessage{},
 		&coremodel.Artifact{},
 		&coremodel.ScheduledJob{},
+		&coremodel.TimedIntent{},
 		&coremodel.TrustedController{},
 	); err != nil {
 		return err
@@ -139,6 +142,10 @@ func (s *GORMStorage) Messages() repository.MessageRepository   { return s.messa
 func (s *GORMStorage) Artifacts() repository.ArtifactRepository { return s.artifacts }
 func (s *GORMStorage) ScheduledJobs() repository.ScheduledJobRepository {
 	return s.scheduledJobs
+}
+
+func (s *GORMStorage) TimedIntents() repository.TimedIntentRepository {
+	return s.timedIntents
 }
 
 func (s *GORMStorage) TrustedControllers() repository.TrustedControllerRepository {
@@ -934,6 +941,118 @@ func (r *gormScheduledJobs) DeleteByName(ctx context.Context, name string) (bool
 		Where("name = ?", clean(name)).
 		Delete(&coremodel.ScheduledJob{})
 	return result.RowsAffected > 0, result.Error
+}
+
+type gormTimedIntents struct{ db *gorm.DB }
+
+func (r *gormTimedIntents) Save(ctx context.Context, intent *coremodel.TimedIntent) error {
+	if intent == nil {
+		return fmt.Errorf("missing timed intent")
+	}
+	cleanTimedIntent(intent)
+	ensureID(&intent.ID)
+	return r.db.WithContext(ctx).Save(intent).Error
+}
+
+func (r *gormTimedIntents) UpsertByTargetKindKey(ctx context.Context, intent *coremodel.TimedIntent) error {
+	if intent == nil {
+		return fmt.Errorf("missing timed intent")
+	}
+	cleanTimedIntent(intent)
+	var existing coremodel.TimedIntent
+	err := r.db.WithContext(ctx).
+		Where("target_thread_id = ? AND kind = ? AND key = ?", intent.TargetThreadID, intent.Kind, intent.Key).
+		First(&existing).Error
+	if err == nil {
+		intent.ID = existing.ID
+		intent.CreatedAt = existing.CreatedAt
+	} else if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	ensureID(&intent.ID)
+	return r.db.WithContext(ctx).Save(intent).Error
+}
+
+func (r *gormTimedIntents) GetByTargetKindKey(ctx context.Context, targetThreadID modeluuid.UUID, kind string, key string) (*coremodel.TimedIntent, error) {
+	var intent coremodel.TimedIntent
+	err := r.db.WithContext(ctx).
+		Where("target_thread_id = ? AND kind = ? AND key = ?", targetThreadID, clean(kind), clean(key)).
+		First(&intent).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, &repository.ShortIDNotFoundError{Ref: clean(kind) + ":" + clean(key)}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &intent, nil
+}
+
+func (r *gormTimedIntents) ListByTarget(ctx context.Context, targetThreadID modeluuid.UUID) ([]coremodel.TimedIntent, error) {
+	var intents []coremodel.TimedIntent
+	err := r.db.WithContext(ctx).
+		Where("target_thread_id = ?", targetThreadID).
+		Order("next_due_at ASC").
+		Order("kind ASC").
+		Order("key ASC").
+		Find(&intents).Error
+	return intents, err
+}
+
+func (r *gormTimedIntents) ListDue(ctx context.Context, now time.Time, limit int) ([]coremodel.TimedIntent, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("invalid timed intent limit: %d", limit)
+	}
+	var intents []coremodel.TimedIntent
+	err := r.db.WithContext(ctx).
+		Where("enabled = ? AND next_due_at IS NOT NULL AND next_due_at <= ?", true, now.UTC()).
+		Order("next_due_at ASC").
+		Order("target_thread_id ASC").
+		Order("kind ASC").
+		Order("key ASC").
+		Limit(limit).
+		Find(&intents).Error
+	return intents, err
+}
+
+func (r *gormTimedIntents) NextDue(ctx context.Context) (*time.Time, error) {
+	var intent coremodel.TimedIntent
+	err := r.db.WithContext(ctx).
+		Where("enabled = ? AND next_due_at IS NOT NULL", true).
+		Order("next_due_at ASC").
+		First(&intent).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if intent.NextDueAt == nil {
+		return nil, nil
+	}
+	next := intent.NextDueAt.UTC()
+	return &next, nil
+}
+
+func (r *gormTimedIntents) DeleteByTargetKindKey(ctx context.Context, targetThreadID modeluuid.UUID, kind string, key string) (bool, error) {
+	result := r.db.WithContext(ctx).
+		Where("target_thread_id = ? AND kind = ? AND key = ?", targetThreadID, clean(kind), clean(key)).
+		Delete(&coremodel.TimedIntent{})
+	return result.RowsAffected > 0, result.Error
+}
+
+func cleanTimedIntent(intent *coremodel.TimedIntent) {
+	intent.Kind = clean(intent.Kind)
+	intent.Key = clean(intent.Key)
+	intent.OwnerActorID = clean(intent.OwnerActorID)
+	intent.Every = clean(intent.Every)
+	intent.Cron = clean(intent.Cron)
+	intent.Timezone = clean(intent.Timezone)
+	intent.Delivery = clean(intent.Delivery)
+	intent.HandlerRef = clean(intent.HandlerRef)
+	intent.ParamsJSON = clean(intent.ParamsJSON)
+	intent.Label = clean(intent.Label)
+	intent.LastStatus = clean(intent.LastStatus)
+	intent.LastError = clean(intent.LastError)
 }
 
 type gormTrustedControllers struct{ db *gorm.DB }

@@ -53,6 +53,27 @@ func (s *service) ScheduledCommandEngine(ctx context.Context) (*commandengine.En
 	return commandset.NewBoundEngineForSource(commandengine.SourceScheduler, bound)
 }
 
+func (s *service) UpdateFeeds(ctx context.Context) ([]component.UpdateFeed, error) {
+	if s == nil || s.Storage == nil {
+		return nil, nil
+	}
+	registrations, err := s.Storage.Components().ListEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var loadedComponents []*component.Loaded
+	for _, registration := range registrations {
+		loaded, err := s.ResolveComponent(ctx, registration.ID)
+		if err != nil {
+			return nil, err
+		}
+		if loaded != nil {
+			loadedComponents = append(loadedComponents, loaded)
+		}
+	}
+	return scheduledUpdateFeeds(loadedComponents), nil
+}
+
 func scheduledUpdateFeeds(loaded []*component.Loaded) []component.UpdateFeed {
 	var feeds []component.UpdateFeed
 	for _, item := range loaded {

@@ -9,8 +9,10 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/timedintent"
 )
 
 const DefaultInterval = time.Minute
@@ -24,6 +26,7 @@ type Scheduler struct {
 	app      App
 	interval time.Duration
 	logf     func(format string, args ...any)
+	timed    *timedintent.Service
 }
 
 type Option func(*Scheduler)
@@ -33,6 +36,12 @@ func WithInterval(interval time.Duration) Option {
 		if interval > 0 {
 			s.interval = interval
 		}
+	}
+}
+
+func WithTimedIntentService(service *timedintent.Service) Option {
+	return func(s *Scheduler) {
+		s.timed = service
 	}
 }
 
@@ -74,7 +83,89 @@ func (s *Scheduler) RunDue(ctx context.Context) (RunDueResult, error) {
 	if s == nil || s.app == nil {
 		return RunDueResult{}, fmt.Errorf("missing scheduler app")
 	}
-	return RunDue(ctx, s.app.ScheduledJobRepository(), s.app, s.logf)
+	if s.timed != nil {
+		if err := migrateLegacyHeartbeatJobs(ctx, s.app.ScheduledJobRepository(), s.timed.Intents, s.logf); err != nil {
+			s.logf("legacy heartbeat migration failed: %v", err)
+		}
+	}
+	result, err := RunDue(ctx, s.app.ScheduledJobRepository(), s.app, s.logf)
+	if s.timed != nil {
+		timedResult, timedErr := s.timed.RunDue(ctx)
+		result.TimedDue = timedResult.Due
+		result.TimedDelivered = timedResult.Delivered
+		result.TimedSkippedBusy = timedResult.SkippedBusy
+		result.TimedFailed = timedResult.Failed
+		result.TimedExpired = timedResult.Expired
+		if err == nil {
+			err = timedErr
+		} else if timedErr != nil {
+			s.logf("timed intents run due failed: %v", timedErr)
+		}
+	}
+	return result, err
+}
+
+func migrateLegacyHeartbeatJobs(ctx context.Context, jobs repository.ScheduledJobRepository, intents repository.TimedIntentRepository, logf func(format string, args ...any)) error {
+	if jobs == nil || intents == nil {
+		return nil
+	}
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+	all, err := jobs.List(ctx)
+	if err != nil {
+		return err
+	}
+	for _, job := range all {
+		if !strings.HasPrefix(job.Name, "heartbeat:") {
+			continue
+		}
+		threadID, err := modeluuid.Parse(strings.TrimPrefix(job.Name, "heartbeat:"))
+		if err != nil || threadID.IsNull() {
+			logf("skip invalid legacy heartbeat job name=%s err=%v", job.Name, err)
+			continue
+		}
+		if _, err := time.ParseDuration(strings.TrimSpace(job.Every)); err != nil {
+			logf("skip invalid legacy heartbeat job name=%s every=%s err=%v", job.Name, job.Every, err)
+			continue
+		}
+		next := time.Now().UTC()
+		if job.NextRunAt != nil {
+			next = job.NextRunAt.UTC()
+		}
+		intent := coremodel.TimedIntent{
+			TargetThreadID: threadID,
+			OwnerThreadID:  threadID,
+			OwnerActorID:   "legacy-scheduler",
+			Kind:           timedintent.KindHeartbeat,
+			Key:            timedintent.KeyDefault,
+			Enabled:        job.Enabled,
+			NextDueAt:      &next,
+			Every:          job.Every,
+			Delivery:       timedintent.DeliveryTurn,
+			Label:          "heartbeat",
+			LastRunAt:      job.LastRunAt,
+			LastStatus:     firstNonEmpty(job.LastStatus, coremodel.TimedIntentStatusNever),
+			LastError:      job.LastError,
+		}
+		if err := intents.UpsertByTargetKindKey(ctx, &intent); err != nil {
+			return err
+		}
+		if _, err := jobs.DeleteByName(ctx, job.Name); err != nil {
+			return err
+		}
+		logf("migrated legacy heartbeat job thread=%s", threadID)
+	}
+	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 type ScheduledCommandEngineProvider interface {
@@ -82,9 +173,14 @@ type ScheduledCommandEngineProvider interface {
 }
 
 type RunDueResult struct {
-	Due       int
-	Succeeded int
-	Failed    int
+	Due              int
+	Succeeded        int
+	Failed           int
+	TimedDue         int
+	TimedDelivered   int
+	TimedSkippedBusy int
+	TimedFailed      int
+	TimedExpired     int
 }
 
 func RunDue(ctx context.Context, jobs repository.ScheduledJobRepository, provider ScheduledCommandEngineProvider, logf func(format string, args ...any)) (RunDueResult, error) {

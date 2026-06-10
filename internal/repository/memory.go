@@ -28,6 +28,7 @@ type MemoryStorage struct {
 	messages                map[modeluuid.UUID]coremodel.ThreadMessage
 	artifacts               map[modeluuid.UUID]coremodel.Artifact
 	scheduledJobs           map[modeluuid.UUID]coremodel.ScheduledJob
+	timedIntents            map[modeluuid.UUID]coremodel.TimedIntent
 	trustedControllers      map[modeluuid.UUID]coremodel.TrustedController
 }
 
@@ -46,6 +47,7 @@ func NewMemory() *MemoryStorage {
 		messages:                map[modeluuid.UUID]coremodel.ThreadMessage{},
 		artifacts:               map[modeluuid.UUID]coremodel.Artifact{},
 		scheduledJobs:           map[modeluuid.UUID]coremodel.ScheduledJob{},
+		timedIntents:            map[modeluuid.UUID]coremodel.TimedIntent{},
 		trustedControllers:      map[modeluuid.UUID]coremodel.TrustedController{},
 	}
 }
@@ -90,6 +92,9 @@ func (s *MemoryStorage) Messages() MessageRepository   { return memoryMessages{s
 func (s *MemoryStorage) Artifacts() ArtifactRepository { return memoryArtifacts{s} }
 func (s *MemoryStorage) ScheduledJobs() ScheduledJobRepository {
 	return memoryScheduledJobs{s}
+}
+func (s *MemoryStorage) TimedIntents() TimedIntentRepository {
+	return memoryTimedIntents{s}
 }
 
 func (s *MemoryStorage) TrustedControllers() TrustedControllerRepository {
@@ -137,6 +142,9 @@ func (s *MemoryStorage) cloneLocked() *MemoryStorage {
 	for k, v := range s.scheduledJobs {
 		clone.scheduledJobs[k] = v
 	}
+	for k, v := range s.timedIntents {
+		clone.timedIntents[k] = v
+	}
 	for k, v := range s.trustedControllers {
 		clone.trustedControllers[k] = v
 	}
@@ -160,6 +168,7 @@ func (s *MemoryStorage) replaceLocked(next *MemoryStorage) {
 	s.messages = next.messages
 	s.artifacts = next.artifacts
 	s.scheduledJobs = next.scheduledJobs
+	s.timedIntents = next.timedIntents
 	s.trustedControllers = next.trustedControllers
 }
 
@@ -1198,6 +1207,172 @@ func (r memoryScheduledJobs) DeleteByName(ctx context.Context, name string) (boo
 		}
 	}
 	return false, nil
+}
+
+type memoryTimedIntents struct{ s *MemoryStorage }
+
+func (r memoryTimedIntents) Save(ctx context.Context, intent *coremodel.TimedIntent) error {
+	_ = ctx
+	if intent == nil {
+		return nil
+	}
+	cleanTimedIntent(intent)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	now := time.Now()
+	if intent.ID.IsNull() {
+		intent.ID = modeluuid.New()
+		intent.CreatedAt = now
+	} else if existing, ok := r.s.timedIntents[intent.ID]; ok && intent.CreatedAt.IsZero() {
+		intent.CreatedAt = existing.CreatedAt
+	}
+	intent.UpdatedAt = now
+	r.s.timedIntents[intent.ID] = *intent
+	return nil
+}
+
+func (r memoryTimedIntents) UpsertByTargetKindKey(ctx context.Context, intent *coremodel.TimedIntent) error {
+	_ = ctx
+	if intent == nil {
+		return nil
+	}
+	cleanTimedIntent(intent)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	now := time.Now()
+	for _, existing := range r.s.timedIntents {
+		if existing.TargetThreadID == intent.TargetThreadID && existing.Kind == intent.Kind && existing.Key == intent.Key {
+			intent.ID = existing.ID
+			intent.CreatedAt = existing.CreatedAt
+			break
+		}
+	}
+	if intent.ID.IsNull() {
+		intent.ID = modeluuid.New()
+		intent.CreatedAt = now
+	}
+	intent.UpdatedAt = now
+	r.s.timedIntents[intent.ID] = *intent
+	return nil
+}
+
+func (r memoryTimedIntents) GetByTargetKindKey(ctx context.Context, targetThreadID modeluuid.UUID, kind string, key string) (*coremodel.TimedIntent, error) {
+	_ = ctx
+	kind = strings.TrimSpace(kind)
+	key = strings.TrimSpace(key)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for _, intent := range r.s.timedIntents {
+		if intent.TargetThreadID == targetThreadID && intent.Kind == kind && intent.Key == key {
+			item := intent
+			return &item, nil
+		}
+	}
+	return nil, &ShortIDNotFoundError{Ref: strings.TrimSpace(kind + ":" + key)}
+}
+
+func (r memoryTimedIntents) ListByTarget(ctx context.Context, targetThreadID modeluuid.UUID) ([]coremodel.TimedIntent, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var out []coremodel.TimedIntent
+	for _, intent := range r.s.timedIntents {
+		if intent.TargetThreadID == targetThreadID {
+			out = append(out, intent)
+		}
+	}
+	sortTimedIntents(out)
+	return out, nil
+}
+
+func (r memoryTimedIntents) ListDue(ctx context.Context, now time.Time, limit int) ([]coremodel.TimedIntent, error) {
+	_ = ctx
+	if limit <= 0 {
+		return nil, fmt.Errorf("invalid timed intent limit: %d", limit)
+	}
+	now = now.UTC()
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var out []coremodel.TimedIntent
+	for _, intent := range r.s.timedIntents {
+		if !intent.Enabled || intent.NextDueAt == nil || intent.NextDueAt.After(now) {
+			continue
+		}
+		out = append(out, intent)
+	}
+	sortTimedIntents(out)
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (r memoryTimedIntents) NextDue(ctx context.Context) (*time.Time, error) {
+	_ = ctx
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var next *time.Time
+	for _, intent := range r.s.timedIntents {
+		if !intent.Enabled || intent.NextDueAt == nil {
+			continue
+		}
+		if next == nil || intent.NextDueAt.Before(*next) {
+			value := intent.NextDueAt.UTC()
+			next = &value
+		}
+	}
+	return next, nil
+}
+
+func (r memoryTimedIntents) DeleteByTargetKindKey(ctx context.Context, targetThreadID modeluuid.UUID, kind string, key string) (bool, error) {
+	_ = ctx
+	kind = strings.TrimSpace(kind)
+	key = strings.TrimSpace(key)
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for id, intent := range r.s.timedIntents {
+		if intent.TargetThreadID == targetThreadID && intent.Kind == kind && intent.Key == key {
+			delete(r.s.timedIntents, id)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func cleanTimedIntent(intent *coremodel.TimedIntent) {
+	intent.Kind = strings.TrimSpace(intent.Kind)
+	intent.Key = strings.TrimSpace(intent.Key)
+	intent.OwnerActorID = strings.TrimSpace(intent.OwnerActorID)
+	intent.Every = strings.TrimSpace(intent.Every)
+	intent.Cron = strings.TrimSpace(intent.Cron)
+	intent.Timezone = strings.TrimSpace(intent.Timezone)
+	intent.Delivery = strings.TrimSpace(intent.Delivery)
+	intent.HandlerRef = strings.TrimSpace(intent.HandlerRef)
+	intent.ParamsJSON = strings.TrimSpace(intent.ParamsJSON)
+	intent.Label = strings.TrimSpace(intent.Label)
+	intent.LastStatus = strings.TrimSpace(intent.LastStatus)
+	intent.LastError = strings.TrimSpace(intent.LastError)
+}
+
+func sortTimedIntents(out []coremodel.TimedIntent) {
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].NextDueAt != nil && out[j].NextDueAt != nil {
+			if !out[i].NextDueAt.Equal(*out[j].NextDueAt) {
+				return out[i].NextDueAt.Before(*out[j].NextDueAt)
+			}
+		} else if out[i].NextDueAt != nil {
+			return true
+		} else if out[j].NextDueAt != nil {
+			return false
+		}
+		if out[i].TargetThreadID != out[j].TargetThreadID {
+			return out[i].TargetThreadID.String() < out[j].TargetThreadID.String()
+		}
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return out[i].Key < out[j].Key
+	})
 }
 
 type memoryTrustedControllers struct{ s *MemoryStorage }

@@ -12,11 +12,10 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
-	schedulerpkg "github.com/bartdeboer/ctgbot/internal/scheduler"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
-func TestHeartbeatStartCreatesScheduledTickForCurrentThread(t *testing.T) {
+func TestHeartbeatStartCreatesTimedIntentForCurrentThread(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()
 	c := newTestComponent(storage, nil)
@@ -31,23 +30,21 @@ func TestHeartbeatStartCreatesScheduledTickForCurrentThread(t *testing.T) {
 		t.Fatalf("result = %q, want started", result.Text)
 	}
 
-	jobs, err := storage.ScheduledJobs().List(ctx)
+	intents, err := storage.TimedIntents().ListByTarget(ctx, threadID)
 	if err != nil {
-		t.Fatalf("List() error = %v", err)
+		t.Fatalf("ListByTarget() error = %v", err)
 	}
-	if len(jobs) != 1 {
-		t.Fatalf("jobs len = %d, want 1", len(jobs))
+	if len(intents) != 1 {
+		t.Fatalf("intents len = %d, want 1", len(intents))
 	}
-	if jobs[0].Name != jobName(threadID) {
-		t.Fatalf("job name = %q, want %q", jobs[0].Name, jobName(threadID))
+	if got, want := intents[0].Kind+":"+intents[0].Key, "heartbeat:default"; got != want {
+		t.Fatalf("intent identity = %q, want %q", got, want)
 	}
-	argv, err := schedulerpkg.Argv(jobs[0])
-	if err != nil {
-		t.Fatalf("schedulerArgv() error = %v", err)
+	if got, want := intents[0].Every, "15m"; got != want {
+		t.Fatalf("intent every = %q, want %q", got, want)
 	}
-	want := strings.Join([]string{Type, "tick", threadID.String()}, " ")
-	if got := strings.Join(argv, " "); got != want {
-		t.Fatalf("job argv = %q, want %q", got, want)
+	if intents[0].NextDueAt == nil {
+		t.Fatalf("intent next due is nil")
 	}
 }
 
@@ -92,7 +89,7 @@ func TestHeartbeatNowIncludesUpdateFeeds(t *testing.T) {
 }
 
 func newTestComponent(storage *repository.MemoryStorage, sender componentpkg.ChatPayloadSender) *Component {
-	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, jobs: storage.ScheduledJobs(), chatPayloadSender: sender}
+	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, intents: storage.TimedIntents(), jobs: storage.ScheduledJobs(), chatPayloadSender: sender}
 }
 
 func newTestEngine(t *testing.T, c *Component, source commandengine.Source) *commandengine.Engine {

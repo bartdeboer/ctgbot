@@ -23,6 +23,7 @@ type Storage interface {
 	Messages() MessageRepository
 	Artifacts() ArtifactRepository
 	ScheduledJobs() ScheduledJobRepository
+	TimedIntents() TimedIntentRepository
 	TrustedControllers() TrustedControllerRepository
 }
 
@@ -137,4 +138,14 @@ type ScheduledJobRepository interface {
 	List(ctx context.Context) ([]coremodel.ScheduledJob, error)
 	ListDue(ctx context.Context, now time.Time) ([]coremodel.ScheduledJob, error)
 	DeleteByName(ctx context.Context, name string) (bool, error)
+}
+
+type TimedIntentRepository interface {
+	Save(ctx context.Context, intent *coremodel.TimedIntent) error
+	UpsertByTargetKindKey(ctx context.Context, intent *coremodel.TimedIntent) error
+	GetByTargetKindKey(ctx context.Context, targetThreadID modeluuid.UUID, kind string, key string) (*coremodel.TimedIntent, error)
+	ListByTarget(ctx context.Context, targetThreadID modeluuid.UUID) ([]coremodel.TimedIntent, error)
+	ListDue(ctx context.Context, now time.Time, limit int) ([]coremodel.TimedIntent, error)
+	NextDue(ctx context.Context) (*time.Time, error)
+	DeleteByTargetKindKey(ctx context.Context, targetThreadID modeluuid.UUID, kind string, key string) (bool, error)
 }
