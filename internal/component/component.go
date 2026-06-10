@@ -346,10 +346,19 @@ type MessageSender interface {
 	SendMessage(ctx context.Context, request MessageSendRequest) (MessageSendResult, error)
 }
 
-type Agent interface {
+// TurnHandler participates in the broker turn pipeline.
+//
+// Claude/Codex-style components use this to produce agent replies, while
+// lighter components can use it for turn-shaped behavior such as verbatim
+// message-board relays.
+type TurnHandler interface {
 	Component
 	HandleTurn(ctx context.Context, turn Turn) (*TurnResult, error)
 }
+
+// Agent is kept as a compatibility alias for older component assertions.
+// New code should use TurnHandler.
+type Agent = TurnHandler
 
 // CompletionEngine receives a normalized completion prompt.
 //

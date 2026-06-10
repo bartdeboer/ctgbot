@@ -37,7 +37,7 @@ type Component struct {
 	logger           *log.Logger
 }
 
-var _ component.Agent = (*Component)(nil)
+var _ component.TurnHandler = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
 

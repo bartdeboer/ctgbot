@@ -31,7 +31,7 @@ const (
 	stopAfterTurnTimeout = agentcommon.DefaultStopAfterTurnTimeout
 )
 
-var _ component.Agent = (*Component)(nil)
+var _ component.TurnHandler = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 var _ component.Authenticator = (*Component)(nil)
 var _ component.AuthStatusReporter = (*Component)(nil)

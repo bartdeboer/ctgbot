@@ -45,7 +45,7 @@ type ChatRuntime struct {
 
 type AgentBinding struct {
 	ComponentID modeluuid.UUID
-	Agent       component.Agent
+	TurnHandler component.TurnHandler
 	Completion  component.CompletionEngine
 }
 
@@ -344,7 +344,7 @@ func (b *Broker) runAgentTurn(
 		}
 		return result.Final, nil
 	}
-	if agentBinding.Agent == nil {
+	if agentBinding.TurnHandler == nil {
 		return nil, nil
 	}
 	history, err := b.App.ThreadMessages(ctx, thread.ID)
@@ -356,7 +356,7 @@ func (b *Broker) runAgentTurn(
 			history[i] = inbound
 		}
 	}
-	result, err := agentBinding.Agent.HandleTurn(ctx, component.Turn{
+	result, err := agentBinding.TurnHandler.HandleTurn(ctx, component.Turn{
 		Chat:    chat,
 		Thread:  thread,
 		Inbound: inbound,
@@ -373,8 +373,8 @@ func agentType(binding AgentBinding) string {
 	if binding.Completion != nil {
 		return binding.Completion.Type()
 	}
-	if binding.Agent != nil {
-		return binding.Agent.Type()
+	if binding.TurnHandler != nil {
+		return binding.TurnHandler.Type()
 	}
 	return ""
 }

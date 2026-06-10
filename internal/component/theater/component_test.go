@@ -153,3 +153,86 @@ func appendTestMessage(t *testing.T, ctx context.Context, storage repository.Sto
 		t.Fatalf("append message: %v", err)
 	}
 }
+
+func TestTheaterHandleTurnRelaysInternalThreadPosts(t *testing.T) {
+	component := newTestComponent(t)
+	component.registration.ID = modeluuid.New()
+	result, err := component.HandleTurn(context.Background(), componentTurn("thread", "Claude #1", "parser image ready"))
+	if err != nil {
+		t.Fatalf("HandleTurn() error = %v", err)
+	}
+	if result == nil || result.Final == nil {
+		t.Fatal("HandleTurn() returned no final message")
+	}
+	if got, want := result.Final.Text, "Claude #1: parser image ready"; got != want {
+		t.Fatalf("final text = %q, want %q", got, want)
+	}
+	if result.Final.ComponentID != component.registration.ID {
+		t.Fatalf("component id = %s, want %s", result.Final.ComponentID, component.registration.ID)
+	}
+}
+
+func TestTheaterHandleTurnIgnoresExternalProviderPosts(t *testing.T) {
+	component := newTestComponent(t)
+	result, err := component.HandleTurn(context.Background(), componentTurn("telegram", "Bart", "hello"))
+	if err != nil {
+		t.Fatalf("HandleTurn() error = %v", err)
+	}
+	if result != nil {
+		t.Fatalf("HandleTurn() = %#v, want nil", result)
+	}
+}
+
+func TestTheaterReadHidesOwnRelayMessages(t *testing.T) {
+	ctx := context.Background()
+	component := newTestComponent(t)
+	component.registration.ID = modeluuid.New()
+	engine := newTestEngine(t, component)
+	viewer := createTestThread(t, ctx, component.storage, "Codex #1", "ctgbot 2")
+	target := createTestThread(t, ctx, component.storage, "Theaters", "qwen-parser-lab")
+	appendTestMessage(t, ctx, component.storage, target, "Claude #1", "parser image ready", time.Date(2026, 6, 9, 9, 0, 0, 0, time.UTC))
+	if err := component.storage.Messages().Append(ctx, &coremodel.ThreadMessage{
+		ID:          modeluuid.New(),
+		ChatID:      target.ChatID,
+		ThreadID:    target.ID,
+		Direction:   coremodel.MessageDirectionOutbound,
+		Role:        coremodel.MessageRoleAgent,
+		Kind:        coremodel.MessageKindMessage,
+		ComponentID: component.registration.ID,
+		ActorID:     Type,
+		ActorLabel:  "theater",
+		Text:        "Claude #1: parser image ready",
+		CreatedAt:   time.Date(2026, 6, 9, 9, 0, 1, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("append relay message: %v", err)
+	}
+	if _, err := component.store.subscribe(ctx, viewer.ID, target.ID, target.Label); err != nil {
+		t.Fatal(err)
+	}
+	updates, err := component.NewUpdates(ctx, componentUpdateRequest(viewer.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updates) != 1 || updates[0].Count != 1 {
+		t.Fatalf("updates = %#v, want one visible message", updates)
+	}
+	read, err := engine.Run(ctx, testRequest(viewer.ID), []string{Type, target.ID.String(), "read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(read.Text, "theater: Claude #1") || strings.Count(read.Text, "parser image ready") != 1 {
+		t.Fatalf("read = %q, want only original inbound post", read.Text)
+	}
+}
+
+func componentTurn(provider string, actorLabel string, text string) component.Turn {
+	return component.Turn{Inbound: coremodel.ThreadMessage{
+		Direction:    coremodel.MessageDirectionInbound,
+		Role:         coremodel.MessageRoleUser,
+		Kind:         coremodel.MessageKindMessage,
+		ActorID:      actorLabel,
+		ActorLabel:   actorLabel,
+		Text:         text,
+		MetadataJSON: "provider=" + provider,
+	}}
+}

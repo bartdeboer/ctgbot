@@ -701,18 +701,6 @@ func (r *gormMessages) ListByThreadID(ctx context.Context, threadID modeluuid.UU
 	return out, err
 }
 
-func (r *gormMessages) CountByThreadIDSince(ctx context.Context, threadID modeluuid.UUID, since *time.Time) (int64, error) {
-	query := r.db.WithContext(ctx).Model(&coremodel.ThreadMessage{}).Where("thread_id = ?", threadID)
-	if since != nil {
-		query = query.Where("created_at > ?", since.UTC())
-	}
-	var count int64
-	if err := query.Count(&count).Error; err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
 func (r *gormMessages) DeleteByThreadID(ctx context.Context, threadID modeluuid.UUID) (int64, error) {
 	result := r.db.WithContext(ctx).Where("thread_id = ?", threadID).Delete(&coremodel.ThreadMessage{})
 	return result.RowsAffected, result.Error

@@ -34,7 +34,7 @@ const (
 	stopAfterTurnTimeout = agentcommon.DefaultStopAfterTurnTimeout
 )
 
-var _ component.Agent = (*Component)(nil)
+var _ component.TurnHandler = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
 var _ component.ThreadRuntimeController = (*Component)(nil)
 

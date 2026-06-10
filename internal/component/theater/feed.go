@@ -22,7 +22,7 @@ func (c *Component) pendingUpdates(ctx context.Context, subscriberThreadID model
 		if err != nil {
 			return nil, err
 		}
-		count, err := c.storage.Messages().CountByThreadIDSince(ctx, targetThreadID, subscription.LastReadAt)
+		count, err := c.unreadCount(ctx, targetThreadID, subscription.LastReadAt)
 		if err != nil {
 			return nil, err
 		}
