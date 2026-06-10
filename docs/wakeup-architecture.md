@@ -218,6 +218,71 @@ Recommended slices:
 
 ## Open design questions
 
+These questions should be resolved while designing the first wakeup slice, not
+after code has already accumulated around the wrong abstraction.
+
+### Evolve scheduler or introduce schedulerv2?
+
+The current scheduler already has useful pieces: persisted jobs, cron parsing
+work, restart restoration, and no catch-up storm. But wake delivery changes the
+center of gravity from "run this argv later" to "wake this thread later with
+these reasons".
+
+If adapting the current scheduler makes that primitive feel bolted on, prefer a
+fresh schedulerv2. The deciding test is whether the core happy path can read as:
+
+```text
+store wake -> due wake -> coalesce reasons -> enqueue inbound turn
+```
+
+If the implementation instead reads as command jobs pretending to be wakes, the
+abstraction is wrong.
+
+### Wake storage shape
+
+A wake needs at least:
+
+- target thread;
+- due time;
+- reason list;
+- source/kind such as heartbeat, cron, or turn override;
+- owner / creator for authorization and cleanup;
+- coalescing key, most likely thread ID;
+- delivery state.
+
+It should not store large message content. Heartbeat reasons are badges and
+hints, not copied theater posts.
+
+### Authorization and ownership
+
+Scheduler ownership should be explicit. An agent should not be able to list,
+remove, or create wakeups for unrelated threads just because it can call a
+scheduler command.
+
+For v1, scope scheduler and heartbeat commands to the current thread by default.
+Broader administrative control can remain root/operator-only.
+
+### Delivery identity
+
+Wake delivery should use a distinct provider identity, for example `wakeup`, so
+agents and logs can distinguish:
+
+- Telegram/user messages;
+- direct internal thread messages;
+- scheduled wake messages.
+
+The wake provider should enter through the same inbound broker path as other
+messages. It should not be a special direct call into an agent component.
+
+### Coalescing boundary
+
+Coalescing is per target thread. Multiple reasons can merge into one pending
+wake turn for the same thread, but wakes for different threads are independent.
+
+The first implementation can be conservative: if a turn is pending or running,
+merge reasons into the next pending wake rather than enqueue another turn. Later
+work can make this more sophisticated if real workloads need it.
+
 - Should wake reasons be stored as structured JSON, plain text, or both?
 - Should heartbeat notice generation happen at scheduling time or delivery time?
   Delivery time is likely fresher for theater unread counts.
