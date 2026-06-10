@@ -49,6 +49,46 @@ func TestHeartbeatStartCreatesTimedIntentForCurrentThread(t *testing.T) {
 	}
 }
 
+func TestHeartbeatStartCronCreatesTimedIntentForCurrentThread(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	c := newTestComponent(storage, nil)
+	engine := newTestEngine(t, c, commandengine.SourceMessage)
+	threadID := modeluuid.New()
+
+	result, err := engine.Run(ctx, testRequest(threadID), []string{Type, "start", "cron", "0 9-17/2 * * 1-5", "--tz", "Europe/Amsterdam", "--reason", "check income-growth theater"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if !strings.Contains(result.Text, `cron="0 9-17/2 * * 1-5"`) {
+		t.Fatalf("result = %q, want cron", result.Text)
+	}
+
+	intents, err := storage.TimedIntents().ListByTarget(ctx, threadID)
+	if err != nil {
+		t.Fatalf("ListByTarget() error = %v", err)
+	}
+	if len(intents) != 1 {
+		t.Fatalf("intents len = %d, want 1", len(intents))
+	}
+	intent := intents[0]
+	if got, want := intent.Kind+":"+intent.Key, "heartbeat:default"; got != want {
+		t.Fatalf("intent identity = %q, want %q", got, want)
+	}
+	if got, want := intent.Cron, "0 9-17/2 * * 1-5"; got != want {
+		t.Fatalf("intent cron = %q, want %q", got, want)
+	}
+	if got, want := intent.Timezone, "Europe/Amsterdam"; got != want {
+		t.Fatalf("intent timezone = %q, want %q", got, want)
+	}
+	if got, want := intent.Label, "check income-growth theater"; got != want {
+		t.Fatalf("intent label = %q, want %q", got, want)
+	}
+	if intent.NextDueAt == nil {
+		t.Fatalf("intent next due is nil")
+	}
+}
+
 func TestHeartbeatTickSendsPayloadToThread(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()

@@ -398,6 +398,7 @@ func TestCodexBootstrapFixtureMainDeveloperInstructions(t *testing.T) {
 			"hostbridge component list",
 			"hostbridge component <component> help",
 			"hostbridge heartbeat now",
+			"hostbridge heartbeat start cron <expr>",
 			"hostbridge heartbeat start <interval>",
 			"hostbridge heartbeat status",
 			"hostbridge heartbeat stop",

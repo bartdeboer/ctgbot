@@ -457,6 +457,7 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 		KeepRepliesConcise:        instructions.KeepRepliesConcise,
 		BinariesSynopsis:          runAliasSynopsis,
 		HostbridgeControlSynopsis: controlSynopsis,
+		HostbridgeExamples:        agentcommon.HostbridgeExampleLines(controlSynopsis),
 		RuntimeNotices:            append([]string(nil), instructions.RuntimeNotices...),
 	})
 	if err != nil {

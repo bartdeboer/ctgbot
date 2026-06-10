@@ -114,6 +114,78 @@ func TestResetHeartbeatFloorMovesNextDueFromCompletedTurn(t *testing.T) {
 	}
 }
 
+func TestStartCronHeartbeatSchedulesNextCronTime(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	threadID := modeluuid.New()
+	service := New(storage.TimedIntents(), nil, nil, nil)
+	now := time.Date(2026, 6, 10, 8, 30, 0, 0, time.UTC)
+	service.Now = func() time.Time { return now }
+
+	intent, err := service.StartCronHeartbeat(ctx, threadID, "0 9-17/2 * * 1-5", "Europe/Amsterdam", "check income-growth theater", coremodel.Actor{ID: "agent"})
+	if err != nil {
+		t.Fatalf("StartCronHeartbeat() error = %v", err)
+	}
+	if got, want := intent.Cron, "0 9-17/2 * * 1-5"; got != want {
+		t.Fatalf("cron = %q, want %q", got, want)
+	}
+	if got, want := intent.Timezone, "Europe/Amsterdam"; got != want {
+		t.Fatalf("timezone = %q, want %q", got, want)
+	}
+	if got, want := intent.Label, "check income-growth theater"; got != want {
+		t.Fatalf("label = %q, want %q", got, want)
+	}
+	want := time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC) // 11:00 Europe/Amsterdam.
+	if intent.NextDueAt == nil || !intent.NextDueAt.Equal(want) {
+		t.Fatalf("next due = %v, want %v", intent.NextDueAt, want)
+	}
+}
+
+func TestRunDueAdvancesCronHeartbeatToNextCronTime(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	threadID := modeluuid.New()
+	now := time.Date(2026, 6, 10, 9, 0, 0, 0, time.UTC)
+	deliverer := &fakeDeliverer{}
+	service := New(storage.TimedIntents(), deliverer, nil, nil)
+	service.Now = func() time.Time { return now }
+
+	intent := coremodel.TimedIntent{
+		TargetThreadID: threadID,
+		OwnerThreadID:  threadID,
+		Kind:           KindHeartbeat,
+		Key:            KeyDefault,
+		Enabled:        true,
+		NextDueAt:      timePtr(now.Add(-time.Minute)),
+		Cron:           "0 9-17/2 * * 1-5",
+		Timezone:       "Europe/Amsterdam",
+		Delivery:       DeliveryTurn,
+		Label:          "check income-growth theater",
+	}
+	if err := storage.TimedIntents().UpsertByTargetKindKey(ctx, &intent); err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	result, err := service.RunDue(ctx)
+	if err != nil {
+		t.Fatalf("RunDue() error = %v", err)
+	}
+	if got, want := result.Delivered, 1; got != want {
+		t.Fatalf("delivered = %d, want %d", got, want)
+	}
+	if !strings.Contains(deliverer.text, "heartbeat: check income-growth theater") {
+		t.Fatalf("wake text = %q, want heartbeat reason", deliverer.text)
+	}
+	stored, found, err := service.Heartbeat(ctx, threadID)
+	if err != nil || !found {
+		t.Fatalf("Heartbeat() found=%v err=%v", found, err)
+	}
+	want := time.Date(2026, 6, 10, 11, 0, 0, 0, time.UTC) // 13:00 Europe/Amsterdam.
+	if stored.NextDueAt == nil || !stored.NextDueAt.Equal(want) {
+		t.Fatalf("next due = %v, want %v", stored.NextDueAt, want)
+	}
+}
+
 func TestRunDueExpiresIntentBeforeDelivery(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()

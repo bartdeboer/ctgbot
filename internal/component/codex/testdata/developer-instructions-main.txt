@@ -21,7 +21,7 @@ hostbridge [
     help | list | <component> help
   ]
   heartbeat [ # autonomous keepalive and self-scheduling
-    now | start <interval> | status | stop
+    now | start [ cron <expr> | <interval> ] | status | stop
   ]
   search <query>
   send <text>
@@ -38,6 +38,9 @@ hostbridge [
   run <alias> [args...]
 ]
 ```
+- Hostbridge examples:
+  - heartbeat examples: `hostbridge heartbeat start 2h`; workday cron: `hostbridge heartbeat start cron "CRON_TZ=Europe/Amsterdam 0 9-17/2 * * 1-5" --reason "check theater updates"`; immediate check: `hostbridge heartbeat now`
+  - theater examples: `hostbridge theater <thread> subscribe`; `hostbridge theater <thread> read`
 - Available hostbridge run aliases (on host):
 ```
 hostbridge run [

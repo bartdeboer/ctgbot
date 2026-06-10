@@ -21,6 +21,12 @@ You are operating inside a dedicated Docker container for this conversation.
 {{ .HostbridgeControlSynopsis }}
 ```
 {{- end }}
+{{- if .HostbridgeExamples }}
+- Hostbridge examples:
+{{- range .HostbridgeExamples }}
+  - {{ . }}
+{{- end }}
+{{- end }}
 - Available hostbridge run aliases (on host):
 ```
 {{ .BinariesSynopsis }}

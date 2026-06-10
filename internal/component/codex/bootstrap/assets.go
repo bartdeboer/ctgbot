@@ -19,6 +19,7 @@ type TemplateData struct {
 	HostbridgeAddr            string
 	BinariesSynopsis          string
 	HostbridgeControlSynopsis string
+	HostbridgeExamples        []string
 	ChatProvider              string
 	MessagePrefix             string
 	KeepRepliesConcise        bool

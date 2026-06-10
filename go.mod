@@ -9,6 +9,7 @@ require (
 	github.com/bartdeboer/go-clir v0.3.0
 	github.com/bartdeboer/go-clistate v0.0.10
 	github.com/go-telegram/bot v1.17.0
+	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/oauth2 v0.31.0
 	golang.org/x/sync v0.17.0
 	google.golang.org/api v0.250.0

@@ -281,6 +281,12 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 	if strings.TrimSpace(controlSynopsis) != "" {
 		lines = append(lines, "", "Canonical hostbridge commands:", "```text", controlSynopsis, "```")
 	}
+	if examples := agentcommon.HostbridgeExampleLines(controlSynopsis); len(examples) > 0 {
+		lines = append(lines, "", "Hostbridge examples:")
+		for _, example := range examples {
+			lines = append(lines, "- "+example)
+		}
+	}
 	lines = append(lines, "", "Available hostbridge run aliases (on host):", "```text", runAliasSynopsis, "```")
 	for _, notice := range instructions.RuntimeNotices {
 		if notice = strings.TrimSpace(notice); notice != "" {

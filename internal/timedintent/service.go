@@ -103,6 +103,43 @@ func (s *Service) StartHeartbeat(ctx context.Context, threadID modeluuid.UUID, e
 	return &intent, nil
 }
 
+func (s *Service) StartCronHeartbeat(ctx context.Context, threadID modeluuid.UUID, expr string, timezone string, label string, owner coremodel.Actor) (*coremodel.TimedIntent, error) {
+	if s == nil || s.Intents == nil {
+		return nil, fmt.Errorf("missing timed intent repository")
+	}
+	if threadID.IsNull() {
+		return nil, fmt.Errorf("missing thread id")
+	}
+	expr = strings.TrimSpace(expr)
+	timezone = strings.TrimSpace(timezone)
+	next, err := nextCronDue(expr, timezone, s.now())
+	if err != nil {
+		return nil, fmt.Errorf("parse heartbeat cron: %w", err)
+	}
+	label = strings.TrimSpace(label)
+	if label == "" {
+		label = "heartbeat"
+	}
+	intent := coremodel.TimedIntent{
+		TargetThreadID: threadID,
+		OwnerThreadID:  threadID,
+		OwnerActorID:   strings.TrimSpace(owner.ID),
+		Kind:           KindHeartbeat,
+		Key:            KeyDefault,
+		Enabled:        true,
+		NextDueAt:      &next,
+		Cron:           expr,
+		Timezone:       timezone,
+		Delivery:       DeliveryTurn,
+		Label:          label,
+		LastStatus:     coremodel.TimedIntentStatusNever,
+	}
+	if err := s.Intents.UpsertByTargetKindKey(ctx, &intent); err != nil {
+		return nil, err
+	}
+	return &intent, nil
+}
+
 func (s *Service) StopHeartbeat(ctx context.Context, threadID modeluuid.UUID) (bool, error) {
 	if s == nil || s.Intents == nil {
 		return false, fmt.Errorf("missing timed intent repository")
@@ -136,14 +173,13 @@ func (s *Service) ResetHeartbeatFloor(ctx context.Context, threadID modeluuid.UU
 	if err != nil || !found || intent == nil || !intent.Enabled {
 		return err
 	}
-	every, err := time.ParseDuration(strings.TrimSpace(intent.Every))
-	if err != nil || every <= 0 {
-		return err
-	}
 	if now.IsZero() {
 		now = s.now()
 	}
-	next := now.UTC().Add(every)
+	next, err := nextHeartbeatDue(*intent, now)
+	if err != nil {
+		return err
+	}
 	intent.NextDueAt = &next
 	return s.Intents.Save(ctx, intent)
 }
@@ -272,6 +308,14 @@ func shouldExpire(intent coremodel.TimedIntent, now time.Time) bool {
 }
 
 func nextAfterDelivery(intent coremodel.TimedIntent, now time.Time) (*time.Time, bool, error) {
+	cronExpr := strings.TrimSpace(intent.Cron)
+	if cronExpr != "" {
+		next, err := nextCronDue(cronExpr, intent.Timezone, now)
+		if err != nil {
+			return nil, false, err
+		}
+		return &next, false, nil
+	}
 	every := strings.TrimSpace(intent.Every)
 	if every == "" {
 		return nil, true, nil
@@ -285,6 +329,20 @@ func nextAfterDelivery(intent coremodel.TimedIntent, now time.Time) (*time.Time,
 	}
 	next := now.UTC().Add(duration)
 	return &next, false, nil
+}
+
+func nextHeartbeatDue(intent coremodel.TimedIntent, now time.Time) (time.Time, error) {
+	if cronExpr := strings.TrimSpace(intent.Cron); cronExpr != "" {
+		return nextCronDue(cronExpr, intent.Timezone, now)
+	}
+	every, err := time.ParseDuration(strings.TrimSpace(intent.Every))
+	if err != nil {
+		return time.Time{}, err
+	}
+	if every <= 0 {
+		return time.Time{}, fmt.Errorf("heartbeat interval must be positive")
+	}
+	return now.UTC().Add(every), nil
 }
 
 func (s *Service) composeWakeText(ctx context.Context, threadID modeluuid.UUID, intents []coremodel.TimedIntent) string {
