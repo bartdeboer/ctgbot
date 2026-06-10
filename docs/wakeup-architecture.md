@@ -54,6 +54,33 @@ Reasons:
 - wakeup: you asked to check the build
 ```
 
+### Attention wakes vs maintenance intents
+
+Most wake intents are attention wakes: they exist to start an inbound turn for
+an agent.
+
+Some future timed work may be thread-scoped but not agent-facing. For example,
+Claude prompt-cache keepalive may want to call the provider every few minutes to
+keep the cache warm for a bounded window, then compact the thread and stop.
+
+That should still use the same persisted scheduler substrate, but it should not
+be forced through the human/agent-visible wake message path if the work is
+really provider maintenance.
+
+The broader primitive is therefore:
+
+```text
+timed_intent(thread, at, kind, reason, delivery)
+```
+
+Where `delivery` can start with:
+
+- `turn` — enqueue an inbound wake turn;
+- `maintenance` — call a component/runtime maintenance handler.
+
+The first implementation can focus on `turn`. The storage and naming should
+avoid assuming that every timed intent must become a visible message.
+
 ## Three writers, one primitive
 
 Cron, heartbeat, and turn wakeups should not be three independent timer systems.
@@ -187,6 +214,7 @@ around it.
 A clean schedulerv2 would model these concepts explicitly:
 
 - durable jobs / wake intents;
+- delivery modes such as turn wake vs component maintenance;
 - schedule writers (cron, heartbeat policy, turn override);
 - per-thread coalescing;
 - ownership and authorization;
