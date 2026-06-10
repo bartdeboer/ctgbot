@@ -14,7 +14,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
-	"github.com/bartdeboer/ctgbot/internal/timedintent"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -142,8 +141,7 @@ func (c *Component) handleStart(ctx context.Context, req commandengine.Request, 
 	if threadID.IsNull() {
 		return commandengine.Result{}, fmt.Errorf("heartbeat start requires a current thread")
 	}
-	service := timedintent.New(c.intents, nil, nil, nil)
-	intent, err := service.StartHeartbeat(ctx, threadID, cmd.Every, req.Context.Actor.Resolved())
+	intent, err := c.timed().StartHeartbeat(ctx, threadID, cmd.Every, req.Context.Actor.Resolved())
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -159,8 +157,7 @@ func (c *Component) handleStop(ctx context.Context, req commandengine.Request, c
 	if threadID.IsNull() {
 		return commandengine.Result{}, fmt.Errorf("heartbeat stop requires a current thread")
 	}
-	service := timedintent.New(c.intents, nil, nil, nil)
-	deleted, err := service.StopHeartbeat(ctx, threadID)
+	deleted, err := c.timed().StopHeartbeat(ctx, threadID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -179,8 +176,7 @@ func (c *Component) handleStatus(ctx context.Context, req commandengine.Request,
 	if threadID.IsNull() {
 		return commandengine.Result{}, fmt.Errorf("heartbeat status requires a current thread")
 	}
-	service := timedintent.New(c.intents, nil, nil, nil)
-	intent, found, err := service.Heartbeat(ctx, threadID)
+	intent, found, err := c.timed().Heartbeat(ctx, threadID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}

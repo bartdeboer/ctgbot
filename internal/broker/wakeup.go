@@ -18,6 +18,9 @@ func (b *Broker) ThreadBusy(threadID modeluuid.UUID) bool {
 	if b == nil || b.Turns == nil {
 		return false
 	}
+	// This reports turns actively holding the gate. It intentionally does not
+	// inspect queued inbound goroutines; v1 coalesces only while a turn is
+	// running, not while work is merely about to queue.
 	return b.Turns.Busy(threadID)
 }
 
@@ -46,6 +49,10 @@ func (b *Broker) DeliverWake(ctx context.Context, threadID modeluuid.UUID, text 
 	if !chat.Enabled {
 		return fmt.Errorf("wake target chat is disabled: %s", chat.ID)
 	}
+	// QueueResolvedInbound is accept-and-queue: once accepted, timed intent
+	// delivery records success before the asynchronous turn necessarily
+	// completes. That is the deliberate v1 tradeoff; recurring heartbeats and
+	// idempotent wake reasons make at-least-once bookkeeping unnecessary here.
 	actor := coremodel.Actor{ID: "wakeup", Label: "wakeup", Roles: []simplerbac.Role{simplerbac.RoleUser}}
 	return b.QueueResolvedInbound(ctx, component.ResolvedInbound{
 		Chat:   *chat,

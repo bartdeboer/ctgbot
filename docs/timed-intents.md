@@ -404,14 +404,20 @@ Stated plainly, as requested:
 
 ## Migration notes
 
-- `ScheduledJob` rows map onto `TimedIntent`: heartbeat jobs become
-  `Kind=heartbeat` intents; the indexing command job becomes a maintenance
-  handler registration; nothing else exists in the wild (single instance).
-- The scheduler component's `job add/list/remove` surface becomes the intent
-  surface with self-scoping; `heartbeat start/stop/status` keeps its UX and
-  writes the standing intent underneath.
-- `RunDue`'s per-job error isolation issue (one failing `FinishJob` aborts the
-  loop) does not carry over: delivery state is per intent by construction.
+Do not hide schema or behavior migration inside the normal scheduler loop. If
+old rows need to be moved, use an explicit temporary migration file or operator
+command that can be deleted after the upgrade.
+
+For the first slice:
+
+- `heartbeat start/stop/status` writes the standing heartbeat timed intent.
+- Existing legacy `ScheduledJob` heartbeat rows are not auto-migrated. Operators
+  should delete old `heartbeat:<thread>` scheduled jobs and run
+  `heartbeat start <interval>` again for those threads.
+- Legacy non-heartbeat scheduled command jobs continue to run through the old
+  scheduler path until their replacement exists.
+- The scheduler component's `job add/list/remove` surface later becomes an
+  intent surface with self-scoping.
 - The wake delivery path (`provider=wakeup` inbound turns) is the keystone and
   ships first; heartbeat moves onto it second; turn wakes third; cron and
   maintenance follow. Same slicing as wakeup-architecture.md, unchanged.

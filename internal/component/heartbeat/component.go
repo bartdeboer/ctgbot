@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/timedintent"
 )
 
 const Type = "heartbeat"
@@ -19,6 +20,7 @@ const Type = "heartbeat"
 type Component struct {
 	registration      coremodel.Component
 	intents           repository.TimedIntentRepository
+	service           *timedintent.Service
 	chatPayloadSender component.ChatPayloadSender
 	updateFeeds       []component.UpdateFeed
 }
@@ -35,12 +37,23 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if storage == nil {
 		return nil, fmt.Errorf("missing heartbeat storage")
 	}
-	return &Component{registration: registration, intents: storage.TimedIntents(), chatPayloadSender: sender, updateFeeds: feeds}, nil
+	intents := storage.TimedIntents()
+	return &Component{registration: registration, intents: intents, service: timedintent.New(intents, nil, nil, nil), chatPayloadSender: sender, updateFeeds: feeds}, nil
 }
 
 func (c *Component) Type() string { return Type }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
+
+func (c *Component) timed() *timedintent.Service {
+	if c == nil {
+		return nil
+	}
+	if c.service == nil && c.intents != nil {
+		c.service = timedintent.New(c.intents, nil, nil, nil)
+	}
+	return c.service
+}
 
 func (c *Component) CommandDescriptions() []commandengine.Description {
 	policy := simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent)

@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/timedintent"
 )
 
 func TestHeartbeatStartCreatesTimedIntentForCurrentThread(t *testing.T) {
@@ -89,7 +90,7 @@ func TestHeartbeatNowIncludesUpdateFeeds(t *testing.T) {
 }
 
 func newTestComponent(storage *repository.MemoryStorage, sender componentpkg.ChatPayloadSender) *Component {
-	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, intents: storage.TimedIntents(), chatPayloadSender: sender}
+	return &Component{registration: coremodel.Component{Type: Type, Name: Type}, intents: storage.TimedIntents(), service: timedintent.New(storage.TimedIntents(), nil, nil, nil), chatPayloadSender: sender}
 }
 
 func newTestEngine(t *testing.T, c *Component, source commandengine.Source) *commandengine.Engine {

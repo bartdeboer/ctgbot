@@ -320,6 +320,8 @@ func (b *Broker) handleResolvedInboundTurn(
 	if err != nil {
 		return failConversation(storedInbound, outbound, err)
 	}
+	// Only successful turns reset idle-floor policies such as heartbeat. A
+	// failed turn should not postpone the next wake that might recover it.
 	if b.TurnCompleted != nil {
 		b.TurnCompleted(ctx, thread.ID)
 	}
