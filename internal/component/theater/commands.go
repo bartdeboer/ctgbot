@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -203,8 +204,10 @@ func (c *Component) handleRead(ctx context.Context, req commandengine.Request, c
 		return commandengine.Result{Text: "no theater messages: " + threadLabel(*targetThread)}, nil
 	}
 	if !subscriberThreadID.IsNull() {
-		last := messages[len(messages)-1].CreatedAt.UTC()
-		if err := c.store.markRead(ctx, subscriberThreadID, targetThread.ID, last); err != nil {
+		// Mark at read time rather than at the last message timestamp. This avoids
+		// timestamp precision/equality differences between message storage and the
+		// theater subscription store keeping just-read messages counted as unread.
+		if err := c.store.markRead(ctx, subscriberThreadID, targetThread.ID, time.Now().UTC()); err != nil {
 			return commandengine.Result{}, err
 		}
 	}
