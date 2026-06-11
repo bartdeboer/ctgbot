@@ -33,7 +33,7 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 
 	threadID := modeluuid.New()
 	commands := commandengine.NewEngine(nil, commandengine.NewRegistry())
-	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, commands, true)
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), threadID, commands, true)
 	if err != nil {
 		if strings.Contains(err.Error(), "bind: operation not permitted") || (strings.Contains(err.Error(), "listen tcp") && strings.Contains(err.Error(), "operation not permitted")) {
 			t.Skipf("hostbridge listener unavailable in this environment: %v", err)
@@ -87,7 +87,7 @@ func TestSandboxDoesNotBindHostbridgeWithoutCommands(t *testing.T) {
 	home := factory.ComponentHome(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
 
-	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, true)
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, true)
 	if err != nil {
 		t.Fatalf("sandbox() error = %v", err)
 	}
@@ -113,7 +113,7 @@ func TestSandboxPropagatesConfiguredUser(t *testing.T) {
 	gid := 0
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{UID: &uid, GID: &gid}).(*Runtime)
 
-	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
 	if err != nil {
 		t.Fatalf("sandbox() error = %v", err)
 	}
@@ -121,6 +121,35 @@ func TestSandboxPropagatesConfiguredUser(t *testing.T) {
 
 	if got, want := sandbox.User, "0:0"; got != want {
 		t.Fatalf("User = %q, want %q", got, want)
+	}
+}
+
+func TestSandboxUsesThreadRuntimePorts(t *testing.T) {
+	root := t.TempDir()
+	threadID := modeluuid.New()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil).
+		WithThreadConfigResolver(staticThreadConfigResolver{
+			threadID: threadID,
+			config:   runtimepkg.ThreadConfig{Ports: []string{"127.0.0.1:18423:8080"}},
+		})
+	registration := coremodel.Component{Type: "mockagent", Name: "ports", Runtime: "docker"}
+	home := factory.ComponentHome(registration)
+	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
+
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), threadID, nil, false)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+	if got, want := sandbox.Ports, []string{"127.0.0.1:18423:8080"}; !equalStrings(got, want) {
+		t.Fatalf("sandbox ports = %#v, want %#v", got, want)
+	}
+	status, err := runtime.statusForSandbox(context.Background(), filepath.Join(root, "workspace"), sandbox)
+	if err != nil {
+		t.Fatalf("statusForSandbox() error = %v", err)
+	}
+	if got, want := status.Ports, []string{"127.0.0.1:18423:8080"}; !equalStrings(got, want) {
+		t.Fatalf("status ports = %#v, want %#v", got, want)
 	}
 }
 
@@ -136,7 +165,7 @@ func TestSandboxPropagatesConfiguredGPUs(t *testing.T) {
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{GPUs: "all"}).(*Runtime)
 
 	threadID := modeluuid.New()
-	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), threadID, nil, false)
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), threadID, nil, false)
 	if err != nil {
 		t.Fatalf("sandbox() error = %v", err)
 	}
@@ -161,7 +190,7 @@ func TestSandboxPropagatesBaseGitIdentityEnv(t *testing.T) {
 		Env: []string{"GIT_AUTHOR_NAME=Bot"},
 	}).(*Runtime)
 
-	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
 	if err != nil {
 		t.Fatalf("sandbox() error = %v", err)
 	}
@@ -188,7 +217,7 @@ func TestSandboxUsesDockerDefaultSeccompByDefault(t *testing.T) {
 	home := factory.ComponentHome(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
 
-	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
 	if err != nil {
 		t.Fatalf("sandbox() error = %v", err)
 	}
@@ -206,7 +235,7 @@ func TestSandboxPropagatesConfiguredUnconfinedSeccomp(t *testing.T) {
 	home := factory.ComponentHome(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{Seccomp: "unconfined"}).(*Runtime)
 
-	sandbox, cleanup, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
 	if err != nil {
 		t.Fatalf("sandbox() error = %v", err)
 	}
@@ -224,7 +253,7 @@ func TestSandboxRejectsUnsupportedSeccompMode(t *testing.T) {
 	home := factory.ComponentHome(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{Seccomp: "strict"}).(*Runtime)
 
-	_, _, err := runtime.sandbox(filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	_, _, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
 	if err == nil {
 		t.Fatal("sandbox() error = nil, want unsupported seccomp error")
 	}
@@ -278,4 +307,29 @@ func hasAddHost(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+type staticThreadConfigResolver struct {
+	threadID modeluuid.UUID
+	config   runtimepkg.ThreadConfig
+}
+
+func (r staticThreadConfigResolver) RuntimeThreadConfig(ctx context.Context, threadID modeluuid.UUID) (runtimepkg.ThreadConfig, error) {
+	_ = ctx
+	if threadID != r.threadID {
+		return runtimepkg.ThreadConfig{}, nil
+	}
+	return r.config, nil
+}
+
+func equalStrings(a []string, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

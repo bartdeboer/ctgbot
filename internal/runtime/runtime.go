@@ -30,11 +30,20 @@ type BindConfig struct {
 	Uses        *runtimeimage.Target `json:"uses,omitempty"`
 }
 
+type ThreadConfig struct {
+	Ports []string
+}
+
+type ThreadConfigResolver interface {
+	RuntimeThreadConfig(ctx context.Context, threadID modeluuid.UUID) (ThreadConfig, error)
+}
+
 type Status struct {
 	Name                 string
 	State                string
 	RuntimeHomePath      string
 	RuntimeWorkspacePath string
+	Ports                []string
 	ActiveCommandName    string
 	ActiveCommandArgs    []string
 	RuntimeNotices       []string

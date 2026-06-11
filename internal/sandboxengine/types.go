@@ -50,6 +50,7 @@ type SandboxSpec struct {
 	User         string
 	UserMode     string
 	GPUs         string
+	Ports        []string
 	Labels       map[string]string
 	Env          []string
 	Mounts       []Mount
@@ -103,6 +104,7 @@ func (s *Sandbox) ContainerSpec() containerengine.ContainerSpec {
 		User:         s.User,
 		UserMode:     s.UserMode,
 		GPUs:         s.GPUs,
+		Ports:        append([]string{}, s.Ports...),
 		Labels:       s.Labels,
 		Env:          s.Env,
 		Mounts:       mounts,

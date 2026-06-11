@@ -74,6 +74,7 @@ func TestSandboxContainerSpecMapsFields(t *testing.T) {
 		Workdir:      "/workspace",
 		User:         "1000:1000",
 		GPUs:         "all",
+		Ports:        []string{"127.0.0.1:18423:8080"},
 		Labels:       map[string]string{"a": "b"},
 		Env:          []string{"HOME=/codex-home"},
 		Mounts:       []Mount{{Source: "/src", Target: "/dst", ReadOnly: true}},
@@ -87,6 +88,9 @@ func TestSandboxContainerSpecMapsFields(t *testing.T) {
 	}
 	if len(spec.Mounts) != 1 || spec.Mounts[0].Source != "/src" || !spec.Mounts[0].ReadOnly {
 		t.Fatalf("mounts = %#v", spec.Mounts)
+	}
+	if len(spec.Ports) != 1 || spec.Ports[0] != "127.0.0.1:18423:8080" {
+		t.Fatalf("ports = %#v", spec.Ports)
 	}
 }
 

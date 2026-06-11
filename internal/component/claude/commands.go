@@ -109,6 +109,9 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 	if status.ActiveCommandName != "" {
 		lines = append(lines, "active_command: "+strings.TrimSpace(status.ActiveCommandName+" "+strings.Join(status.ActiveCommandArgs, " ")))
 	}
+	if len(status.Ports) > 0 {
+		lines = append(lines, "runtime_ports: "+strings.Join(status.Ports, ", "))
+	}
 	for _, notice := range status.RuntimeNotices {
 		if notice = strings.TrimSpace(notice); notice != "" {
 			lines = append(lines, "runtime_notice: "+notice)

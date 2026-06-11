@@ -169,7 +169,9 @@ func buildRuntimes(ctx context.Context, rootDir string, stateRoot string, cfg *a
 		var runtime runtimepkg.Factory
 		switch runtimeKind {
 		case "docker":
-			runtime = dockerruntime.New(rootDir, componentsRoot, sandboxes, bridge).WithEnv(gitEnv...)
+			runtime = dockerruntime.New(rootDir, componentsRoot, sandboxes, bridge).
+				WithEnv(gitEnv...).
+				WithThreadConfigResolver(threadRuntimeConfigResolver{storage: storage})
 		case "local":
 			runtime = localruntime.New(rootDir, componentsRoot).WithEnv(gitEnv...)
 		case backendruntime.Kind:

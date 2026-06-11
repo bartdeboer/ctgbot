@@ -73,6 +73,11 @@ func (b Builder) GPUs(v string) Builder {
 	return b
 }
 
+func (b Builder) Ports(v []string) Builder {
+	b.spec.Ports = v
+	return b
+}
+
 func (b Builder) Labels(v map[string]string) Builder {
 	b.spec.Labels = v
 	return b

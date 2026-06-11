@@ -29,6 +29,7 @@ type Factory struct {
 	sandboxes      sandboxengine.RuntimeManager
 	bridge         *hostbridgebridge.Bridge
 	env            []string
+	threadConfig   runtimepkg.ThreadConfigResolver
 }
 
 func New(rootDir string, componentsRoot string, sandboxes sandboxengine.RuntimeManager, bridge *hostbridgebridge.Bridge) *Factory {
@@ -53,6 +54,15 @@ func (f *Factory) WithEnv(env ...string) *Factory {
 	}
 	clone := *f
 	clone.env = runtimepkg.MergeEnv(clone.env, env)
+	return &clone
+}
+
+func (f *Factory) WithThreadConfigResolver(resolver runtimepkg.ThreadConfigResolver) *Factory {
+	if f == nil {
+		return nil
+	}
+	clone := *f
+	clone.threadConfig = resolver
 	return &clone
 }
 
@@ -97,6 +107,7 @@ func (f *Factory) Bind(
 		seccomp:      strings.TrimSpace(config.Seccomp),
 		cmd:          append([]string{}, config.Cmd...),
 		user:         config.UserString(),
+		threadConfig: f.threadConfig,
 	}
 }
 
@@ -113,6 +124,7 @@ type Runtime struct {
 	seccomp      string
 	cmd          []string
 	user         string
+	threadConfig runtimepkg.ThreadConfigResolver
 }
 
 func (r *Runtime) Kind() string {
@@ -140,7 +152,7 @@ func (r *Runtime) Refresh(
 	workspacePath string,
 	threadID modeluuid.UUID,
 ) error {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, false)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, false)
 	if err != nil {
 		return err
 	}
@@ -153,7 +165,7 @@ func (r *Runtime) Start(
 	workspacePath string,
 	threadID modeluuid.UUID,
 ) (runtimepkg.Status, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, true)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, true)
 	if err != nil {
 		return runtimepkg.Status{}, err
 	}
@@ -169,7 +181,7 @@ func (r *Runtime) Stop(
 	workspacePath string,
 	threadID modeluuid.UUID,
 ) error {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, false)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, false)
 	if err != nil {
 		return err
 	}
@@ -182,7 +194,7 @@ func (r *Runtime) Interrupt(
 	workspacePath string,
 	threadID modeluuid.UUID,
 ) (bool, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, false)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, false)
 	if err != nil {
 		return false, err
 	}
@@ -198,7 +210,7 @@ func (r *Runtime) Status(
 	workspacePath string,
 	threadID modeluuid.UUID,
 ) (runtimepkg.Status, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, nil, false)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, false)
 	if err != nil {
 		return runtimepkg.Status{}, err
 	}
@@ -216,7 +228,7 @@ func (r *Runtime) Exec(
 	name string,
 	args ...string,
 ) error {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands, true)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, commands, true)
 	if err != nil {
 		return err
 	}
@@ -238,7 +250,7 @@ func (r *Runtime) ExecTTY(
 	name string,
 	args ...string,
 ) error {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands, true)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, commands, true)
 	if err != nil {
 		return err
 	}
@@ -258,7 +270,7 @@ func (r *Runtime) CombinedOutput(
 	name string,
 	args ...string,
 ) ([]byte, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands, true)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, commands, true)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +290,7 @@ func (r *Runtime) OpenHTTPRelayPort(
 	callbackPort int,
 	callbackTimeout time.Duration,
 ) (func(context.Context) error, error) {
-	sbx, cleanup, err := r.sandbox(workspacePath, threadID, commands, true)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, commands, true)
 	if err != nil {
 		return nil, err
 	}
@@ -298,6 +310,7 @@ func (r *Runtime) OpenHTTPRelayPort(
 }
 
 func (r *Runtime) sandbox(
+	ctx context.Context,
 	workspacePath string,
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
@@ -334,6 +347,10 @@ func (r *Runtime) sandbox(
 	runtimeHomePath := r.RuntimeComponentHomePath()
 	env := append([]string{}, r.env...)
 	env = append(env, "CTGBOT_COMPONENT_REF="+r.registration.Ref())
+	ports, err := r.threadPorts(ctx, threadID)
+	if err != nil {
+		return nil, nil, err
+	}
 	mounts := []sandboxengine.Mount{
 		{Source: r.home.Path, Target: runtimeHomePath},
 		{Source: workspaceHost, Target: workspaceRuntime},
@@ -360,6 +377,7 @@ func (r *Runtime) sandbox(
 		Workdir(workspaceRuntime).
 		User(r.user).
 		GPUs(r.gpus).
+		Ports(ports).
 		Env(env).
 		Mounts(mounts).
 		SecurityOpts(securityOpts).
@@ -367,6 +385,17 @@ func (r *Runtime) sandbox(
 		Cmd(r.idleCmd()).
 		Build()
 	return r.sandboxes.CreateSandbox(spec), cleanup, nil
+}
+
+func (r *Runtime) threadPorts(ctx context.Context, threadID modeluuid.UUID) ([]string, error) {
+	if r == nil || r.threadConfig == nil || threadID.IsNull() {
+		return nil, nil
+	}
+	config, err := r.threadConfig.RuntimeThreadConfig(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{}, config.Ports...), nil
 }
 
 func (r *Runtime) idleCmd() []string {
@@ -396,6 +425,7 @@ func (r *Runtime) statusForSandbox(ctx context.Context, workspacePath string, sb
 		State:                string(state),
 		RuntimeHomePath:      r.RuntimeComponentHomePath(),
 		RuntimeWorkspacePath: r.RuntimeWorkspacePath(workspacePath),
+		Ports:                append([]string{}, sbx.Ports...),
 	}
 	if active, ok := sbx.ActiveCommand(); ok {
 		status.ActiveCommandName = active.Name

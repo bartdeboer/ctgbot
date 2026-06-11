@@ -3,6 +3,7 @@ package thread
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -19,6 +20,7 @@ const (
 	VoiceName              = "voice.name"
 	VoiceModel             = "voice.model"
 	VoiceDeviceTarget      = "voice.device-target"
+	RuntimePorts           = "runtime.ports"
 )
 
 var keys = []string{
@@ -28,6 +30,7 @@ var keys = []string{
 	VoiceName,
 	VoiceModel,
 	VoiceDeviceTarget,
+	RuntimePorts,
 }
 
 // Surface exposes a thread row through the shared config surface contract.
@@ -83,6 +86,12 @@ func Schema() configsurface.ConfigSchema {
 			Type:     configsurface.FieldTypeString,
 			Writable: true,
 		},
+		{
+			Key:      RuntimePorts,
+			Help:     "Docker port mappings for this thread container, e.g. [\"127.0.0.1:18423:8080\"]; requires container refresh",
+			Type:     configsurface.FieldTypeStringList,
+			Writable: true,
+		},
 	}}
 }
 
@@ -135,6 +144,8 @@ func Value(thread coremodel.Thread, key string) (string, error) {
 		return strings.TrimSpace(thread.VoiceModel), nil
 	case VoiceDeviceTarget:
 		return strings.TrimSpace(thread.VoiceDeviceTarget), nil
+	case RuntimePorts:
+		return formatStringList(RuntimePortsValue(thread)), nil
 	default:
 		return "", UnknownKey(key)
 	}
@@ -167,6 +178,12 @@ func Set(thread *coremodel.Thread, key string, value string) (string, error) {
 		thread.VoiceModel = value
 	case VoiceDeviceTarget:
 		thread.VoiceDeviceTarget = value
+	case RuntimePorts:
+		ports, err := parseStringList(value)
+		if err != nil {
+			return "", fmt.Errorf("thread config %s: %w", key, err)
+		}
+		thread.RuntimePorts = strings.Join(ports, "\n")
 	default:
 		return "", UnknownKey(key)
 	}
@@ -191,10 +208,54 @@ func Unset(thread *coremodel.Thread, key string) (string, error) {
 		thread.VoiceModel = ""
 	case VoiceDeviceTarget:
 		thread.VoiceDeviceTarget = ""
+	case RuntimePorts:
+		thread.RuntimePorts = ""
 	default:
 		return "", UnknownKey(key)
 	}
 	return Value(*thread, key)
+}
+
+func RuntimePortsValue(thread coremodel.Thread) []string {
+	ports, _ := parseStringList(thread.RuntimePorts)
+	return ports
+}
+
+func parseStringList(value string) ([]string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	var values []string
+	if strings.HasPrefix(value, "[") {
+		if err := json.Unmarshal([]byte(value), &values); err != nil {
+			return nil, err
+		}
+	} else {
+		values = strings.FieldsFunc(value, func(r rune) bool {
+			return r == ',' || r == '\n' || r == '\r' || r == '\t'
+		})
+	}
+	out := make([]string, 0, len(values))
+	for _, candidate := range values {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		out = append(out, candidate)
+	}
+	return out, nil
+}
+
+func formatStringList(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return strings.Join(values, ",")
+	}
+	return string(data)
 }
 
 func NormalizeKey(key string) string {
