@@ -149,6 +149,54 @@ func TestThreadWakeCommandsCreateTimedIntentsForCurrentThread(t *testing.T) {
 	}
 }
 
+func TestThreadWakeListAndClearCommands(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	c := newTestComponent(storage, nil)
+	engine := newTestEngine(t, c, commandengine.SourceMessage)
+	threadID := modeluuid.New()
+	req := testRequest(threadID)
+
+	commands := [][]string{
+		{"thread", "heartbeat", "2h"},
+		{"thread", "wake", "once", "20m", "check download"},
+		{"thread", "wake", "schedule", "0 3 * * *", "backup database"},
+	}
+	for _, argv := range commands {
+		if _, err := engine.Run(ctx, req, argv); err != nil {
+			t.Fatalf("Run(%v) error = %v", argv, err)
+		}
+	}
+
+	list, err := engine.Run(ctx, req, []string{"thread", "wake", "list"})
+	if err != nil {
+		t.Fatalf("Run(wake list) error = %v", err)
+	}
+	for _, want := range []string{"heartbeat every=2h", `once "check download"`, `schedule "backup database"`} {
+		if !strings.Contains(list.Text, want) {
+			t.Fatalf("wake list = %q, missing %q", list.Text, want)
+		}
+	}
+
+	clearCommands := [][]string{
+		{"thread", "wake", "heartbeat", "clear"},
+		{"thread", "wake", "once", "clear"},
+		{"thread", "wake", "schedule", "clear", "backup database"},
+	}
+	for _, argv := range clearCommands {
+		if _, err := engine.Run(ctx, req, argv); err != nil {
+			t.Fatalf("Run(%v) error = %v", argv, err)
+		}
+	}
+	intents, err := storage.TimedIntents().ListByTarget(ctx, threadID)
+	if err != nil {
+		t.Fatalf("ListByTarget() error = %v", err)
+	}
+	if len(intents) != 0 {
+		t.Fatalf("intents len = %d, want cleared", len(intents))
+	}
+}
+
 func TestHeartbeatTickSendsPayloadToThread(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()

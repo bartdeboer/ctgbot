@@ -11,6 +11,7 @@ func HostbridgeExampleLines(controlSynopsis string) []string {
 		lines = append(lines,
 			"thread heartbeat examples: `hostbridge thread heartbeat 2h`; workday cron: `hostbridge thread heartbeat \"CRON_TZ=Europe/Amsterdam 0 9-17/2 * * 1-5\" \"check theater updates\"`; immediate check: `hostbridge heartbeat now`",
 			"thread wake examples: `hostbridge thread wake once 20m \"check if download completed\"`; `hostbridge thread wake schedule \"0 3 * * *\" \"backup database\"`",
+			"thread wake cleanup: `hostbridge thread wake list`; `hostbridge thread wake once clear`; `hostbridge thread wake schedule clear all`",
 		)
 	}
 	if strings.Contains(controlSynopsis, "theater [") {

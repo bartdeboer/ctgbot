@@ -226,6 +226,90 @@ func (s *Service) StopHeartbeat(ctx context.Context, threadID modeluuid.UUID) (b
 	return s.Intents.DeleteByTargetKindKey(ctx, threadID, KindHeartbeat, KeyDefault)
 }
 
+func (s *Service) ClearWakeOnce(ctx context.Context, threadID modeluuid.UUID) (bool, error) {
+	if s == nil || s.Intents == nil {
+		return false, fmt.Errorf("missing timed intent repository")
+	}
+	if threadID.IsNull() {
+		return false, fmt.Errorf("missing thread id")
+	}
+	return s.Intents.DeleteByTargetKindKey(ctx, threadID, KindWake, KeyDefault)
+}
+
+func (s *Service) ClearScheduledWake(ctx context.Context, threadID modeluuid.UUID, label string) (bool, error) {
+	if s == nil || s.Intents == nil {
+		return false, fmt.Errorf("missing timed intent repository")
+	}
+	if threadID.IsNull() {
+		return false, fmt.Errorf("missing thread id")
+	}
+	return s.Intents.DeleteByTargetKindKey(ctx, threadID, KindCron, keyFromLabel(label))
+}
+
+func (s *Service) ClearAllScheduledWakes(ctx context.Context, threadID modeluuid.UUID) (int, error) {
+	if s == nil || s.Intents == nil {
+		return 0, fmt.Errorf("missing timed intent repository")
+	}
+	if threadID.IsNull() {
+		return 0, fmt.Errorf("missing thread id")
+	}
+	intents, err := s.Intents.ListByTarget(ctx, threadID)
+	if err != nil {
+		return 0, err
+	}
+	var removed int
+	for _, intent := range intents {
+		if intent.Kind != KindCron {
+			continue
+		}
+		deleted, err := s.Intents.DeleteByTargetKindKey(ctx, threadID, KindCron, intent.Key)
+		if err != nil {
+			return removed, err
+		}
+		if deleted {
+			removed++
+		}
+	}
+	return removed, nil
+}
+
+func (s *Service) ThreadWakes(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.TimedIntent, error) {
+	if s == nil || s.Intents == nil {
+		return nil, fmt.Errorf("missing timed intent repository")
+	}
+	if threadID.IsNull() {
+		return nil, fmt.Errorf("missing thread id")
+	}
+	intents, err := s.Intents.ListByTarget(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]coremodel.TimedIntent, 0, len(intents))
+	for _, intent := range intents {
+		switch intent.Kind {
+		case KindHeartbeat, KindWake, KindCron:
+			out = append(out, intent)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		left, right := out[i], out[j]
+		if left.NextDueAt == nil && right.NextDueAt != nil {
+			return false
+		}
+		if left.NextDueAt != nil && right.NextDueAt == nil {
+			return true
+		}
+		if left.NextDueAt != nil && right.NextDueAt != nil && !left.NextDueAt.Equal(*right.NextDueAt) {
+			return left.NextDueAt.Before(*right.NextDueAt)
+		}
+		if left.Kind != right.Kind {
+			return left.Kind < right.Kind
+		}
+		return left.Key < right.Key
+	})
+	return out, nil
+}
+
 func (s *Service) Heartbeat(ctx context.Context, threadID modeluuid.UUID) (*coremodel.TimedIntent, bool, error) {
 	if s == nil || s.Intents == nil {
 		return nil, false, fmt.Errorf("missing timed intent repository")

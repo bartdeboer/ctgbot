@@ -14,6 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/ctgbot/internal/timedintent"
 	"github.com/bartdeboer/go-clir"
 )
 
@@ -37,6 +38,12 @@ type wakeScheduleCommand struct {
 	Timezone string
 	Reason   string
 }
+type wakeListCommand struct{}
+type wakeHeartbeatClearCommand struct{}
+type wakeOnceClearCommand struct{}
+type wakeScheduleClearCommand struct {
+	Target string
+}
 type stopCommand struct{}
 type statusCommand struct{}
 type tickCommand struct{ ThreadID string }
@@ -48,6 +55,10 @@ func RegisterGobTypes(register func(any)) {
 	register(setThreadHeartbeatCommand{})
 	register(wakeOnceCommand{})
 	register(wakeScheduleCommand{})
+	register(wakeListCommand{})
+	register(wakeHeartbeatClearCommand{})
+	register(wakeOnceClearCommand{})
+	register(wakeScheduleClearCommand{})
 	register(stopCommand{})
 	register(statusCommand{})
 	register(tickCommand{})
@@ -98,6 +109,54 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Hidden:  true,
 			Aliases: []commandengine.Route{
 				{Pattern: "thread wake schedule <expr>", Absolute: true},
+			},
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern: "thread-wake list",
+			Help:    "List current thread wake intents",
+			Build:   func(req *clir.Request) (any, error) { _ = req; return wakeListCommand{}, nil },
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  userPolicy,
+			Hidden:  true,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread wake list", Absolute: true},
+			},
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern: "thread-wake heartbeat clear",
+			Help:    "Clear the current thread heartbeat",
+			Build:   func(req *clir.Request) (any, error) { _ = req; return wakeHeartbeatClearCommand{}, nil },
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  userPolicy,
+			Hidden:  true,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread wake heartbeat clear", Absolute: true},
+			},
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern: "thread-wake once clear",
+			Help:    "Clear the current thread one-shot wake",
+			Build:   func(req *clir.Request) (any, error) { _ = req; return wakeOnceClearCommand{}, nil },
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  userPolicy,
+			Hidden:  true,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread wake once clear", Absolute: true},
+			},
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern: "thread-wake schedule clear <target>",
+			Help:    "Clear current thread scheduled wakes by all or reason",
+			Build:   buildWakeScheduleClearCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  userPolicy,
+			Hidden:  true,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread wake schedule clear <target>", Absolute: true},
 			},
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
@@ -170,6 +229,18 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.RegisterPattern[wakeScheduleCommand](registry, "thread-wake schedule <expr>", c.handleWakeSchedule); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[wakeListCommand](registry, "thread-wake list", c.handleWakeList); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[wakeHeartbeatClearCommand](registry, "thread-wake heartbeat clear", c.handleWakeHeartbeatClear); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[wakeOnceClearCommand](registry, "thread-wake once clear", c.handleWakeOnceClear); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[wakeScheduleClearCommand](registry, "thread-wake schedule clear <target>", c.handleWakeScheduleClear); err != nil {
 		return err
 	}
 	if err := commandengine.RegisterPattern[stopCommand](registry, "stop", c.handleStop); err != nil {
@@ -259,6 +330,17 @@ func buildWakeScheduleCommand(req *clir.Request) (any, error) {
 		return nil, fmt.Errorf("missing scheduled wake reason")
 	}
 	return wakeScheduleCommand{Expr: expr, Timezone: strings.TrimSpace(*timezone), Reason: reason}, nil
+}
+
+func buildWakeScheduleClearCommand(req *clir.Request) (any, error) {
+	target := strings.TrimSpace(req.Params["target"])
+	if target == "" {
+		return nil, fmt.Errorf("missing scheduled wake target")
+	}
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		target = strings.TrimSpace(target + " " + extra)
+	}
+	return wakeScheduleClearCommand{Target: target}, nil
 }
 
 func (c *Component) handleNow(ctx context.Context, req commandengine.Request, cmd nowCommand) (commandengine.Result, error) {
@@ -369,6 +451,86 @@ func (c *Component) handleWakeSchedule(ctx context.Context, req commandengine.Re
 	}
 	parts = append(parts, fmt.Sprintf("reason=%q", intent.Label), fmt.Sprintf("thread_id=%s", threadID))
 	return commandengine.Result{Text: strings.Join(parts, " ")}, nil
+}
+
+func (c *Component) handleWakeList(ctx context.Context, req commandengine.Request, cmd wakeListCommand) (commandengine.Result, error) {
+	_ = cmd
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
+	}
+	threadID := requestThreadID(req)
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("thread wake list requires a current thread")
+	}
+	intents, err := c.timed().ThreadWakes(ctx, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: formatWakeList(intents, time.Now().UTC())}, nil
+}
+
+func (c *Component) handleWakeHeartbeatClear(ctx context.Context, req commandengine.Request, cmd wakeHeartbeatClearCommand) (commandengine.Result, error) {
+	_ = cmd
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
+	}
+	threadID := requestThreadID(req)
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("thread wake heartbeat clear requires a current thread")
+	}
+	deleted, err := c.timed().StopHeartbeat(ctx, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if !deleted {
+		return commandengine.Result{Text: "thread heartbeat is not running"}, nil
+	}
+	return commandengine.Result{Text: "thread heartbeat cleared"}, nil
+}
+
+func (c *Component) handleWakeOnceClear(ctx context.Context, req commandengine.Request, cmd wakeOnceClearCommand) (commandengine.Result, error) {
+	_ = cmd
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
+	}
+	threadID := requestThreadID(req)
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("thread wake once clear requires a current thread")
+	}
+	deleted, err := c.timed().ClearWakeOnce(ctx, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if !deleted {
+		return commandengine.Result{Text: "thread one-shot wake is not set"}, nil
+	}
+	return commandengine.Result{Text: "thread one-shot wake cleared"}, nil
+}
+
+func (c *Component) handleWakeScheduleClear(ctx context.Context, req commandengine.Request, cmd wakeScheduleClearCommand) (commandengine.Result, error) {
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
+	}
+	threadID := requestThreadID(req)
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("thread wake schedule clear requires a current thread")
+	}
+	target := strings.TrimSpace(cmd.Target)
+	if strings.EqualFold(target, "all") {
+		removed, err := c.timed().ClearAllScheduledWakes(ctx, threadID)
+		if err != nil {
+			return commandengine.Result{}, err
+		}
+		return commandengine.Result{Text: fmt.Sprintf("thread scheduled wakes cleared: %d", removed)}, nil
+	}
+	deleted, err := c.timed().ClearScheduledWake(ctx, threadID, target)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if !deleted {
+		return commandengine.Result{Text: fmt.Sprintf("thread scheduled wake not found: %s", target)}, nil
+	}
+	return commandengine.Result{Text: fmt.Sprintf("thread scheduled wake cleared: %s", target)}, nil
 }
 
 func (c *Component) handleStop(ctx context.Context, req commandengine.Request, cmd stopCommand) (commandengine.Result, error) {
@@ -541,6 +703,76 @@ func formatIntentStatus(intent coremodel.TimedIntent) string {
 		lines = append(lines, "error: "+strings.TrimSpace(intent.LastError))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatWakeList(intents []coremodel.TimedIntent, now time.Time) string {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	if len(intents) == 0 {
+		return "thread wakes\n(no wake intents)"
+	}
+	lines := []string{"thread wakes"}
+	for _, intent := range intents {
+		lines = append(lines, "- "+formatWakeIntent(intent, now))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatWakeIntent(intent coremodel.TimedIntent, now time.Time) string {
+	kind := strings.TrimSpace(intent.Kind)
+	switch kind {
+	case timedintent.KindHeartbeat:
+		kind = "heartbeat"
+	case timedintent.KindWake:
+		kind = "once"
+	case timedintent.KindCron:
+		kind = "schedule"
+	}
+	label := strings.TrimSpace(intent.Label)
+	if label == "" {
+		label = strings.TrimSpace(intent.Key)
+	}
+	var parts []string
+	parts = append(parts, kind)
+	if label != "" && label != kind && label != "heartbeat" {
+		parts = append(parts, fmt.Sprintf("%q", label))
+	}
+	if strings.TrimSpace(intent.Every) != "" {
+		parts = append(parts, "every="+strings.TrimSpace(intent.Every))
+	}
+	if strings.TrimSpace(intent.Cron) != "" {
+		parts = append(parts, "cron="+fmt.Sprintf("%q", strings.TrimSpace(intent.Cron)))
+	}
+	if intent.NextDueAt != nil {
+		parts = append(parts, "next="+intent.NextDueAt.UTC().Format(time.RFC3339))
+		if d := intent.NextDueAt.UTC().Sub(now.UTC()); d > 0 {
+			parts = append(parts, "in="+formatDurationCompact(d))
+		}
+	}
+	if !intent.Enabled {
+		parts = append(parts, "disabled")
+	}
+	return strings.Join(parts, " ")
+}
+
+func formatDurationCompact(d time.Duration) string {
+	if d < 0 {
+		d = -d
+	}
+	d = d.Round(time.Minute)
+	if d < time.Minute {
+		return "now"
+	}
+	hours := int(d / time.Hour)
+	minutes := int((d % time.Hour) / time.Minute)
+	if hours > 0 && minutes > 0 {
+		return fmt.Sprintf("%dh%02dm", hours, minutes)
+	}
+	if hours > 0 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
 func firstNonEmpty(values ...string) string {
