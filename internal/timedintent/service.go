@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -126,6 +127,81 @@ func (s *Service) StartCronHeartbeat(ctx context.Context, threadID modeluuid.UUI
 		OwnerActorID:   strings.TrimSpace(owner.ID),
 		Kind:           KindHeartbeat,
 		Key:            KeyDefault,
+		Enabled:        true,
+		NextDueAt:      &next,
+		Cron:           expr,
+		Timezone:       timezone,
+		Delivery:       DeliveryTurn,
+		Label:          label,
+		LastStatus:     coremodel.TimedIntentStatusNever,
+	}
+	if err := s.Intents.UpsertByTargetKindKey(ctx, &intent); err != nil {
+		return nil, err
+	}
+	return &intent, nil
+}
+
+func (s *Service) ScheduleWakeOnce(ctx context.Context, threadID modeluuid.UUID, delay string, label string, owner coremodel.Actor) (*coremodel.TimedIntent, error) {
+	if s == nil || s.Intents == nil {
+		return nil, fmt.Errorf("missing timed intent repository")
+	}
+	if threadID.IsNull() {
+		return nil, fmt.Errorf("missing thread id")
+	}
+	delay = strings.TrimSpace(delay)
+	duration, err := time.ParseDuration(delay)
+	if err != nil {
+		return nil, fmt.Errorf("parse wake delay: %w", err)
+	}
+	if duration <= 0 {
+		return nil, fmt.Errorf("wake delay must be positive")
+	}
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return nil, fmt.Errorf("missing wake reason")
+	}
+	next := s.now().Add(duration)
+	intent := coremodel.TimedIntent{
+		TargetThreadID: threadID,
+		OwnerThreadID:  threadID,
+		OwnerActorID:   strings.TrimSpace(owner.ID),
+		Kind:           KindWake,
+		Key:            KeyDefault,
+		Enabled:        true,
+		NextDueAt:      &next,
+		Delivery:       DeliveryTurn,
+		Label:          label,
+		LastStatus:     coremodel.TimedIntentStatusNever,
+	}
+	if err := s.Intents.UpsertByTargetKindKey(ctx, &intent); err != nil {
+		return nil, err
+	}
+	return &intent, nil
+}
+
+func (s *Service) ScheduleWakeCron(ctx context.Context, threadID modeluuid.UUID, expr string, timezone string, label string, owner coremodel.Actor) (*coremodel.TimedIntent, error) {
+	if s == nil || s.Intents == nil {
+		return nil, fmt.Errorf("missing timed intent repository")
+	}
+	if threadID.IsNull() {
+		return nil, fmt.Errorf("missing thread id")
+	}
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return nil, fmt.Errorf("missing scheduled wake reason")
+	}
+	expr = strings.TrimSpace(expr)
+	timezone = strings.TrimSpace(timezone)
+	next, err := nextCronDue(expr, timezone, s.now())
+	if err != nil {
+		return nil, fmt.Errorf("parse scheduled wake cron: %w", err)
+	}
+	intent := coremodel.TimedIntent{
+		TargetThreadID: threadID,
+		OwnerThreadID:  threadID,
+		OwnerActorID:   strings.TrimSpace(owner.ID),
+		Kind:           KindCron,
+		Key:            keyFromLabel(label),
 		Enabled:        true,
 		NextDueAt:      &next,
 		Cron:           expr,
@@ -398,6 +474,12 @@ func intentReason(intent coremodel.TimedIntent) string {
 	if kind == "" {
 		kind = "wakeup"
 	}
+	if kind == KindCron {
+		kind = "scheduled"
+	}
+	if kind == KindWake {
+		kind = "wakeup"
+	}
 	if label == "" || label == kind {
 		return kind
 	}
@@ -431,6 +513,24 @@ func plural(word string, count int) string {
 		return word
 	}
 	return word + "s"
+}
+
+var keyPartRE = regexp.MustCompile(`[^a-z0-9]+`)
+
+func keyFromLabel(label string) string {
+	key := strings.ToLower(strings.TrimSpace(label))
+	key = keyPartRE.ReplaceAllString(key, "-")
+	key = strings.Trim(key, "-")
+	if key == "" {
+		return KeyDefault
+	}
+	if len(key) > 80 {
+		key = strings.Trim(key[:80], "-")
+	}
+	if key == "" {
+		return KeyDefault
+	}
+	return key
 }
 
 func groupByTarget(intents []coremodel.TimedIntent) map[modeluuid.UUID][]coremodel.TimedIntent {

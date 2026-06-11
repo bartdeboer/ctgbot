@@ -9,7 +9,8 @@ func HostbridgeExampleLines(controlSynopsis string) []string {
 	var lines []string
 	if strings.Contains(controlSynopsis, "heartbeat [") {
 		lines = append(lines,
-			"heartbeat examples: `hostbridge heartbeat start 2h`; workday cron: `hostbridge heartbeat start cron \"CRON_TZ=Europe/Amsterdam 0 9-17/2 * * 1-5\" --reason \"check theater updates\"`; immediate check: `hostbridge heartbeat now`",
+			"thread heartbeat examples: `hostbridge thread heartbeat 2h`; workday cron: `hostbridge thread heartbeat \"CRON_TZ=Europe/Amsterdam 0 9-17/2 * * 1-5\" \"check theater updates\"`; immediate check: `hostbridge heartbeat now`",
+			"thread wake examples: `hostbridge thread wake once 20m \"check if download completed\"`; `hostbridge thread wake schedule \"0 3 * * *\" \"backup database\"`",
 		)
 	}
 	if strings.Contains(controlSynopsis, "theater [") {

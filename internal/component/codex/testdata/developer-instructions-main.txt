@@ -29,8 +29,8 @@ hostbridge [
   theater [ # thread subscriptions and shared message boards
     list | status | <thread> [ read | status | subscribe | unsubscribe ]
   ]
-  thread [ # direct messaging to other agent threads
-    help | list | status | label set | <thread> [ label set | config [ get <key> | list | set <key> <value> | unset <key> ] | message send ] | config [ get <key> | list | set <key> <value> | unset <key> ]
+  thread [ # thread messaging, config, and attention controls
+    help | heartbeat <schedule> | list | status | wake [ once <delay> | schedule <expr> ] | label set | <thread> [ label set | config [ get <key> | list | set <key> <value> | unset <key> ] | message send ] | config [ get <key> | list | set <key> <value> | unset <key> ]
   ]
   turn [ # current turn metadata and output controls
     config [ get <key> | list | set <key> <value> ] | info
@@ -39,7 +39,8 @@ hostbridge [
 ]
 ```
 - Hostbridge examples:
-  - heartbeat examples: `hostbridge heartbeat start 2h`; workday cron: `hostbridge heartbeat start cron "CRON_TZ=Europe/Amsterdam 0 9-17/2 * * 1-5" --reason "check theater updates"`; immediate check: `hostbridge heartbeat now`
+  - thread heartbeat examples: `hostbridge thread heartbeat 2h`; workday cron: `hostbridge thread heartbeat "CRON_TZ=Europe/Amsterdam 0 9-17/2 * * 1-5" "check theater updates"`; immediate check: `hostbridge heartbeat now`
+  - thread wake examples: `hostbridge thread wake once 20m "check if download completed"`; `hostbridge thread wake schedule "0 3 * * *" "backup database"`
   - theater examples: `hostbridge theater <thread> subscribe`; `hostbridge theater <thread> read`
 - Available hostbridge run aliases (on host):
 ```

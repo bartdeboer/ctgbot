@@ -241,7 +241,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 func (c *Component) CommandDescriptions() []commandengine.Description {
 	return []commandengine.Description{{
 		Pattern: "thread",
-		Help:    "direct messaging to other agent threads",
+		Help:    "thread messaging, config, and attention controls",
 		Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
 		Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 	}}

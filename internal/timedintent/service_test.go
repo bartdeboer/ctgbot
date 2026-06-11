@@ -186,6 +186,73 @@ func TestRunDueAdvancesCronHeartbeatToNextCronTime(t *testing.T) {
 	}
 }
 
+func TestScheduleWakeOnceDeliversOnceAndDisables(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	threadID := modeluuid.New()
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	deliverer := &fakeDeliverer{}
+	service := New(storage.TimedIntents(), deliverer, nil, nil)
+	service.Now = func() time.Time { return now }
+
+	intent, err := service.ScheduleWakeOnce(ctx, threadID, "20m", "check download", coremodel.Actor{ID: "agent"})
+	if err != nil {
+		t.Fatalf("ScheduleWakeOnce() error = %v", err)
+	}
+	intent.NextDueAt = timePtr(now.Add(-time.Minute))
+	if err := storage.TimedIntents().Save(ctx, intent); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	result, err := service.RunDue(ctx)
+	if err != nil {
+		t.Fatalf("RunDue() error = %v", err)
+	}
+	if got, want := result.Delivered, 1; got != want {
+		t.Fatalf("delivered = %d, want %d", got, want)
+	}
+	if !strings.Contains(deliverer.text, "wakeup: check download") {
+		t.Fatalf("wake text = %q, want wakeup reason", deliverer.text)
+	}
+	stored, err := storage.TimedIntents().GetByTargetKindKey(ctx, threadID, KindWake, KeyDefault)
+	if err != nil {
+		t.Fatalf("GetByTargetKindKey() error = %v", err)
+	}
+	if stored.Enabled || stored.NextDueAt != nil {
+		t.Fatalf("stored enabled=%v next=%v, want disabled one-shot", stored.Enabled, stored.NextDueAt)
+	}
+}
+
+func TestScheduleWakeCronUsesReasonAsReplacementKey(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	threadID := modeluuid.New()
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	service := New(storage.TimedIntents(), nil, nil, nil)
+	service.Now = func() time.Time { return now }
+
+	if _, err := service.ScheduleWakeCron(ctx, threadID, "0 3 * * *", "", "backup database", coremodel.Actor{ID: "agent"}); err != nil {
+		t.Fatalf("ScheduleWakeCron() error = %v", err)
+	}
+	if _, err := service.ScheduleWakeCron(ctx, threadID, "0 4 * * *", "", "backup database", coremodel.Actor{ID: "agent"}); err != nil {
+		t.Fatalf("ScheduleWakeCron(replace) error = %v", err)
+	}
+
+	intents, err := storage.TimedIntents().ListByTarget(ctx, threadID)
+	if err != nil {
+		t.Fatalf("ListByTarget() error = %v", err)
+	}
+	if len(intents) != 1 {
+		t.Fatalf("intents len = %d, want 1 replacement", len(intents))
+	}
+	if got, want := intents[0].Kind+":"+intents[0].Key, "cron:backup-database"; got != want {
+		t.Fatalf("identity = %q, want %q", got, want)
+	}
+	if got, want := intents[0].Cron, "0 4 * * *"; got != want {
+		t.Fatalf("cron = %q, want %q", got, want)
+	}
+}
+
 func TestRunDueExpiresIntentBeforeDelivery(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()

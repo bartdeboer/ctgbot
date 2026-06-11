@@ -268,7 +268,7 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			argv: []string{"help"},
 			contains: []string{
 				"codex [ chat | compact | config | container | goal | interrupt | status | help ] - agent lifecycle and config",
-				"thread [ <thread> | config | label | list | status | help ] - direct messaging to other agent threads",
+				"thread [ <thread> | config | label | list | status | help ] - thread messaging, config, and attention controls",
 				"status - Show current thread status",
 			},
 		},
@@ -294,7 +294,7 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			name: "thread root shows compact command family",
 			argv: []string{"thread", "help"},
 			contains: []string{
-				"direct messaging to other agent threads",
+				"thread messaging, config, and attention controls",
 				"thread [ <thread> | config | label | list | status | help ] - Thread commands",
 			},
 			occursOnce: []string{

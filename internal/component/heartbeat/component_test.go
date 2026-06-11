@@ -89,6 +89,66 @@ func TestHeartbeatStartCronCreatesTimedIntentForCurrentThread(t *testing.T) {
 	}
 }
 
+func TestThreadHeartbeatAliasCreatesTimedIntentForCurrentThread(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	c := newTestComponent(storage, nil)
+	engine := newTestEngine(t, c, commandengine.SourceMessage)
+	threadID := modeluuid.New()
+
+	result, err := engine.Run(ctx, testRequest(threadID), []string{"thread", "heartbeat", "0 9-17/2 * * 1-5", "workday check-in"})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if !strings.Contains(result.Text, "thread heartbeat set") {
+		t.Fatalf("result = %q, want thread heartbeat set", result.Text)
+	}
+
+	intents, err := storage.TimedIntents().ListByTarget(ctx, threadID)
+	if err != nil {
+		t.Fatalf("ListByTarget() error = %v", err)
+	}
+	if len(intents) != 1 {
+		t.Fatalf("intents len = %d, want 1", len(intents))
+	}
+	if got, want := intents[0].Cron, "0 9-17/2 * * 1-5"; got != want {
+		t.Fatalf("intent cron = %q, want %q", got, want)
+	}
+	if got, want := intents[0].Label, "workday check-in"; got != want {
+		t.Fatalf("intent label = %q, want %q", got, want)
+	}
+}
+
+func TestThreadWakeCommandsCreateTimedIntentsForCurrentThread(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	c := newTestComponent(storage, nil)
+	engine := newTestEngine(t, c, commandengine.SourceMessage)
+	threadID := modeluuid.New()
+
+	if _, err := engine.Run(ctx, testRequest(threadID), []string{"thread", "wake", "once", "20m", "check download"}); err != nil {
+		t.Fatalf("Run(wake once) error = %v", err)
+	}
+	if _, err := engine.Run(ctx, testRequest(threadID), []string{"thread", "wake", "schedule", "0 3 * * *", "backup database"}); err != nil {
+		t.Fatalf("Run(wake schedule) error = %v", err)
+	}
+
+	intents, err := storage.TimedIntents().ListByTarget(ctx, threadID)
+	if err != nil {
+		t.Fatalf("ListByTarget() error = %v", err)
+	}
+	seen := map[string]coremodel.TimedIntent{}
+	for _, intent := range intents {
+		seen[intent.Kind+":"+intent.Key] = intent
+	}
+	if got := seen["wake:default"].Label; got != "check download" {
+		t.Fatalf("wake label = %q, want check download", got)
+	}
+	if got := seen["cron:backup-database"].Label; got != "backup database" {
+		t.Fatalf("scheduled label = %q, want backup database", got)
+	}
+}
+
 func TestHeartbeatTickSendsPayloadToThread(t *testing.T) {
 	ctx := context.Background()
 	storage := repository.NewMemory()

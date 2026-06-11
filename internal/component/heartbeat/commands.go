@@ -24,6 +24,19 @@ type startCronCommand struct {
 	Timezone string
 	Reason   string
 }
+type setThreadHeartbeatCommand struct {
+	Schedule string
+	Reason   string
+}
+type wakeOnceCommand struct {
+	Delay  string
+	Reason string
+}
+type wakeScheduleCommand struct {
+	Expr     string
+	Timezone string
+	Reason   string
+}
 type stopCommand struct{}
 type statusCommand struct{}
 type tickCommand struct{ ThreadID string }
@@ -32,6 +45,9 @@ func RegisterGobTypes(register func(any)) {
 	register(nowCommand{})
 	register(startCommand{})
 	register(startCronCommand{})
+	register(setThreadHeartbeatCommand{})
+	register(wakeOnceCommand{})
+	register(wakeScheduleCommand{})
 	register(stopCommand{})
 	register(statusCommand{})
 	register(tickCommand{})
@@ -47,6 +63,42 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Build:                 func(req *clir.Request) (any, error) { _ = req; return nowCommand{}, nil },
 			Sources:               userSources,
 			Policy:                userPolicy,
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern: "thread-heartbeat <schedule>",
+			Help:    "Set the current thread heartbeat schedule",
+			Build:   buildSetThreadHeartbeatCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  userPolicy,
+			Hidden:  true,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread heartbeat <schedule>", Absolute: true},
+			},
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern: "thread-wake once <delay>",
+			Help:    "Set a one-shot wake for the current thread",
+			Build:   buildWakeOnceCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  userPolicy,
+			Hidden:  true,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread wake once <delay>", Absolute: true},
+			},
+			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern: "thread-wake schedule <expr>",
+			Help:    "Set a recurring scheduled wake for the current thread",
+			Build:   buildWakeScheduleCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  userPolicy,
+			Hidden:  true,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread wake schedule <expr>", Absolute: true},
+			},
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
@@ -111,6 +163,15 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.RegisterPattern[startCronCommand](registry, "start cron <expr>", c.handleStartCron); err != nil {
 		return err
 	}
+	if err := commandengine.RegisterPattern[setThreadHeartbeatCommand](registry, "thread-heartbeat <schedule>", c.handleSetThreadHeartbeat); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[wakeOnceCommand](registry, "thread-wake once <delay>", c.handleWakeOnce); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[wakeScheduleCommand](registry, "thread-wake schedule <expr>", c.handleWakeSchedule); err != nil {
+		return err
+	}
 	if err := commandengine.RegisterPattern[stopCommand](registry, "stop", c.handleStop); err != nil {
 		return err
 	}
@@ -159,6 +220,47 @@ func buildStartCronCommand(req *clir.Request) (any, error) {
 	return startCronCommand{Expr: expr, Timezone: strings.TrimSpace(*timezone), Reason: strings.TrimSpace(*reason)}, nil
 }
 
+func buildSetThreadHeartbeatCommand(req *clir.Request) (any, error) {
+	schedule := strings.TrimSpace(req.Params["schedule"])
+	if schedule == "" {
+		return nil, fmt.Errorf("missing heartbeat schedule")
+	}
+	return setThreadHeartbeatCommand{
+		Schedule: schedule,
+		Reason:   strings.TrimSpace(strings.Join(req.Extra, " ")),
+	}, nil
+}
+
+func buildWakeOnceCommand(req *clir.Request) (any, error) {
+	delay := strings.TrimSpace(req.Params["delay"])
+	if delay == "" {
+		return nil, fmt.Errorf("missing wake delay")
+	}
+	reason := strings.TrimSpace(strings.Join(req.Extra, " "))
+	if reason == "" {
+		return nil, fmt.Errorf("missing wake reason")
+	}
+	return wakeOnceCommand{Delay: delay, Reason: reason}, nil
+}
+
+func buildWakeScheduleCommand(req *clir.Request) (any, error) {
+	fs := flag.NewFlagSet("thread wake schedule", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	timezone := fs.String("tz", "", "cron timezone, for example Europe/Amsterdam")
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, err
+	}
+	expr := strings.TrimSpace(req.Params["expr"])
+	if expr == "" {
+		return nil, fmt.Errorf("missing cron expression")
+	}
+	reason := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	if reason == "" {
+		return nil, fmt.Errorf("missing scheduled wake reason")
+	}
+	return wakeScheduleCommand{Expr: expr, Timezone: strings.TrimSpace(*timezone), Reason: reason}, nil
+}
+
 func (c *Component) handleNow(ctx context.Context, req commandengine.Request, cmd nowCommand) (commandengine.Result, error) {
 	_ = cmd
 	threadID := requestThreadID(req)
@@ -204,6 +306,68 @@ func (c *Component) handleStartCron(ctx context.Context, req commandengine.Reque
 		parts = append(parts, fmt.Sprintf("reason=%q", intent.Label))
 	}
 	parts = append(parts, fmt.Sprintf("thread_id=%s", threadID))
+	return commandengine.Result{Text: strings.Join(parts, " ")}, nil
+}
+
+func (c *Component) handleSetThreadHeartbeat(ctx context.Context, req commandengine.Request, cmd setThreadHeartbeatCommand) (commandengine.Result, error) {
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
+	}
+	threadID := requestThreadID(req)
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("thread heartbeat requires a current thread")
+	}
+	if _, err := time.ParseDuration(cmd.Schedule); err == nil {
+		intent, err := c.timed().StartHeartbeat(ctx, threadID, cmd.Schedule, req.Context.Actor.Resolved())
+		if err != nil {
+			return commandengine.Result{}, err
+		}
+		return commandengine.Result{Text: fmt.Sprintf("thread heartbeat set: every=%s thread_id=%s", intent.Every, threadID)}, nil
+	}
+	intent, err := c.timed().StartCronHeartbeat(ctx, threadID, cmd.Schedule, "", cmd.Reason, req.Context.Actor.Resolved())
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	parts := []string{fmt.Sprintf("thread heartbeat set: cron=%q", intent.Cron)}
+	if strings.TrimSpace(intent.Label) != "" && intent.Label != "heartbeat" {
+		parts = append(parts, fmt.Sprintf("reason=%q", intent.Label))
+	}
+	parts = append(parts, fmt.Sprintf("thread_id=%s", threadID))
+	return commandengine.Result{Text: strings.Join(parts, " ")}, nil
+}
+
+func (c *Component) handleWakeOnce(ctx context.Context, req commandengine.Request, cmd wakeOnceCommand) (commandengine.Result, error) {
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
+	}
+	threadID := requestThreadID(req)
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("thread wake requires a current thread")
+	}
+	intent, err := c.timed().ScheduleWakeOnce(ctx, threadID, cmd.Delay, cmd.Reason, req.Context.Actor.Resolved())
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: fmt.Sprintf("thread wake set: once=%s reason=%q thread_id=%s", cmd.Delay, intent.Label, threadID)}, nil
+}
+
+func (c *Component) handleWakeSchedule(ctx context.Context, req commandengine.Request, cmd wakeScheduleCommand) (commandengine.Result, error) {
+	if c == nil || c.intents == nil {
+		return commandengine.Result{}, fmt.Errorf("missing timed intent repository")
+	}
+	threadID := requestThreadID(req)
+	if threadID.IsNull() {
+		return commandengine.Result{}, fmt.Errorf("thread wake schedule requires a current thread")
+	}
+	intent, err := c.timed().ScheduleWakeCron(ctx, threadID, cmd.Expr, cmd.Timezone, cmd.Reason, req.Context.Actor.Resolved())
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	parts := []string{fmt.Sprintf("thread wake schedule set: cron=%q", intent.Cron)}
+	if strings.TrimSpace(intent.Timezone) != "" {
+		parts = append(parts, fmt.Sprintf("timezone=%s", intent.Timezone))
+	}
+	parts = append(parts, fmt.Sprintf("reason=%q", intent.Label), fmt.Sprintf("thread_id=%s", threadID))
 	return commandengine.Result{Text: strings.Join(parts, " ")}, nil
 }
 
