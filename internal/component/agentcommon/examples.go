@@ -19,5 +19,10 @@ func HostbridgeExampleLines(controlSynopsis string) []string {
 			"theater examples: `hostbridge theater <thread> subscribe`; `hostbridge theater <thread> read`",
 		)
 	}
+	if strings.Contains(controlSynopsis, "message send") {
+		lines = append(lines,
+			"thread message examples: `hostbridge thread <thread> message send \"hello\"`; stdin preserves shell-sensitive text: `cat note.md | hostbridge thread <thread> message send`",
+		)
+	}
 	return lines
 }

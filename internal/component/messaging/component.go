@@ -228,12 +228,20 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 		},
 		{
-			Pattern:               "thread <thread> message send",
-			Help:                  "Send a message into another thread; hostbridge reads stdin when message args are omitted",
+			Pattern:               "thread <thread> message send <message>",
+			Help:                  "Send a message into another thread",
 			Build:                 buildMessageSendCommand,
 			Sources:               []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
 			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 			InstructionVisibility: commandengine.InstructionImportant,
+		},
+		{
+			Pattern: "thread <thread> message send",
+			Help:    "Send a message into another thread from stdin",
+			Build:   buildMessageSendCommand,
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			Hidden:  true,
 		},
 	}
 }
@@ -579,7 +587,12 @@ func buildMessageSendCommand(req *clir.Request) (any, error) {
 	if threadRef == "" {
 		return nil, fmt.Errorf("missing thread")
 	}
-	text := strings.TrimSpace(strings.Join(req.Extra, " "))
+	parts := []string{}
+	if message := strings.TrimSpace(req.Params["message"]); message != "" {
+		parts = append(parts, message)
+	}
+	parts = append(parts, req.Extra...)
+	text := strings.TrimSpace(strings.Join(parts, " "))
 	return messageSendCommand{
 		ThreadRef: threadRef,
 		Text:      text,

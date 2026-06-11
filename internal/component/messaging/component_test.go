@@ -9,6 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
+	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	messagingdomain "github.com/bartdeboer/ctgbot/internal/messaging"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -312,6 +313,56 @@ func TestThreadPurgeIsMessageOnly(t *testing.T) {
 	}
 }
 
+func TestThreadMessageSendUsesMessageArgument(t *testing.T) {
+	ctx := context.Background()
+	storage, currentThread := testMessagingStorage(t, ctx)
+	targetThread := &coremodel.Thread{ChatID: currentThread.ChatID, Label: "target"}
+	if err := storage.Threads().Save(ctx, targetThread); err != nil {
+		t.Fatalf("Save(target thread) error = %v", err)
+	}
+	queuer := &captureResolvedInboundQueuer{}
+	engine, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, New(messagingdomain.New(storage), queuer))
+	if err != nil {
+		t.Fatalf("NewEngineForSource(hostbridge) error = %v", err)
+	}
+
+	result, err := engine.Run(ctx, testMessagingRequest(currentThread.ID, simplerbac.RoleAgent), []string{
+		"thread", targetThread.ID.String(), "message", "send", "hello", "`world`",
+	})
+	if err != nil {
+		t.Fatalf("Run(thread message send) error = %v", err)
+	}
+	if got, want := strings.TrimSpace(result.Text), "message queued"; got != want {
+		t.Fatalf("result = %q, want %q", got, want)
+	}
+	if got, want := queuer.last.Payload.Text.Text, "hello `world`"; got != want {
+		t.Fatalf("queued text = %q, want %q", got, want)
+	}
+}
+
+func TestThreadMessageSendUsesRequestStdinWhenMessageArgumentOmitted(t *testing.T) {
+	ctx := context.Background()
+	storage, currentThread := testMessagingStorage(t, ctx)
+	targetThread := &coremodel.Thread{ChatID: currentThread.ChatID, Label: "target"}
+	if err := storage.Threads().Save(ctx, targetThread); err != nil {
+		t.Fatalf("Save(target thread) error = %v", err)
+	}
+	queuer := &captureResolvedInboundQueuer{}
+	engine, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, New(messagingdomain.New(storage), queuer))
+	if err != nil {
+		t.Fatalf("NewEngineForSource(hostbridge) error = %v", err)
+	}
+	req := testMessagingRequest(currentThread.ID, simplerbac.RoleAgent)
+	req.Stdin = "hello `world`\nline two\n"
+
+	if _, err := engine.Run(ctx, req, []string{"thread", targetThread.ID.String(), "message", "send"}); err != nil {
+		t.Fatalf("Run(thread message send stdin) error = %v", err)
+	}
+	if got, want := queuer.last.Payload.Text.Text, "hello `world`\nline two"; got != want {
+		t.Fatalf("queued text = %q, want %q", got, want)
+	}
+}
+
 func TestThreadComponentBindInfersProviderThreadIDFromSourceBinding(t *testing.T) {
 	ctx := context.Background()
 	storage, thread := testMessagingStorage(t, ctx)
@@ -593,6 +644,16 @@ func testMessagingRequest(threadID modeluuid.UUID, roles ...simplerbac.Role) com
 			Roles: roles,
 		},
 	}}
+}
+
+type captureResolvedInboundQueuer struct {
+	last component.ResolvedInbound
+}
+
+func (q *captureResolvedInboundQueuer) QueueResolvedInbound(ctx context.Context, inbound component.ResolvedInbound) error {
+	_ = ctx
+	q.last = inbound
+	return nil
 }
 
 func TestFormatThreadListUsesReadableBlocks(t *testing.T) {

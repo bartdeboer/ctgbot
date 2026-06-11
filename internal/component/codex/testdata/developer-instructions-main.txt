@@ -43,6 +43,7 @@ hostbridge [
   - thread wake examples: `hostbridge thread wake once 20m "check if download completed"`; `hostbridge thread wake schedule "0 3 * * *" "backup database"`
   - thread wake cleanup: `hostbridge thread wake list`; `hostbridge thread heartbeat clear`; `hostbridge thread wake once clear`; `hostbridge thread wake schedule clear all`
   - theater examples: `hostbridge theater <thread> subscribe`; `hostbridge theater <thread> read`
+  - thread message examples: `hostbridge thread <thread> message send "hello"`; stdin preserves shell-sensitive text: `cat note.md | hostbridge thread <thread> message send`
 - Available hostbridge run aliases (on host):
 ```
 hostbridge run [
