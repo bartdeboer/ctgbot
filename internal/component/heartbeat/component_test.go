@@ -179,7 +179,7 @@ func TestThreadWakeListAndClearCommands(t *testing.T) {
 	}
 
 	clearCommands := [][]string{
-		{"thread", "wake", "heartbeat", "clear"},
+		{"thread", "heartbeat", "clear"},
 		{"thread", "wake", "once", "clear"},
 		{"thread", "wake", "schedule", "clear", "backup database"},
 	}

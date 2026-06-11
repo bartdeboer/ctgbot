@@ -413,6 +413,7 @@ func TestCodexBootstrapFixtureMainDeveloperInstructions(t *testing.T) {
 			"hostbridge theater <thread> unsubscribe",
 			"hostbridge thread help",
 			"hostbridge thread heartbeat <schedule>",
+			"hostbridge thread heartbeat clear",
 			"hostbridge thread list",
 			"hostbridge thread status",
 			"hostbridge thread wake list",

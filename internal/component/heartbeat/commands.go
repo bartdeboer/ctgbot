@@ -132,6 +132,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			Policy:  userPolicy,
 			Hidden:  true,
 			Aliases: []commandengine.Route{
+				{Pattern: "thread heartbeat clear", Absolute: true},
 				{Pattern: "thread wake heartbeat clear", Absolute: true},
 			},
 			InstructionVisibility: commandengine.InstructionImportant,

@@ -36,6 +36,45 @@ func (c *testCommandSurface) RegisterCommandHandlers(registry *commandengine.Reg
 
 type testCommand struct{}
 
+type conflictingAliasSurface struct {
+	componentType string
+	alias         string
+}
+
+func (c conflictingAliasSurface) Type() string { return c.componentType }
+func (c conflictingAliasSurface) UsesLocalCommandRoutes() bool {
+	return true
+}
+func (c conflictingAliasSurface) CommandDefinitions() []commandengine.Definition {
+	return []commandengine.Definition{{
+		Pattern: "hidden",
+		Help:    "Hidden command",
+		Build: func(req *clir.Request) (any, error) {
+			_ = req
+			return testCommand{}, nil
+		},
+		Sources: []commandengine.Source{commandengine.SourceMessage},
+		Hidden:  true,
+		Aliases: []commandengine.Route{{
+			Pattern:  c.alias,
+			Absolute: true,
+		}},
+	}}
+}
+func (c conflictingAliasSurface) RegisterCommandHandlers(registry *commandengine.Registry) error {
+	return nil
+}
+
+func TestNewBoundEngineForSourceRejectsConflictingAbsoluteAliases(t *testing.T) {
+	_, err := NewBoundEngineForSource(commandengine.SourceMessage, []BoundSurface{
+		{Surface: conflictingAliasSurface{componentType: "one", alias: "thread wake list"}, ComponentRef: "one", ComponentType: "one"},
+		{Surface: conflictingAliasSurface{componentType: "two", alias: "thread wake list"}, ComponentRef: "two", ComponentType: "two"},
+	})
+	if err == nil {
+		t.Fatal("NewBoundEngineForSource() error = nil, want duplicate route")
+	}
+}
+
 func TestNewBoundEngineForSourceSupportsUniqueTypeShorthand(t *testing.T) {
 	engine, err := NewBoundEngineForSource(commandengine.SourceMessage, []BoundSurface{{
 		Surface:       &testCommandSurface{},

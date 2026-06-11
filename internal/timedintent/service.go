@@ -336,6 +336,9 @@ func (s *Service) ResetHeartbeatFloor(ctx context.Context, threadID modeluuid.UU
 	if now.IsZero() {
 		now = s.now()
 	}
+	// Heartbeat reset means "this thread received attention." Interval
+	// heartbeats move by idle duration; cron heartbeats move to the next
+	// calendar slot. One-shot and scheduled wakes are deliberately untouched.
 	next, err := nextHeartbeatDue(*intent, now)
 	if err != nil {
 		return err
@@ -436,6 +439,10 @@ func (s *Service) finishIntent(ctx context.Context, intent coremodel.TimedIntent
 		return s.Intents.Save(ctx, &intent)
 	}
 	if done {
+		if intent.Kind == KindWake {
+			_, err := s.Intents.DeleteByTargetKindKey(ctx, intent.TargetThreadID, intent.Kind, intent.Key)
+			return err
+		}
 		intent.Enabled = false
 		intent.NextDueAt = nil
 		return s.Intents.Save(ctx, &intent)

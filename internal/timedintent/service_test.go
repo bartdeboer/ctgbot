@@ -214,12 +214,12 @@ func TestScheduleWakeOnceDeliversOnceAndDisables(t *testing.T) {
 	if !strings.Contains(deliverer.text, "wakeup: check download") {
 		t.Fatalf("wake text = %q, want wakeup reason", deliverer.text)
 	}
-	stored, err := storage.TimedIntents().GetByTargetKindKey(ctx, threadID, KindWake, KeyDefault)
+	intents, err := storage.TimedIntents().ListByTarget(ctx, threadID)
 	if err != nil {
-		t.Fatalf("GetByTargetKindKey() error = %v", err)
+		t.Fatalf("ListByTarget() error = %v", err)
 	}
-	if stored.Enabled || stored.NextDueAt != nil {
-		t.Fatalf("stored enabled=%v next=%v, want disabled one-shot", stored.Enabled, stored.NextDueAt)
+	if len(intents) != 0 {
+		t.Fatalf("intents len = %d, want delivered one-shot deleted", len(intents))
 	}
 }
 

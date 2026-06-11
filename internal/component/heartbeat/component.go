@@ -49,9 +49,6 @@ func (c *Component) timed() *timedintent.Service {
 	if c == nil {
 		return nil
 	}
-	if c.service == nil && c.intents != nil {
-		c.service = timedintent.New(c.intents, nil, nil, nil)
-	}
 	return c.service
 }
 
