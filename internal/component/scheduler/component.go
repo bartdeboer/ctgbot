@@ -25,8 +25,8 @@ var _ component.Component = (*Component)(nil)
 var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 
-func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, logf func(format string, args ...any)) (component.Component, error) {
-	_, _, _ = ctx, runtime, home
+func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage, logf func(format string, args ...any)) (component.Component, error) {
+	_, _, _ = ctx, runtime, profile
 	if storage == nil {
 		return nil, fmt.Errorf("missing scheduler storage")
 	}

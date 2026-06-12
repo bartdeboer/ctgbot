@@ -54,16 +54,16 @@ func (f fakeInboundFilter) FilterInbound(ctx context.Context, input inboundpkg.C
 }
 
 type fakeRuntime struct {
-	home runtimepkg.Home
-	kind string
+	profile runtimepkg.Profile
+	kind    string
 }
 
 func (r fakeRuntime) Kind() string { return r.kind }
-func (r fakeRuntime) ComponentHome() runtimepkg.Home {
-	return r.home
+func (r fakeRuntime) ComponentProfile() runtimepkg.Profile {
+	return r.profile
 }
-func (r fakeRuntime) RuntimeComponentHomePath() string {
-	return r.home.Path
+func (r fakeRuntime) RuntimeComponentProfilePath() string {
+	return r.profile.Path
 }
 func (r fakeRuntime) RuntimeWorkspacePath(workspacePath string) string {
 	return workspacePath
@@ -114,25 +114,25 @@ type fakeFactory struct {
 }
 
 func (f fakeFactory) Kind() string { return f.kind }
-func (f fakeFactory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
-	hostPath := registration.HomePath
+func (f fakeFactory) ComponentProfile(registration coremodel.Component) runtimepkg.Profile {
+	hostPath := registration.ProfilePath
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return runtimepkg.Home{Path: hostPath}
+	return runtimepkg.Profile{Path: hostPath}
 }
-func (f fakeFactory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
-	_, _ = registration, home
-	return home.Path
+func (f fakeFactory) RuntimeComponentProfilePath(registration coremodel.Component, profile runtimepkg.Profile) string {
+	_, _ = registration, profile
+	return profile.Path
 }
 func (f fakeFactory) RuntimeWorkspacePath(workspacePath string) string {
 	return workspacePath
 }
-func (f fakeFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
-	_, _, _ = registration, home, config
+func (f fakeFactory) Bind(registration coremodel.Component, profile runtimepkg.Profile, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
+	_, _, _ = registration, profile, config
 	return fakeRuntime{
-		home: home,
-		kind: f.kind,
+		profile: profile,
+		kind:    f.kind,
 	}
 }
 
@@ -168,7 +168,7 @@ func (c *fakeMessenger) StartChatAction(ctx context.Context, target message.Chat
 
 type fakeAgentRecorder struct {
 	prompts      []string
-	homes        []runtimepkg.Home
+	homes        []runtimepkg.Profile
 	streamText   string
 	finalText    string
 	relayText    string
@@ -198,8 +198,8 @@ func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	if c.recorder.release != nil {
 		<-c.recorder.release
 	}
-	if home, ok := turn.Runtime.ComponentHome(c.componentID); ok {
-		c.recorder.homes = append(c.recorder.homes, home)
+	if profile, ok := turn.Runtime.ComponentProfile(c.componentID); ok {
+		c.recorder.homes = append(c.recorder.homes, profile)
 	}
 	if relayText := strings.TrimSpace(c.recorder.relayText); relayText != "" {
 		return &component.TurnResult{Relay: &coremodel.ThreadMessage{Text: relayText}}, nil
@@ -282,14 +282,14 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage, record
 	t.Helper()
 
 	registry := component.NewRegistry()
-	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _, _ = ctx, rt, home, storage, registration
+	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _, _, _ = ctx, rt, profile, storage, registration
 		return &fakeMessenger{componentID: registration.ID, recorder: recorder, events: append([]component.InboundEvent(nil), events...)}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Add("codex", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _, _ = ctx, rt, home, storage, registration
+	if err := registry.Add("codex", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _, _, _ = ctx, rt, profile, storage, registration
 		return &fakeAgent{componentID: registration.ID, recorder: agentRecorder}, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -392,8 +392,8 @@ func newAllowlistInboundFixture(t *testing.T, bindAllowlist bool) allowlistInbou
 	messengerRecorder := &fakeMessengerRecorder{}
 	agentRecorder := &fakeAgentRecorder{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
-		return registry.Add(allowlistfilter.Type, func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _ = ctx, registration, rt, home
+		return registry.Add(allowlistfilter.Type, func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _ = ctx, registration, rt, profile
 			return allowlistfilter.New(storage), nil
 		})
 	})
@@ -455,14 +455,14 @@ func newGuardInboundFixture(t *testing.T, guardOutput string) guardInboundFixtur
 	completionRecorder := &fakeCompletionRecorder{outputs: []string{guardOutput}}
 	var system *systempkg.System
 	system = newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
-		if err := registry.Add("llm", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, registration, rt, home, storage
+		if err := registry.Add("llm", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, registration, rt, profile, storage
 			return &fakeCompletionEngine{recorder: completionRecorder}, nil
 		}); err != nil {
 			return err
 		}
-		return registry.Add(guardcomponent.Type, func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			return guardcomponent.New(ctx, registration, rt, home, storage, system, nil)
+		return registry.Add(guardcomponent.Type, func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			return guardcomponent.New(ctx, registration, rt, profile, storage, system, nil)
 		})
 	})
 	b := newTestBroker(storage, system, nil)
@@ -481,11 +481,11 @@ func newGuardInboundFixture(t *testing.T, guardOutput string) guardInboundFixtur
 			t.Fatal(err)
 		}
 	}
-	guardHome := filepath.Join(root, ".ctgbot", "components", guardcomponent.Type, "qwen")
-	if err := os.MkdirAll(guardHome, 0o755); err != nil {
+	guardProfile := filepath.Join(root, ".ctgbot", "components", guardcomponent.Type, "qwen")
+	if err := os.MkdirAll(guardProfile, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(guardHome, guardcomponent.ComponentConfigFilename), []byte(`{"completion":"llm/qwen"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(guardProfile, guardcomponent.ComponentConfigFilename), []byte(`{"completion":"llm/qwen"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -602,7 +602,7 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 		t.Fatalf("relay texts = %#v", messengerRecorder.payloads)
 	}
 	if agentRecorder.homes[0].Path == "" || !strings.Contains(agentRecorder.homes[0].Path, filepath.Join(".ctgbot", "components", "codex", "codex")) {
-		t.Fatalf("agent home = %#v", agentRecorder.homes[0])
+		t.Fatalf("agent profile = %#v", agentRecorder.homes[0])
 	}
 	messages, err := storage.Messages().ListByThreadID(context.Background(), outcome.Inbound.ThreadID)
 	if err != nil {
@@ -688,14 +688,14 @@ func TestVoiceInputUsesTranscriberWithoutImplicitVoiceOutput(t *testing.T) {
 	transcriber := &fakeTranscriber{text: "hello from voice", language: "nl"}
 	synthesizer := &fakeSynthesizer{}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
-		if err := registry.Add("whisper", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, registration, rt, home, storage
+		if err := registry.Add("whisper", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, registration, rt, profile, storage
 			return transcriber, nil
 		}); err != nil {
 			return err
 		}
-		return registry.Add("piper", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, registration, rt, home, storage
+		return registry.Add("piper", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, registration, rt, profile, storage
 			return synthesizer, nil
 		})
 	})
@@ -790,8 +790,8 @@ func TestAudioWithTextIsHandledAsFileUpload(t *testing.T) {
 	agentRecorder := &fakeAgentRecorder{finalText: "done"}
 	transcriber := &fakeTranscriber{text: "should not run"}
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
-		return registry.Add("whisper", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, registration, rt, home, storage
+		return registry.Add("whisper", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, registration, rt, profile, storage
 			return transcriber, nil
 		})
 	})
@@ -872,8 +872,8 @@ func TestInboundEventFilterCanTransformEventBeforeRouting(t *testing.T) {
 		return inboundpkg.Pass(input), nil
 	})
 	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil, func(registry *component.Registry) error {
-		return registry.Add("filter", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, registration, rt, home, storage
+		return registry.Add("filter", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, registration, rt, profile, storage
 			return fakeInboundFilter{fn: rewriteText}, nil
 		})
 	})
@@ -1712,8 +1712,8 @@ func TestHandleInboundRunsMessageCommandAndSkipsAgent(t *testing.T) {
 		agentRecorder,
 		nil,
 		func(registry *component.Registry) error {
-			return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-				_, _, _, _, _ = ctx, rt, home, storage, registration
+			return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+				_, _, _, _, _ = ctx, rt, profile, storage, registration
 				return &fakeCommandComponent{recorder: commandRecorder}, nil
 			})
 		},
@@ -1932,8 +1932,8 @@ func TestHandleInboundRecognizesProcessQuitAliasAndSkipsAgent(t *testing.T) {
 		agentRecorder,
 		nil,
 		func(registry *component.Registry) error {
-			return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-				_, _, _, _, _ = ctx, registration, rt, home, storage
+			return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, rt runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+				_, _, _, _, _ = ctx, registration, rt, profile, storage
 				return processcomponent.New(&fakeProcessActions{}), nil
 			})
 		},

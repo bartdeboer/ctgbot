@@ -41,8 +41,8 @@ func TestMockComponentsEndToEnd(t *testing.T) {
 		agentState := &agentState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, runtime, home, storage, registration
+		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, profile, storage, registration
 			return &mockMessenger{
 				componentID: registration.ID,
 				state:       messengerState,
@@ -50,11 +50,11 @@ func TestMockComponentsEndToEnd(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockmsg: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _ = ctx, home, storage
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _ = ctx, profile, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, profile, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -190,8 +190,8 @@ func TestInboundAttachmentsMaterializeIntoWorkspaceInboxAndInjectPrompt(t *testi
 		agentState := &agentState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, runtime, home, storage, registration
+		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, profile, storage, registration
 			return &mockMessenger{
 				componentID: registration.ID,
 				state:       messengerState,
@@ -199,11 +199,11 @@ func TestInboundAttachmentsMaterializeIntoWorkspaceInboxAndInjectPrompt(t *testi
 		}); err != nil {
 			t.Fatalf("register mockmsg: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _ = ctx, home, storage
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _ = ctx, profile, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, profile, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -327,8 +327,8 @@ func TestAttachmentOnlyInboundReturnsUploadSavedMessage(t *testing.T) {
 		agentState := &agentState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, runtime, home, storage, registration
+		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, profile, storage, registration
 			return &mockMessenger{
 				componentID: registration.ID,
 				state:       messengerState,
@@ -336,11 +336,11 @@ func TestAttachmentOnlyInboundReturnsUploadSavedMessage(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockmsg: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _ = ctx, home, storage
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _ = ctx, profile, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, profile, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -435,8 +435,8 @@ func TestConversationErrorIsReportedToChatAndDoesNotStopSource(t *testing.T) {
 		agentState := &agentState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, runtime, home, storage, registration
+		if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, profile, storage, registration
 			return &multiEventSource{
 				componentID: registration.ID,
 				state:       sourceState,
@@ -444,17 +444,17 @@ func TestConversationErrorIsReportedToChatAndDoesNotStopSource(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockmsg: %v", err)
 		}
-		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, runtime, home, storage, registration
+		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, profile, storage, registration
 			return &mockRelay{state: relayState}, nil
 		}); err != nil {
 			t.Fatalf("register mockrelay: %v", err)
 		}
-		if err := registry.Add("failingagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _ = ctx, home, storage
+		if err := registry.Add("failingagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _ = ctx, profile, storage
 			return &failingAgent{
 				componentID: registration.ID,
-				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, profile, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {
@@ -563,11 +563,11 @@ func (a *mockAgent) Type() string {
 
 func (a *mockAgent) Auth(ctx context.Context, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
 	_, _, _, _, _ = ctx, callbackPort, callbackTimeout, stdout, stderr
-	home := a.runtime.ComponentHome()
-	if err := os.MkdirAll(home.Path, 0o755); err != nil {
+	profile := a.runtime.ComponentProfile()
+	if err := os.MkdirAll(profile.Path, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(home.Path, "auth.json"), []byte(`{"ok":true}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(profile.Path, "auth.json"), []byte(`{"ok":true}`), 0o600); err != nil {
 		return err
 	}
 	a.state.mu.Lock()
@@ -577,13 +577,13 @@ func (a *mockAgent) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 }
 
 func (a *mockAgent) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
-	homeFromRuntime := a.runtime.ComponentHome()
-	homeFromTurn, ok := turn.Runtime.ComponentHome(a.componentID)
+	homeFromRuntime := a.runtime.ComponentProfile()
+	homeFromTurn, ok := turn.Runtime.ComponentProfile(a.componentID)
 	if !ok {
-		return nil, fmt.Errorf("missing component home")
+		return nil, fmt.Errorf("missing component profile")
 	}
 	if homeFromRuntime.Path != homeFromTurn.Path {
-		return nil, fmt.Errorf("component home mismatch: %s != %s", homeFromRuntime.Path, homeFromTurn.Path)
+		return nil, fmt.Errorf("component profile mismatch: %s != %s", homeFromRuntime.Path, homeFromTurn.Path)
 	}
 	if _, err := os.Stat(filepath.Join(homeFromRuntime.Path, "auth.json")); err != nil {
 		return nil, fmt.Errorf("missing auth.json: %w", err)

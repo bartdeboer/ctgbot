@@ -19,31 +19,33 @@ import (
 )
 
 type captureBindFactory struct {
-	home   runtimepkg.Home
-	config runtimepkg.BindConfig
+	profile runtimepkg.Profile
+	config  runtimepkg.BindConfig
 }
 
 func (f *captureBindFactory) Kind() string { return "docker" }
-func (f *captureBindFactory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
+func (f *captureBindFactory) ComponentProfile(registration coremodel.Component) runtimepkg.Profile {
 	_ = registration
-	return f.home
+	return f.profile
 }
-func (f *captureBindFactory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
-	_, _ = registration, home
+func (f *captureBindFactory) RuntimeComponentProfilePath(registration coremodel.Component, profile runtimepkg.Profile) string {
+	_, _ = registration, profile
 	return "/profile/components/codex/gpu"
 }
 func (f *captureBindFactory) RuntimeWorkspacePath(workspacePath string) string { return workspacePath }
-func (f *captureBindFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
-	_, _ = registration, home
+func (f *captureBindFactory) Bind(registration coremodel.Component, profile runtimepkg.Profile, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
+	_, _ = registration, profile
 	f.config = config
-	return &capturedRuntime{home: f.home}
+	return &capturedRuntime{profile: f.profile}
 }
 
-type capturedRuntime struct{ home runtimepkg.Home }
+type capturedRuntime struct{ profile runtimepkg.Profile }
 
-func (r *capturedRuntime) Kind() string                                          { return "docker" }
-func (r *capturedRuntime) ComponentHome() runtimepkg.Home                        { return r.home }
-func (r *capturedRuntime) RuntimeComponentHomePath() string                      { return "/profile/components/codex/gpu" }
+func (r *capturedRuntime) Kind() string                         { return "docker" }
+func (r *capturedRuntime) ComponentProfile() runtimepkg.Profile { return r.profile }
+func (r *capturedRuntime) RuntimeComponentProfilePath() string {
+	return "/profile/components/codex/gpu"
+}
 func (r *capturedRuntime) RuntimeWorkspacePath(workspacePath string) string      { return workspacePath }
 func (r *capturedRuntime) Refresh(context.Context, string, modeluuid.UUID) error { return nil }
 func (r *capturedRuntime) Start(context.Context, string, modeluuid.UUID) (runtimepkg.Status, error) {
@@ -100,9 +102,9 @@ func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 			t.Fatalf("SetImage() error = %v", err)
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "gpu"}
-		factory := &captureBindFactory{home: runtimepkg.Home{Path: homePath}}
+		factory := &captureBindFactory{profile: runtimepkg.Profile{Path: homePath}}
 
-		value, err := New(context.Background(), registration, factory, factory.home, repository.NewMemory(), cfg, func(context.Context, coremodel.Chat) (string, error) {
+		value, err := New(context.Background(), registration, factory, factory.profile, repository.NewMemory(), cfg, func(context.Context, coremodel.Chat) (string, error) {
 			return filepath.Join(root, "workspace"), nil
 		}, log.New(io.Discard, "", 0), "")
 		if err != nil {
@@ -162,9 +164,9 @@ func TestNewFallsBackToGlobalDockerImageWhenProfileImageUnset(t *testing.T) {
 			t.Fatalf("SetImage() error = %v", err)
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "work"}
-		factory := &captureBindFactory{home: runtimepkg.Home{Path: homePath}}
+		factory := &captureBindFactory{profile: runtimepkg.Profile{Path: homePath}}
 
-		if _, err := New(context.Background(), registration, factory, factory.home, repository.NewMemory(), cfg, func(context.Context, coremodel.Chat) (string, error) {
+		if _, err := New(context.Background(), registration, factory, factory.profile, repository.NewMemory(), cfg, func(context.Context, coremodel.Chat) (string, error) {
 			return filepath.Join(root, "workspace"), nil
 		}, log.New(io.Discard, "", 0), ""); err != nil {
 			t.Fatalf("New() error = %v", err)
@@ -197,9 +199,9 @@ func TestNewPrefersExplicitImageOverrideOverProfileAndGlobal(t *testing.T) {
 			t.Fatalf("SetImage() error = %v", err)
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "override"}
-		factory := &captureBindFactory{home: runtimepkg.Home{Path: homePath}}
+		factory := &captureBindFactory{profile: runtimepkg.Profile{Path: homePath}}
 
-		if _, err := New(context.Background(), registration, factory, factory.home, repository.NewMemory(), cfg, func(context.Context, coremodel.Chat) (string, error) {
+		if _, err := New(context.Background(), registration, factory, factory.profile, repository.NewMemory(), cfg, func(context.Context, coremodel.Chat) (string, error) {
 			return filepath.Join(root, "workspace"), nil
 		}, log.New(io.Discard, "", 0), "explicit:image"); err != nil {
 			t.Fatalf("New() error = %v", err)

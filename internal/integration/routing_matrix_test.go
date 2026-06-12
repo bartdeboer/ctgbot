@@ -88,8 +88,8 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockgmail", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, runtime, home, storage, registration
+		if err := registry.Add("mockgmail", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, profile, storage, registration
 			state, ok := gmailStates[registration.Ref()]
 			if !ok {
 				return nil, fmt.Errorf("missing gmail state for %s", registration.Ref())
@@ -101,8 +101,8 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockgmail: %v", err)
 		}
-		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, runtime, home, storage, registration
+		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, profile, storage, registration
 			state, ok := relayStates[registration.Ref()]
 			if !ok {
 				return nil, fmt.Errorf("missing relay state for %s", registration.Ref())
@@ -111,15 +111,15 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockrelay: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _ = ctx, home, storage
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _ = ctx, profile, storage
 			state, ok := agentStates[registration.Ref()]
 			if !ok {
 				return nil, fmt.Errorf("missing agent state for %s", registration.Ref())
 			}
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, profile, runtimepkg.BindConfig{}),
 				state:       state,
 			}, nil
 		}); err != nil {
@@ -225,19 +225,19 @@ func TestRoutingMatrixProfilesChatsThreadsAndContinuity(t *testing.T) {
 			t.Fatalf("beta distinct provider threads collapsed to one internal thread: %s", recordBetaOne.ThreadID)
 		}
 
-		workHome := filepath.Join(root, ".ctgbot", "components", "mockagent", "work")
-		personalHome := filepath.Join(root, ".ctgbot", "components", "mockagent", "personal")
-		if _, err := os.Stat(filepath.Join(workHome, "auth.json")); err != nil {
+		workProfile := filepath.Join(root, ".ctgbot", "components", "mockagent", "work")
+		personalProfile := filepath.Join(root, ".ctgbot", "components", "mockagent", "personal")
+		if _, err := os.Stat(filepath.Join(workProfile, "auth.json")); err != nil {
 			t.Fatalf("missing work auth file: %v", err)
 		}
-		if _, err := os.Stat(filepath.Join(personalHome, "auth.json")); err != nil {
+		if _, err := os.Stat(filepath.Join(personalProfile, "auth.json")); err != nil {
 			t.Fatalf("missing personal auth file: %v", err)
 		}
-		if recordAlphaOne.HomeHostPath != workHome || recordAlphaTwo.HomeHostPath != workHome {
-			t.Fatalf("work agent home mismatch: alpha one=%s alpha two=%s want %s", recordAlphaOne.HomeHostPath, recordAlphaTwo.HomeHostPath, workHome)
+		if recordAlphaOne.ProfileHostPath != workProfile || recordAlphaTwo.ProfileHostPath != workProfile {
+			t.Fatalf("work agent profile mismatch: alpha one=%s alpha two=%s want %s", recordAlphaOne.ProfileHostPath, recordAlphaTwo.ProfileHostPath, workProfile)
 		}
-		if recordBetaOne.HomeHostPath != personalHome || recordBetaOther.HomeHostPath != personalHome {
-			t.Fatalf("personal agent home mismatch: beta one=%s beta other=%s want %s", recordBetaOne.HomeHostPath, recordBetaOther.HomeHostPath, personalHome)
+		if recordBetaOne.ProfileHostPath != personalProfile || recordBetaOther.ProfileHostPath != personalProfile {
+			t.Fatalf("personal agent profile mismatch: beta one=%s beta other=%s want %s", recordBetaOne.ProfileHostPath, recordBetaOther.ProfileHostPath, personalProfile)
 		}
 		if got, want := recordAlphaOne.Workspace, filepath.Join(root, "workspaces", "work-root"); got != want {
 			t.Fatalf("alpha workspace = %s, want %s", got, want)

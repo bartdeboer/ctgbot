@@ -19,7 +19,7 @@ const Type = "model"
 
 type Component struct {
 	registration coremodel.Component
-	home         runtimepkg.Home
+	profile      runtimepkg.Profile
 	config       ComponentConfig
 	registry     Registry
 }
@@ -30,17 +30,17 @@ var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 var _ component.ModelRegistry = (*Component)(nil)
 
-func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
 	_, _, _ = ctx, runtime, storage
-	config, err := loadComponentConfig(home.Path)
+	config, err := loadComponentConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	registry, err := loadRegistry(home.Path)
+	registry, err := loadRegistry(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	return &Component{registration: registration, home: home, config: config, registry: registry}, nil
+	return &Component{registration: registration, profile: profile, config: config, registry: registry}, nil
 }
 
 func (c *Component) Type() string { return Type }
@@ -140,7 +140,7 @@ func (c *Component) SetModelCard(ctx context.Context, name string, text string) 
 	}
 	record.Card = strings.TrimSpace(text)
 	c.registry.Models[name] = cleanModelRecord(record)
-	return saveRegistry(c.home.Path, c.registry)
+	return saveRegistry(c.profile.Path, c.registry)
 }
 
 func (c *Component) ModelConfigSchema(ctx context.Context, name string) (configsurface.ConfigSchema, error) {
@@ -183,7 +183,7 @@ func (c *Component) SetModelConfigKey(ctx context.Context, name string, key stri
 	}
 	model.ConfigKeys[key] = cleanModelConfigKeyRecord(record)
 	c.registry.Models[name] = cleanModelRecord(model)
-	return saveRegistry(c.home.Path, c.registry)
+	return saveRegistry(c.profile.Path, c.registry)
 }
 
 func (c *Component) UnsetModelConfigKey(ctx context.Context, name string, key string) error {
@@ -204,7 +204,7 @@ func (c *Component) UnsetModelConfigKey(ctx context.Context, name string, key st
 		model.ConfigKeys = nil
 	}
 	c.registry.Models[name] = cleanModelRecord(model)
-	return saveRegistry(c.home.Path, c.registry)
+	return saveRegistry(c.profile.Path, c.registry)
 }
 
 func (c *Component) InstallModel(ctx context.Context, req component.ModelInstallRequest) (component.Model, error) {
@@ -264,7 +264,7 @@ func (c *Component) saveModel(name string, record ModelRecord, makeDefault bool)
 			c.registry.DefaultModel = name
 		}
 	}
-	if err := saveRegistry(c.home.Path, c.registry); err != nil {
+	if err := saveRegistry(c.profile.Path, c.registry); err != nil {
 		return component.Model{}, err
 	}
 	return c.resolve(name, c.registry.Models[name]), nil
@@ -366,7 +366,7 @@ func (c *Component) resolveRelativeModelPath(path string) string {
 		return ""
 	}
 	if strings.HasPrefix(filepath.ToSlash(path), "models/") {
-		legacy := filepath.Join(c.home.Path, path)
+		legacy := filepath.Join(c.profile.Path, path)
 		if _, err := os.Stat(legacy); err == nil {
 			return legacy
 		}

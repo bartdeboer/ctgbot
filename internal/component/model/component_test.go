@@ -19,7 +19,7 @@ func TestRegisterModelRegistryStoresAndResolvesModel(t *testing.T) {
 	if err := os.WriteFile(modelPath, []byte("model"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: dir}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: dir}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -45,7 +45,7 @@ func TestRegisterModelRegistryStoresAndResolvesModel(t *testing.T) {
 	if model.Path != modelPath || model.Mode != component.ModelModeEmbedding || !model.Normalize {
 		t.Fatalf("model = %#v", model)
 	}
-	loaded, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: dir}, nil)
+	loaded, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: dir}, nil)
 	if err != nil {
 		t.Fatalf("New() reload error = %v", err)
 	}
@@ -72,7 +72,7 @@ func TestRegisterModelDefaultIsPerMode(t *testing.T) {
 	if err := os.MkdirAll(ttsPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: dir}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: dir}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -146,7 +146,7 @@ func TestComponentConfigModelPathResolvesRelativeRegistryPaths(t *testing.T) {
 	if err := os.WriteFile(templatePath, []byte("template"), 0o644); err != nil {
 		t.Fatalf("WriteFile(template) error = %v", err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: home}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -180,7 +180,7 @@ func TestLegacyInstalledModelPathStillResolvesAgainstProfileHome(t *testing.T) {
 	if err := saveRegistry(home, registry); err != nil {
 		t.Fatalf("saveRegistry() error = %v", err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: home}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -244,7 +244,7 @@ func TestModelCardAndConfigSchema(t *testing.T) {
 	if err := saveRegistry(home, registry); err != nil {
 		t.Fatalf("saveRegistry() error = %v", err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: home}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -284,7 +284,7 @@ func TestSetAndUnsetModelConfigKey(t *testing.T) {
 	if err := saveRegistry(home, registry); err != nil {
 		t.Fatalf("saveRegistry() error = %v", err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: home}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

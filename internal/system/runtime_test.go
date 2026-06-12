@@ -17,16 +17,16 @@ import (
 )
 
 type fakeRuntime struct {
-	home runtimepkg.Home
-	kind string
+	profile runtimepkg.Profile
+	kind    string
 }
 
 func (r fakeRuntime) Kind() string { return r.kind }
-func (r fakeRuntime) ComponentHome() runtimepkg.Home {
-	return r.home
+func (r fakeRuntime) ComponentProfile() runtimepkg.Profile {
+	return r.profile
 }
-func (r fakeRuntime) RuntimeComponentHomePath() string {
-	return r.home.Path
+func (r fakeRuntime) RuntimeComponentProfilePath() string {
+	return r.profile.Path
 }
 func (r fakeRuntime) RuntimeWorkspacePath(workspacePath string) string {
 	return workspacePath
@@ -73,23 +73,23 @@ type fakeFactory struct {
 }
 
 func (f fakeFactory) Kind() string { return f.kind }
-func (f fakeFactory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
-	hostPath := registration.HomePath
+func (f fakeFactory) ComponentProfile(registration coremodel.Component) runtimepkg.Profile {
+	hostPath := registration.ProfilePath
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return runtimepkg.Home{Path: hostPath}
+	return runtimepkg.Profile{Path: hostPath}
 }
-func (f fakeFactory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
-	_, _ = registration, home
-	return home.Path
+func (f fakeFactory) RuntimeComponentProfilePath(registration coremodel.Component, profile runtimepkg.Profile) string {
+	_, _ = registration, profile
+	return profile.Path
 }
 func (f fakeFactory) RuntimeWorkspacePath(workspacePath string) string {
 	return workspacePath
 }
-func (f fakeFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
-	_, _, _ = registration, home, config
-	return fakeRuntime{home: home, kind: f.kind}
+func (f fakeFactory) Bind(registration coremodel.Component, profile runtimepkg.Profile, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
+	_, _, _ = registration, profile, config
+	return fakeRuntime{profile: profile, kind: f.kind}
 }
 
 type fakeResolved struct {
@@ -104,7 +104,7 @@ type fakeAuthenticator struct {
 	authStatusCalls int
 	last            struct {
 		registration coremodel.Component
-		home         runtimepkg.Home
+		profile      runtimepkg.Profile
 		callbackPort int
 		timeout      time.Duration
 	}
@@ -129,17 +129,17 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage) *Syste
 	t.Helper()
 
 	registry := component.NewRegistry()
-	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _ = ctx, home, storage
+	if err := registry.Add("telegram", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _ = ctx, profile, storage
 		return fakeResolved{componentType: registration.Type, runtimeKind: runtime.Kind()}, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 	auth := &fakeAuthenticator{}
-	if err := registry.Add("gmail", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _ = ctx, runtime, home, storage
+	if err := registry.Add("gmail", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _, _ = ctx, runtime, profile, storage
 		auth.last.registration = registration
-		auth.last.home = home
+		auth.last.profile = profile
 		return auth, nil
 	}); err != nil {
 		t.Fatal(err)
@@ -158,7 +158,7 @@ func newTestSystem(t *testing.T, root string, storage repository.Storage) *Syste
 	return system
 }
 
-func TestResolveComponentUsesRuntimeAndHome(t *testing.T) {
+func TestResolveComponentUsesRuntimeAndProfile(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	system := newTestSystem(t, root, storage)
@@ -185,7 +185,7 @@ func TestResolveComponentUsesRuntimeAndHome(t *testing.T) {
 	if resolved.runtimeKind != "local" {
 		t.Fatalf("runtime kind = %q, want local", resolved.runtimeKind)
 	}
-	if got, want := loaded.Home.Path, filepath.Join(root, ".ctgbot", "components", "telegram", "telegram"); got != want {
+	if got, want := loaded.Profile.Path, filepath.Join(root, ".ctgbot", "components", "telegram", "telegram"); got != want {
 		t.Fatalf("Path = %q, want %q", got, want)
 	}
 }
@@ -244,7 +244,7 @@ func TestResolveChatWorkspaceFallsBackToChatLocalWorkspace(t *testing.T) {
 	}
 }
 
-func TestAuthComponentUsesResolvedHomeAndRegistration(t *testing.T) {
+func TestAuthComponentUsesResolvedProfileAndRegistration(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	system := newTestSystem(t, root, storage)
@@ -270,12 +270,12 @@ func TestAuthComponentUsesResolvedHomeAndRegistration(t *testing.T) {
 	if auth.last.registration.Ref() != "gmail/work" {
 		t.Fatalf("auth registration = %q", auth.last.registration.Ref())
 	}
-	if got, want := auth.last.home.Path, filepath.Join(root, ".ctgbot", "components", "gmail", "work"); got != want {
-		t.Fatalf("auth home = %q, want %q", got, want)
+	if got, want := auth.last.profile.Path, filepath.Join(root, ".ctgbot", "components", "gmail", "work"); got != want {
+		t.Fatalf("auth profile = %q, want %q", got, want)
 	}
 }
 
-func TestCheckComponentAuthUsesResolvedHomeAndRegistration(t *testing.T) {
+func TestCheckComponentAuthUsesResolvedProfileAndRegistration(t *testing.T) {
 	root := t.TempDir()
 	storage := repository.NewMemory()
 	system := newTestSystem(t, root, storage)
@@ -301,8 +301,8 @@ func TestCheckComponentAuthUsesResolvedHomeAndRegistration(t *testing.T) {
 	if auth.last.registration.Ref() != "gmail/work" {
 		t.Fatalf("auth registration = %q", auth.last.registration.Ref())
 	}
-	if got, want := auth.last.home.Path, filepath.Join(root, ".ctgbot", "components", "gmail", "work"); got != want {
-		t.Fatalf("auth home = %q, want %q", got, want)
+	if got, want := auth.last.profile.Path, filepath.Join(root, ".ctgbot", "components", "gmail", "work"); got != want {
+		t.Fatalf("auth profile = %q, want %q", got, want)
 	}
 }
 

@@ -163,7 +163,7 @@ func (c *Component) saveConfig(config ComponentConfig) error {
 		return fmt.Errorf("missing gmailv2 component")
 	}
 	config = config.withDefaults()
-	if err := saveComponentConfig(c.home.Path, config); err != nil {
+	if err := saveComponentConfig(c.profile.Path, config); err != nil {
 		return err
 	}
 	c.componentConfig = config

@@ -139,28 +139,28 @@ func openSystem(ctx context.Context, store *clistate.Store, processActions proce
 func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcomponent.Actions) (*component.Registry, error) {
 	registry := component.NewRegistry()
 
-	if err := registry.Add(telegram.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return telegram.New(ctx, registration, runtime, home, storage, rtSystem.Logger)
+	if err := registry.Add(telegram.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return telegram.New(ctx, registration, runtime, profile, storage, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(codex.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return codex.New(ctx, registration, runtime, home, storage, rtSystem.Config, rtSystem.ResolveChatWorkspace, rtSystem.Logger, "")
+	if err := registry.Add(codex.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return codex.New(ctx, registration, runtime, profile, storage, rtSystem.Config, rtSystem.ResolveChatWorkspace, rtSystem.Logger, "")
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(claude.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return claude.New(ctx, registration, runtime, home, storage, rtSystem.ResolveChatWorkspace, rtSystem.Logger)
+	if err := registry.Add(claude.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return claude.New(ctx, registration, runtime, profile, storage, rtSystem.ResolveChatWorkspace, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(gmail.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return gmail.NewWithOptions(ctx, registration, runtime, home, storage, gmail.Options{OAuthClientConfigPath: filepath.Join(rtSystem.StateRoot, "google", "oauth_client.json"), Logger: rtSystem.Logger})
+	if err := registry.Add(gmail.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return gmail.NewWithOptions(ctx, registration, runtime, profile, storage, gmail.Options{OAuthClientConfigPath: filepath.Join(rtSystem.StateRoot, "google", "oauth_client.json"), Logger: rtSystem.Logger})
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(gmailv2.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return gmailv2.NewWithOptions(ctx, registration, runtime, home, storage, gmailv2.Options{
+	if err := registry.Add(gmailv2.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return gmailv2.NewWithOptions(ctx, registration, runtime, profile, storage, gmailv2.Options{
 			OAuthClientConfigPath: filepath.Join(rtSystem.StateRoot, "google", "oauth_client.json"),
 			Logger:                rtSystem.Logger,
 			ResolveChatWorkspace:  rtSystem.ResolveChatWorkspace,
@@ -168,8 +168,8 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(allowlistfilter.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _ = ctx, runtime, home, registration
+	if err := registry.Add(allowlistfilter.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _, _ = ctx, runtime, profile, registration
 		if strings.TrimSpace(registration.Name) != allowlistfilter.Name {
 			return nil, fmt.Errorf("unsupported filters component: %s", registration.Ref())
 		}
@@ -177,63 +177,63 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(guardcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return guardcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
+	if err := registry.Add(guardcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return guardcomponent.New(ctx, registration, runtime, profile, storage, rtSystem, rtSystem.Logger.Printf)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(llamacpp.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return llamacpp.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger)
+	if err := registry.Add(llamacpp.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return llamacpp.New(ctx, registration, runtime, profile, storage, rtSystem, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(llamacppagentcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return llamacppagentcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.ResolveChatWorkspace, rtSystem.Logger)
+	if err := registry.Add(llamacppagentcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return llamacppagentcomponent.New(ctx, registration, runtime, profile, storage, rtSystem, rtSystem.ResolveChatWorkspace, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(modelcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return modelcomponent.New(ctx, registration, runtime, home, storage)
+	if err := registry.Add(modelcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return modelcomponent.New(ctx, registration, runtime, profile, storage)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(semanticcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return semanticcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
+	if err := registry.Add(semanticcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return semanticcomponent.New(ctx, registration, runtime, profile, storage, rtSystem, rtSystem.Logger.Printf)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(heartbeatcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+	if err := registry.Add(heartbeatcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
 		logf := func(format string, args ...any) {}
 		if rtSystem.Logger != nil {
 			logf = rtSystem.Logger.Printf
 		}
 		appService := app.NewServiceWithLogger(storage, rtSystem, logf)
-		return heartbeatcomponent.New(ctx, registration, runtime, home, storage, broker.New(appService, logf))
+		return heartbeatcomponent.New(ctx, registration, runtime, profile, storage, broker.New(appService, logf))
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(indexingcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return indexingcomponent.New(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
+	if err := registry.Add(indexingcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return indexingcomponent.New(ctx, registration, runtime, profile, storage, rtSystem, rtSystem.Logger.Printf)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(indexingcomponent.SearchType, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return indexingcomponent.NewSearch(ctx, registration, runtime, home, storage, rtSystem, rtSystem.Logger.Printf)
+	if err := registry.Add(indexingcomponent.SearchType, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return indexingcomponent.NewSearch(ctx, registration, runtime, profile, storage, rtSystem, rtSystem.Logger.Printf)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(theatercomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return theatercomponent.New(ctx, registration, runtime, home, storage)
+	if err := registry.Add(theatercomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return theatercomponent.New(ctx, registration, runtime, profile, storage)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(schedulercomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return schedulercomponent.New(ctx, registration, runtime, home, storage, rtSystem.Logger.Printf)
+	if err := registry.Add(schedulercomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return schedulercomponent.New(ctx, registration, runtime, profile, storage, rtSystem.Logger.Printf)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(opscomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _ = ctx, registration, runtime, home
+	if err := registry.Add(opscomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _, _ = ctx, registration, runtime, profile
 		logf := func(format string, args ...any) {}
 		if rtSystem.Logger != nil {
 			logf = rtSystem.Logger.Printf
@@ -242,24 +242,24 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(whispercppcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return whispercppcomponent.New(ctx, registration, runtime, home, storage, rtSystem)
+	if err := registry.Add(whispercppcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return whispercppcomponent.New(ctx, registration, runtime, profile, storage, rtSystem)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(supertoniccomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		return supertoniccomponent.New(ctx, registration, runtime, home, storage, rtSystem)
+	if err := registry.Add(supertoniccomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return supertoniccomponent.New(ctx, registration, runtime, profile, storage, rtSystem)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(sqlcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _ = ctx, registration, runtime, home
+	if err := registry.Add(sqlcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _, _ = ctx, registration, runtime, profile
 		return sqlcomponent.New(rtSystem.DB)
 	}); err != nil {
 		return nil, err
 	}
-	if err := registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _, _ = ctx, registration, runtime, home, storage
+	if err := registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _, _, _ = ctx, registration, runtime, profile, storage
 		return processcomponent.New(processActions), nil
 	}); err != nil {
 		return nil, err

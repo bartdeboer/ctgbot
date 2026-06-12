@@ -67,6 +67,9 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 	if err := s.migrateProviderChannelColumns(ctx); err != nil {
 		return err
 	}
+	if err := s.migrateComponentProfileColumn(ctx); err != nil {
+		return err
+	}
 	if err := s.db.WithContext(ctx).AutoMigrate(
 		&coremodel.Chat{},
 		&coremodel.Thread{},
@@ -85,6 +88,18 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 		&coremodel.TrustedController{},
 	); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (s *GORMStorage) migrateComponentProfileColumn(ctx context.Context) error {
+	migrator := s.db.WithContext(ctx).Migrator()
+	model := &coremodel.Component{}
+	if !migrator.HasTable(model) {
+		return nil
+	}
+	if migrator.HasColumn(model, "home_path") && !migrator.HasColumn(model, "profile_path") {
+		return migrator.RenameColumn(model, "home_path", "profile_path")
 	}
 	return nil
 }
@@ -243,7 +258,7 @@ func (r *gormComponents) Save(ctx context.Context, component *coremodel.Componen
 	component.Type = clean(component.Type)
 	component.Name = clean(component.Name)
 	component.Runtime = clean(component.Runtime)
-	component.HomePath = clean(component.HomePath)
+	component.ProfilePath = clean(component.ProfilePath)
 	component.Label = strings.TrimSpace(component.Label)
 	if component.ID.IsNull() {
 		existing, err := r.GetByTypeAndName(ctx, component.Type, component.Name)

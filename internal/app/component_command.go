@@ -15,7 +15,7 @@ import (
 type ComponentCommandRequest struct {
 	ComponentRef string
 	RuntimeKind  string
-	HomePath     string
+	ProfilePath  string
 	Args         []string
 }
 
@@ -26,12 +26,12 @@ type ComponentCommandResult struct {
 func (s *service) RunComponentCommand(ctx context.Context, request ComponentCommandRequest) (ComponentCommandResult, error) {
 	var registration *coremodel.Component
 	var err error
-	if strings.TrimSpace(request.RuntimeKind) != "" || strings.TrimSpace(request.HomePath) != "" {
+	if strings.TrimSpace(request.RuntimeKind) != "" || strings.TrimSpace(request.ProfilePath) != "" {
 		manager, managerErr := s.componentManager()
 		if managerErr != nil {
 			return ComponentCommandResult{}, managerErr
 		}
-		registration, err = manager.EnsureComponent(ctx, strings.TrimSpace(request.ComponentRef), strings.TrimSpace(request.RuntimeKind), strings.TrimSpace(request.HomePath))
+		registration, err = manager.EnsureComponent(ctx, strings.TrimSpace(request.ComponentRef), strings.TrimSpace(request.RuntimeKind), strings.TrimSpace(request.ProfilePath))
 	} else {
 		registration, err = s.resolveComponentRegistration(ctx, request.ComponentRef)
 	}

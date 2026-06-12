@@ -20,7 +20,7 @@ func TestAuthStatusMissingTokenMentionsTokenNotOAuthClient(t *testing.T) {
 	}
 	component := &Component{
 		registration: coremodel.Component{Type: Type, Name: "work"},
-		home:         runtimepkg.Home{Path: home},
+		profile:      runtimepkg.Profile{Path: home},
 	}
 
 	var stdout bytes.Buffer
@@ -46,7 +46,7 @@ func TestAuthStatusMissingOAuthClientMentionsOAuthClient(t *testing.T) {
 	home := t.TempDir()
 	component := &Component{
 		registration: coremodel.Component{Type: Type, Name: "work"},
-		home:         runtimepkg.Home{Path: home},
+		profile:      runtimepkg.Profile{Path: home},
 	}
 	if err := component.saveToken(&oauth2.Token{AccessToken: "token", TokenType: "Bearer"}); err != nil {
 		t.Fatalf("saveToken() error = %v", err)

@@ -153,7 +153,7 @@ func newTestGuard(t *testing.T, configJSON string, recorder *fakeCompletionRecor
 		provider:     &fakeCompletionEngine{recorder: recorder},
 	}
 	registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "qwen", Runtime: "local", Enabled: true}
-	created, err := New(context.Background(), registration, nil, runtimepkg.Home{Path: dir}, repository.NewMemory(), resolver, nil)
+	created, err := New(context.Background(), registration, nil, runtimepkg.Profile{Path: dir}, repository.NewMemory(), resolver, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

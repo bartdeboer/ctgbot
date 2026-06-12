@@ -11,7 +11,7 @@ import (
 	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
 )
 
-type Home struct {
+type Profile struct {
 	Path string
 }
 
@@ -41,7 +41,7 @@ type ThreadConfigResolver interface {
 type Status struct {
 	Name                 string
 	State                string
-	RuntimeHomePath      string
+	RuntimeProfilePath   string
 	RuntimeWorkspacePath string
 	Ports                []string
 	ActiveCommandName    string
@@ -53,8 +53,8 @@ const DefaultWorkspaceRuntimePath = "/workspace"
 
 type Factory interface {
 	Kind() string
-	ComponentHome(registration coremodel.Component) Home
-	RuntimeComponentHomePath(registration coremodel.Component, home Home) string
+	ComponentProfile(registration coremodel.Component) Profile
+	RuntimeComponentProfilePath(registration coremodel.Component, profile Profile) string
 	RuntimeWorkspacePath(workspacePath string) string
 }
 
@@ -62,13 +62,13 @@ type ThreadRuntimeFactory interface {
 	Factory
 	Bind(
 		registration coremodel.Component,
-		home Home,
+		profile Profile,
 		config BindConfig,
 	) ThreadRuntime
 }
 
 type ServiceRuntime interface {
-	ComponentHome() Home
+	ComponentProfile() Profile
 	BaseURL() string
 	Start(ctx context.Context) (Status, error)
 	Stop(ctx context.Context) error
@@ -78,8 +78,8 @@ type ServiceRuntime interface {
 
 type ThreadRuntime interface {
 	Kind() string
-	ComponentHome() Home
-	RuntimeComponentHomePath() string
+	ComponentProfile() Profile
+	RuntimeComponentProfilePath() string
 	RuntimeWorkspacePath(workspacePath string) string
 	Refresh(ctx context.Context, workspacePath string, threadID modeluuid.UUID) error
 	Start(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (Status, error)

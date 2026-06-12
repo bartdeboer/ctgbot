@@ -421,7 +421,7 @@ func TestCommandBuildersRequireProviderAndModel(t *testing.T) {
 func newTestComponent(t *testing.T, resolver fakeResolver, messages []coremodel.ThreadMessage) *Component {
 	t.Helper()
 	registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
-	created, err := New(context.Background(), registration, nil, runtimepkg.Home{Path: t.TempDir()}, nil, resolver, nil)
+	created, err := New(context.Background(), registration, nil, runtimepkg.Profile{Path: t.TempDir()}, nil, resolver, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +433,7 @@ func newTestComponent(t *testing.T, resolver fakeResolver, messages []coremodel.
 func newTestSearchComponent(t *testing.T, resolver fakeResolver, messages []coremodel.ThreadMessage) *SearchComponent {
 	t.Helper()
 	registration := coremodel.Component{ID: modeluuid.New(), Type: SearchType, Name: SearchType}
-	created, err := NewSearch(context.Background(), registration, nil, runtimepkg.Home{Path: t.TempDir()}, nil, resolver, nil)
+	created, err := NewSearch(context.Background(), registration, nil, runtimepkg.Profile{Path: t.TempDir()}, nil, resolver, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

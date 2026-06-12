@@ -98,7 +98,7 @@ func (r fakeResolver) EnsureComponent(ctx context.Context, ref string, runtimeKi
 		}
 	}
 	registration.Runtime = runtimeKind
-	registration.HomePath = strings.TrimSpace(homePath)
+	registration.ProfilePath = strings.TrimSpace(homePath)
 	registration.Enabled = true
 	if err := r.storage.Components().Save(ctx, registration); err != nil {
 		return nil, err
@@ -122,24 +122,24 @@ func (f fakeRuntimeFactory) Kind() string {
 	return f.kind
 }
 
-func (f fakeRuntimeFactory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
-	if strings.TrimSpace(registration.HomePath) != "" {
-		return runtimepkg.Home{Path: strings.TrimSpace(registration.HomePath)}
+func (f fakeRuntimeFactory) ComponentProfile(registration coremodel.Component) runtimepkg.Profile {
+	if strings.TrimSpace(registration.ProfilePath) != "" {
+		return runtimepkg.Profile{Path: strings.TrimSpace(registration.ProfilePath)}
 	}
-	return runtimepkg.Home{Path: "/components/" + registration.Type + "/" + registration.Name}
+	return runtimepkg.Profile{Path: "/components/" + registration.Type + "/" + registration.Name}
 }
 
-func (f fakeRuntimeFactory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
+func (f fakeRuntimeFactory) RuntimeComponentProfilePath(registration coremodel.Component, profile runtimepkg.Profile) string {
 	_ = registration
-	return "/runtime" + strings.TrimPrefix(home.Path, "/components")
+	return "/runtime" + strings.TrimPrefix(profile.Path, "/components")
 }
 
 func (f fakeRuntimeFactory) RuntimeWorkspacePath(workspacePath string) string {
 	return strings.TrimSpace(workspacePath)
 }
 
-func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
-	_, _, _ = registration, home, config
+func (f fakeRuntimeFactory) Bind(registration coremodel.Component, profile runtimepkg.Profile, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
+	_, _, _ = registration, profile, config
 	return nil
 }
 
@@ -394,9 +394,9 @@ func TestServiceRegisterAndListComponents(t *testing.T) {
 	}
 	if registered.Component.Ref() != "source/inbox" ||
 		registered.Component.Runtime != "local" ||
-		registered.Component.HomePath != "/custom/source" ||
-		registered.HostHomePath != "/custom/source" ||
-		registered.RuntimeHomePath != "/runtime/custom/source" {
+		registered.Component.ProfilePath != "/custom/source" ||
+		registered.HostProfilePath != "/custom/source" ||
+		registered.RuntimeProfilePath != "/runtime/custom/source" {
 		t.Fatalf("registered result = %#v", registered)
 	}
 
@@ -410,7 +410,7 @@ func TestServiceRegisterAndListComponents(t *testing.T) {
 	info := components[0]
 	if info.Component.Ref() != "source/inbox" ||
 		info.RuntimeKind != "local" ||
-		info.HostHomePath != "/custom/source" {
+		info.HostProfilePath != "/custom/source" {
 		t.Fatalf("component info = %#v", info)
 	}
 }

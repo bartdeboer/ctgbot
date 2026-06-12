@@ -38,8 +38,8 @@ func TestMessageCommandRunsAndSkipsAgent(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-					_, _, _, _, _ = ctx, registration, runtime, home, storage
+				return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+					_, _, _, _, _ = ctx, registration, runtime, profile, storage
 					return &mockMessageCommandComponent{}, nil
 				})
 			},
@@ -133,8 +133,8 @@ func TestUnknownMessageCommandReturnsErrorAndSkipsAgent(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-					_, _, _, _, _ = ctx, registration, runtime, home, storage
+				return registry.Add("tools", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+					_, _, _, _, _ = ctx, registration, runtime, profile, storage
 					return &mockMessageCommandComponent{}, nil
 				})
 			},
@@ -222,8 +222,8 @@ func TestAgentBoundCommandSurfaceRunsWithoutSeparateCommandBinding(t *testing.T)
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-					_, _, _, _, _ = ctx, registration, runtime, home, storage
+				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+					_, _, _, _, _ = ctx, registration, runtime, profile, storage
 					return &mockAgentCommandComponent{}, nil
 				})
 			},
@@ -290,8 +290,8 @@ func TestMultipleNamedAgentCommandSurfacesRequireFullRef(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-					_, _, _, _, _ = ctx, runtime, home, storage, registry
+				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+					_, _, _, _, _ = ctx, runtime, profile, storage, registry
 					return &mockLocalAgentCommandComponent{name: registration.Name}, nil
 				})
 			},
@@ -365,8 +365,8 @@ func TestMultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-					_, _, _, _, _ = ctx, runtime, home, storage, registry
+				return registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+					_, _, _, _, _ = ctx, runtime, profile, storage, registry
 					return &mockLocalAgentCommandComponent{name: registration.Name}, nil
 				})
 			},
@@ -441,8 +441,8 @@ func TestProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 					},
 				},
 				func(registry *component.Registry) error {
-					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-						_, _, _, _, _ = ctx, registration, runtime, home, storage
+					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+						_, _, _, _, _ = ctx, registration, runtime, profile, storage
 						return processcomponent.New(&noopProcessActions{}), nil
 					})
 				},
@@ -532,8 +532,8 @@ func TestProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 					},
 				},
 				func(registry *component.Registry) error {
-					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-						_, _, _, _, _ = ctx, registration, runtime, home, storage
+					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+						_, _, _, _, _ = ctx, registration, runtime, profile, storage
 						return processcomponent.New(&noopProcessActions{}), nil
 					})
 				},
@@ -643,8 +643,8 @@ func TestProcessInstallAndUpgradeMessageAliasesAllowOperators(t *testing.T) {
 					},
 				},
 				func(registry *component.Registry) error {
-					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-						_, _, _, _, _ = ctx, registration, runtime, home, storage
+					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+						_, _, _, _, _ = ctx, registration, runtime, profile, storage
 						return processcomponent.New(actions), nil
 					})
 				},
@@ -741,14 +741,14 @@ func TestHelpListsActiveMessageCommands(t *testing.T) {
 				},
 			},
 			func(registry *component.Registry) error {
-				if err := registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-					_, _, _, _, _ = ctx, registration, runtime, home, storage
+				if err := registry.Add("agentctl", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+					_, _, _, _, _ = ctx, registration, runtime, profile, storage
 					return &mockAgentCommandComponent{}, nil
 				}); err != nil {
 					return err
 				}
-				return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-					_, _, _, _, _ = ctx, registration, runtime, home, storage
+				return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+					_, _, _, _, _ = ctx, registration, runtime, profile, storage
 					return processcomponent.New(&noopProcessActions{}), nil
 				})
 			},
@@ -894,8 +894,8 @@ func newMessageCommandTestSystem(
 	agentState := &agentState{}
 
 	registry := component.NewRegistry()
-	if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _, _, _ = ctx, runtime, home, storage, registration
+	if err := registry.Add("mockmsg", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _, _, _ = ctx, runtime, profile, storage, registration
 		return &mockMessenger{
 			componentID: registration.ID,
 			state:       messengerState,
@@ -903,11 +903,11 @@ func newMessageCommandTestSystem(
 	}); err != nil {
 		t.Fatalf("register mockmsg: %v", err)
 	}
-	if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-		_, _, _ = ctx, home, storage
+	if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		_, _, _ = ctx, profile, storage
 		return &mockAgent{
 			componentID: registration.ID,
-			runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
+			runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, profile, runtimepkg.BindConfig{}),
 			state:       agentState,
 		}, nil
 	}); err != nil {

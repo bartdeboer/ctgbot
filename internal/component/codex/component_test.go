@@ -56,9 +56,9 @@ func (stubTurnRuntime) StartChatAction(ctx context.Context, action message.ChatA
 	return func() {}, nil
 }
 func (stubTurnRuntime) WorkspacePath() string { return "/tmp/workspace" }
-func (stubTurnRuntime) ComponentHome(componentID modeluuid.UUID) (runtimepkg.Home, bool) {
+func (stubTurnRuntime) ComponentProfile(componentID modeluuid.UUID) (runtimepkg.Profile, bool) {
 	_ = componentID
-	return runtimepkg.Home{}, false
+	return runtimepkg.Profile{}, false
 }
 func (stubTurnRuntime) ComponentThreadID(componentID modeluuid.UUID) (string, bool, error) {
 	_ = componentID
@@ -234,9 +234,9 @@ func TestHandleTurnInjectsRuntimeNoticesIntoBootstrap(t *testing.T) {
 		ctx := context.Background()
 		cfg := newTestConfig(t, root)
 		storage := repository.NewMemory()
-		homePath := filepath.Join(root, "codex-home")
+		profilePath := filepath.Join(root, "codex-home")
 		runtime := &testRuntime{
-			componentHome: runtimepkg.Home{Path: homePath},
+			componentProfile: runtimepkg.Profile{Path: profilePath},
 			status: runtimepkg.Status{
 				RuntimeNotices: []string{"[Runtime notice] container stale"},
 			},
@@ -269,7 +269,7 @@ func TestHandleTurnInjectsRuntimeNoticesIntoBootstrap(t *testing.T) {
 		if err != nil {
 			t.Fatalf("HandleTurn() error = %v", err)
 		}
-		bootstrap, err := os.ReadFile(filepath.Join(homePath, "ctgbot-bootstrap.md"))
+		bootstrap, err := os.ReadFile(filepath.Join(profilePath, "ctgbot-bootstrap.md"))
 		if err != nil {
 			t.Fatalf("read bootstrap: %v", err)
 		}
@@ -334,11 +334,11 @@ func TestAuthStatusRunsComponentScopedLoginStatus(t *testing.T) {
 		ctx := context.Background()
 		cfg := newTestConfig(t, root)
 		storage := repository.NewMemory()
-		componentHome := filepath.Join(root, ".ctgbot", "components", "codex", "work")
-		runtimeHomePath := filepath.Join(root, "runtime-home")
+		componentProfile := filepath.Join(root, ".ctgbot", "components", "codex", "work")
+		runtimeProfilePath := filepath.Join(root, "runtime-home")
 		runtime := &testRuntime{
-			componentHome: runtimepkg.Home{Path: componentHome},
-			runtimeHome:   runtimeHomePath,
+			componentProfile: runtimepkg.Profile{Path: componentProfile},
+			runtimeProfile:   runtimeProfilePath,
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "work"}
 		c := &Component{
@@ -362,7 +362,7 @@ func TestAuthStatusRunsComponentScopedLoginStatus(t *testing.T) {
 		if got, want := strings.Join(runtime.execArgs, " "), "login status"; got != want {
 			t.Fatalf("exec args = %q, want %q", got, want)
 		}
-		if _, err := os.Stat(filepath.Join(componentHome, "config.toml")); err != nil {
+		if _, err := os.Stat(filepath.Join(componentProfile, "config.toml")); err != nil {
 			t.Fatalf("expected config.toml: %v", err)
 		}
 	})

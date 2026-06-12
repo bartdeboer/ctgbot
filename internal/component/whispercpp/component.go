@@ -34,9 +34,9 @@ type ComponentResolver interface {
 type Component struct {
 	registration   coremodel.Component
 	sandboxes      sandboxengine.RuntimeManager
-	home           runtimepkg.Home
+	profile        runtimepkg.Profile
 	runtimeConfig  runtimepkg.BindConfig
-	runtimeHome    string
+	runtimeProfile string
 	config         ComponentConfig
 	resolver       ComponentResolver
 	transcribeGate *workgate.Gate
@@ -49,9 +49,9 @@ var _ component.LocalCommandSurface = (*Component)(nil)
 var _ component.Transcriber = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
 
-func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver) (component.Component, error) {
+func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage, resolver ComponentResolver) (component.Component, error) {
 	_, _ = ctx, storage
-	runtimeConfig, err := loadRuntimeConfig(home.Path)
+	runtimeConfig, err := loadRuntimeConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -59,16 +59,16 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if !ok || provider.SandboxManager() == nil {
 		return nil, fmt.Errorf("whispercpp requires a sandbox-capable runtime")
 	}
-	config, err := loadComponentConfig(home.Path)
+	config, err := loadComponentConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
 	return &Component{
 		registration:   registration,
 		sandboxes:      provider.SandboxManager(),
-		home:           home,
+		profile:        profile,
 		runtimeConfig:  runtimeConfig,
-		runtimeHome:    runtime.RuntimeComponentHomePath(registration, home),
+		runtimeProfile: runtime.RuntimeComponentProfilePath(registration, profile),
 		config:         config,
 		resolver:       resolver,
 		transcribeGate: workgate.New(),
@@ -196,7 +196,7 @@ func (c *Component) sandboxSpec(modelDir string) (sandboxengine.SandboxSpec, err
 		GPUs(c.runtimeConfig.GPUs).
 		Env(c.runtimeConfig.Env).
 		Mounts([]sandboxengine.Mount{
-			{Source: c.home.Path, Target: c.runtimeHome},
+			{Source: c.profile.Path, Target: c.runtimeProfile},
 			{Source: modelDir, Target: workspaceRuntimePath, ReadOnly: true},
 		}).
 		SecurityOpts(securityOpts).
@@ -256,11 +256,11 @@ type workdir struct {
 }
 
 func (c *Component) prepareWorkdir(pattern string) (workdir, func(), error) {
-	host, err := os.MkdirTemp(c.home.Path, pattern)
+	host, err := os.MkdirTemp(c.profile.Path, pattern)
 	if err != nil {
 		return workdir{}, func() {}, err
 	}
-	runtime := filepath.Join(c.runtimeHome, filepath.Base(host))
+	runtime := filepath.Join(c.runtimeProfile, filepath.Base(host))
 	return workdir{host: host, runtime: runtime}, func() { _ = os.RemoveAll(host) }, nil
 }
 

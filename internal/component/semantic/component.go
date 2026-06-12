@@ -39,17 +39,17 @@ var _ component.Searcher = (*Component)(nil)
 var _ component.SearchMessageSourceReceiver = (*Component)(nil)
 var _ configsurface.ConfigSurface = (*Component)(nil)
 
-func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver, logf func(format string, args ...any)) (component.Component, error) {
+func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage, resolver ComponentResolver, logf func(format string, args ...any)) (component.Component, error) {
 	_, _, _ = ctx, runtime, storage
-	config, err := loadComponentConfig(home.Path)
+	config, err := loadComponentConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	store, err := openStore(home.Path)
+	store, err := openStore(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	return &Component{registration: registration, homePath: home.Path, config: config, store: store, resolver: resolver, logf: logf}, nil
+	return &Component{registration: registration, homePath: profile.Path, config: config, store: store, resolver: resolver, logf: logf}, nil
 }
 
 func (c *Component) Type() string { return Type }

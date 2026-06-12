@@ -43,7 +43,7 @@ func TestLoadComponentConfigDefaultsAndExplicitFalse(t *testing.T) {
 func newTestComponent(t *testing.T, name string) *Component {
 	t.Helper()
 	home := t.TempDir()
-	component, err := NewWithOptions(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: name, Enabled: true}, nil, runtimepkg.Home{Path: home}, nil, Options{})
+	component, err := NewWithOptions(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: name, Enabled: true}, nil, runtimepkg.Profile{Path: home}, nil, Options{})
 	if err != nil {
 		t.Fatalf("NewWithOptions() error = %v", err)
 	}
@@ -110,7 +110,7 @@ func TestComponentConfigSurface(t *testing.T) {
 	if got, want := strings.TrimSpace(set.Text), "max-poll-messages=7"; got != want {
 		t.Fatalf("config set text = %q, want %q", got, want)
 	}
-	loaded, err := loadComponentConfig(c.home.Path)
+	loaded, err := loadComponentConfig(c.profile.Path)
 	if err != nil {
 		t.Fatalf("loadComponentConfig() error = %v", err)
 	}

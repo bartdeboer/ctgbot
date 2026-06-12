@@ -111,7 +111,7 @@ func TestManagedFilePutRejectsTraversal(t *testing.T) {
 	}
 }
 
-func TestManagedFilePutWritesDeclaredFileUnderComponentHome(t *testing.T) {
+func TestManagedFilePutWritesDeclaredFileUnderComponentProfile(t *testing.T) {
 	engine, home := newTestEngine(t, &fakeProfileComponent{
 		typeName: "gmail",
 		files:    []componentpkg.ManagedFile{{RelativePath: "secrets/oauth_client.json", Sensitive: true}},
@@ -181,7 +181,7 @@ func newTestEngine(t *testing.T, fake componentpkg.Component) (*commandengine.En
 	resolver := fakeResolver{loaded: map[modeluuid.UUID]*componentpkg.Loaded{
 		registration.ID: {
 			Registration: *registration,
-			Home:         runtimepkg.Home{Path: home},
+			Profile:      runtimepkg.Profile{Path: home},
 			Component:    fake,
 		},
 	}}

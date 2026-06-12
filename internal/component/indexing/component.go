@@ -34,13 +34,13 @@ var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 var _ component.SearchMessageSourceReceiver = (*Component)(nil)
 
-func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver, logf func(format string, args ...any)) (component.Component, error) {
+func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage, resolver ComponentResolver, logf func(format string, args ...any)) (component.Component, error) {
 	_, _, _ = ctx, runtime, storage
-	store, err := openStore(home.Path)
+	store, err := openStore(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	return &Component{registration: registration, homePath: home.Path, store: store, resolver: resolver, logf: logf}, nil
+	return &Component{registration: registration, homePath: profile.Path, store: store, resolver: resolver, logf: logf}, nil
 }
 
 func (c *Component) Type() string { return Type }

@@ -41,12 +41,12 @@ func (s *System) ResolveComponent(ctx context.Context, componentID modeluuid.UUI
 	if err != nil {
 		return nil, err
 	}
-	home := runtime.ComponentHome(*registration)
-	if err := os.MkdirAll(home.Path, 0o755); err != nil {
+	profile := runtime.ComponentProfile(*registration)
+	if err := os.MkdirAll(profile.Path, 0o755); err != nil {
 		return nil, err
 	}
 
-	loaded, err = s.Registry.Build(ctx, *registration, runtime, home, s.Storage)
+	loaded, err = s.Registry.Build(ctx, *registration, runtime, profile, s.Storage)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (s *System) ResolveChatHostbridgeAllowedCommands(_ context.Context, chat co
 	return out, nil
 }
 
-func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind string, homePath string) (*coremodel.Component, error) {
+func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind string, profilePath string) (*coremodel.Component, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing system storage")
 	}
@@ -169,12 +169,12 @@ func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind st
 			return nil, err
 		}
 		registration = &coremodel.Component{
-			Type:      parsed.Type,
-			Name:      parsed.ResolvedName(),
-			Runtime:   runtime.Kind(),
-			HomePath:  strings.TrimSpace(homePath),
-			Enabled:   true,
-			IsDefault: !parsed.ExplicitName || parsed.ResolvedName() == coremodel.DefaultComponentName(parsed.Type),
+			Type:        parsed.Type,
+			Name:        parsed.ResolvedName(),
+			Runtime:     runtime.Kind(),
+			ProfilePath: strings.TrimSpace(profilePath),
+			Enabled:     true,
+			IsDefault:   !parsed.ExplicitName || parsed.ResolvedName() == coremodel.DefaultComponentName(parsed.Type),
 		}
 	} else {
 		registration.Enabled = true
@@ -187,8 +187,8 @@ func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind st
 		} else if strings.TrimSpace(registration.Runtime) == "" {
 			registration.Runtime = "docker"
 		}
-		if strings.TrimSpace(homePath) != "" {
-			registration.HomePath = strings.TrimSpace(homePath)
+		if strings.TrimSpace(profilePath) != "" {
+			registration.ProfilePath = strings.TrimSpace(profilePath)
 		}
 	}
 
@@ -199,8 +199,8 @@ func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind st
 	if err != nil {
 		return nil, err
 	}
-	home := runtime.ComponentHome(*registration)
-	if err := os.MkdirAll(home.Path, 0o755); err != nil {
+	profile := runtime.ComponentProfile(*registration)
+	if err := os.MkdirAll(profile.Path, 0o755); err != nil {
 		return nil, err
 	}
 	s.loadedMu.Lock()

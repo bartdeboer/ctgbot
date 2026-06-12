@@ -13,7 +13,7 @@ func (c *Component) Skill() component.Skill {
 What it does:
 - Receives Telegram bot updates as inbound source events.
 - Sends outbound messages back to Telegram as a relay.
-- Stores the bot token and Telegram settings in this component's profile home.
+- Stores the bot token and Telegram settings in this component's profile.
 
 Managed files:
 - token.txt: Telegram bot token. Sensitive. Required before polling or sending works.

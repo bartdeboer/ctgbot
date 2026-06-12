@@ -53,7 +53,7 @@ func New(
 	ctx context.Context,
 	registration coremodel.Component,
 	runtimeFactory runtimepkg.Factory,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	storage repository.Storage,
 	cfg *appstate.Config,
 	resolveWorkspace func(context.Context, coremodel.Chat) (string, error),
@@ -73,21 +73,21 @@ func New(
 	if resolveWorkspace == nil {
 		return nil, fmt.Errorf("missing workspace resolver")
 	}
-	runtimeConfig, err := runtimepkg.LoadBindConfig(home.Path)
+	runtimeConfig, err := runtimepkg.LoadBindConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	componentConfig, err := loadComponentConfig(home.Path)
+	componentConfig, err := loadComponentConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	runtimeHomePath := runtimeFactory.RuntimeComponentHomePath(registration, home)
-	bindConfig := componentBindConfig(runtimeConfig, cfg, image, runtimeHomePath)
+	runtimeProfilePath := runtimeFactory.RuntimeComponentProfilePath(registration, profile)
+	bindConfig := componentBindConfig(runtimeConfig, cfg, image, runtimeProfilePath)
 	threadFactory, ok := runtimeFactory.(runtimepkg.ThreadRuntimeFactory)
 	if !ok {
 		return nil, fmt.Errorf("codex requires thread runtime, got %T", runtimeFactory)
 	}
-	runtime := threadFactory.Bind(registration, home, bindConfig)
+	runtime := threadFactory.Bind(registration, profile, bindConfig)
 	return &Component{
 		Core: agentcommon.Core{
 			Registration:        registration,
@@ -191,12 +191,12 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 	if c == nil || c.Runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
-	home := c.Runtime.ComponentHome()
-	runtimeHomePath := c.Runtime.RuntimeComponentHomePath()
-	if err := PrepareHome(c.config, HomeSpec{
-		HostHome:         home.Path,
-		RuntimeHome:      runtimeHomePath,
-		RuntimeWorkspace: runtimeHomePath,
+	profile := c.Runtime.ComponentProfile()
+	runtimeProfilePath := c.Runtime.RuntimeComponentProfilePath()
+	if err := PrepareProfile(c.config, ProfileSpec{
+		HostProfile:      profile.Path,
+		RuntimeProfile:   runtimeProfilePath,
+		RuntimeWorkspace: runtimeProfilePath,
 		SandboxMode:      c.componentConfig.SandboxMode,
 	}); err != nil {
 		return err
@@ -229,12 +229,12 @@ func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.
 	if c == nil || c.Runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
-	home := c.Runtime.ComponentHome()
-	runtimeHomePath := c.Runtime.RuntimeComponentHomePath()
-	if err := PrepareHome(c.config, HomeSpec{
-		HostHome:         home.Path,
-		RuntimeHome:      runtimeHomePath,
-		RuntimeWorkspace: runtimeHomePath,
+	profile := c.Runtime.ComponentProfile()
+	runtimeProfilePath := c.Runtime.RuntimeComponentProfilePath()
+	if err := PrepareProfile(c.config, ProfileSpec{
+		HostProfile:      profile.Path,
+		RuntimeProfile:   runtimeProfilePath,
+		RuntimeWorkspace: runtimeProfilePath,
 		SandboxMode:      c.componentConfig.SandboxMode,
 	}); err != nil {
 		return err
@@ -266,20 +266,20 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 
 	workspacePath := turn.Runtime.WorkspacePath()
 	runtimeWorkspacePath := c.Runtime.RuntimeWorkspacePath(workspacePath)
-	runtimeHomePath := c.Runtime.RuntimeComponentHomePath()
+	runtimeProfilePath := c.Runtime.RuntimeComponentProfilePath()
 	settings, err := c.resolveThreadSettings(ctx, &turn.Thread)
 	if err != nil {
 		return nil, err
 	}
 	instructions := turn.Runtime.Instructions()
 	instructions.RuntimeNotices = append(instructions.RuntimeNotices, c.RuntimeNotices(ctx, workspacePath, turn.Thread.ID)...)
-	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeHomePath, instructions)
+	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeProfilePath, instructions)
 	if err != nil {
 		return nil, err
 	}
-	if err := PrepareHome(c.config, HomeSpec{
-		HostHome:         c.Runtime.ComponentHome().Path,
-		RuntimeHome:      runtimeHomePath,
+	if err := PrepareProfile(c.config, ProfileSpec{
+		HostProfile:      c.Runtime.ComponentProfile().Path,
+		RuntimeProfile:   runtimeProfilePath,
 		RuntimeWorkspace: runtimeWorkspacePath,
 		BootstrapText:    bootstrapText,
 		SandboxMode:      settings.SandboxMode,
@@ -352,15 +352,15 @@ func turnOptionsFromSettings(settings resolvedThreadSettings) TurnOptions {
 	return options
 }
 
-func componentBindConfig(config runtimepkg.BindConfig, cfg *appstate.Config, imageOverride string, runtimeHomePath string) runtimepkg.BindConfig {
+func componentBindConfig(config runtimepkg.BindConfig, cfg *appstate.Config, imageOverride string, runtimeProfilePath string) runtimepkg.BindConfig {
 	config = config.Clean()
 	if strings.TrimSpace(config.Image) == "" && cfg != nil {
 		config.Image = strings.TrimSpace(cfg.Docker().Image())
 	}
 	config.Image = componentImage(agentcommon.FirstNonEmpty(imageOverride, config.Image))
 	return config.WithEnv(
-		"HOME="+runtimeHomePath,
-		"CODEX_HOME="+runtimeHomePath,
+		"HOME="+runtimeProfilePath,
+		"CODEX_HOME="+runtimeProfilePath,
 	)
 }
 
@@ -432,7 +432,7 @@ func componentImage(value string) string {
 	return value
 }
 
-func codexBootstrap(workspace string, home string, instructions component.TurnInstructions) (string, error) {
+func codexBootstrap(workspace string, profile string, instructions component.TurnInstructions) (string, error) {
 	chatProvider := strings.TrimSpace(instructions.ChatProvider)
 	if chatProvider == "" {
 		chatProvider = "Chat"
@@ -449,7 +449,7 @@ func codexBootstrap(workspace string, home string, instructions component.TurnIn
 	text, err := codexbootstrap.Text(codexbootstrap.TemplateData{
 		Workspace:                 workspace,
 		WorkspaceInbox:            workspace + "/inbox",
-		CodexHome:                 home,
+		CodexProfile:              profile,
 		ContainerOS:               "linux",
 		HostOS:                    goruntime.GOOS,
 		ChatProvider:              chatProvider,

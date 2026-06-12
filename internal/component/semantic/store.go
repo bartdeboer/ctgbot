@@ -97,7 +97,7 @@ type semanticStats struct {
 func openStore(homePath string) (*store, error) {
 	homePath = strings.TrimSpace(homePath)
 	if homePath == "" {
-		return nil, fmt.Errorf("missing semantic profile home")
+		return nil, fmt.Errorf("missing semantic profile")
 	}
 	if err := os.MkdirAll(homePath, 0o755); err != nil {
 		return nil, err

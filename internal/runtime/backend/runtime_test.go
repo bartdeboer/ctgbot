@@ -9,13 +9,13 @@ import (
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 )
 
-func TestFactoryComponentHomeDefaultsToComponentsRoot(t *testing.T) {
+func TestFactoryComponentProfileDefaultsToComponentsRoot(t *testing.T) {
 	t.Parallel()
 
 	factory := New("/state/components", nil)
-	home := factory.ComponentHome(coremodel.Component{Type: "llamacpp", Name: "qwen3-q5"})
-	if got, want := home.Path, "/state/components/llamacpp/qwen3-q5"; got != want {
-		t.Fatalf("home.Path = %q, want %q", got, want)
+	profile := factory.ComponentProfile(coremodel.Component{Type: "llamacpp", Name: "qwen3-q5"})
+	if got, want := profile.Path, "/state/components/llamacpp/qwen3-q5"; got != want {
+		t.Fatalf("profile.Path = %q, want %q", got, want)
 	}
 }
 
@@ -25,7 +25,7 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 	factory := New("/state/components", nil)
 	runtime := factory.BindBackend(
 		coremodel.Component{Type: "llamacpp", Name: "qwen3-q5"},
-		runtimepkg.Home{Path: "/state/components/llamacpp/qwen3-q5"},
+		runtimepkg.Profile{Path: "/state/components/llamacpp/qwen3-q5"},
 		runtimepkg.BindConfig{
 			Image:   "llama:test",
 			GPUs:    "all",
@@ -82,7 +82,7 @@ func TestBindBackendPropagatesBaseEnvOverRuntimeEnv(t *testing.T) {
 	factory := New("/state/components", nil).WithEnv("GIT_AUTHOR_NAME=Human")
 	runtime := factory.BindBackend(
 		coremodel.Component{Type: "llamacpp", Name: "qwen3-q5"},
-		runtimepkg.Home{Path: "/state/components/llamacpp/qwen3-q5"},
+		runtimepkg.Profile{Path: "/state/components/llamacpp/qwen3-q5"},
 		runtimepkg.BindConfig{Env: []string{"GIT_AUTHOR_NAME=Bot"}},
 		ServiceSpec{Env: []string{"GIT_AUTHOR_NAME=Service"}},
 	)

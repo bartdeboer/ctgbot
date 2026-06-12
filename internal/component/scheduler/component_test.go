@@ -60,7 +60,7 @@ func TestSchedulerCommandBuilders(t *testing.T) {
 
 func newTestComponent(t *testing.T) *Component {
 	t.Helper()
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Home{Path: t.TempDir()}, repository.NewMemory(), nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: t.TempDir()}, repository.NewMemory(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

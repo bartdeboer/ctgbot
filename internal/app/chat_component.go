@@ -21,7 +21,7 @@ type ChatComponentAddResult struct {
 	Binding      coremodel.ChatComponent
 	ComponentRef string
 	Runtime      string
-	HomePath     string
+	ProfilePath  string
 }
 
 type ChatComponentRemoveResult struct {
@@ -109,7 +109,7 @@ func (s *service) AddChatComponent(ctx context.Context, chatID modeluuid.UUID, r
 		Binding:      *binding,
 		ComponentRef: registration.Ref(),
 		Runtime:      registration.Runtime,
-		HomePath:     registration.HomePath,
+		ProfilePath:  registration.ProfilePath,
 	}, nil
 }
 

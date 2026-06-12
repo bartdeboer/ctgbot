@@ -242,7 +242,7 @@ func TestNewLoadsProfileTokenAndConfig(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(home, ComponentConfigFilename), []byte(configJSON), 0o644); err != nil {
 		t.Fatalf("write component config: %v", err)
 	}
-	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Home{Path: home}, repository.NewMemory(), nil)
+	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, repository.NewMemory(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -265,7 +265,7 @@ func TestNewLoadsProfileTokenAndConfig(t *testing.T) {
 }
 
 func TestNewAllowsMissingProfileTokenForManagedFileSetup(t *testing.T) {
-	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Home{Path: t.TempDir()}, repository.NewMemory(), nil)
+	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: t.TempDir()}, repository.NewMemory(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -279,7 +279,7 @@ func TestNewAllowsMissingProfileTokenForManagedFileSetup(t *testing.T) {
 }
 
 func TestRunInboundWaitsForMissingTokenUntilCancel(t *testing.T) {
-	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Home{Path: t.TempDir()}, repository.NewMemory(), nil)
+	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: t.TempDir()}, repository.NewMemory(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

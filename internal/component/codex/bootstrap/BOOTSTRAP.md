@@ -3,7 +3,7 @@ You are operating inside a dedicated Docker container for this conversation.
 - Host OS: `{{ .HostOS }}`
 - Workspace: `{{ .Workspace }}`
 - Workspace inbox: `{{ .WorkspaceInbox }}`
-- Codex home: `{{ .CodexHome }}`
+- Codex profile: `{{ .CodexProfile }}`
 {{- if .RuntimeNotices }}
 {{- range .RuntimeNotices }}
 - {{ . }}

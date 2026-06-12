@@ -60,5 +60,5 @@ func (c *Component) statePath() string {
 	if c == nil {
 		return StateFilename
 	}
-	return filepath.Join(strings.TrimSpace(c.home.Path), StateFilename)
+	return filepath.Join(strings.TrimSpace(c.profile.Path), StateFilename)
 }

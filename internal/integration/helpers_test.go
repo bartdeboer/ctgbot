@@ -54,12 +54,12 @@ func actorWithRoles(id string, label string, roles ...simplerbac.Role) message.A
 }
 
 type execRecord struct {
-	ThreadID     modeluuid.UUID
-	Name         string
-	Args         []string
-	HomeHostPath string
-	RuntimeKind  string
-	Workspace    string
+	ThreadID        modeluuid.UUID
+	Name            string
+	Args            []string
+	ProfileHostPath string
+	RuntimeKind     string
+	Workspace       string
 }
 
 type fakeRuntimeFactory struct {
@@ -76,29 +76,29 @@ func (f fakeRuntimeFactory) Kind() string {
 	return strings.TrimSpace(f.runtimeKind)
 }
 
-func (f fakeRuntimeFactory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
-	hostPath := strings.TrimSpace(registration.HomePath)
+func (f fakeRuntimeFactory) ComponentProfile(registration coremodel.Component) runtimepkg.Profile {
+	hostPath := strings.TrimSpace(registration.ProfilePath)
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return runtimepkg.Home{Path: hostPath}
+	return runtimepkg.Profile{Path: hostPath}
 }
 
-func (f fakeRuntimeFactory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
-	_, _ = registration, home
-	return home.Path
+func (f fakeRuntimeFactory) RuntimeComponentProfilePath(registration coremodel.Component, profile runtimepkg.Profile) string {
+	_, _ = registration, profile
+	return profile.Path
 }
 
 func (f fakeRuntimeFactory) RuntimeWorkspacePath(workspacePath string) string {
 	return strings.TrimSpace(workspacePath)
 }
 
-func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
-	_, _, _ = registration, home, config
+func (f fakeRuntimeFactory) Bind(registration coremodel.Component, profile runtimepkg.Profile, config runtimepkg.BindConfig) runtimepkg.ThreadRuntime {
+	_, _, _ = registration, profile, config
 	return &fakeRuntime{
 		rootDir: f.rootDir,
 		kind:    f.Kind(),
-		home:    home,
+		profile: profile,
 		state:   f.state,
 	}
 }
@@ -106,7 +106,7 @@ func (f fakeRuntimeFactory) Bind(registration coremodel.Component, home runtimep
 type fakeRuntime struct {
 	rootDir string
 	kind    string
-	home    runtimepkg.Home
+	profile runtimepkg.Profile
 	state   *runtimeState
 }
 
@@ -117,12 +117,12 @@ func (r *fakeRuntime) Kind() string {
 	return strings.TrimSpace(r.kind)
 }
 
-func (r *fakeRuntime) ComponentHome() runtimepkg.Home {
-	return r.home
+func (r *fakeRuntime) ComponentProfile() runtimepkg.Profile {
+	return r.profile
 }
 
-func (r *fakeRuntime) RuntimeComponentHomePath() string {
-	return r.home.Path
+func (r *fakeRuntime) RuntimeComponentProfilePath() string {
+	return r.profile.Path
 }
 
 func (r *fakeRuntime) RuntimeWorkspacePath(workspacePath string) string {
@@ -137,7 +137,7 @@ func (r *fakeRuntime) Start(ctx context.Context, workspacePath string, threadID 
 	return runtimepkg.Status{
 		Name:                 "fake-runtime",
 		State:                "running",
-		RuntimeHomePath:      r.home.Path,
+		RuntimeProfilePath:   r.profile.Path,
 		RuntimeWorkspacePath: strings.TrimSpace(workspacePath),
 	}, nil
 }
@@ -157,7 +157,7 @@ func (r *fakeRuntime) Status(ctx context.Context, workspacePath string, threadID
 	return runtimepkg.Status{
 		Name:                 "fake-runtime",
 		State:                "missing",
-		RuntimeHomePath:      r.home.Path,
+		RuntimeProfilePath:   r.profile.Path,
 		RuntimeWorkspacePath: strings.TrimSpace(workspacePath),
 	}, nil
 }
@@ -171,12 +171,12 @@ func (r *fakeRuntime) Exec(ctx context.Context, workspacePath string, threadID m
 	r.state.lastName = name
 	r.state.lastArgs = append([]string(nil), args...)
 	r.state.execs = append(r.state.execs, execRecord{
-		ThreadID:     threadID,
-		Name:         name,
-		Args:         append([]string(nil), args...),
-		HomeHostPath: r.home.Path,
-		RuntimeKind:  r.Kind(),
-		Workspace:    workspacePath,
+		ThreadID:        threadID,
+		Name:            name,
+		Args:            append([]string(nil), args...),
+		ProfileHostPath: r.profile.Path,
+		RuntimeKind:     r.Kind(),
+		Workspace:       workspacePath,
 	})
 	return nil
 }

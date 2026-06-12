@@ -605,7 +605,7 @@ func testComponent(t *testing.T) *Component {
 	return &Component{
 		registration:    testRegistration(),
 		componentID:     modeluuid.New(),
-		home:            runtimepkg.Home{Path: t.TempDir()},
+		profile:         runtimepkg.Profile{Path: t.TempDir()},
 		UserID:          DefaultUserID,
 		componentConfig: ComponentConfig{}.withDefaults(),
 		mailboxEmail:    "work@example.com",

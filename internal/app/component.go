@@ -11,15 +11,15 @@ import (
 )
 
 type RegisterComponentResult struct {
-	Component       coremodel.Component
-	HostHomePath    string
-	RuntimeHomePath string
+	Component          coremodel.Component
+	HostProfilePath    string
+	RuntimeProfilePath string
 }
 
 type ComponentInfo struct {
-	Component    coremodel.Component
-	RuntimeKind  string
-	HostHomePath string
+	Component       coremodel.Component
+	RuntimeKind     string
+	HostProfilePath string
 }
 
 type UnregisterComponentResult struct {
@@ -32,12 +32,12 @@ type UnregisterComponentResult struct {
 	ComponentRemoved      bool
 }
 
-func (s *service) RegisterComponent(ctx context.Context, componentRef string, runtimeKind string, homePath string) (RegisterComponentResult, error) {
+func (s *service) RegisterComponent(ctx context.Context, componentRef string, runtimeKind string, profilePath string) (RegisterComponentResult, error) {
 	manager, err := s.componentManager()
 	if err != nil {
 		return RegisterComponentResult{}, err
 	}
-	registration, err := manager.EnsureComponent(ctx, strings.TrimSpace(componentRef), strings.TrimSpace(runtimeKind), strings.TrimSpace(homePath))
+	registration, err := manager.EnsureComponent(ctx, strings.TrimSpace(componentRef), strings.TrimSpace(runtimeKind), strings.TrimSpace(profilePath))
 	if err != nil {
 		return RegisterComponentResult{}, err
 	}
@@ -135,11 +135,11 @@ func (s *service) ListComponents(ctx context.Context) ([]ComponentInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		home := runtime.ComponentHome(registration)
+		profile := runtime.ComponentProfile(registration)
 		out = append(out, ComponentInfo{
-			Component:    registration,
-			RuntimeKind:  runtime.Kind(),
-			HostHomePath: home.Path,
+			Component:       registration,
+			RuntimeKind:     runtime.Kind(),
+			HostProfilePath: profile.Path,
 		})
 	}
 	return out, nil
@@ -154,10 +154,10 @@ func (s *service) componentRegistrationResult(registration coremodel.Component) 
 	if err != nil {
 		return RegisterComponentResult{}, err
 	}
-	home := runtime.ComponentHome(registration)
+	profile := runtime.ComponentProfile(registration)
 	return RegisterComponentResult{
-		Component:       registration,
-		HostHomePath:    home.Path,
-		RuntimeHomePath: runtime.RuntimeComponentHomePath(registration, home),
+		Component:          registration,
+		HostProfilePath:    profile.Path,
+		RuntimeProfilePath: runtime.RuntimeComponentProfilePath(registration, profile),
 	}, nil
 }

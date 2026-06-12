@@ -33,7 +33,7 @@ func (subscriptionRecord) TableName() string { return "theater_thread_subscripti
 func openStore(homePath string) (*store, error) {
 	homePath = strings.TrimSpace(homePath)
 	if homePath == "" {
-		return nil, fmt.Errorf("missing theater component home")
+		return nil, fmt.Errorf("missing theater component profile")
 	}
 	if err := os.MkdirAll(homePath, 0o755); err != nil {
 		return nil, err

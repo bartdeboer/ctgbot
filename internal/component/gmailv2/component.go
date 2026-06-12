@@ -36,34 +36,34 @@ func New(
 	ctx context.Context,
 	registration coremodel.Component,
 	runtime runtimepkg.Factory,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	storage repository.Storage,
 	service *gmailapi.Service,
 ) (component.Component, error) {
-	return NewWithOptions(ctx, registration, runtime, home, storage, Options{Service: service})
+	return NewWithOptions(ctx, registration, runtime, profile, storage, Options{Service: service})
 }
 
 func NewWithOptions(
 	ctx context.Context,
 	registration coremodel.Component,
 	runtime runtimepkg.Factory,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	storage repository.Storage,
 	options Options,
 ) (component.Component, error) {
 	_, _ = ctx, runtime
-	config, err := loadComponentConfig(home.Path)
+	config, err := loadComponentConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	store, err := openStore(home.Path, config.DefaultShowFull)
+	store, err := openStore(profile.Path, config.DefaultShowFull)
 	if err != nil {
 		return nil, err
 	}
 	c := &Component{
 		registration:          registration,
 		componentID:           registration.ID,
-		home:                  home,
+		profile:               profile,
 		storage:               storage,
 		store:                 store,
 		Service:               options.Service,
@@ -92,7 +92,7 @@ func NewWithOptions(
 type Component struct {
 	registration coremodel.Component
 	componentID  modeluuid.UUID
-	home         runtimepkg.Home
+	profile      runtimepkg.Profile
 	storage      repository.Storage
 	store        *store
 

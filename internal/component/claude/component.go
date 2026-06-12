@@ -48,7 +48,7 @@ type Component struct {
 	runner          turnRunner
 }
 
-func New(ctx context.Context, registration coremodel.Component, runtimeFactory runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolveWorkspace func(context.Context, coremodel.Chat) (string, error), logger *log.Logger) (component.Component, error) {
+func New(ctx context.Context, registration coremodel.Component, runtimeFactory runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage, resolveWorkspace func(context.Context, coremodel.Chat) (string, error), logger *log.Logger) (component.Component, error) {
 	_ = ctx
 	if runtimeFactory == nil {
 		return nil, fmt.Errorf("missing runtime factory")
@@ -59,21 +59,21 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 	if resolveWorkspace == nil {
 		return nil, fmt.Errorf("missing workspace resolver")
 	}
-	runtimeConfig, err := runtimepkg.LoadBindConfig(home.Path)
+	runtimeConfig, err := runtimepkg.LoadBindConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	componentConfig, err := loadComponentConfig(home.Path)
+	componentConfig, err := loadComponentConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	runtimeHomePath := runtimeFactory.RuntimeComponentHomePath(registration, home)
-	bindConfig := componentBindConfig(runtimeConfig, componentConfig, runtimeHomePath)
+	runtimeProfilePath := runtimeFactory.RuntimeComponentProfilePath(registration, profile)
+	bindConfig := componentBindConfig(runtimeConfig, componentConfig, runtimeProfilePath)
 	threadFactory, ok := runtimeFactory.(runtimepkg.ThreadRuntimeFactory)
 	if !ok {
 		return nil, fmt.Errorf("claude requires thread runtime, got %T", runtimeFactory)
 	}
-	runtime := threadFactory.Bind(registration, home, bindConfig)
+	runtime := threadFactory.Bind(registration, profile, bindConfig)
 	return &Component{
 		Core: agentcommon.Core{
 			Registration:        registration,
@@ -143,7 +143,7 @@ func (c *Component) Auth(ctx context.Context, callbackPort int, callbackTimeout 
 	if c == nil || c.Runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
-	if err := PrepareHome(HomeSpec{HostHome: c.Runtime.ComponentHome().Path}); err != nil {
+	if err := PrepareProfile(ProfileSpec{HostProfile: c.Runtime.ComponentProfile().Path}); err != nil {
 		return err
 	}
 	closeRelay, err := c.Runtime.OpenHTTPRelayPort(
@@ -165,7 +165,7 @@ func (c *Component) AuthStatus(ctx context.Context, stdout io.Writer, stderr io.
 	if c == nil || c.Runtime == nil {
 		return fmt.Errorf("missing component runtime")
 	}
-	if err := PrepareHome(HomeSpec{HostHome: c.Runtime.ComponentHome().Path}); err != nil {
+	if err := PrepareProfile(ProfileSpec{HostProfile: c.Runtime.ComponentProfile().Path}); err != nil {
 		return err
 	}
 	return c.Runtime.Exec(ctx, "", modeluuid.UUID{}, nil, agentcommon.WriterOrDiscard(stdout), agentcommon.WriterOrDiscard(stderr), "claude", "--version")
@@ -187,7 +187,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	instructions := turn.Runtime.Instructions()
 	instructions.RuntimeNotices = append(instructions.RuntimeNotices, c.RuntimeNotices(ctx, workspacePath, turn.Thread.ID)...)
 	bootstrapText := claudeBootstrap(runtimeWorkspacePath, instructions)
-	if err := PrepareHome(HomeSpec{HostHome: c.Runtime.ComponentHome().Path, BootstrapText: bootstrapText}); err != nil {
+	if err := PrepareProfile(ProfileSpec{HostProfile: c.Runtime.ComponentProfile().Path, BootstrapText: bootstrapText}); err != nil {
 		return nil, err
 	}
 	stopTyping, err := turn.Runtime.StartChatAction(ctx, message.ChatActionTyping)
@@ -231,10 +231,10 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	return &component.TurnResult{Final: &coremodel.ThreadMessage{Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, ComponentID: c.Registration.ID, ActorID: c.Registration.Ref(), ActorLabel: "Claude", Text: reply}}, nil
 }
 
-func componentBindConfig(config runtimepkg.BindConfig, componentConfig ComponentConfig, runtimeHomePath string) runtimepkg.BindConfig {
+func componentBindConfig(config runtimepkg.BindConfig, componentConfig ComponentConfig, runtimeProfilePath string) runtimepkg.BindConfig {
 	config = config.Clean()
 	config.Image = agentcommon.FirstNonEmpty(componentConfig.Image, config.Image, DefaultImage)
-	return config.WithEnv("HOME="+runtimeHomePath, "CLAUDE_CONFIG_DIR="+runtimeHomePath+"/.claude")
+	return config.WithEnv("HOME="+runtimeProfilePath, "CLAUDE_CONFIG_DIR="+runtimeProfilePath+"/.claude")
 }
 
 func modelOption(settings resolvedThreadSettings) string {

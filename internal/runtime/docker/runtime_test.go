@@ -28,7 +28,7 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 		Name:    "default",
 		Runtime: "docker",
 	}
-	home := factory.ComponentHome(registration)
+	home := factory.ComponentProfile(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
 
 	threadID := modeluuid.New()
@@ -84,7 +84,7 @@ func TestSandboxDoesNotBindHostbridgeWithoutCommands(t *testing.T) {
 
 	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, bridge)
 	registration := coremodel.Component{Type: "mockagent", Name: "helper", Runtime: "docker"}
-	home := factory.ComponentHome(registration)
+	home := factory.ComponentProfile(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
 
 	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, true)
@@ -108,7 +108,7 @@ func TestSandboxPropagatesConfiguredUser(t *testing.T) {
 	root := t.TempDir()
 	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
 	registration := coremodel.Component{Type: "mockagent", Name: "root", Runtime: "docker"}
-	home := factory.ComponentHome(registration)
+	home := factory.ComponentProfile(registration)
 	uid := 0
 	gid := 0
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{UID: &uid, GID: &gid}).(*Runtime)
@@ -133,7 +133,7 @@ func TestSandboxUsesThreadRuntimePorts(t *testing.T) {
 			config:   runtimepkg.ThreadConfig{Ports: []string{"127.0.0.1:18423:8080"}},
 		})
 	registration := coremodel.Component{Type: "mockagent", Name: "ports", Runtime: "docker"}
-	home := factory.ComponentHome(registration)
+	home := factory.ComponentProfile(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
 
 	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), threadID, nil, false)
@@ -161,7 +161,7 @@ func TestSandboxPropagatesConfiguredGPUs(t *testing.T) {
 		Name:    "gpu",
 		Runtime: "docker",
 	}
-	home := factory.ComponentHome(registration)
+	home := factory.ComponentProfile(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{GPUs: "all"}).(*Runtime)
 
 	threadID := modeluuid.New()
@@ -185,7 +185,7 @@ func TestSandboxPropagatesBaseGitIdentityEnv(t *testing.T) {
 		"GIT_COMMITTER_EMAIL=human@example.com",
 	)
 	registration := coremodel.Component{Type: "mockagent", Name: "git", Runtime: "docker"}
-	home := factory.ComponentHome(registration)
+	home := factory.ComponentProfile(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{
 		Env: []string{"GIT_AUTHOR_NAME=Bot"},
 	}).(*Runtime)
@@ -214,7 +214,7 @@ func TestSandboxUsesDockerDefaultSeccompByDefault(t *testing.T) {
 	root := t.TempDir()
 	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
 	registration := coremodel.Component{Type: "mockagent", Name: "default", Runtime: "docker"}
-	home := factory.ComponentHome(registration)
+	home := factory.ComponentProfile(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{}).(*Runtime)
 
 	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
@@ -232,7 +232,7 @@ func TestSandboxPropagatesConfiguredUnconfinedSeccomp(t *testing.T) {
 	root := t.TempDir()
 	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
 	registration := coremodel.Component{Type: "mockagent", Name: "default", Runtime: "docker"}
-	home := factory.ComponentHome(registration)
+	home := factory.ComponentProfile(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{Seccomp: "unconfined"}).(*Runtime)
 
 	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
@@ -250,7 +250,7 @@ func TestSandboxRejectsUnsupportedSeccompMode(t *testing.T) {
 	root := t.TempDir()
 	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
 	registration := coremodel.Component{Type: "mockagent", Name: "default", Runtime: "docker"}
-	home := factory.ComponentHome(registration)
+	home := factory.ComponentProfile(registration)
 	runtime := factory.Bind(registration, home, runtimepkg.BindConfig{Seccomp: "strict"}).(*Runtime)
 
 	_, _, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)

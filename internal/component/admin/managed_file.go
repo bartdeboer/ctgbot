@@ -27,7 +27,7 @@ func formatManagedFileList(files []component.ManagedFile) string {
 	return strings.Join(lines, "\n")
 }
 
-func formatManagedFileStatus(home string, files []component.ManagedFile) string {
+func formatManagedFileStatus(profile string, files []component.ManagedFile) string {
 	if len(files) == 0 {
 		return "no managed files"
 	}
@@ -39,7 +39,7 @@ func formatManagedFileStatus(home string, files []component.ManagedFile) string 
 			continue
 		}
 		file.RelativePath = rel
-		target, _, err := managedFileTarget(home, file.RelativePath)
+		target, _, err := managedFileTarget(profile, file.RelativePath)
 		if err != nil {
 			lines = append(lines, fmt.Sprintf("%s\tinvalid\t%s\t%s", file.RelativePath, requiredLabel(file.Required), sensitiveLabel(file.Sensitive)))
 			continue
@@ -98,15 +98,15 @@ func safeManagedRelativePath(value string) (string, error) {
 	return value, nil
 }
 
-func writeManagedFile(home string, file component.ManagedFile, content []byte) error {
-	target, parent, err := managedFileTarget(home, file.RelativePath)
+func writeManagedFile(profile string, file component.ManagedFile, content []byte) error {
+	target, parent, err := managedFileTarget(profile, file.RelativePath)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return err
 	}
-	if err := ensureManagedParentInside(home, parent); err != nil {
+	if err := ensureManagedParentInside(profile, parent); err != nil {
 		return err
 	}
 	mode := os.FileMode(0o644)
@@ -135,36 +135,36 @@ func writeManagedFile(home string, file component.ManagedFile, content []byte) e
 	return os.Chmod(target, mode)
 }
 
-func managedFileTarget(home string, relativePath string) (target string, parent string, err error) {
-	home = strings.TrimSpace(home)
-	if home == "" {
-		return "", "", fmt.Errorf("missing component home")
+func managedFileTarget(profile string, relativePath string) (target string, parent string, err error) {
+	profile = strings.TrimSpace(profile)
+	if profile == "" {
+		return "", "", fmt.Errorf("missing component profile")
 	}
 	rel, err := safeManagedRelativePath(relativePath)
 	if err != nil {
 		return "", "", err
 	}
-	absHome, err := filepath.Abs(home)
+	absProfile, err := filepath.Abs(profile)
 	if err != nil {
 		return "", "", err
 	}
-	target = filepath.Join(absHome, filepath.FromSlash(rel))
+	target = filepath.Join(absProfile, filepath.FromSlash(rel))
 	absTarget, err := filepath.Abs(target)
 	if err != nil {
 		return "", "", err
 	}
-	if !pathWithin(absHome, absTarget) {
-		return "", "", fmt.Errorf("managed file target escapes component home: %s", rel)
+	if !pathWithin(absProfile, absTarget) {
+		return "", "", fmt.Errorf("managed file target escapes component profile: %s", rel)
 	}
 	return absTarget, filepath.Dir(absTarget), nil
 }
 
-func ensureManagedParentInside(home string, parent string) error {
-	absHome, err := filepath.Abs(strings.TrimSpace(home))
+func ensureManagedParentInside(profile string, parent string) error {
+	absProfile, err := filepath.Abs(strings.TrimSpace(profile))
 	if err != nil {
 		return err
 	}
-	realHome, err := filepath.EvalSymlinks(absHome)
+	realProfile, err := filepath.EvalSymlinks(absProfile)
 	if err != nil {
 		return err
 	}
@@ -172,8 +172,8 @@ func ensureManagedParentInside(home string, parent string) error {
 	if err != nil {
 		return err
 	}
-	if !pathWithin(realHome, realParent) {
-		return fmt.Errorf("managed file parent escapes component home: %s", parent)
+	if !pathWithin(realProfile, realParent) {
+		return fmt.Errorf("managed file parent escapes component profile: %s", parent)
 	}
 	return nil
 }

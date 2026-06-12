@@ -384,7 +384,7 @@ func (s *cliCommandSurface) handleChatComponentAdd(ctx context.Context, req comm
 	}
 	lines := []string{"chat component bound", fmt.Sprintf("chat_id: %s", result.Binding.ChatID)}
 	if result.ComponentRef != "" {
-		lines = append(lines, fmt.Sprintf("component: %s", result.ComponentRef), fmt.Sprintf("runtime: %s", result.Runtime), fmt.Sprintf("home_path: %s", result.HomePath))
+		lines = append(lines, fmt.Sprintf("component: %s", result.ComponentRef), fmt.Sprintf("runtime: %s", result.Runtime), fmt.Sprintf("profile_path: %s", result.ProfilePath))
 	} else {
 		lines = append(lines, fmt.Sprintf("component_id: %s", result.Binding.ComponentID))
 	}

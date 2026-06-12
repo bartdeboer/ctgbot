@@ -37,8 +37,8 @@ func TestGmailSourceRelaysOutboundElsewhere(t *testing.T) {
 		agentState := &agentState{}
 
 		registry := component.NewRegistry()
-		if err := registry.Add("mockgmail", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, runtime, home, storage, registration
+		if err := registry.Add("mockgmail", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, profile, storage, registration
 			return &mockGmailSource{
 				componentID: registration.ID,
 				state:       gmailState,
@@ -46,19 +46,19 @@ func TestGmailSourceRelaysOutboundElsewhere(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("register mockgmail: %v", err)
 		}
-		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _, _, _ = ctx, runtime, home, storage, registration
+		if err := registry.Add("mockrelay", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _, _, _ = ctx, runtime, profile, storage, registration
 			return &mockRelay{
 				state: relayState,
 			}, nil
 		}); err != nil {
 			t.Fatalf("register mockrelay: %v", err)
 		}
-		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
-			_, _, _ = ctx, home, storage
+		if err := registry.Add("mockagent", func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+			_, _, _ = ctx, profile, storage
 			return &mockAgent{
 				componentID: registration.ID,
-				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, home, runtimepkg.BindConfig{}),
+				runtime:     runtime.(runtimepkg.ThreadRuntimeFactory).Bind(registration, profile, runtimepkg.BindConfig{}),
 				state:       agentState,
 			}, nil
 		}); err != nil {

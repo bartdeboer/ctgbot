@@ -185,8 +185,8 @@ func (f *fakeTurnRuntime) StartChatAction(context.Context, message.ChatAction) (
 	return func() {}, nil
 }
 func (f *fakeTurnRuntime) WorkspacePath() string { return "" }
-func (f *fakeTurnRuntime) ComponentHome(modeluuid.UUID) (runtimepkg.Home, bool) {
-	return runtimepkg.Home{}, false
+func (f *fakeTurnRuntime) ComponentProfile(modeluuid.UUID) (runtimepkg.Profile, bool) {
+	return runtimepkg.Profile{}, false
 }
 func (f *fakeTurnRuntime) ComponentThreadID(componentID modeluuid.UUID) (string, bool, error) {
 	if f == nil || f.ids == nil {

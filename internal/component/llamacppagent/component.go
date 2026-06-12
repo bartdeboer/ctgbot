@@ -29,7 +29,7 @@ type Component struct {
 	registration     coremodel.Component
 	runtime          runtimepkg.ThreadRuntime
 	runtimeConfig    runtimepkg.BindConfig
-	home             runtimepkg.Home
+	profile          runtimepkg.Profile
 	storage          repository.Storage
 	resolveWorkspace func(context.Context, coremodel.Chat) (string, error)
 	config           ComponentConfig
@@ -41,7 +41,7 @@ var _ component.TurnHandler = (*Component)(nil)
 var _ component.ProfileOwner = (*Component)(nil)
 var _ component.RuntimeImageProvider = (*Component)(nil)
 
-func New(ctx context.Context, registration coremodel.Component, runtimeFactory runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver, resolveWorkspace func(context.Context, coremodel.Chat) (string, error), logger *log.Logger) (component.Component, error) {
+func New(ctx context.Context, registration coremodel.Component, runtimeFactory runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage, resolver ComponentResolver, resolveWorkspace func(context.Context, coremodel.Chat) (string, error), logger *log.Logger) (component.Component, error) {
 	_ = ctx
 	if storage == nil {
 		return nil, fmt.Errorf("missing storage")
@@ -53,21 +53,21 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 	if !ok {
 		return nil, fmt.Errorf("llamacppagent requires thread runtime, got %T", runtimeFactory)
 	}
-	runtimeConfig, err := loadRuntimeConfig(home.Path)
+	runtimeConfig, err := loadRuntimeConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	config, err := loadComponentConfig(home.Path)
+	config, err := loadComponentConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	runtimeHomePath := runtimeFactory.RuntimeComponentHomePath(registration, home)
-	bindConfig := componentBindConfig(runtimeConfig, runtimeHomePath)
+	runtimeProfilePath := runtimeFactory.RuntimeComponentProfilePath(registration, profile)
+	bindConfig := componentBindConfig(runtimeConfig, runtimeProfilePath)
 	return &Component{
 		registration:     registration,
-		runtime:          threadFactory.Bind(registration, home, bindConfig),
+		runtime:          threadFactory.Bind(registration, profile, bindConfig),
 		runtimeConfig:    bindConfig,
-		home:             home,
+		profile:          profile,
 		storage:          storage,
 		resolveWorkspace: resolveWorkspace,
 		config:           config,
@@ -76,13 +76,13 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 	}, nil
 }
 
-func componentBindConfig(config runtimepkg.BindConfig, runtimeHomePath string) runtimepkg.BindConfig {
-	runtimeHomePath = strings.TrimSpace(runtimeHomePath)
+func componentBindConfig(config runtimepkg.BindConfig, runtimeProfilePath string) runtimepkg.BindConfig {
+	runtimeProfilePath = strings.TrimSpace(runtimeProfilePath)
 	return config.Clean().WithEnvOverride(
-		"HOME="+runtimeHomePath,
-		"GOCACHE="+runtimeHomePath+"/.cache/go-build",
-		"GOPATH="+runtimeHomePath+"/go",
-		"GOMODCACHE="+runtimeHomePath+"/go/pkg/mod",
+		"HOME="+runtimeProfilePath,
+		"GOCACHE="+runtimeProfilePath+"/.cache/go-build",
+		"GOPATH="+runtimeProfilePath+"/go",
+		"GOMODCACHE="+runtimeProfilePath+"/go/pkg/mod",
 	)
 }
 
@@ -192,7 +192,7 @@ func (c *Component) beginBackendSession(ctx context.Context) (component.OpenAICh
 }
 
 func (c *Component) prepareToolloopRun(turn component.Turn, session component.OpenAIChatSession, profile component.ModelToolloopProfile, prompt string) (*toolloopRunFiles, error) {
-	files, err := newToolloopRunFiles(c.runtime.ComponentHome().Path, c.runtime.RuntimeComponentHomePath(), turn.Thread.ID)
+	files, err := newToolloopRunFiles(c.runtime.ComponentProfile().Path, c.runtime.RuntimeComponentProfilePath(), turn.Thread.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +245,7 @@ func (c *Component) toolloopEnv(session component.OpenAIChatSession, turn compon
 		"TOOLLOOP_MAX_ITERATIONS=" + fmt.Sprintf("%d", c.config.MaxIterations),
 		"TOOLLOOP_MAX_TOKENS=" + fmt.Sprintf("%d", c.config.MaxTokens),
 		"TOOLLOOP_TEMPERATURE=" + fmt.Sprintf("%g", c.config.Temperature),
-		"TOOLLOOP_CONVERSATION_DIR=" + c.runtime.RuntimeComponentHomePath() + "/toolloop/conversations",
+		"TOOLLOOP_CONVERSATION_DIR=" + c.runtime.RuntimeComponentProfilePath() + "/toolloop/conversations",
 		"TOOLLOOP_MODEL_PROMPT_INSTRUCTIONS=" + profile.PromptInstructions,
 		"TOOLLOOP_MODEL_TOOL_INSTRUCTIONS=" + profile.ToolInstructions,
 		"TOOLLOOP_MODEL_REASONING_FORMAT=" + profile.ReasoningFormat,

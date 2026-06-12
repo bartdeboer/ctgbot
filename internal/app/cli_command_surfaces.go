@@ -19,7 +19,7 @@ import (
 type componentRegisterCommand struct {
 	Component   string
 	RuntimeKind string
-	HomePath    string
+	ProfilePath string
 }
 
 type componentUnregisterCommand struct {
@@ -29,7 +29,7 @@ type componentUnregisterCommand struct {
 type componentRunCommand struct {
 	Component   string
 	RuntimeKind string
-	HomePath    string
+	ProfilePath string
 	Args        []string
 }
 
@@ -124,7 +124,8 @@ func buildComponentRegisterCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("component register", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	runtimeKind := fs.String("runtime", "", "Runtime kind for this registered component")
-	homePath := fs.String("home", "", "Optional host component home override")
+	profilePath := fs.String("profile", "", "Optional host component profile override")
+	fs.StringVar(profilePath, "home", "", "Deprecated alias for --profile")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -132,14 +133,15 @@ func buildComponentRegisterCommand(req *clir.Request) (any, error) {
 	if componentRef == "" {
 		return nil, fmt.Errorf("missing component ref")
 	}
-	return componentRegisterCommand{Component: componentRef, RuntimeKind: strings.TrimSpace(*runtimeKind), HomePath: strings.TrimSpace(*homePath)}, nil
+	return componentRegisterCommand{Component: componentRef, RuntimeKind: strings.TrimSpace(*runtimeKind), ProfilePath: strings.TrimSpace(*profilePath)}, nil
 }
 
 func buildComponentRunCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("component", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	runtimeKind := fs.String("runtime", "", "Runtime kind for this component registration")
-	homePath := fs.String("home", "", "Optional host component home override")
+	profilePath := fs.String("profile", "", "Optional host component profile override")
+	fs.StringVar(profilePath, "home", "", "Deprecated alias for --profile")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -147,7 +149,7 @@ func buildComponentRunCommand(req *clir.Request) (any, error) {
 	if componentRef == "" {
 		return nil, fmt.Errorf("missing component ref")
 	}
-	return componentRunCommand{Component: componentRef, RuntimeKind: strings.TrimSpace(*runtimeKind), HomePath: strings.TrimSpace(*homePath), Args: fs.Args()}, nil
+	return componentRunCommand{Component: componentRef, RuntimeKind: strings.TrimSpace(*runtimeKind), ProfilePath: strings.TrimSpace(*profilePath), Args: fs.Args()}, nil
 }
 
 func (s *cliCommandSurface) handleComponentRegister(ctx context.Context, req commandengine.Request, cmd componentRegisterCommand) (commandengine.Result, error) {
@@ -155,7 +157,7 @@ func (s *cliCommandSurface) handleComponentRegister(ctx context.Context, req com
 	if s == nil || s.service == nil {
 		return commandengine.Result{}, fmt.Errorf("missing app service")
 	}
-	result, err := s.service.RegisterComponent(ctx, cmd.Component, cmd.RuntimeKind, cmd.HomePath)
+	result, err := s.service.RegisterComponent(ctx, cmd.Component, cmd.RuntimeKind, cmd.ProfilePath)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
@@ -165,9 +167,9 @@ func (s *cliCommandSurface) handleComponentRegister(ctx context.Context, req com
 		fmt.Sprintf("id: %s", registration.ID),
 		fmt.Sprintf("ref: %s", registration.Ref()),
 		fmt.Sprintf("runtime: %s", registration.Runtime),
-		fmt.Sprintf("home_path: %s", registration.HomePath),
-		fmt.Sprintf("host_home: %s", result.HostHomePath),
-		fmt.Sprintf("runtime_home: %s", result.RuntimeHomePath),
+		fmt.Sprintf("profile_path: %s", registration.ProfilePath),
+		fmt.Sprintf("host_profile: %s", result.HostProfilePath),
+		fmt.Sprintf("runtime_profile: %s", result.RuntimeProfilePath),
 	}
 	return commandengine.Result{Text: strings.Join(lines, "\n")}, nil
 }
@@ -202,7 +204,7 @@ func (s *cliCommandSurface) handleComponentRun(ctx context.Context, req commande
 	result, err := s.service.RunComponentCommand(ctx, ComponentCommandRequest{
 		ComponentRef: cmd.Component,
 		RuntimeKind:  cmd.RuntimeKind,
-		HomePath:     cmd.HomePath,
+		ProfilePath:  cmd.ProfilePath,
 		Args:         cmd.Args,
 	})
 	if err != nil {

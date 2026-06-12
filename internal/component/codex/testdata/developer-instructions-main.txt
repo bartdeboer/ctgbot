@@ -3,7 +3,7 @@ You are operating inside a dedicated Docker container for this conversation.
 - Host OS: `linux`
 - Workspace: `/workspace`
 - Workspace inbox: `/workspace/inbox`
-- Codex home: `/profile/components/codex/codex`
+- Codex profile: `/profile/components/codex/codex`
 - [Runtime notice] image stale
 - The `hostbridge` command is available for:
   - running commands via `hostbridge <command> [args...]`

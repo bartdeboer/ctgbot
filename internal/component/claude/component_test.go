@@ -25,10 +25,10 @@ func TestClaudeBootstrapIncludesRuntimeNotices(t *testing.T) {
 	}
 }
 
-func TestPrepareHomeWritesNonEmptyDefaultBootstrap(t *testing.T) {
+func TestPrepareProfileWritesNonEmptyDefaultBootstrap(t *testing.T) {
 	home := t.TempDir()
-	if err := PrepareHome(HomeSpec{HostHome: home}); err != nil {
-		t.Fatalf("PrepareHome() error = %v", err)
+	if err := PrepareProfile(ProfileSpec{HostProfile: home}); err != nil {
+		t.Fatalf("PrepareProfile() error = %v", err)
 	}
 	body, err := os.ReadFile(filepath.Join(home, "ctgbot-bootstrap.md"))
 	if err != nil {
@@ -40,7 +40,7 @@ func TestPrepareHomeWritesNonEmptyDefaultBootstrap(t *testing.T) {
 }
 
 func TestAuthRunsClaudeSetupTokenWithRelay(t *testing.T) {
-	runtime := &authRuntime{home: runtimepkg.Home{Path: t.TempDir()}}
+	runtime := &authRuntime{home: runtimepkg.Profile{Path: t.TempDir()}}
 	c := &Component{Core: agentcommon.Core{Runtime: runtime}}
 	if err := c.Auth(context.Background(), 1234, time.Minute, io.Discard, io.Discard); err != nil {
 		t.Fatalf("Auth() error = %v", err)
@@ -66,7 +66,7 @@ func TestAuthRunsClaudeSetupTokenWithRelay(t *testing.T) {
 }
 
 type authRuntime struct {
-	home         runtimepkg.Home
+	home         runtimepkg.Profile
 	relayPort    int
 	relayTimeout time.Duration
 	relayClosed  bool
@@ -75,9 +75,11 @@ type authRuntime struct {
 	execTTY      bool
 }
 
-func (r *authRuntime) Kind() string                                     { return "docker" }
-func (r *authRuntime) ComponentHome() runtimepkg.Home                   { return r.home }
-func (r *authRuntime) RuntimeComponentHomePath() string                 { return "/profile/components/claude/claude" }
+func (r *authRuntime) Kind() string                         { return "docker" }
+func (r *authRuntime) ComponentProfile() runtimepkg.Profile { return r.home }
+func (r *authRuntime) RuntimeComponentProfilePath() string {
+	return "/profile/components/claude/claude"
+}
 func (r *authRuntime) RuntimeWorkspacePath(workspacePath string) string { return workspacePath }
 func (r *authRuntime) Refresh(context.Context, string, modeluuid.UUID) error {
 	return nil

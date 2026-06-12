@@ -103,14 +103,14 @@ type Thread struct {
 // Type identifies the code plugin, while Name identifies the configured
 // registration of that plugin in the current ctgbot runtime.
 type Component struct {
-	ID        modeluuid.UUID `gorm:"primaryKey"`
-	Type      string         `gorm:"index;uniqueIndex:idx_component_type_name"`
-	Name      string         `gorm:"uniqueIndex:idx_component_type_name"`
-	Runtime   string
-	HomePath  string
-	Label     string
-	Enabled   bool
-	IsDefault bool
+	ID          modeluuid.UUID `gorm:"primaryKey"`
+	Type        string         `gorm:"index;uniqueIndex:idx_component_type_name"`
+	Name        string         `gorm:"uniqueIndex:idx_component_type_name"`
+	Runtime     string
+	ProfilePath string
+	Label       string
+	Enabled     bool
+	IsDefault   bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

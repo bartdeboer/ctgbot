@@ -70,17 +70,17 @@ func (f *Factory) Kind() string {
 	return "docker"
 }
 
-func (f *Factory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
-	hostPath := strings.TrimSpace(registration.HomePath)
+func (f *Factory) ComponentProfile(registration coremodel.Component) runtimepkg.Profile {
+	hostPath := strings.TrimSpace(registration.ProfilePath)
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return runtimepkg.Home{Path: hostPath}
+	return runtimepkg.Profile{Path: hostPath}
 }
 
-func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
-	_ = home
-	return componentRuntimeHomePath(registration)
+func (f *Factory) RuntimeComponentProfilePath(registration coremodel.Component, profile runtimepkg.Profile) string {
+	_ = profile
+	return componentRuntimeProfilePath(registration)
 }
 
 func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
@@ -90,7 +90,7 @@ func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
 
 func (f *Factory) Bind(
 	registration coremodel.Component,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	config runtimepkg.BindConfig,
 ) runtimepkg.ThreadRuntime {
 	config = config.WithEnvOverride(f.env...)
@@ -99,7 +99,7 @@ func (f *Factory) Bind(
 		sandboxes:    f.sandboxes,
 		bridge:       f.bridge,
 		registration: registration,
-		home:         home,
+		profile:      profile,
 		image:        resolveImage(config.Image),
 		entrypoint:   strings.TrimSpace(config.Entrypoint),
 		env:          append([]string{}, config.Env...),
@@ -116,7 +116,7 @@ type Runtime struct {
 	sandboxes    sandboxengine.RuntimeManager
 	bridge       *hostbridgebridge.Bridge
 	registration coremodel.Component
-	home         runtimepkg.Home
+	profile      runtimepkg.Profile
 	image        string
 	entrypoint   string
 	env          []string
@@ -131,15 +131,15 @@ func (r *Runtime) Kind() string {
 	return "docker"
 }
 
-func (r *Runtime) ComponentHome() runtimepkg.Home {
-	return r.home
+func (r *Runtime) ComponentProfile() runtimepkg.Profile {
+	return r.profile
 }
 
-func (r *Runtime) RuntimeComponentHomePath() string {
+func (r *Runtime) RuntimeComponentProfilePath() string {
 	if r == nil {
-		return componentRuntimeHomePath(coremodel.Component{})
+		return componentRuntimeProfilePath(coremodel.Component{})
 	}
-	return componentRuntimeHomePath(r.registration)
+	return componentRuntimeProfilePath(r.registration)
 }
 
 func (r *Runtime) RuntimeWorkspacePath(workspacePath string) string {
@@ -324,15 +324,15 @@ func (r *Runtime) sandbox(
 		return nil, nil, err
 	}
 	if threadID.IsNull() {
-		runtimeHomePath := r.RuntimeComponentHomePath()
+		runtimeProfilePath := r.RuntimeComponentProfilePath()
 		spec := sandboxengine.NewBuilder(authSandboxName(r.registration)).
 			Image(r.image).
 			Entrypoint(r.entrypoint).
-			Workdir(runtimeHomePath).
+			Workdir(runtimeProfilePath).
 			User(r.user).
 			GPUs(r.gpus).
 			Env(append([]string{}, r.env...)).
-			Mounts([]sandboxengine.Mount{{Source: r.home.Path, Target: runtimeHomePath}}).
+			Mounts([]sandboxengine.Mount{{Source: r.profile.Path, Target: runtimeProfilePath}}).
 			SecurityOpts(securityOpts).
 			AddHosts(sandboxAddHosts()).
 			Cmd(r.idleCmd()).
@@ -344,7 +344,7 @@ func (r *Runtime) sandbox(
 	if err != nil {
 		return nil, nil, err
 	}
-	runtimeHomePath := r.RuntimeComponentHomePath()
+	runtimeProfilePath := r.RuntimeComponentProfilePath()
 	env := append([]string{}, r.env...)
 	env = append(env, "CTGBOT_COMPONENT_REF="+r.registration.Ref())
 	ports, err := r.threadPorts(ctx, threadID)
@@ -352,7 +352,7 @@ func (r *Runtime) sandbox(
 		return nil, nil, err
 	}
 	mounts := []sandboxengine.Mount{
-		{Source: r.home.Path, Target: runtimeHomePath},
+		{Source: r.profile.Path, Target: runtimeProfilePath},
 		{Source: workspaceHost, Target: workspaceRuntime},
 	}
 	cleanup := func() {}
@@ -368,9 +368,9 @@ func (r *Runtime) sandbox(
 	name := turnSandboxName(r.registration, threadID)
 	spec := sandboxengine.NewBuilder(name).
 		WorkspaceDir(workspaceHost).
-		ProfileDir(r.home.Path).
+		ProfileDir(r.profile.Path).
 		ContainerWorkspace(workspaceRuntime).
-		ContainerHome(runtimeHomePath).
+		ContainerHome(runtimeProfilePath).
 		Hostname(name).
 		Image(r.image).
 		Entrypoint(r.entrypoint).
@@ -423,7 +423,7 @@ func (r *Runtime) statusForSandbox(ctx context.Context, workspacePath string, sb
 	status := runtimepkg.Status{
 		Name:                 sbx.Name,
 		State:                string(state),
-		RuntimeHomePath:      r.RuntimeComponentHomePath(),
+		RuntimeProfilePath:   r.RuntimeComponentProfilePath(),
 		RuntimeWorkspacePath: r.RuntimeWorkspacePath(workspacePath),
 		Ports:                append([]string{}, sbx.Ports...),
 	}
@@ -477,7 +477,7 @@ func resolveWorkspace(workspacePath string) (string, string, error) {
 	return hostPath, runtimepkg.DefaultWorkspaceRuntimePath, nil
 }
 
-func componentRuntimeHomePath(registration coremodel.Component) string {
+func componentRuntimeProfilePath(registration coremodel.Component) string {
 	return "/profile/components/" + registration.Type + "/" + registration.Name
 }
 

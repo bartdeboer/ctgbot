@@ -72,7 +72,7 @@ func (senderPolicy) TableName() string { return "gmail_sender_policies" }
 func openStore(homePath string, defaultShowFull bool) (*store, error) {
 	homePath = strings.TrimSpace(homePath)
 	if homePath == "" {
-		return nil, fmt.Errorf("missing gmailv2 profile home")
+		return nil, fmt.Errorf("missing gmailv2 profile")
 	}
 	if err := os.MkdirAll(homePath, 0o755); err != nil {
 		return nil, err

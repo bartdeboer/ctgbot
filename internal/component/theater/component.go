@@ -28,9 +28,9 @@ var _ component.CommandDescriptionSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 var _ component.UpdateFeed = (*Component)(nil)
 
-func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage) (component.Component, error) {
+func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
 	_, _ = ctx, runtime
-	store, err := openStore(home.Path)
+	store, err := openStore(profile.Path)
 	if err != nil {
 		return nil, err
 	}

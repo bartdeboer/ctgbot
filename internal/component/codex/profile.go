@@ -11,40 +11,40 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 )
 
-type HomeSpec struct {
-	HostHome         string
-	RuntimeHome      string
+type ProfileSpec struct {
+	HostProfile      string
+	RuntimeProfile   string
 	RuntimeWorkspace string
 	BootstrapText    string
 	SandboxMode      string
 }
 
-func PrepareHome(cfg *appstate.Config, spec HomeSpec) error {
+func PrepareProfile(cfg *appstate.Config, spec ProfileSpec) error {
 	if cfg == nil {
 		return fmt.Errorf("missing config")
 	}
 	if err := cfg.Codex().EnsureCLIHome(); err != nil {
 		return err
 	}
-	hostHome := strings.TrimSpace(spec.HostHome)
-	if hostHome == "" {
-		return fmt.Errorf("missing Codex home path")
+	hostProfile := strings.TrimSpace(spec.HostProfile)
+	if hostProfile == "" {
+		return fmt.Errorf("missing Codex profile path")
 	}
-	if err := os.MkdirAll(hostHome, 0o755); err != nil {
+	if err := os.MkdirAll(hostProfile, 0o755); err != nil {
 		return err
 	}
 
-	if err := importSharedAuth(cfg, hostHome); err != nil {
+	if err := importSharedAuth(cfg, hostProfile); err != nil {
 		return err
 	}
-	if err := writeBootstrap(hostHome, spec.BootstrapText); err != nil {
+	if err := writeBootstrap(hostProfile, spec.BootstrapText); err != nil {
 		return err
 	}
-	return writeConfig(hostHome, spec.RuntimeHome, spec.RuntimeWorkspace, spec.SandboxMode)
+	return writeConfig(hostProfile, spec.RuntimeProfile, spec.RuntimeWorkspace, spec.SandboxMode)
 }
 
-func importSharedAuth(cfg *appstate.Config, hostHome string) error {
-	target := filepath.Join(hostHome, "auth.json")
+func importSharedAuth(cfg *appstate.Config, hostProfile string) error {
+	target := filepath.Join(hostProfile, "auth.json")
 	authPath := cfg.Codex().AuthPath()
 	if !fileExistsAndNonEmpty(target) && fileExistsAndNonEmpty(authPath) {
 		if err := copyFile(authPath, target); err != nil {
@@ -54,23 +54,23 @@ func importSharedAuth(cfg *appstate.Config, hostHome string) error {
 	return nil
 }
 
-func writeBootstrap(hostHome string, bootstrapText string) error {
+func writeBootstrap(hostProfile string, bootstrapText string) error {
 	bootstrapText = strings.TrimSpace(bootstrapText)
 	if bootstrapText == "" {
 		bootstrapText = "You are Codex running inside ctgbot."
 	}
-	bootstrapPath := filepath.Join(hostHome, "ctgbot-bootstrap.md")
+	bootstrapPath := filepath.Join(hostProfile, "ctgbot-bootstrap.md")
 	return os.WriteFile(bootstrapPath, []byte(bootstrapText+"\n"), 0o600)
 }
 
-func writeConfig(hostHome string, runtimeHome string, runtimeWorkspace string, sandboxMode string) error {
-	runtimeHome = cleanRuntimePath(runtimeHome, "/profile")
+func writeConfig(hostProfile string, runtimeProfile string, runtimeWorkspace string, sandboxMode string) error {
+	runtimeProfile = cleanRuntimePath(runtimeProfile, "/profile")
 	runtimeWorkspace = cleanRuntimePath(runtimeWorkspace, "/workspace")
 	sandboxMode = strings.TrimSpace(sandboxMode)
 	if sandboxMode == "" {
 		sandboxMode = DefaultSandboxMode
 	}
-	configPath := filepath.Join(hostHome, "config.toml")
+	configPath := filepath.Join(hostProfile, "config.toml")
 	configBody := strings.TrimSpace(fmt.Sprintf(`
 sandbox_mode = %q
 approval_policy = "never"
@@ -85,7 +85,7 @@ exclude_tmpdir_env_var = false
 exclude_slash_tmp = false
 writable_roots = [%q, %q, %q]
 network_access = true
-`, sandboxMode, path.Join(runtimeHome, "ctgbot-bootstrap.md"), runtimeWorkspace, runtimeHome, "/tmp")) + "\n"
+`, sandboxMode, path.Join(runtimeProfile, "ctgbot-bootstrap.md"), runtimeWorkspace, runtimeProfile, "/tmp")) + "\n"
 	return os.WriteFile(configPath, []byte(configBody), 0o600)
 }
 

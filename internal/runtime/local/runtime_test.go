@@ -13,7 +13,7 @@ func TestBindPropagatesBaseEnvOverRuntimeEnv(t *testing.T) {
 	factory := New("/state", "/state/components").WithEnv("GIT_AUTHOR_NAME=Human")
 	runtime := factory.Bind(
 		coremodel.Component{Type: "mock", Name: "default"},
-		runtimepkg.Home{Path: "/state/components/mock/default"},
+		runtimepkg.Profile{Path: "/state/components/mock/default"},
 		runtimepkg.BindConfig{Env: []string{"GIT_AUTHOR_NAME=Bot"}},
 	).(*Runtime)
 

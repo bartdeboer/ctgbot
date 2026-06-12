@@ -47,11 +47,12 @@ func TestCLICommandSurfacesExposeProcessAndServiceCommands(t *testing.T) {
 		t.Fatalf("component help missing component description/group in:\n%s", out)
 	}
 
+	profilePath := t.TempDir()
 	var register bytes.Buffer
-	if err := runCLICommand(context.Background(), []string{"component", "register", "telegram/test", "--runtime", "local"}, store, nil, &register); err != nil {
+	if err := runCLICommand(context.Background(), []string{"component", "register", "telegram/test", "--runtime", "local", "--profile", profilePath}, store, nil, &register); err != nil {
 		t.Fatalf("component register: %v", err)
 	}
-	if out := register.String(); !strings.Contains(out, "component registered") || !strings.Contains(out, "ref: telegram/test") {
+	if out := register.String(); !strings.Contains(out, "component registered") || !strings.Contains(out, "ref: telegram/test") || !strings.Contains(out, "profile_path: "+profilePath) {
 		t.Fatalf("register output = %q", out)
 	}
 

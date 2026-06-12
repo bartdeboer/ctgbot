@@ -14,13 +14,13 @@ type Constructor func(
 	ctx context.Context,
 	registration coremodel.Component,
 	runtime runtimepkg.Factory,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	storage repository.Storage,
 ) (Component, error)
 
 type Loaded struct {
 	Registration coremodel.Component
-	Home         runtimepkg.Home
+	Profile      runtimepkg.Profile
 	Runtime      runtimepkg.Factory
 	Component    Component
 }
@@ -66,7 +66,7 @@ func (r *Registry) Build(
 	ctx context.Context,
 	registration coremodel.Component,
 	runtime runtimepkg.Factory,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	storage repository.Storage,
 ) (*Loaded, error) {
 	if r == nil {
@@ -80,13 +80,13 @@ func (r *Registry) Build(
 	if !ok {
 		return nil, fmt.Errorf("component constructor not registered: %s", componentType)
 	}
-	value, err := constructor(ctx, registration, runtime, home, storage)
+	value, err := constructor(ctx, registration, runtime, profile, storage)
 	if err != nil {
 		return nil, err
 	}
 	return &Loaded{
 		Registration: registration,
-		Home:         home,
+		Profile:      profile,
 		Runtime:      runtime,
 		Component:    value,
 	}, nil

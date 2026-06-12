@@ -34,13 +34,13 @@ func New(
 	ctx context.Context,
 	registration coremodel.Component,
 	runtime runtimepkg.Factory,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	storage repository.Storage,
 	resolver ComponentResolver,
 	logf func(format string, args ...any),
 ) (component.Component, error) {
 	_, _, _ = ctx, runtime, storage
-	config, err := loadComponentConfig(home.Path)
+	config, err := loadComponentConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}

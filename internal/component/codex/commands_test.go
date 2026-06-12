@@ -13,37 +13,37 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
-	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/go-clistate"
 )
 
 type testRuntime struct {
-	componentHome runtimepkg.Home
-	runtimeHome   string
-	status        runtimepkg.Status
-	refreshCalls  int
-	stopCalls     int
-	stopErr       error
-	execCalls     int
-	execName      string
-	execArgs      []string
+	componentProfile runtimepkg.Profile
+	runtimeProfile   string
+	status           runtimepkg.Status
+	refreshCalls     int
+	stopCalls        int
+	stopErr          error
+	execCalls        int
+	execName         string
+	execArgs         []string
 }
 
 func (r *testRuntime) Kind() string { return "docker" }
-func (r *testRuntime) ComponentHome() runtimepkg.Home {
-	if strings.TrimSpace(r.componentHome.Path) != "" {
-		return r.componentHome
+func (r *testRuntime) ComponentProfile() runtimepkg.Profile {
+	if strings.TrimSpace(r.componentProfile.Path) != "" {
+		return r.componentProfile
 	}
-	return runtimepkg.Home{Path: "/tmp/codex-home"}
+	return runtimepkg.Profile{Path: "/tmp/codex-home"}
 }
-func (r *testRuntime) RuntimeComponentHomePath() string {
-	if strings.TrimSpace(r.runtimeHome) != "" {
-		return r.runtimeHome
+func (r *testRuntime) RuntimeComponentProfilePath() string {
+	if strings.TrimSpace(r.runtimeProfile) != "" {
+		return r.runtimeProfile
 	}
 	return "/profile/components/codex/codex"
 }
@@ -102,21 +102,20 @@ func TestCodexCommandModelSetAndStatus(t *testing.T) {
 			status: runtimepkg.Status{
 				Name:                 "ctgbot-codex-thread",
 				State:                "running",
-				RuntimeHomePath:      "/profile/components/codex/codex",
+				RuntimeProfilePath:   "/profile/components/codex/codex",
 				RuntimeWorkspacePath: "/workspace",
 			},
 		}
 		c := &Component{
-				Core: agentcommon.Core{
-		Registration: registration,
+			Core: agentcommon.Core{
+				Registration: registration,
 				Runtime:      runtime,
 				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
-				},
+			},
 			config: cfg,
 		}
 
@@ -174,16 +173,15 @@ func TestCodexConfigSurfaceCommands(t *testing.T) {
 		storage := repository.NewMemory()
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
-				Core: agentcommon.Core{
-		Registration: registration,
+			Core: agentcommon.Core{
+				Registration: registration,
 				Runtime:      &testRuntime{},
 				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
-				},
+			},
 			config: cfg,
 		}
 
@@ -282,16 +280,15 @@ func TestCodexCommandModelClearRemovesThreadComponentState(t *testing.T) {
 		storage := repository.NewMemory()
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
-				Core: agentcommon.Core{
-		Registration: registration,
+			Core: agentcommon.Core{
+				Registration: registration,
 				Runtime:      &testRuntime{},
 				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
-				},
+			},
 			config: cfg,
 		}
 
@@ -356,16 +353,15 @@ func TestCodexCommandModelEffortSetUsesThreadComponentState(t *testing.T) {
 		storage := repository.NewMemory()
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		c := &Component{
-				Core: agentcommon.Core{
-		Registration: registration,
+			Core: agentcommon.Core{
+				Registration: registration,
 				Runtime:      &testRuntime{},
 				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
-				},
+			},
 			config: cfg,
 		}
 
@@ -409,21 +405,20 @@ func TestCodexCommandStartAndStopToggleKeepRunning(t *testing.T) {
 			status: runtimepkg.Status{
 				Name:                 "ctgbot-codex-thread",
 				State:                "running",
-				RuntimeHomePath:      "/profile/components/codex/codex",
+				RuntimeProfilePath:   "/profile/components/codex/codex",
 				RuntimeWorkspacePath: "/workspace",
 			},
 		}
 		c := &Component{
-				Core: agentcommon.Core{
-		Registration: registration,
+			Core: agentcommon.Core{
+				Registration: registration,
 				Runtime:      runtime,
 				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
-				},
+			},
 			config: cfg,
 		}
 
@@ -477,16 +472,15 @@ func TestCodexCommandPurgeClearsProviderThreadMapping(t *testing.T) {
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}
 		runtime := &testRuntime{}
 		c := &Component{
-				Core: agentcommon.Core{
-		Registration: registration,
+			Core: agentcommon.Core{
+				Registration: registration,
 				Runtime:      runtime,
 				Storage:      storage,
 				ResolveWorkspace: func(_ context.Context, chat coremodel.Chat) (string, error) {
 					_ = chat
 					return filepath.Join(root, "workspace"), nil
 				},
-
-				},
+			},
 			config: cfg,
 		}
 

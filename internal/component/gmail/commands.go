@@ -60,7 +60,7 @@ func (c *Component) status(ctx context.Context) (commandengine.Result, error) {
 	var lines []string
 	lines = append(lines, "gmail status")
 	lines = append(lines, "component: "+c.registration.Ref())
-	lines = append(lines, "home: "+strings.TrimSpace(c.home.Path))
+	lines = append(lines, "profile: "+strings.TrimSpace(c.profile.Path))
 	lines = append(lines, "poll_interval: "+c.componentConfig.pollInterval().String())
 	account, authState := c.authSummary(ctx)
 	lines = append(lines, "auth: "+authState)

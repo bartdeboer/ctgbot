@@ -10,7 +10,7 @@ import (
 	"github.com/bartdeboer/go-clistate"
 )
 
-func TestPrepareHomeWritesManagedFilesAndImportsAuth(t *testing.T) {
+func TestPrepareProfileWritesManagedFilesAndImportsAuth(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		store, err := clistate.NewCwd("ctgbot", "config")
 		if err != nil {
@@ -29,22 +29,22 @@ func TestPrepareHomeWritesManagedFilesAndImportsAuth(t *testing.T) {
 			t.Fatalf("write shared auth: %v", err)
 		}
 
-		homeDir := filepath.Join(root, "components", "codex")
-		if err := PrepareHome(cfg, HomeSpec{
-			HostHome:         homeDir,
-			RuntimeHome:      "/profile/components/codex/codex",
+		profileDir := filepath.Join(root, "components", "codex")
+		if err := PrepareProfile(cfg, ProfileSpec{
+			HostProfile:      profileDir,
+			RuntimeProfile:   "/profile/components/codex/codex",
 			RuntimeWorkspace: "/workspace",
 			BootstrapText:    "bootstrap text",
 		}); err != nil {
-			t.Fatalf("PrepareHome: %v", err)
+			t.Fatalf("PrepareProfile: %v", err)
 		}
 
 		for _, name := range []string{"auth.json", "config.toml", "ctgbot-bootstrap.md"} {
-			if _, err := os.Stat(filepath.Join(homeDir, name)); err != nil {
+			if _, err := os.Stat(filepath.Join(profileDir, name)); err != nil {
 				t.Fatalf("%s missing: %v", name, err)
 			}
 		}
-		bootstrap, err := os.ReadFile(filepath.Join(homeDir, "ctgbot-bootstrap.md"))
+		bootstrap, err := os.ReadFile(filepath.Join(profileDir, "ctgbot-bootstrap.md"))
 		if err != nil {
 			t.Fatalf("read bootstrap: %v", err)
 		}
@@ -54,7 +54,7 @@ func TestPrepareHomeWritesManagedFilesAndImportsAuth(t *testing.T) {
 	})
 }
 
-func TestPrepareHomeWritesPosixModelInstructionsPath(t *testing.T) {
+func TestPrepareProfileWritesPosixModelInstructionsPath(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		store, err := clistate.NewCwd("ctgbot", "config")
 		if err != nil {
@@ -65,17 +65,17 @@ func TestPrepareHomeWritesPosixModelInstructionsPath(t *testing.T) {
 			t.Fatalf("new config: %v", err)
 		}
 
-		homeDir := filepath.Join(root, "components", "codex")
-		if err := PrepareHome(cfg, HomeSpec{
-			HostHome:         homeDir,
-			RuntimeHome:      `\\profile\\components\\codex\\codex`,
+		profileDir := filepath.Join(root, "components", "codex")
+		if err := PrepareProfile(cfg, ProfileSpec{
+			HostProfile:      profileDir,
+			RuntimeProfile:   `\\profile\\components\\codex\\codex`,
 			RuntimeWorkspace: `\\workspace`,
 			BootstrapText:    "bootstrap",
 		}); err != nil {
-			t.Fatalf("PrepareHome: %v", err)
+			t.Fatalf("PrepareProfile: %v", err)
 		}
 
-		body, err := os.ReadFile(filepath.Join(homeDir, "config.toml"))
+		body, err := os.ReadFile(filepath.Join(profileDir, "config.toml"))
 		if err != nil {
 			t.Fatalf("read config.toml: %v", err)
 		}
@@ -95,7 +95,7 @@ func TestPrepareHomeWritesPosixModelInstructionsPath(t *testing.T) {
 	})
 }
 
-func TestPrepareHomeWritesConfiguredSandboxMode(t *testing.T) {
+func TestPrepareProfileWritesConfiguredSandboxMode(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		store, err := clistate.NewCwd("ctgbot", "config")
 		if err != nil {
@@ -106,17 +106,17 @@ func TestPrepareHomeWritesConfiguredSandboxMode(t *testing.T) {
 			t.Fatalf("new config: %v", err)
 		}
 
-		homeDir := filepath.Join(root, "components", "codex")
-		if err := PrepareHome(cfg, HomeSpec{
-			HostHome:         homeDir,
-			RuntimeHome:      "/profile/components/codex/restricted",
+		profileDir := filepath.Join(root, "components", "codex")
+		if err := PrepareProfile(cfg, ProfileSpec{
+			HostProfile:      profileDir,
+			RuntimeProfile:   "/profile/components/codex/restricted",
 			RuntimeWorkspace: "/workspace",
 			SandboxMode:      "workspace-write",
 		}); err != nil {
-			t.Fatalf("PrepareHome: %v", err)
+			t.Fatalf("PrepareProfile: %v", err)
 		}
 
-		body, err := os.ReadFile(filepath.Join(homeDir, "config.toml"))
+		body, err := os.ReadFile(filepath.Join(profileDir, "config.toml"))
 		if err != nil {
 			t.Fatalf("read config.toml: %v", err)
 		}
@@ -126,7 +126,7 @@ func TestPrepareHomeWritesConfiguredSandboxMode(t *testing.T) {
 	})
 }
 
-func TestPrepareHomeWritesNonEmptyDefaultBootstrap(t *testing.T) {
+func TestPrepareProfileWritesNonEmptyDefaultBootstrap(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		store, err := clistate.NewCwd("ctgbot", "config")
 		if err != nil {
@@ -137,16 +137,16 @@ func TestPrepareHomeWritesNonEmptyDefaultBootstrap(t *testing.T) {
 			t.Fatalf("new config: %v", err)
 		}
 
-		homeDir := filepath.Join(root, "components", "codex")
-		if err := PrepareHome(cfg, HomeSpec{
-			HostHome:         homeDir,
-			RuntimeHome:      "/profile/components/codex/codex",
+		profileDir := filepath.Join(root, "components", "codex")
+		if err := PrepareProfile(cfg, ProfileSpec{
+			HostProfile:      profileDir,
+			RuntimeProfile:   "/profile/components/codex/codex",
 			RuntimeWorkspace: "/workspace",
 		}); err != nil {
-			t.Fatalf("PrepareHome: %v", err)
+			t.Fatalf("PrepareProfile: %v", err)
 		}
 
-		body, err := os.ReadFile(filepath.Join(homeDir, "ctgbot-bootstrap.md"))
+		body, err := os.ReadFile(filepath.Join(profileDir, "ctgbot-bootstrap.md"))
 		if err != nil {
 			t.Fatalf("read bootstrap: %v", err)
 		}

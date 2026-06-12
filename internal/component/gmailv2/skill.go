@@ -11,7 +11,7 @@ func (c *Component) Skill() component.Skill {
 What it does:
 - Watches a Gmail mailbox for new mail.
 - Emits new messages into ctgbot as normal inbound source events.
-- Stores OAuth token and polling state in this component's profile home.
+- Stores OAuth token and polling state in this component's profile.
 
 Managed files:
 - oauth_client.json: Google OAuth Desktop client JSON. Sensitive. Provide this before auth unless your deployment has a global OAuth client config.

@@ -188,8 +188,8 @@ func (c *Component) oauthConfigPaths() []string {
 		if path := strings.TrimSpace(c.oauthClientConfigPath); path != "" {
 			paths = append(paths, path)
 		}
-		if home := strings.TrimSpace(c.home.Path); home != "" {
-			paths = append(paths, filepath.Join(home, OAuthClientFilename))
+		if profile := strings.TrimSpace(c.profile.Path); profile != "" {
+			paths = append(paths, filepath.Join(profile, OAuthClientFilename))
 		}
 	}
 	return uniqueNonEmpty(paths)
@@ -238,7 +238,7 @@ func (c *Component) tokenPath() string {
 	if c == nil {
 		return TokenFilename
 	}
-	return filepath.Join(strings.TrimSpace(c.home.Path), TokenFilename)
+	return filepath.Join(strings.TrimSpace(c.profile.Path), TokenFilename)
 }
 
 func oauthCallbackHandler(wantState string, codeCh chan<- string, errCh chan<- error) http.Handler {

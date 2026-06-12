@@ -26,7 +26,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	workspace := spec.Workspace
 	bindings := spec.Bindings
 
-	homes := map[modeluuid.UUID]runtimepkg.Home{}
+	profiles := map[modeluuid.UUID]runtimepkg.Profile{}
 	var (
 		components       []*component.Loaded
 		agents           []AgentBinding
@@ -62,8 +62,8 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		if receiver, ok := instance.Component.(component.SearchMessageSourceReceiver); ok {
 			receiver.SetSearchMessageSource(b.App)
 		}
-		if _, seen := homes[binding.ComponentID]; !seen {
-			homes[binding.ComponentID] = instance.Home
+		if _, seen := profiles[binding.ComponentID]; !seen {
+			profiles[binding.ComponentID] = instance.Profile
 			components = append(components, instance)
 		}
 		if surface, ok := instance.Component.(component.CommandSurface); ok {
@@ -133,7 +133,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		Relays:           relays,
 		MessageCommands:  messageCommands,
 		AgentCommands:    agentCommands,
-		Homes:            homes,
+		Profiles:         profiles,
 	}, nil
 }
 
@@ -321,11 +321,11 @@ func (r *agentTurnRuntime) WorkspacePath() string {
 	return r.runtime.Workspace
 }
 
-func (r *agentTurnRuntime) ComponentHome(componentID modeluuid.UUID) (runtimepkg.Home, bool) {
+func (r *agentTurnRuntime) ComponentProfile(componentID modeluuid.UUID) (runtimepkg.Profile, bool) {
 	if r == nil || r.runtime == nil {
-		return runtimepkg.Home{}, false
+		return runtimepkg.Profile{}, false
 	}
-	home, ok := r.runtime.Homes[componentID]
+	home, ok := r.runtime.Profiles[componentID]
 	return home, ok
 }
 

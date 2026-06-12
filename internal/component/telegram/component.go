@@ -22,19 +22,19 @@ func New(
 	ctx context.Context,
 	registration coremodel.Component,
 	runtime runtimepkg.Factory,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	storage repository.Storage,
 	logger *log.Logger,
 ) (component.Component, error) {
 	_, _, _ = ctx, runtime, storage
 
-	config, err := loadComponentConfig(home.Path)
+	config, err := loadComponentConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
 	c := &Component{
 		componentID:     registration.ID,
-		home:            home,
+		profile:         profile,
 		componentConfig: config,
 		logger:          logger,
 	}
@@ -46,7 +46,7 @@ func New(
 
 type Component struct {
 	componentID     modeluuid.UUID
-	home            runtimepkg.Home
+	profile         runtimepkg.Profile
 	componentConfig ComponentConfig
 	api             TelegramAPI
 	logger          *log.Logger
@@ -72,7 +72,7 @@ func (c *Component) loadAPIFromProfile() error {
 	if c == nil {
 		return fmt.Errorf("missing telegram component")
 	}
-	token, err := loadToken(c.home.Path)
+	token, err := loadToken(c.profile.Path)
 	if err != nil {
 		return err
 	}

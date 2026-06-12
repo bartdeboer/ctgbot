@@ -40,17 +40,17 @@ func (f *Factory) Kind() string {
 	return "local"
 }
 
-func (f *Factory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
-	hostPath := strings.TrimSpace(registration.HomePath)
+func (f *Factory) ComponentProfile(registration coremodel.Component) runtimepkg.Profile {
+	hostPath := strings.TrimSpace(registration.ProfilePath)
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return runtimepkg.Home{Path: hostPath}
+	return runtimepkg.Profile{Path: hostPath}
 }
 
-func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
-	_, _ = registration, home
-	return home.Path
+func (f *Factory) RuntimeComponentProfilePath(registration coremodel.Component, profile runtimepkg.Profile) string {
+	_, _ = registration, profile
+	return profile.Path
 }
 
 func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
@@ -59,14 +59,14 @@ func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
 
 func (f *Factory) Bind(
 	registration coremodel.Component,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	config runtimepkg.BindConfig,
 ) runtimepkg.ThreadRuntime {
 	_ = registration
 	config = config.WithEnvOverride(f.env...)
 	return &Runtime{
 		rootDir: f.rootDir,
-		home:    home,
+		profile: profile,
 		image:   strings.TrimSpace(config.Image),
 		env:     append([]string{}, config.Env...),
 		gpus:    strings.TrimSpace(config.GPUs),
@@ -75,7 +75,7 @@ func (f *Factory) Bind(
 
 type Runtime struct {
 	rootDir string
-	home    runtimepkg.Home
+	profile runtimepkg.Profile
 	image   string
 	env     []string
 	gpus    string
@@ -85,15 +85,15 @@ func (r *Runtime) Kind() string {
 	return "local"
 }
 
-func (r *Runtime) ComponentHome() runtimepkg.Home {
-	return r.home
+func (r *Runtime) ComponentProfile() runtimepkg.Profile {
+	return r.profile
 }
 
-func (r *Runtime) RuntimeComponentHomePath() string {
+func (r *Runtime) RuntimeComponentProfilePath() string {
 	if r == nil {
 		return ""
 	}
-	return strings.TrimSpace(r.home.Path)
+	return strings.TrimSpace(r.profile.Path)
 }
 
 func (r *Runtime) RuntimeWorkspacePath(workspacePath string) string {

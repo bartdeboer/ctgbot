@@ -233,7 +233,7 @@ func (c *Component) handleManagedFileStatus(ctx context.Context, req commandengi
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: formatManagedFileStatus(loaded.Home.Path, files)}, nil
+	return commandengine.Result{Text: formatManagedFileStatus(loaded.Profile.Path, files)}, nil
 }
 
 func (c *Component) handleManagedFilePut(ctx context.Context, req commandengine.Request, cmd ManagedFilePutCommand) (commandengine.Result, error) {
@@ -246,7 +246,7 @@ func (c *Component) handleManagedFilePut(ctx context.Context, req commandengine.
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	if err := writeManagedFile(loaded.Home.Path, file, cmd.Content); err != nil {
+	if err := writeManagedFile(loaded.Profile.Path, file, cmd.Content); err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: "managed file written: " + file.RelativePath}, nil

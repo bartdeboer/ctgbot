@@ -32,8 +32,8 @@ var _ component.LocalCommandSurface = (*Component)(nil)
 var _ component.ChatPayloadSenderReceiver = (*Component)(nil)
 var _ component.UpdateFeedReceiver = (*Component)(nil)
 
-func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, sender component.ChatPayloadSender, feeds ...component.UpdateFeed) (component.Component, error) {
-	_, _, _ = ctx, runtime, home
+func New(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage, sender component.ChatPayloadSender, feeds ...component.UpdateFeed) (component.Component, error) {
+	_, _, _ = ctx, runtime, profile
 	if storage == nil {
 		return nil, fmt.Errorf("missing heartbeat storage")
 	}

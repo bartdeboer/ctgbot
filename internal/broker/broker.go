@@ -41,7 +41,7 @@ type ChatRuntime struct {
 	Relays           []RelayBinding
 	MessageCommands  *commandengine.Engine
 	AgentCommands    *commandengine.Engine
-	Homes            map[modeluuid.UUID]runtimepkg.Home
+	Profiles         map[modeluuid.UUID]runtimepkg.Profile
 }
 
 type AgentBinding struct {

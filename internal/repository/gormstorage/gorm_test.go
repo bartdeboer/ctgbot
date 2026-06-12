@@ -516,6 +516,56 @@ func TestAutoMigrateRenamesExternalChannelColumns(t *testing.T) {
 	}
 }
 
+func TestAutoMigrateRenamesComponentProfileColumn(t *testing.T) {
+	ctx := context.Background()
+	name := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
+	dsn := fmt.Sprintf("file:%s-%s?mode=memory&cache=shared", name, modeluuid.New().String())
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("gorm.Open() error = %v", err)
+	}
+	if err := db.Exec(`CREATE TABLE components (
+		id BLOB PRIMARY KEY,
+		type TEXT,
+		name TEXT,
+		runtime TEXT,
+		home_path TEXT,
+		label TEXT,
+		enabled NUMERIC,
+		is_default NUMERIC,
+		created_at DATETIME,
+		updated_at DATETIME
+	)`).Error; err != nil {
+		t.Fatalf("create legacy components table: %v", err)
+	}
+	componentID := modeluuid.New()
+	if err := db.Exec(
+		`INSERT INTO components (id, type, name, runtime, home_path, label, enabled, is_default, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		componentID, "codex", "codex", "docker", "/legacy/profile", "Codex", true, true, time.Now(), time.Now(),
+	).Error; err != nil {
+		t.Fatalf("insert legacy component: %v", err)
+	}
+
+	store := New(db)
+	if err := store.AutoMigrate(ctx); err != nil {
+		t.Fatalf("AutoMigrate() error = %v", err)
+	}
+	if db.Migrator().HasColumn(&coremodel.Component{}, "home_path") {
+		t.Fatal("components.home_path still exists")
+	}
+	if !db.Migrator().HasColumn(&coremodel.Component{}, "profile_path") {
+		t.Fatal("components.profile_path missing")
+	}
+	component, err := store.Components().GetByID(ctx, componentID)
+	if err != nil {
+		t.Fatalf("Components().GetByID() error = %v", err)
+	}
+	if component == nil || component.ProfilePath != "/legacy/profile" {
+		t.Fatalf("component after migration = %#v, want profile path /legacy/profile", component)
+	}
+}
+
 func newTestStore(t *testing.T) *GORMStorage {
 	t.Helper()
 	name := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())

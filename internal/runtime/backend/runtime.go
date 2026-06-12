@@ -32,7 +32,7 @@ type ServiceSpec struct {
 
 type Binder interface {
 	runtimepkg.Factory
-	BindBackend(registration coremodel.Component, home runtimepkg.Home, config runtimepkg.BindConfig, service ServiceSpec) *Runtime
+	BindBackend(registration coremodel.Component, profile runtimepkg.Profile, config runtimepkg.BindConfig, service ServiceSpec) *Runtime
 }
 
 func New(componentsRoot string, logger *log.Logger) *Factory {
@@ -55,17 +55,17 @@ func (f *Factory) Kind() string {
 	return Kind
 }
 
-func (f *Factory) ComponentHome(registration coremodel.Component) runtimepkg.Home {
-	hostPath := strings.TrimSpace(registration.HomePath)
+func (f *Factory) ComponentProfile(registration coremodel.Component) runtimepkg.Profile {
+	hostPath := strings.TrimSpace(registration.ProfilePath)
 	if hostPath == "" {
 		hostPath = filepath.Join(f.componentsRoot, registration.Type, registration.Name)
 	}
-	return runtimepkg.Home{Path: hostPath}
+	return runtimepkg.Profile{Path: hostPath}
 }
 
-func (f *Factory) RuntimeComponentHomePath(registration coremodel.Component, home runtimepkg.Home) string {
-	_, _ = registration, home
-	return strings.TrimSpace(home.Path)
+func (f *Factory) RuntimeComponentProfilePath(registration coremodel.Component, profile runtimepkg.Profile) string {
+	_, _ = registration, profile
+	return strings.TrimSpace(profile.Path)
 }
 
 func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
@@ -74,14 +74,14 @@ func (f *Factory) RuntimeWorkspacePath(workspacePath string) string {
 
 func (f *Factory) BindBackend(
 	registration coremodel.Component,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	config runtimepkg.BindConfig,
 	service ServiceSpec,
 ) *Runtime {
 	config = config.WithEnvOverride(f.env...)
 	return &Runtime{
 		registration: registration,
-		home:         home,
+		profile:      profile,
 		config:       config,
 		service:      service.clean(),
 		containers:   containerengine.NewManager(f.logger),
@@ -90,17 +90,17 @@ func (f *Factory) BindBackend(
 
 type Runtime struct {
 	registration coremodel.Component
-	home         runtimepkg.Home
+	profile      runtimepkg.Profile
 	config       runtimepkg.BindConfig
 	service      ServiceSpec
 	containers   *containerengine.Manager
 }
 
-func (r *Runtime) ComponentHome() runtimepkg.Home {
+func (r *Runtime) ComponentProfile() runtimepkg.Profile {
 	if r == nil {
-		return runtimepkg.Home{}
+		return runtimepkg.Profile{}
 	}
-	return r.home
+	return r.profile
 }
 
 func (r *Runtime) BaseURL() string {
@@ -151,9 +151,9 @@ func (r *Runtime) Status(ctx context.Context) (runtimepkg.Status, error) {
 		return runtimepkg.Status{}, err
 	}
 	return runtimepkg.Status{
-		Name:            r.containerName(),
-		State:           string(state),
-		RuntimeHomePath: strings.TrimSpace(r.home.Path),
+		Name:               r.containerName(),
+		State:              string(state),
+		RuntimeProfilePath: strings.TrimSpace(r.profile.Path),
 	}, nil
 }
 

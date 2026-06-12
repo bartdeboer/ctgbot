@@ -539,7 +539,7 @@ type TurnRuntime interface {
 	Send(ctx context.Context, payload message.OutboundPayload) error
 	StartChatAction(ctx context.Context, action message.ChatAction) (func(), error)
 	WorkspacePath() string
-	ComponentHome(componentID modeluuid.UUID) (runtimepkg.Home, bool)
+	ComponentProfile(componentID modeluuid.UUID) (runtimepkg.Profile, bool)
 	ComponentThreadID(componentID modeluuid.UUID) (string, bool, error)
 	BindComponentThreadID(componentID modeluuid.UUID, componentThreadID string) error
 }

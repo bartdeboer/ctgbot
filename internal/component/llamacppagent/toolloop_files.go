@@ -31,13 +31,13 @@ type toolloopRunFiles struct {
 	EventsHost     string
 }
 
-func newToolloopRunFiles(hostHome string, runtimeHome string, threadID modeluuid.UUID) (*toolloopRunFiles, error) {
+func newToolloopRunFiles(hostProfile string, runtimeProfile string, threadID modeluuid.UUID) (*toolloopRunFiles, error) {
 	runName := threadID.String() + "-" + modeluuid.New().String()
-	hostDir := filepath.Join(hostHome, "toolloop", "turns", runName)
+	hostDir := filepath.Join(hostProfile, "toolloop", "turns", runName)
 	if err := os.MkdirAll(hostDir, 0o700); err != nil {
 		return nil, err
 	}
-	runtimeDir := filepath.ToSlash(filepath.Join(runtimeHome, "toolloop", "turns", runName))
+	runtimeDir := filepath.ToSlash(filepath.Join(runtimeProfile, "toolloop", "turns", runName))
 	return &toolloopRunFiles{
 		HostDir:        hostDir,
 		RuntimeDir:     runtimeDir,

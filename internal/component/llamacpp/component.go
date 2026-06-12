@@ -29,7 +29,7 @@ type Component struct {
 	componentConfig ComponentConfig
 	runtimeConfig   runtimepkg.BindConfig
 	backendFactory  backendruntime.Binder
-	home            runtimepkg.Home
+	profile         runtimepkg.Profile
 	resolver        ComponentResolver
 	client          *http.Client
 	logger          *log.Logger
@@ -60,7 +60,7 @@ func New(
 	ctx context.Context,
 	registration coremodel.Component,
 	runtimeFactory runtimepkg.Factory,
-	home runtimepkg.Home,
+	profile runtimepkg.Profile,
 	storage repository.Storage,
 	resolver ComponentResolver,
 	logger *log.Logger,
@@ -70,11 +70,11 @@ func New(
 	if !ok {
 		return nil, fmt.Errorf("llamacpp requires backend runtime, got %T", runtimeFactory)
 	}
-	runtimeConfig, err := loadRuntimeConfig(home.Path)
+	runtimeConfig, err := loadRuntimeConfig(profile.Path)
 	if err != nil {
 		return nil, err
 	}
-	componentConfig, err := loadComponentConfig(home.Path, registration.Name)
+	componentConfig, err := loadComponentConfig(profile.Path, registration.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func New(
 		componentConfig: componentConfig,
 		runtimeConfig:   runtimeConfig,
 		backendFactory:  backendFactory,
-		home:            home,
+		profile:         profile,
 		resolver:        resolver,
 		client:          &http.Client{Timeout: 2 * time.Minute},
 		logger:          logger,
@@ -497,7 +497,7 @@ func (c *Component) runtimeForModel(name string) (*backendruntime.Runtime, resol
 	if model.Name != "" && model.Name != "default" {
 		registration.Name = c.registration.Name + "-" + model.Name
 	}
-	return c.backendFactory.BindBackend(registration, c.home, c.runtimeConfig, serviceSpec(model)), model, nil
+	return c.backendFactory.BindBackend(registration, c.profile, c.runtimeConfig, serviceSpec(model)), model, nil
 }
 
 type completionResponseFormat struct {

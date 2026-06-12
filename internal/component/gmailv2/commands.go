@@ -161,7 +161,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 
 func (c *Component) status(ctx context.Context) (commandengine.Result, error) {
 	var lines []string
-	lines = append(lines, "gmailv2 status", "component: "+c.registration.Ref(), "home: "+strings.TrimSpace(c.home.Path), "poll_interval: "+c.componentConfig.pollInterval().String())
+	lines = append(lines, "gmailv2 status", "component: "+c.registration.Ref(), "profile: "+strings.TrimSpace(c.profile.Path), "poll_interval: "+c.componentConfig.pollInterval().String())
 	account, authState := c.authSummary(ctx)
 	lines = append(lines, "auth: "+authState)
 	if account != "" {

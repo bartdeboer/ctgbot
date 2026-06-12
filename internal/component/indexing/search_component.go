@@ -39,8 +39,8 @@ var _ component.CommandSurface = (*SearchComponent)(nil)
 var _ component.LocalCommandSurface = (*SearchComponent)(nil)
 var _ component.SearchMessageSourceReceiver = (*SearchComponent)(nil)
 
-func NewSearch(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, home runtimepkg.Home, storage repository.Storage, resolver ComponentResolver, logf func(format string, args ...any)) (component.Component, error) {
-	_, _, _, _, _ = ctx, registration, runtime, home, storage
+func NewSearch(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage, resolver ComponentResolver, logf func(format string, args ...any)) (component.Component, error) {
+	_, _, _, _, _ = ctx, registration, runtime, profile, storage
 	return &SearchComponent{resolver: resolver}, nil
 }
 
