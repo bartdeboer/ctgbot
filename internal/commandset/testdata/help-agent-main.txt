@@ -1,5 +1,5 @@
 Available commands:
-codex [ chat | compact | config | container | goal | interrupt | status | help ] - agent lifecycle and config
+codex [ chat | compact | config | container | goal | interrupt | service | status | help ] - agent lifecycle and config
 component [ <component> | list | help ] - component setup and inspection
 config [ get | list | set | help ] - global instance config
 heartbeat [ now | start | status | stop | help ] - autonomous keepalive and self-scheduling

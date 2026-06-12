@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
@@ -14,6 +15,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
+	"github.com/bartdeboer/ctgbot/internal/supervisor"
 )
 
 func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
@@ -221,6 +223,44 @@ func TestSandboxHomePathPrependsConfiguredPath(t *testing.T) {
 
 	if got, want := findEnv(sandbox.Env, "PATH"), "/home/agent/bin:/custom/bin:/usr/bin"; got != want {
 		t.Fatalf("PATH = %q, want %q", got, want)
+	}
+}
+
+func TestServiceAddWritesSupervisorConfigInHome(t *testing.T) {
+	root := t.TempDir()
+	threadID := modeluuid.New()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
+	registration := coremodel.Component{Type: "mockagent", Name: "services", Runtime: "docker"}
+	profile := factory.ComponentProfile(registration)
+	runtime := factory.Bind(registration, profile, runtimepkg.BindConfig{}).(*Runtime)
+
+	status, err := runtime.ServiceAdd(context.Background(), filepath.Join(root, "workspace"), threadID, runtimepkg.ServiceDefinition{
+		Name:    "web",
+		Command: []string{"sh", "-lc", "exec ./server"},
+	})
+	if err != nil {
+		t.Fatalf("ServiceAdd() error = %v", err)
+	}
+	if got, want := status.ConfigPath, "/home/agent/services/web/service.json"; got != want {
+		t.Fatalf("ConfigPath = %q, want %q", got, want)
+	}
+	hostConfig := filepath.Join(root, "threads", threadID.String(), "components", "mockagent", "services", "home", "services", "web", "service.json")
+	b, err := os.ReadFile(hostConfig)
+	if err != nil {
+		t.Fatalf("ReadFile(service.json) error = %v", err)
+	}
+	var cfg supervisor.Config
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		t.Fatalf("Unmarshal(service.json) error = %v", err)
+	}
+	if got, want := cfg.Workdir, "/workspace"; got != want {
+		t.Fatalf("Workdir = %q, want %q", got, want)
+	}
+	if got, want := cfg.Command, []string{"sh", "-lc", "exec ./server"}; !equalStrings(got, want) {
+		t.Fatalf("Command = %#v, want %#v", got, want)
+	}
+	if got, want := cfg.LogPath, "/home/agent/services/web/service.log"; got != want {
+		t.Fatalf("LogPath = %q, want %q", got, want)
 	}
 }
 

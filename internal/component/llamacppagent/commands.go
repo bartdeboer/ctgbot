@@ -15,9 +15,11 @@ var _ component.CommandSurface = (*Component)(nil)
 var _ component.LocalCommandSurface = (*Component)(nil)
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	return []commandengine.Definition{
+	definitions := []commandengine.Definition{
 		llamacppAgentCommand("container refresh", RefreshContainer{}, "Delete and recreate the llama.cpp agent runtime on next turn"),
 	}
+	definitions = append(definitions, agentcommon.ServiceCommandDefinitions()...)
+	return definitions
 }
 
 func (c *Component) UsesLocalCommandRoutes() bool { return true }
@@ -26,9 +28,22 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if registry == nil {
 		return fmt.Errorf("missing command registry")
 	}
-	return commandengine.RegisterPattern[RefreshContainer](registry, "container refresh", func(ctx context.Context, req commandengine.Request, _ RefreshContainer) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[RefreshContainer](registry, "container refresh", func(ctx context.Context, req commandengine.Request, _ RefreshContainer) (commandengine.Result, error) {
 		return c.refresh(ctx, req)
-	})
+	}); err != nil {
+		return err
+	}
+	core := agentcommon.Core{}
+	if c != nil {
+		core = agentcommon.Core{
+			Registration:     c.registration,
+			Runtime:          c.runtime,
+			Storage:          c.storage,
+			ResolveWorkspace: c.resolveWorkspace,
+			Logger:           c.logger,
+		}
+	}
+	return core.RegisterServiceCommandHandlers(registry, Type)
 }
 
 func (c *Component) refresh(ctx context.Context, req commandengine.Request) (commandengine.Result, error) {

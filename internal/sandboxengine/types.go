@@ -239,6 +239,13 @@ func (s *Sandbox) Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, 
 	return s.manager.exec(ctx, s, stdout, stderr, name, args...)
 }
 
+func (s *Sandbox) ExecDetached(ctx context.Context, name string, args ...string) error {
+	if s == nil || s.manager == nil {
+		return nil
+	}
+	return s.manager.execDetached(ctx, s, name, args...)
+}
+
 func (s *Sandbox) ExecTTY(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	if s == nil || s.manager == nil {
 		return nil

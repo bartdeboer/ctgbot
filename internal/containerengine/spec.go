@@ -50,6 +50,7 @@ type ExecOptions struct {
 	Stderr      io.Writer
 	Interactive bool
 	TTY         bool
+	Detach      bool
 }
 
 type Container struct {
@@ -119,6 +120,9 @@ func (c *Container) execArgs(opts ExecOptions, name string, args ...string) []st
 	}
 	if opts.TTY {
 		dockerArgs = append(dockerArgs, "-t")
+	}
+	if opts.Detach {
+		dockerArgs = append(dockerArgs, "-d")
 	}
 	for _, env := range opts.Env {
 		if env == "" {

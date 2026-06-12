@@ -187,6 +187,12 @@ func (m *SandboxManager) exec(ctx context.Context, sbx *Sandbox, stdout io.Write
 	return m.execWithOptions(ctx, sbx, sbx.execOptions(stdout, stderr), name, args...)
 }
 
+func (m *SandboxManager) execDetached(ctx context.Context, sbx *Sandbox, name string, args ...string) error {
+	opts := sbx.execOptions(io.Discard, io.Discard)
+	opts.Detach = true
+	return m.execWithOptions(ctx, sbx, opts, name, args...)
+}
+
 func (m *SandboxManager) execTTY(ctx context.Context, sbx *Sandbox, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
 	opts := sbx.execOptions(stdout, stderr)
 	opts.Interactive = true

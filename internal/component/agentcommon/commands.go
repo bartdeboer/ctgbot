@@ -29,6 +29,13 @@ func RegisterGobTypes(register func(any)) {
 	register(Status{})
 	register(Compact{})
 	register(Goal{})
+	register(ServiceAdd{})
+	register(ServiceStart{})
+	register(ServiceStop{})
+	register(ServiceRestart{})
+	register(ServiceStatus{})
+	register(ServiceLogs{})
+	register(ServiceRemove{})
 }
 
 type KeepRunningSetter interface {
@@ -94,6 +101,7 @@ func AgentCommandDefinitions(opts AgentCommandOptions) []commandengine.Definitio
 		}
 		definitions = append(definitions, def)
 	}
+	definitions = append(definitions, ServiceCommandDefinitions()...)
 	return definitions
 }
 
@@ -139,9 +147,12 @@ func (c *Core) RegisterAgentCommandHandlers(
 	}); err != nil {
 		return err
 	}
-	return commandengine.RegisterPattern[Status](registry, "status", func(ctx context.Context, req commandengine.Request, _ Status) (commandengine.Result, error) {
+	if err := commandengine.RegisterPattern[Status](registry, "status", func(ctx context.Context, req commandengine.Request, _ Status) (commandengine.Result, error) {
 		return statusFn(ctx, req)
-	})
+	}); err != nil {
+		return err
+	}
+	return c.RegisterServiceCommandHandlers(registry, componentType)
 }
 
 func (c *Core) agentRefresh(ctx context.Context, req commandengine.Request, componentType string) (commandengine.Result, error) {

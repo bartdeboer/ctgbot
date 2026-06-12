@@ -235,7 +235,7 @@ func TestHostbridgeScopedHelpHidesHiddenCodexAliases(t *testing.T) {
 			}
 
 			out := buf.String()
-			if !strings.Contains(out, "codex [ chat | compact | config | container | goal | interrupt | status | help ]") {
+			if !strings.Contains(out, "codex [ chat | compact | config | container | goal | interrupt | service | status | help ]") {
 				t.Fatalf("FPrintHelp(%v) missing compact codex group in %q", tc.argv, out)
 			}
 			for _, notWant := range []string{"codex purge", "codex refresh"} {
@@ -267,7 +267,7 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			name: "root help is navigation index",
 			argv: []string{"help"},
 			contains: []string{
-				"codex [ chat | compact | config | container | goal | interrupt | status | help ] - agent lifecycle and config",
+				"codex [ chat | compact | config | container | goal | interrupt | service | status | help ] - agent lifecycle and config",
 				"thread [ <thread> | config | label | list | status | help ] - thread messaging, config, and attention controls",
 				"status - Show current thread status",
 			},
