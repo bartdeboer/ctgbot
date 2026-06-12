@@ -69,15 +69,15 @@ type senderPolicy struct {
 
 func (senderPolicy) TableName() string { return "gmail_sender_policies" }
 
-func openStore(homePath string, defaultShowFull bool) (*store, error) {
-	homePath = strings.TrimSpace(homePath)
-	if homePath == "" {
+func openStore(profilePath string, defaultShowFull bool) (*store, error) {
+	profilePath = strings.TrimSpace(profilePath)
+	if profilePath == "" {
 		return nil, fmt.Errorf("missing gmailv2 profile")
 	}
-	if err := os.MkdirAll(homePath, 0o755); err != nil {
+	if err := os.MkdirAll(profilePath, 0o755); err != nil {
 		return nil, err
 	}
-	db, err := gorm.Open(sqlite.Open(filepath.Join(homePath, StoreFilename)), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(profilePath, StoreFilename)), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		return nil, fmt.Errorf("open gmailv2 db: %w", err)
 	}

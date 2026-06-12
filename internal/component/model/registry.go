@@ -51,8 +51,8 @@ type ModelConfigKeyRecord struct {
 	Options []string `json:"options,omitempty"`
 }
 
-func loadRegistry(homePath string) (Registry, error) {
-	path := filepath.Join(strings.TrimSpace(homePath), RegistryFilename)
+func loadRegistry(profilePath string) (Registry, error) {
+	path := filepath.Join(strings.TrimSpace(profilePath), RegistryFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -70,7 +70,7 @@ func loadRegistry(homePath string) (Registry, error) {
 	return registry, nil
 }
 
-func saveRegistry(homePath string, registry Registry) error {
+func saveRegistry(profilePath string, registry Registry) error {
 	registry.DefaultModel = cleanModelName(registry.DefaultModel)
 	registry.DefaultModels = cleanDefaultModels(registry.DefaultModels)
 	registry.Models = cleanRegistry(registry.Models)
@@ -79,7 +79,7 @@ func saveRegistry(homePath string, registry Registry) error {
 		return err
 	}
 	data = append(data, '\n')
-	return atomicWriteFile(filepath.Join(strings.TrimSpace(homePath), RegistryFilename), data, 0o644)
+	return atomicWriteFile(filepath.Join(strings.TrimSpace(profilePath), RegistryFilename), data, 0o644)
 }
 
 func cleanDefaultModels(defaults map[string]string) map[string]string {

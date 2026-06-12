@@ -155,14 +155,14 @@ func TestChatWorkspaceFallbacksStayExplicit(t *testing.T) {
 	}
 }
 
-func TestChatCodexProfileFallbackIgnoresDiscoveredCLIHome(t *testing.T) {
+func TestChatCodexProfileFallbackIgnoresDiscoveredCLIProfile(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 	chatID := modeluuid.New()
-	cliHome := cfg.Codex().LocalHomeRoot()
-	if err := os.MkdirAll(cliHome, 0o755); err != nil {
-		t.Fatalf("mkdir cli home: %v", err)
+	cliProfile := cfg.Codex().LocalProfileRoot()
+	if err := os.MkdirAll(cliProfile, 0o755); err != nil {
+		t.Fatalf("mkdir cli profile: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(cliHome, "auth.json"), []byte("{}"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(cliProfile, "auth.json"), []byte("{}"), 0o600); err != nil {
 		t.Fatalf("write cli auth: %v", err)
 	}
 

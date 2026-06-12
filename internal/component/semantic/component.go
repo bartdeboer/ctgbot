@@ -22,7 +22,7 @@ type ComponentResolver interface {
 
 type Component struct {
 	registration coremodel.Component
-	homePath     string
+	profilePath  string
 	config       ComponentConfig
 	store        *store
 	resolver     ComponentResolver
@@ -49,7 +49,7 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 	if err != nil {
 		return nil, err
 	}
-	return &Component{registration: registration, homePath: profile.Path, config: config, store: store, resolver: resolver, logf: logf}, nil
+	return &Component{registration: registration, profilePath: profile.Path, config: config, store: store, resolver: resolver, logf: logf}, nil
 }
 
 func (c *Component) Type() string { return Type }

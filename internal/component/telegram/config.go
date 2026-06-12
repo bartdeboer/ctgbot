@@ -25,8 +25,8 @@ type ComponentConfig struct {
 	RenderFormat   string  `json:"render_format,omitempty"`
 }
 
-func loadToken(homePath string) (string, error) {
-	path := filepath.Join(strings.TrimSpace(homePath), TokenFilename)
+func loadToken(profilePath string) (string, error) {
+	path := filepath.Join(strings.TrimSpace(profilePath), TokenFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -37,8 +37,8 @@ func loadToken(homePath string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-func loadComponentConfig(homePath string) (ComponentConfig, error) {
-	path := filepath.Join(strings.TrimSpace(homePath), ComponentConfigFilename)
+func loadComponentConfig(profilePath string) (ComponentConfig, error) {
+	path := filepath.Join(strings.TrimSpace(profilePath), ComponentConfigFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

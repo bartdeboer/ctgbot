@@ -36,9 +36,9 @@ type ComponentConfig struct {
 	KeepWarmFor        string  `json:"keep_warm_for,omitempty"`
 }
 
-func loadComponentConfig(home string) (ComponentConfig, error) {
+func loadComponentConfig(profile string) (ComponentConfig, error) {
 	var config ComponentConfig
-	body, err := os.ReadFile(filepath.Join(home, ComponentConfigFilename))
+	body, err := os.ReadFile(filepath.Join(profile, ComponentConfigFilename))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return config.withDefaults(), nil
@@ -54,8 +54,8 @@ func loadComponentConfig(home string) (ComponentConfig, error) {
 	return config.withDefaults(), nil
 }
 
-func saveComponentConfig(home string, config ComponentConfig) error {
-	path := filepath.Join(strings.TrimSpace(home), ComponentConfigFilename)
+func saveComponentConfig(profile string, config ComponentConfig) error {
+	path := filepath.Join(strings.TrimSpace(profile), ComponentConfigFilename)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create semantic component config dir: %w", err)
 	}

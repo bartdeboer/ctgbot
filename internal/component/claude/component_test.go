@@ -26,11 +26,11 @@ func TestClaudeBootstrapIncludesRuntimeNotices(t *testing.T) {
 }
 
 func TestPrepareProfileWritesNonEmptyDefaultBootstrap(t *testing.T) {
-	home := t.TempDir()
-	if err := PrepareProfile(ProfileSpec{HostProfile: home}); err != nil {
+	profile := t.TempDir()
+	if err := PrepareProfile(ProfileSpec{HostProfile: profile}); err != nil {
 		t.Fatalf("PrepareProfile() error = %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(home, "ctgbot-bootstrap.md"))
+	body, err := os.ReadFile(filepath.Join(profile, "ctgbot-bootstrap.md"))
 	if err != nil {
 		t.Fatalf("read bootstrap: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestPrepareProfileWritesNonEmptyDefaultBootstrap(t *testing.T) {
 }
 
 func TestAuthRunsClaudeSetupTokenWithRelay(t *testing.T) {
-	runtime := &authRuntime{home: runtimepkg.Profile{Path: t.TempDir()}}
+	runtime := &authRuntime{profile: runtimepkg.Profile{Path: t.TempDir()}}
 	c := &Component{Core: agentcommon.Core{Runtime: runtime}}
 	if err := c.Auth(context.Background(), 1234, time.Minute, io.Discard, io.Discard); err != nil {
 		t.Fatalf("Auth() error = %v", err)
@@ -66,7 +66,7 @@ func TestAuthRunsClaudeSetupTokenWithRelay(t *testing.T) {
 }
 
 type authRuntime struct {
-	home         runtimepkg.Profile
+	profile      runtimepkg.Profile
 	relayPort    int
 	relayTimeout time.Duration
 	relayClosed  bool
@@ -76,7 +76,7 @@ type authRuntime struct {
 }
 
 func (r *authRuntime) Kind() string                         { return "docker" }
-func (r *authRuntime) ComponentProfile() runtimepkg.Profile { return r.home }
+func (r *authRuntime) ComponentProfile() runtimepkg.Profile { return r.profile }
 func (r *authRuntime) RuntimeComponentProfilePath() string {
 	return "/profile/components/claude/claude"
 }

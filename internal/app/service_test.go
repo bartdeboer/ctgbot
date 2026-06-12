@@ -77,7 +77,7 @@ func (r fakeResolver) ValidateWorkspace(name string) error {
 	return nil
 }
 
-func (r fakeResolver) EnsureComponent(ctx context.Context, ref string, runtimeKind string, homePath string) (*coremodel.Component, error) {
+func (r fakeResolver) EnsureComponent(ctx context.Context, ref string, runtimeKind string, profilePath string) (*coremodel.Component, error) {
 	parsed, err := coremodel.ParseComponentRef(ref)
 	if err != nil {
 		return nil, err
@@ -98,7 +98,7 @@ func (r fakeResolver) EnsureComponent(ctx context.Context, ref string, runtimeKi
 		}
 	}
 	registration.Runtime = runtimeKind
-	registration.ProfilePath = strings.TrimSpace(homePath)
+	registration.ProfilePath = strings.TrimSpace(profilePath)
 	registration.Enabled = true
 	if err := r.storage.Components().Save(ctx, registration); err != nil {
 		return nil, err

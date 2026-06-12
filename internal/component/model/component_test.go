@@ -127,9 +127,9 @@ func TestRegisterModelDefaultIsPerMode(t *testing.T) {
 }
 
 func TestComponentConfigModelPathResolvesRelativeRegistryPaths(t *testing.T) {
-	home := t.TempDir()
+	profileDir := t.TempDir()
 	modelRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(home, ComponentConfigFilename), []byte(`{"model_path":`+quoteJSON(modelRoot)+`}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(profileDir, ComponentConfigFilename), []byte(`{"model_path":`+quoteJSON(modelRoot)+`}`), 0o644); err != nil {
 		t.Fatalf("WriteFile(component.json) error = %v", err)
 	}
 	modelPath := filepath.Join(modelRoot, "qwen", "model.gguf")
@@ -146,7 +146,7 @@ func TestComponentConfigModelPathResolvesRelativeRegistryPaths(t *testing.T) {
 	if err := os.WriteFile(templatePath, []byte("template"), 0o644); err != nil {
 		t.Fatalf("WriteFile(template) error = %v", err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: profileDir}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -165,9 +165,9 @@ func TestComponentConfigModelPathResolvesRelativeRegistryPaths(t *testing.T) {
 	}
 }
 
-func TestLegacyInstalledModelPathStillResolvesAgainstProfileHome(t *testing.T) {
-	home := t.TempDir()
-	modelPath := filepath.Join(home, "models", "qwen", "model.gguf")
+func TestLegacyInstalledModelPathStillResolvesAgainstProfileRoot(t *testing.T) {
+	profileDir := t.TempDir()
+	modelPath := filepath.Join(profileDir, "models", "qwen", "model.gguf")
 	if err := os.MkdirAll(filepath.Dir(modelPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
@@ -177,10 +177,10 @@ func TestLegacyInstalledModelPathStillResolvesAgainstProfileHome(t *testing.T) {
 	registry := Registry{Models: map[string]ModelRecord{
 		"qwen": {Path: "models/qwen/model.gguf"},
 	}}
-	if err := saveRegistry(home, registry); err != nil {
+	if err := saveRegistry(profileDir, registry); err != nil {
 		t.Fatalf("saveRegistry() error = %v", err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: profileDir}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -219,7 +219,7 @@ func TestModelCommandDefinitions(t *testing.T) {
 }
 
 func TestModelCardAndConfigSchema(t *testing.T) {
-	home := t.TempDir()
+	profileDir := t.TempDir()
 	registry := Registry{Models: map[string]ModelRecord{
 		"supertonic": {
 			Path: "supertonic3",
@@ -241,10 +241,10 @@ func TestModelCardAndConfigSchema(t *testing.T) {
 			},
 		},
 	}}
-	if err := saveRegistry(home, registry); err != nil {
+	if err := saveRegistry(profileDir, registry); err != nil {
 		t.Fatalf("saveRegistry() error = %v", err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: profileDir}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -277,14 +277,14 @@ func TestModelCardAndConfigSchema(t *testing.T) {
 }
 
 func TestSetAndUnsetModelConfigKey(t *testing.T) {
-	home := t.TempDir()
+	profileDir := t.TempDir()
 	registry := Registry{Models: map[string]ModelRecord{
 		"supertonic": {Path: "supertonic3", Mode: string(component.ModelModeTTS)},
 	}}
-	if err := saveRegistry(home, registry); err != nil {
+	if err := saveRegistry(profileDir, registry); err != nil {
 		t.Fatalf("saveRegistry() error = %v", err)
 	}
-	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, nil)
+	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: profileDir}, nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

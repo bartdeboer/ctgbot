@@ -36,12 +36,12 @@ func (c CodexConfig) ProfileHostPath() string {
 	if raw := c.profileHostPathOverride(); raw != "" {
 		return raw
 	}
-	for _, root := range c.HomeCandidates() {
+	for _, root := range c.ProfileCandidates() {
 		if fileExistsAndNonEmpty(filepath.Join(root, "auth.json")) {
 			return root
 		}
 	}
-	return c.LocalHomeRoot()
+	return c.LocalProfileRoot()
 }
 
 func (c CodexConfig) SetProfileHostPath(raw string) error {
@@ -59,14 +59,14 @@ func (c CodexConfig) SetProfileHostPath(raw string) error {
 	return c.cfg.persistString("codex.profile_host_path", abs)
 }
 
-func (c CodexConfig) CLIHomeRoot() string { return c.ProfileHostPath() }
-func (c CodexConfig) LocalHomeRoot() string {
+func (c CodexConfig) CLIProfileRoot() string { return c.ProfileHostPath() }
+func (c CodexConfig) LocalProfileRoot() string {
 	if c.cfg == nil {
 		return ""
 	}
 	return filepath.Join(c.cfg.RootDir(), ".codex")
 }
-func (c CodexConfig) ManagedHomeRoot() string {
+func (c CodexConfig) ManagedProfileRoot() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
@@ -81,10 +81,10 @@ func (c CodexConfig) HostRoot() string {
 	return filepath.Join(home, ".codex")
 }
 
-func (c CodexConfig) EnsureCLIHome() error {
-	root := c.CLIHomeRoot()
+func (c CodexConfig) EnsureCLIProfile() error {
+	root := c.CLIProfileRoot()
 	if root == "" {
-		return fmt.Errorf("codex cli home root is empty")
+		return fmt.Errorf("codex cli profile root is empty")
 	}
 	if err := os.MkdirAll(filepath.Dir(root), 0o755); err != nil {
 		return err
@@ -94,11 +94,11 @@ func (c CodexConfig) EnsureCLIHome() error {
 	}
 	return c.importAuthIfNeeded()
 }
-func (c CodexConfig) AuthPath() string { return filepath.Join(c.CLIHomeRoot(), "auth.json") }
+func (c CodexConfig) AuthPath() string { return filepath.Join(c.CLIProfileRoot(), "auth.json") }
 func (c CodexConfig) AuthSearchPaths() []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, 4)
-	for _, root := range c.HomeCandidates() {
+	for _, root := range c.ProfileCandidates() {
 		if root == "" {
 			continue
 		}
@@ -111,8 +111,8 @@ func (c CodexConfig) AuthSearchPaths() []string {
 	}
 	return out
 }
-func (c CodexConfig) HomeCandidates() []string {
-	return []string{c.LocalHomeRoot(), c.ManagedHomeRoot(), c.HostRoot()}
+func (c CodexConfig) ProfileCandidates() []string {
+	return []string{c.LocalProfileRoot(), c.ManagedProfileRoot(), c.HostRoot()}
 }
 func (c CodexConfig) importAuthIfNeeded() error {
 	dst := c.AuthPath()

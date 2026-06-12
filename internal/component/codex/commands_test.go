@@ -39,7 +39,7 @@ func (r *testRuntime) ComponentProfile() runtimepkg.Profile {
 	if strings.TrimSpace(r.componentProfile.Path) != "" {
 		return r.componentProfile
 	}
-	return runtimepkg.Profile{Path: "/tmp/codex-home"}
+	return runtimepkg.Profile{Path: "/tmp/codex-profile"}
 }
 func (r *testRuntime) RuntimeComponentProfilePath() string {
 	if strings.TrimSpace(r.runtimeProfile) != "" {

@@ -31,8 +31,8 @@ type ComponentConfig struct {
 	IncludeSpamTrash bool     `json:"include_spam_trash,omitempty"`
 }
 
-func loadComponentConfig(homePath string) (ComponentConfig, error) {
-	path := filepath.Join(strings.TrimSpace(homePath), ComponentConfigFilename)
+func loadComponentConfig(profilePath string) (ComponentConfig, error) {
+	path := filepath.Join(strings.TrimSpace(profilePath), ComponentConfigFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -47,8 +47,8 @@ func loadComponentConfig(homePath string) (ComponentConfig, error) {
 	return config.withDefaults(), nil
 }
 
-func saveComponentConfig(homePath string, config ComponentConfig) error {
-	path := filepath.Join(strings.TrimSpace(homePath), ComponentConfigFilename)
+func saveComponentConfig(profilePath string, config ComponentConfig) error {
+	path := filepath.Join(strings.TrimSpace(profilePath), ComponentConfigFilename)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create gmailv2 component config dir: %w", err)
 	}

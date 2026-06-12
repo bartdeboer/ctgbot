@@ -14,13 +14,13 @@ import (
 )
 
 func TestAuthStatusMissingTokenMentionsTokenNotOAuthClient(t *testing.T) {
-	home := t.TempDir()
-	if err := os.WriteFile(filepath.Join(home, OAuthClientFilename), []byte(`{"installed":{"client_id":"id","client_secret":"secret","redirect_uris":["http://127.0.0.1"]}}`), 0o600); err != nil {
+	profile := t.TempDir()
+	if err := os.WriteFile(filepath.Join(profile, OAuthClientFilename), []byte(`{"installed":{"client_id":"id","client_secret":"secret","redirect_uris":["http://127.0.0.1"]}}`), 0o600); err != nil {
 		t.Fatalf("WriteFile(oauth_client) error = %v", err)
 	}
 	component := &Component{
 		registration: coremodel.Component{Type: Type, Name: "work"},
-		profile:      runtimepkg.Profile{Path: home},
+		profile:      runtimepkg.Profile{Path: profile},
 	}
 
 	var stdout bytes.Buffer
@@ -43,10 +43,10 @@ func TestAuthStatusMissingTokenMentionsTokenNotOAuthClient(t *testing.T) {
 }
 
 func TestAuthStatusMissingOAuthClientMentionsOAuthClient(t *testing.T) {
-	home := t.TempDir()
+	profile := t.TempDir()
 	component := &Component{
 		registration: coremodel.Component{Type: Type, Name: "work"},
-		profile:      runtimepkg.Profile{Path: home},
+		profile:      runtimepkg.Profile{Path: profile},
 	}
 	if err := component.saveToken(&oauth2.Token{AccessToken: "token", TokenType: "Bearer"}); err != nil {
 		t.Fatalf("saveToken() error = %v", err)

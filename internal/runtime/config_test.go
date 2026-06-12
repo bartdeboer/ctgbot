@@ -92,8 +92,8 @@ func TestBindConfigUIDDefaultsGIDToUID(t *testing.T) {
 }
 
 func TestLoadBindConfigReadsRuntimeImageUses(t *testing.T) {
-	home := t.TempDir()
-	if err := os.WriteFile(filepath.Join(home, ConfigFilename), []byte(`{
+	profile := t.TempDir()
+	if err := os.WriteFile(filepath.Join(profile, ConfigFilename), []byte(`{
 		"image": "ctgbot-codex:gpu",
 		"dockerfile": "cuda.Dockerfile",
 		"no_cache": true,
@@ -108,7 +108,7 @@ func TestLoadBindConfigReadsRuntimeImageUses(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	config, err := LoadBindConfig(home)
+	config, err := LoadBindConfig(profile)
 	if err != nil {
 		t.Fatalf("LoadBindConfig() error = %v", err)
 	}

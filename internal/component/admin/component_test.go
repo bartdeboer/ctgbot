@@ -112,7 +112,7 @@ func TestManagedFilePutRejectsTraversal(t *testing.T) {
 }
 
 func TestManagedFilePutWritesDeclaredFileUnderComponentProfile(t *testing.T) {
-	engine, home := newTestEngine(t, &fakeProfileComponent{
+	engine, profile := newTestEngine(t, &fakeProfileComponent{
 		typeName: "gmail",
 		files:    []componentpkg.ManagedFile{{RelativePath: "secrets/oauth_client.json", Sensitive: true}},
 	})
@@ -131,7 +131,7 @@ func TestManagedFilePutWritesDeclaredFileUnderComponentProfile(t *testing.T) {
 		t.Fatalf("Run(put declared) error = %v", err)
 	}
 
-	path := filepath.Join(home, "secrets", "oauth_client.json")
+	path := filepath.Join(profile, "secrets", "oauth_client.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile(%s) error = %v", path, err)
@@ -149,11 +149,11 @@ func TestManagedFilePutWritesDeclaredFileUnderComponentProfile(t *testing.T) {
 }
 
 func TestManagedFileStatusDoesNotExposeSensitiveContents(t *testing.T) {
-	engine, home := newTestEngine(t, &fakeProfileComponent{
+	engine, profile := newTestEngine(t, &fakeProfileComponent{
 		typeName: "gmail",
 		files:    []componentpkg.ManagedFile{{RelativePath: "token.json", Required: true, Sensitive: true}},
 	})
-	if err := os.WriteFile(filepath.Join(home, "token.json"), []byte("super-secret-token"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(profile, "token.json"), []byte("super-secret-token"), 0o600); err != nil {
 		t.Fatalf("WriteFile(token) error = %v", err)
 	}
 
@@ -177,11 +177,11 @@ func newTestEngine(t *testing.T, fake componentpkg.Component) (*commandengine.En
 	if err := storage.Components().Save(ctx, registration); err != nil {
 		t.Fatalf("Save(component) error = %v", err)
 	}
-	home := t.TempDir()
+	profile := t.TempDir()
 	resolver := fakeResolver{loaded: map[modeluuid.UUID]*componentpkg.Loaded{
 		registration.ID: {
 			Registration: *registration,
-			Profile:      runtimepkg.Profile{Path: home},
+			Profile:      runtimepkg.Profile{Path: profile},
 			Component:    fake,
 		},
 	}}
@@ -189,7 +189,7 @@ func newTestEngine(t *testing.T, fake componentpkg.Component) (*commandengine.En
 	if err != nil {
 		t.Fatalf("NewEngineForSource() error = %v", err)
 	}
-	return engine, home
+	return engine, profile
 }
 
 func testRequest() commandengine.Request {

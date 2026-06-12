@@ -10,8 +10,8 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 )
 
-func (s *System) AuthComponent(ctx context.Context, ref string, runtimeKind string, homePath string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
-	registration, loaded, err := s.ensureLoadedComponent(ctx, ref, runtimeKind, homePath)
+func (s *System) AuthComponent(ctx context.Context, ref string, runtimeKind string, profilePath string, callbackPort int, callbackTimeout time.Duration, stdout io.Writer, stderr io.Writer) error {
+	registration, loaded, err := s.ensureLoadedComponent(ctx, ref, runtimeKind, profilePath)
 	if err != nil {
 		return err
 	}
@@ -28,8 +28,8 @@ func (s *System) AuthComponent(ctx context.Context, ref string, runtimeKind stri
 	return auth.Auth(ctx, callbackPort, callbackTimeout, stdout, stderr)
 }
 
-func (s *System) CheckComponentAuth(ctx context.Context, ref string, runtimeKind string, homePath string, stdout io.Writer, stderr io.Writer) error {
-	registration, loaded, err := s.ensureLoadedComponent(ctx, ref, runtimeKind, homePath)
+func (s *System) CheckComponentAuth(ctx context.Context, ref string, runtimeKind string, profilePath string, stdout io.Writer, stderr io.Writer) error {
+	registration, loaded, err := s.ensureLoadedComponent(ctx, ref, runtimeKind, profilePath)
 	if err != nil {
 		return err
 	}
@@ -46,8 +46,8 @@ func (s *System) CheckComponentAuth(ctx context.Context, ref string, runtimeKind
 	return reporter.AuthStatus(ctx, stdout, stderr)
 }
 
-func (s *System) ensureLoadedComponent(ctx context.Context, ref string, runtimeKind string, homePath string) (*coremodel.Component, *component.Loaded, error) {
-	registration, err := s.EnsureComponent(ctx, ref, runtimeKind, homePath)
+func (s *System) ensureLoadedComponent(ctx context.Context, ref string, runtimeKind string, profilePath string) (*coremodel.Component, *component.Loaded, error) {
+	registration, err := s.EnsureComponent(ctx, ref, runtimeKind, profilePath)
 	if err != nil {
 		return nil, nil, err
 	}

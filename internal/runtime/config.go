@@ -10,8 +10,8 @@ import (
 
 const ConfigFilename = "runtime.json"
 
-func LoadBindConfig(homePath string) (BindConfig, error) {
-	path := filepath.Join(strings.TrimSpace(homePath), ConfigFilename)
+func LoadBindConfig(profilePath string) (BindConfig, error) {
+	path := filepath.Join(strings.TrimSpace(profilePath), ConfigFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -23,7 +23,7 @@ func PrepareProfile(cfg *appstate.Config, spec ProfileSpec) error {
 	if cfg == nil {
 		return fmt.Errorf("missing config")
 	}
-	if err := cfg.Codex().EnsureCLIHome(); err != nil {
+	if err := cfg.Codex().EnsureCLIProfile(); err != nil {
 		return err
 	}
 	hostProfile := strings.TrimSpace(spec.HostProfile)

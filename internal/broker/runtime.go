@@ -325,8 +325,8 @@ func (r *agentTurnRuntime) ComponentProfile(componentID modeluuid.UUID) (runtime
 	if r == nil || r.runtime == nil {
 		return runtimepkg.Profile{}, false
 	}
-	home, ok := r.runtime.Profiles[componentID]
-	return home, ok
+	profile, ok := r.runtime.Profiles[componentID]
+	return profile, ok
 }
 
 func (r *agentTurnRuntime) ComponentThreadID(componentID modeluuid.UUID) (string, bool, error) {

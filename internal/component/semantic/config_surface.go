@@ -166,7 +166,7 @@ func (c *Component) saveConfig(config ComponentConfig) error {
 		return fmt.Errorf("missing semantic component")
 	}
 	config = config.withDefaults()
-	if err := saveComponentConfig(c.homePath, config); err != nil {
+	if err := saveComponentConfig(c.profilePath, config); err != nil {
 		return err
 	}
 	c.config = config

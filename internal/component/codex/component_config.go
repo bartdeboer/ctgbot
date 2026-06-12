@@ -17,8 +17,8 @@ type ComponentConfig struct {
 	SandboxMode     string `json:"sandbox_mode"`
 }
 
-func loadComponentConfig(homePath string) (ComponentConfig, error) {
-	path := filepath.Join(strings.TrimSpace(homePath), ComponentConfigFilename)
+func loadComponentConfig(profilePath string) (ComponentConfig, error) {
+	path := filepath.Join(strings.TrimSpace(profilePath), ComponentConfigFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -30,7 +30,7 @@ type WorkspaceValidator interface {
 }
 
 type ComponentManager interface {
-	EnsureComponent(ctx context.Context, ref string, runtimeKind string, homePath string) (*coremodel.Component, error)
+	EnsureComponent(ctx context.Context, ref string, runtimeKind string, profilePath string) (*coremodel.Component, error)
 	Runtime(kind string) (runtimepkg.Factory, error)
 }
 
@@ -74,7 +74,7 @@ type ComponentAdminService interface {
 	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
 	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
-	RegisterComponent(ctx context.Context, componentRef string, runtimeKind string, homePath string) (RegisterComponentResult, error)
+	RegisterComponent(ctx context.Context, componentRef string, runtimeKind string, profilePath string) (RegisterComponentResult, error)
 	UnregisterComponent(ctx context.Context, componentRef string) (UnregisterComponentResult, error)
 	ListComponents(ctx context.Context) ([]ComponentInfo, error)
 	RunComponentCommand(ctx context.Context, request ComponentCommandRequest) (ComponentCommandResult, error)

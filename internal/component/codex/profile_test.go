@@ -73,11 +73,11 @@ func (r *capturedRuntime) OpenHTTPRelayPort(context.Context, string, modeluuid.U
 
 func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 	withTempCwd(t, func(root string) {
-		homePath := filepath.Join(root, ".ctgbot", "components", "codex", "gpu")
-		if err := os.MkdirAll(homePath, 0o755); err != nil {
+		profilePath := filepath.Join(root, ".ctgbot", "components", "codex", "gpu")
+		if err := os.MkdirAll(profilePath, 0o755); err != nil {
 			t.Fatalf("MkdirAll() error = %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(homePath, runtimepkg.ConfigFilename), []byte(`{
+		if err := os.WriteFile(filepath.Join(profilePath, runtimepkg.ConfigFilename), []byte(`{
   "image": "ctgbot-codex:gpu",
   "gpus": "all",
   "seccomp": "unconfined",
@@ -85,7 +85,7 @@ func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 }`), 0o644); err != nil {
 			t.Fatalf("WriteFile(runtime.json) error = %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(homePath, ComponentConfigFilename), []byte(`{
+		if err := os.WriteFile(filepath.Join(profilePath, ComponentConfigFilename), []byte(`{
   "model": "gpt-5.5",
   "reasoning_effort": "high",
   "sandbox_mode": "workspace-write"
@@ -102,7 +102,7 @@ func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 			t.Fatalf("SetImage() error = %v", err)
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "gpu"}
-		factory := &captureBindFactory{profile: runtimepkg.Profile{Path: homePath}}
+		factory := &captureBindFactory{profile: runtimepkg.Profile{Path: profilePath}}
 
 		value, err := New(context.Background(), registration, factory, factory.profile, repository.NewMemory(), cfg, func(context.Context, coremodel.Chat) (string, error) {
 			return filepath.Join(root, "workspace"), nil
@@ -147,11 +147,11 @@ func TestNewUsesProfileRuntimeConfigAndProfileDefaults(t *testing.T) {
 
 func TestNewFallsBackToGlobalDockerImageWhenProfileImageUnset(t *testing.T) {
 	withTempCwd(t, func(root string) {
-		homePath := filepath.Join(root, ".ctgbot", "components", "codex", "work")
-		if err := os.MkdirAll(homePath, 0o755); err != nil {
+		profilePath := filepath.Join(root, ".ctgbot", "components", "codex", "work")
+		if err := os.MkdirAll(profilePath, 0o755); err != nil {
 			t.Fatalf("MkdirAll() error = %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(homePath, runtimepkg.ConfigFilename), []byte(`{"gpus":"all"}`), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(profilePath, runtimepkg.ConfigFilename), []byte(`{"gpus":"all"}`), 0o644); err != nil {
 			t.Fatalf("WriteFile(runtime.json) error = %v", err)
 		}
 
@@ -164,7 +164,7 @@ func TestNewFallsBackToGlobalDockerImageWhenProfileImageUnset(t *testing.T) {
 			t.Fatalf("SetImage() error = %v", err)
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "work"}
-		factory := &captureBindFactory{profile: runtimepkg.Profile{Path: homePath}}
+		factory := &captureBindFactory{profile: runtimepkg.Profile{Path: profilePath}}
 
 		if _, err := New(context.Background(), registration, factory, factory.profile, repository.NewMemory(), cfg, func(context.Context, coremodel.Chat) (string, error) {
 			return filepath.Join(root, "workspace"), nil
@@ -182,11 +182,11 @@ func TestNewFallsBackToGlobalDockerImageWhenProfileImageUnset(t *testing.T) {
 
 func TestNewPrefersExplicitImageOverrideOverProfileAndGlobal(t *testing.T) {
 	withTempCwd(t, func(root string) {
-		homePath := filepath.Join(root, ".ctgbot", "components", "codex", "override")
-		if err := os.MkdirAll(homePath, 0o755); err != nil {
+		profilePath := filepath.Join(root, ".ctgbot", "components", "codex", "override")
+		if err := os.MkdirAll(profilePath, 0o755); err != nil {
 			t.Fatalf("MkdirAll() error = %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(homePath, runtimepkg.ConfigFilename), []byte(`{"image":"ctgbot-codex:gpu"}`), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(profilePath, runtimepkg.ConfigFilename), []byte(`{"image":"ctgbot-codex:gpu"}`), 0o644); err != nil {
 			t.Fatalf("WriteFile(runtime.json) error = %v", err)
 		}
 
@@ -199,7 +199,7 @@ func TestNewPrefersExplicitImageOverrideOverProfileAndGlobal(t *testing.T) {
 			t.Fatalf("SetImage() error = %v", err)
 		}
 		registration := coremodel.Component{ID: modeluuid.New(), Type: Type, Name: "override"}
-		factory := &captureBindFactory{profile: runtimepkg.Profile{Path: homePath}}
+		factory := &captureBindFactory{profile: runtimepkg.Profile{Path: profilePath}}
 
 		if _, err := New(context.Background(), registration, factory, factory.profile, repository.NewMemory(), cfg, func(context.Context, coremodel.Chat) (string, error) {
 			return filepath.Join(root, "workspace"), nil

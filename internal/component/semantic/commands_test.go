@@ -98,10 +98,10 @@ func TestRenderSearchResponseFullFencesText(t *testing.T) {
 }
 
 func TestSemanticConfigSurface(t *testing.T) {
-	home := t.TempDir()
+	profile := t.TempDir()
 	c := &Component{
 		registration: coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type},
-		homePath:     home,
+		profilePath:  profile,
 		config:       ComponentConfig{}.withDefaults(),
 	}
 	conformtest.Assert(t, c, commandengine.Request{Context: commandengine.Context{Source: commandengine.SourceHostbridge, Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}}}}, conformtest.Case{
@@ -134,7 +134,7 @@ func TestSemanticConfigSurface(t *testing.T) {
 	if got, want := strings.TrimSpace(set.Text), "limit=7"; got != want {
 		t.Fatalf("config set text = %q, want %q", got, want)
 	}
-	loaded, err := loadComponentConfig(home)
+	loaded, err := loadComponentConfig(profile)
 	if err != nil {
 		t.Fatalf("loadComponentConfig() error = %v", err)
 	}

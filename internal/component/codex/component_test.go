@@ -234,7 +234,7 @@ func TestHandleTurnInjectsRuntimeNoticesIntoBootstrap(t *testing.T) {
 		ctx := context.Background()
 		cfg := newTestConfig(t, root)
 		storage := repository.NewMemory()
-		profilePath := filepath.Join(root, "codex-home")
+		profilePath := filepath.Join(root, "codex-profile")
 		runtime := &testRuntime{
 			componentProfile: runtimepkg.Profile{Path: profilePath},
 			status: runtimepkg.Status{
@@ -335,7 +335,7 @@ func TestAuthStatusRunsComponentScopedLoginStatus(t *testing.T) {
 		cfg := newTestConfig(t, root)
 		storage := repository.NewMemory()
 		componentProfile := filepath.Join(root, ".ctgbot", "components", "codex", "work")
-		runtimeProfilePath := filepath.Join(root, "runtime-home")
+		runtimeProfilePath := filepath.Join(root, "runtime-profile")
 		runtime := &testRuntime{
 			componentProfile: runtimepkg.Profile{Path: componentProfile},
 			runtimeProfile:   runtimeProfilePath,

@@ -20,18 +20,18 @@ import (
 )
 
 func TestLoadComponentConfigDefaultsAndExplicitFalse(t *testing.T) {
-	home := t.TempDir()
-	config, err := loadComponentConfig(home)
+	profile := t.TempDir()
+	config, err := loadComponentConfig(profile)
 	if err != nil {
 		t.Fatalf("loadComponentConfig() error = %v", err)
 	}
 	if !config.materializeRaw() || !config.materializeHTML() || config.MaxPollMessages != DefaultMaxPollMessages {
 		t.Fatalf("defaults not applied: %+v", config)
 	}
-	if err := os.WriteFile(filepath.Join(home, ComponentConfigFilename), []byte(`{"mailbox_email":"me@example.com","materialize_html":false}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(profile, ComponentConfigFilename), []byte(`{"mailbox_email":"me@example.com","materialize_html":false}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	config, err = loadComponentConfig(home)
+	config, err = loadComponentConfig(profile)
 	if err != nil {
 		t.Fatalf("loadComponentConfig() explicit error = %v", err)
 	}
@@ -42,8 +42,8 @@ func TestLoadComponentConfigDefaultsAndExplicitFalse(t *testing.T) {
 
 func newTestComponent(t *testing.T, name string) *Component {
 	t.Helper()
-	home := t.TempDir()
-	component, err := NewWithOptions(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: name, Enabled: true}, nil, runtimepkg.Profile{Path: home}, nil, Options{})
+	profile := t.TempDir()
+	component, err := NewWithOptions(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: name, Enabled: true}, nil, runtimepkg.Profile{Path: profile}, nil, Options{})
 	if err != nil {
 		t.Fatalf("NewWithOptions() error = %v", err)
 	}

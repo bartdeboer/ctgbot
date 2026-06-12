@@ -31,8 +31,8 @@ type ComponentConfig struct {
 	WhisperArgs    []string `json:"whisper_args,omitempty"`
 }
 
-func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
-	config, err := runtimepkg.LoadBindConfig(homePath)
+func loadRuntimeConfig(profilePath string) (runtimepkg.BindConfig, error) {
+	config, err := runtimepkg.LoadBindConfig(profilePath)
 	if err != nil {
 		return runtimepkg.BindConfig{}, err
 	}
@@ -51,9 +51,9 @@ func loadRuntimeConfig(homePath string) (runtimepkg.BindConfig, error) {
 	return config.Clean(), nil
 }
 
-func loadComponentConfig(homePath string) (ComponentConfig, error) {
+func loadComponentConfig(profilePath string) (ComponentConfig, error) {
 	var config ComponentConfig
-	path := filepath.Join(strings.TrimSpace(homePath), ComponentConfigFilename)
+	path := filepath.Join(strings.TrimSpace(profilePath), ComponentConfigFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

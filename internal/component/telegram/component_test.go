@@ -234,15 +234,15 @@ func TestManagedFiles(t *testing.T) {
 }
 
 func TestNewLoadsProfileTokenAndConfig(t *testing.T) {
-	home := t.TempDir()
-	if err := os.WriteFile(filepath.Join(home, TokenFilename), []byte("123:abc\n"), 0o600); err != nil {
+	profile := t.TempDir()
+	if err := os.WriteFile(filepath.Join(profile, TokenFilename), []byte("123:abc\n"), 0o600); err != nil {
 		t.Fatalf("write token: %v", err)
 	}
 	configJSON := `{"operators":[42,42,0],"poll_timeout":"2s","debounce_window":"0s","render_format":"html"}`
-	if err := os.WriteFile(filepath.Join(home, ComponentConfigFilename), []byte(configJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(profile, ComponentConfigFilename), []byte(configJSON), 0o644); err != nil {
 		t.Fatalf("write component config: %v", err)
 	}
-	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: home}, repository.NewMemory(), nil)
+	loaded, err := New(context.Background(), coremodel.Component{ID: modeluuid.New(), Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: profile}, repository.NewMemory(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
