@@ -38,6 +38,7 @@ type SandboxSpec struct {
 
 	WorkspaceDir string
 	ProfileDir   string
+	HomeDir      string
 
 	ContainerWorkspace    string
 	ContainerHome         string

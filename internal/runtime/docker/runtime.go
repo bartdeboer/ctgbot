@@ -170,7 +170,7 @@ func (r *Runtime) Start(
 		return runtimepkg.Status{}, err
 	}
 	defer cleanup()
-	if _, err := sbx.Ensure(ctx); err != nil {
+	if err := r.ensureSandboxReady(ctx, sbx); err != nil {
 		return runtimepkg.Status{}, err
 	}
 	return r.statusForSandbox(ctx, workspacePath, sbx)
@@ -233,6 +233,9 @@ func (r *Runtime) Exec(
 		return err
 	}
 	defer cleanup()
+	if err := r.ensureSandboxReady(ctx, sbx); err != nil {
+		return err
+	}
 	err = sbx.Exec(ctx, stdout, stderr, name, args...)
 	if err != nil && sbx.Interrupted() {
 		return context.Canceled
@@ -255,6 +258,9 @@ func (r *Runtime) ExecTTY(
 		return err
 	}
 	defer cleanup()
+	if err := r.ensureSandboxReady(ctx, sbx); err != nil {
+		return err
+	}
 	err = sbx.ExecTTY(ctx, stdout, stderr, name, args...)
 	if err != nil && sbx.Interrupted() {
 		return context.Canceled
@@ -275,6 +281,9 @@ func (r *Runtime) CombinedOutput(
 		return nil, err
 	}
 	defer cleanup()
+	if err := r.ensureSandboxReady(ctx, sbx); err != nil {
+		return nil, err
+	}
 	out, err := sbx.CombinedOutput(ctx, name, args...)
 	if err != nil && sbx.Interrupted() {
 		return nil, context.Canceled
@@ -294,7 +303,7 @@ func (r *Runtime) OpenHTTPRelayPort(
 	if err != nil {
 		return nil, err
 	}
-	if _, err := sbx.Ensure(ctx); err != nil {
+	if err := r.ensureSandboxReady(ctx, sbx); err != nil {
 		cleanup()
 		return nil, err
 	}
@@ -345,8 +354,13 @@ func (r *Runtime) sandbox(
 		return nil, nil, err
 	}
 	runtimeProfilePath := r.RuntimeComponentProfilePath()
+	homeHost, homeRuntime, err := r.resolveHome(threadID)
+	if err != nil {
+		return nil, nil, err
+	}
 	env := append([]string{}, r.env...)
 	env = append(env, "CTGBOT_COMPONENT_REF="+r.registration.Ref())
+	env = withHomeEnv(env, homeRuntime)
 	ports, err := r.threadPorts(ctx, threadID)
 	if err != nil {
 		return nil, nil, err
@@ -354,6 +368,7 @@ func (r *Runtime) sandbox(
 	mounts := []sandboxengine.Mount{
 		{Source: r.profile.Path, Target: runtimeProfilePath},
 		{Source: workspaceHost, Target: workspaceRuntime},
+		{Source: homeHost, Target: homeRuntime},
 	}
 	cleanup := func() {}
 	if prepareBridge && r.bridge != nil && commands != nil {
@@ -369,8 +384,9 @@ func (r *Runtime) sandbox(
 	spec := sandboxengine.NewBuilder(name).
 		WorkspaceDir(workspaceHost).
 		ProfileDir(r.profile.Path).
+		HomeDir(homeHost).
 		ContainerWorkspace(workspaceRuntime).
-		ContainerHome(runtimeProfilePath).
+		ContainerHome(homeRuntime).
 		Hostname(name).
 		Image(r.image).
 		Entrypoint(r.entrypoint).
@@ -425,6 +441,7 @@ func (r *Runtime) statusForSandbox(ctx context.Context, workspacePath string, sb
 		State:                string(state),
 		RuntimeProfilePath:   r.RuntimeComponentProfilePath(),
 		RuntimeWorkspacePath: r.RuntimeWorkspacePath(workspacePath),
+		RuntimeHomePath:      sbx.ContainerHome,
 		Ports:                append([]string{}, sbx.Ports...),
 	}
 	if active, ok := sbx.ActiveCommand(); ok {

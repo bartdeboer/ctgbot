@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
@@ -150,6 +151,76 @@ func TestSandboxUsesThreadRuntimePorts(t *testing.T) {
 	}
 	if got, want := status.Ports, []string{"127.0.0.1:18423:8080"}; !equalStrings(got, want) {
 		t.Fatalf("status ports = %#v, want %#v", got, want)
+	}
+}
+
+func TestSandboxMountsDurableHome(t *testing.T) {
+	root := t.TempDir()
+	threadID := modeluuid.New()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
+	registration := coremodel.Component{Type: "mockagent", Name: "home", Runtime: "docker"}
+	profile := factory.ComponentProfile(registration)
+	runtime := factory.Bind(registration, profile, runtimepkg.BindConfig{}).(*Runtime)
+
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), threadID, nil, false)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+
+	wantHost := filepath.Join(root, "threads", threadID.String(), "components", "mockagent", "home", "home")
+	if got := sandbox.HomeDir; got != wantHost {
+		t.Fatalf("HomeDir = %q, want %q", got, wantHost)
+	}
+	if got, want := sandbox.ContainerHome, "/home/agent"; got != want {
+		t.Fatalf("ContainerHome = %q, want %q", got, want)
+	}
+	if !hasMount(sandbox.Mounts, "/home/agent", false) {
+		t.Fatalf("expected home mount in %#v", sandbox.Mounts)
+	}
+	for key, want := range map[string]string{
+		"HOME":              "/home/agent",
+		"AGENT_HOME":        "/home/agent",
+		"CTGBOT_AGENT_HOME": "/home/agent",
+	} {
+		if got := findEnv(sandbox.Env, key); got != want {
+			t.Fatalf("%s = %q, want %q in %#v", key, got, want, sandbox.Env)
+		}
+	}
+	if path := findEnv(sandbox.Env, "PATH"); !strings.HasPrefix(path, "/home/agent/bin:") {
+		t.Fatalf("PATH = %q, want /home/agent/bin prefix", path)
+	}
+	for _, rel := range []string{"README.md", "bootstrap.sh", "bin", "tools", "services", "state", "cache", "tmp", "logs"} {
+		if _, err := os.Stat(filepath.Join(wantHost, rel)); err != nil {
+			t.Fatalf("stat %s: %v", rel, err)
+		}
+	}
+	status, err := runtime.statusForSandbox(context.Background(), filepath.Join(root, "workspace"), sandbox)
+	if err != nil {
+		t.Fatalf("statusForSandbox() error = %v", err)
+	}
+	if got, want := status.RuntimeHomePath, "/home/agent"; got != want {
+		t.Fatalf("status RuntimeHomePath = %q, want %q", got, want)
+	}
+}
+
+func TestSandboxHomePathPrependsConfiguredPath(t *testing.T) {
+	root := t.TempDir()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
+	registration := coremodel.Component{Type: "mockagent", Name: "path", Runtime: "docker"}
+	profile := factory.ComponentProfile(registration)
+	runtime := factory.Bind(registration, profile, runtimepkg.BindConfig{
+		Env: []string{"PATH=/custom/bin:/usr/bin"},
+	}).(*Runtime)
+
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+
+	if got, want := findEnv(sandbox.Env, "PATH"), "/home/agent/bin:/custom/bin:/usr/bin"; got != want {
+		t.Fatalf("PATH = %q, want %q", got, want)
 	}
 }
 

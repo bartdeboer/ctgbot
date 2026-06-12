@@ -131,6 +131,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 		"workspace: " + workspacePath,
 		"runtime_workspace: " + status.RuntimeWorkspacePath,
 		"runtime_profile: " + status.RuntimeProfilePath,
+		"runtime_home: " + status.RuntimeHomePath,
 		"provider_thread_id: " + providerValue,
 		"codex_model: " + settings.Model,
 		"codex_model_source: " + settings.ModelSource,

@@ -103,7 +103,7 @@ func (c *Component) status(ctx context.Context, req commandengine.Request) (comm
 		"ctgbot_version: " + buildassets.Version(),
 		"chat_id: " + thread.ChatID.String(), "thread_id: " + thread.ID.String(), fmt.Sprintf("keep_running: %t", settings.KeepRunning),
 		"runtime: " + c.Runtime.Kind(), "container: " + status.Name, "container_state: " + status.State, "workspace: " + workspacePath,
-		"runtime_workspace: " + status.RuntimeWorkspacePath, "runtime_profile: " + status.RuntimeProfilePath, "provider_session_id: " + providerValue,
+		"runtime_workspace: " + status.RuntimeWorkspacePath, "runtime_profile: " + status.RuntimeProfilePath, "runtime_home: " + status.RuntimeHomePath, "provider_session_id: " + providerValue,
 		"claude_model: " + settings.Model, "claude_model_source: " + settings.ModelSource,
 	}
 	if status.ActiveCommandName != "" {

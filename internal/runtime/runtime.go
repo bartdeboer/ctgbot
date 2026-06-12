@@ -43,6 +43,7 @@ type Status struct {
 	State                string
 	RuntimeProfilePath   string
 	RuntimeWorkspacePath string
+	RuntimeHomePath      string
 	Ports                []string
 	ActiveCommandName    string
 	ActiveCommandArgs    []string

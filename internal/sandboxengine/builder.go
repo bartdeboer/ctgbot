@@ -23,6 +23,11 @@ func (b Builder) ProfileDir(v string) Builder {
 	return b
 }
 
+func (b Builder) HomeDir(v string) Builder {
+	b.spec.HomeDir = v
+	return b
+}
+
 func (b Builder) ContainerWorkspace(v string) Builder {
 	b.spec.ContainerWorkspace = v
 	return b
