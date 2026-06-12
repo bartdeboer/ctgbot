@@ -92,40 +92,6 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 	return nil
 }
 
-func (s *GORMStorage) migrateComponentProfileColumn(ctx context.Context) error {
-	migrator := s.db.WithContext(ctx).Migrator()
-	model := &coremodel.Component{}
-	if !migrator.HasTable(model) {
-		return nil
-	}
-	if migrator.HasColumn(model, "home_path") && !migrator.HasColumn(model, "profile_path") {
-		return migrator.RenameColumn(model, "home_path", "profile_path")
-	}
-	return nil
-}
-
-func (s *GORMStorage) migrateProviderChannelColumns(ctx context.Context) error {
-	migrator := s.db.WithContext(ctx).Migrator()
-	for _, migration := range []struct {
-		model any
-		old   string
-		new   string
-	}{
-		{model: &coremodel.ChatComponent{}, old: "external_chat_id", new: "external_channel_id"},
-		{model: &coremodel.InboundDrop{}, old: "external_chat_id", new: "external_channel_id"},
-	} {
-		if !migrator.HasTable(migration.model) {
-			continue
-		}
-		if migrator.HasColumn(migration.model, migration.old) && !migrator.HasColumn(migration.model, migration.new) {
-			if err := migrator.RenameColumn(migration.model, migration.old, migration.new); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 func (s *GORMStorage) Transaction(ctx context.Context, fn func(repository.Storage) error) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("missing db")

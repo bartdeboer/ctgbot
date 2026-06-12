@@ -53,22 +53,6 @@ func CodexProfileHostPath(cfg *appstate.Config) configengine.Item {
 	)
 }
 
-func CodexCLIProfilePath(cfg *appstate.Config) configengine.Item {
-	return rootString("codex.cli-home-path", "Legacy alias for the Codex profile host path", configengine.ValueString, cfg,
-		func(cfg *appstate.Config) string { return cfg.Codex().ProfileHostPath() },
-		func(cfg *appstate.Config, value string) error { return cfg.Codex().SetProfileHostPath(value) },
-		rootOnly(), rootOnly(),
-	)
-}
-
-func CodexSharedProfilePath(cfg *appstate.Config) configengine.Item {
-	return rootString("codex.shared-home-path", "Legacy alias for the Codex profile host path", configengine.ValueString, cfg,
-		func(cfg *appstate.Config) string { return cfg.Codex().ProfileHostPath() },
-		func(cfg *appstate.Config, value string) error { return cfg.Codex().SetProfileHostPath(value) },
-		rootOnly(), rootOnly(),
-	)
-}
-
 func CodexLoginCallbackPort() configengine.Item {
 	return rootReadOnlyInt("codex.login-callback-port", "Codex login callback port", appstate.CodexLoginCallbackPort, rootOnly())
 }

@@ -125,7 +125,6 @@ func buildComponentRegisterCommand(req *clir.Request) (any, error) {
 	fs.SetOutput(io.Discard)
 	runtimeKind := fs.String("runtime", "", "Runtime kind for this registered component")
 	profilePath := fs.String("profile", "", "Optional host component profile override")
-	fs.StringVar(profilePath, "home", "", "Deprecated alias for --profile")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}
@@ -141,7 +140,6 @@ func buildComponentRunCommand(req *clir.Request) (any, error) {
 	fs.SetOutput(io.Discard)
 	runtimeKind := fs.String("runtime", "", "Runtime kind for this component registration")
 	profilePath := fs.String("profile", "", "Optional host component profile override")
-	fs.StringVar(profilePath, "home", "", "Deprecated alias for --profile")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, err
 	}

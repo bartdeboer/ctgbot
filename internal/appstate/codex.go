@@ -128,10 +128,8 @@ func (c CodexConfig) importAuthIfNeeded() error {
 	return nil
 }
 func (c CodexConfig) profileHostPathOverride() string {
-	for _, key := range []string{"codex.profile_host_path", "codex.cli_home_host_path", "codex.shared_home_host_path"} {
-		if raw := absOrEmpty(c.cfg.string(key, "")); raw != "" {
-			return raw
-		}
+	if raw := absOrEmpty(c.cfg.string("codex.profile_host_path", "")); raw != "" {
+		return raw
 	}
-	return ""
+	return c.legacyProfileHostPathOverride()
 }
