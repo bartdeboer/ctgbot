@@ -67,9 +67,6 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 	if err := s.migrateProviderChannelColumns(ctx); err != nil {
 		return err
 	}
-	if err := s.migrateComponentProfileColumn(ctx); err != nil {
-		return err
-	}
 	if err := s.db.WithContext(ctx).AutoMigrate(
 		&coremodel.Chat{},
 		&coremodel.Thread{},
@@ -89,7 +86,7 @@ func (s *GORMStorage) AutoMigrate(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-	return nil
+	return s.ensureLegacyComponentProfileShadow(ctx)
 }
 
 func (s *GORMStorage) Transaction(ctx context.Context, fn func(repository.Storage) error) error {
@@ -236,7 +233,10 @@ func (r *gormComponents) Save(ctx context.Context, component *coremodel.Componen
 		}
 	}
 	ensureID(&component.ID)
-	return r.db.WithContext(ctx).Save(component).Error
+	if err := r.db.WithContext(ctx).Save(component).Error; err != nil {
+		return err
+	}
+	return r.writeLegacyComponentProfileShadow(ctx, component.ID, component.ProfilePath)
 }
 
 func (r *gormComponents) GetByID(ctx context.Context, componentID modeluuid.UUID) (*coremodel.Component, error) {
@@ -246,6 +246,9 @@ func (r *gormComponents) GetByID(ctx context.Context, componentID modeluuid.UUID
 	}
 	if componentRow.ID.IsNull() {
 		return nil, nil
+	}
+	if err := r.applyLegacyComponentProfileFallback(ctx, &componentRow); err != nil {
+		return nil, err
 	}
 	return &componentRow, nil
 }
@@ -260,6 +263,9 @@ func (r *gormComponents) GetDefaultByType(ctx context.Context, componentType str
 	if componentRow.ID.IsNull() {
 		return nil, nil
 	}
+	if err := r.applyLegacyComponentProfileFallback(ctx, &componentRow); err != nil {
+		return nil, err
+	}
 	return &componentRow, nil
 }
 
@@ -273,13 +279,23 @@ func (r *gormComponents) GetByTypeAndName(ctx context.Context, componentType str
 	if componentRow.ID.IsNull() {
 		return nil, nil
 	}
+	if err := r.applyLegacyComponentProfileFallback(ctx, &componentRow); err != nil {
+		return nil, err
+	}
 	return &componentRow, nil
 }
 
 func (r *gormComponents) ListEnabled(ctx context.Context) ([]coremodel.Component, error) {
 	var out []coremodel.Component
-	err := r.db.WithContext(ctx).Where("enabled = ?", true).Order("created_at ASC").Find(&out).Error
-	return out, err
+	if err := r.db.WithContext(ctx).Where("enabled = ?", true).Order("created_at ASC").Find(&out).Error; err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if err := r.applyLegacyComponentProfileFallback(ctx, &out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 func (r *gormComponents) DeleteByID(ctx context.Context, componentID modeluuid.UUID) (bool, error) {

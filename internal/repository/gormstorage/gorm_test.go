@@ -516,7 +516,7 @@ func TestAutoMigrateRenamesExternalChannelColumns(t *testing.T) {
 	}
 }
 
-func TestAutoMigrateRenamesComponentProfileColumn(t *testing.T) {
+func TestAutoMigrateAddsProfileColumnAndKeepsLegacyHomeShadow(t *testing.T) {
 	ctx := context.Background()
 	name := strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
 	dsn := fmt.Sprintf("file:%s-%s?mode=memory&cache=shared", name, modeluuid.New().String())
@@ -551,8 +551,8 @@ func TestAutoMigrateRenamesComponentProfileColumn(t *testing.T) {
 	if err := store.AutoMigrate(ctx); err != nil {
 		t.Fatalf("AutoMigrate() error = %v", err)
 	}
-	if db.Migrator().HasColumn(&coremodel.Component{}, "home_path") {
-		t.Fatal("components.home_path still exists")
+	if !db.Migrator().HasColumn(&coremodel.Component{}, "home_path") {
+		t.Fatal("components.home_path missing")
 	}
 	if !db.Migrator().HasColumn(&coremodel.Component{}, "profile_path") {
 		t.Fatal("components.profile_path missing")
@@ -563,6 +563,56 @@ func TestAutoMigrateRenamesComponentProfileColumn(t *testing.T) {
 	}
 	if component == nil || component.ProfilePath != "/legacy/profile" {
 		t.Fatalf("component after migration = %#v, want profile path /legacy/profile", component)
+	}
+
+	var raw struct {
+		ProfilePath string `gorm:"column:profile_path"`
+		HomePath    string `gorm:"column:home_path"`
+	}
+	if err := db.Table("components").Select("profile_path, home_path").Where("id = ?", componentID).Scan(&raw).Error; err != nil {
+		t.Fatalf("load raw component paths: %v", err)
+	}
+	if raw.ProfilePath != "/legacy/profile" || raw.HomePath != "/legacy/profile" {
+		t.Fatalf("raw paths after migration = %#v, want both /legacy/profile", raw)
+	}
+
+	component.ProfilePath = "/updated/profile"
+	if err := store.Components().Save(ctx, component); err != nil {
+		t.Fatalf("Components().Save() error = %v", err)
+	}
+	raw = struct {
+		ProfilePath string `gorm:"column:profile_path"`
+		HomePath    string `gorm:"column:home_path"`
+	}{}
+	if err := db.Table("components").Select("profile_path, home_path").Where("id = ?", componentID).Scan(&raw).Error; err != nil {
+		t.Fatalf("load raw component paths after save: %v", err)
+	}
+	if raw.ProfilePath != "/updated/profile" || raw.HomePath != "/updated/profile" {
+		t.Fatalf("raw paths after save = %#v, want both /updated/profile", raw)
+	}
+}
+
+func TestComponentsReadFallsBackToLegacyHomeShadow(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	component := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "docker", Enabled: true, IsDefault: true}
+	if err := store.Components().Save(ctx, component); err != nil {
+		t.Fatalf("Components().Save() error = %v", err)
+	}
+	if err := store.db.WithContext(ctx).
+		Table("components").
+		Where("id = ?", component.ID).
+		Updates(map[string]any{"profile_path": "", "home_path": "/legacy/only"}).
+		Error; err != nil {
+		t.Fatalf("force legacy-only profile state: %v", err)
+	}
+
+	loaded, err := store.Components().GetByID(ctx, component.ID)
+	if err != nil {
+		t.Fatalf("Components().GetByID() error = %v", err)
+	}
+	if loaded == nil || loaded.ProfilePath != "/legacy/only" {
+		t.Fatalf("loaded component = %#v, want legacy fallback profile path", loaded)
 	}
 }
 
