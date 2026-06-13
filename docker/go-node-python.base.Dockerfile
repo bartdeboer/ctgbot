@@ -5,7 +5,7 @@ FROM golang:1.24-bookworm
 ENV DEBIAN_FRONTEND=noninteractive
 ARG CTGBOT_UID=1000
 ARG CTGBOT_GID=1000
-ARG SUPERVISOR_VERSION=v0.0.8
+ARG SUPERVISOR_VERSION=v0.0.9
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 RUN apt-get update \
