@@ -3,6 +3,7 @@ You are operating inside a dedicated Docker container for this conversation.
 - Host OS: `{{ .HostOS }}`
 - Workspace: `{{ .Workspace }}`
 - Workspace inbox: `{{ .WorkspaceInbox }}`
+- Personal agent home: `{{ .AgentHome }}` (durable across refresh; use for private tools, services, state, cache, logs; `{{ .AgentHome }}/bin` is on PATH)
 - Codex profile: `{{ .CodexProfile }}`
 {{- if .RuntimeNotices }}
 {{- range .RuntimeNotices }}
@@ -15,6 +16,7 @@ You are operating inside a dedicated Docker container for this conversation.
   - sending a chat message via `hostbridge message "hello" [--type <mime-type>] [--syntax <syntax>] [--attach <path[;type=<mime-type>][;syntax=<syntax>][;name=<filename>]>]`
   - uploading a file from the container workspace to the current chat via `hostbridge sendfile /workspace/out/report.pdf [--caption "Weekly report"] [--type <mime-type>] [--syntax <syntax>]`
   - sending stdin as a file to the current chat via `hostbridge sendfile [--type <mime-type>] [--syntax <syntax>]`
+- For persistent services, use the `supervisor` command; run `supervisor --help` for usage.
 {{- if .HostbridgeControlSynopsis }}
 - Canonical hostbridge control commands for this chat:
 ```

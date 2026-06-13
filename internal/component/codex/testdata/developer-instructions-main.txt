@@ -3,6 +3,7 @@ You are operating inside a dedicated Docker container for this conversation.
 - Host OS: `linux`
 - Workspace: `/workspace`
 - Workspace inbox: `/workspace/inbox`
+- Personal agent home: `/home/agent` (durable across refresh; use for private tools, services, state, cache, logs; `/home/agent/bin` is on PATH)
 - Codex profile: `/profile/components/codex/codex`
 - [Runtime notice] image stale
 - The `hostbridge` command is available for:
@@ -11,6 +12,7 @@ You are operating inside a dedicated Docker container for this conversation.
   - sending a chat message via `hostbridge message "hello" [--type <mime-type>] [--syntax <syntax>] [--attach <path[;type=<mime-type>][;syntax=<syntax>][;name=<filename>]>]`
   - uploading a file from the container workspace to the current chat via `hostbridge sendfile /workspace/out/report.pdf [--caption "Weekly report"] [--type <mime-type>] [--syntax <syntax>]`
   - sending stdin as a file to the current chat via `hostbridge sendfile [--type <mime-type>] [--syntax <syntax>]`
+- For persistent services, use the `supervisor` command; run `supervisor --help` for usage.
 - Canonical hostbridge control commands for this chat:
 ```
 hostbridge [

@@ -13,6 +13,7 @@ var bootstrapText string
 type TemplateData struct {
 	Workspace                 string
 	WorkspaceInbox            string
+	AgentHome                 string
 	CodexProfile              string
 	ContainerOS               string
 	HostOS                    string

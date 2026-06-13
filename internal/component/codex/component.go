@@ -449,6 +449,7 @@ func codexBootstrap(workspace string, profile string, instructions component.Tur
 	text, err := codexbootstrap.Text(codexbootstrap.TemplateData{
 		Workspace:                 workspace,
 		WorkspaceInbox:            workspace + "/inbox",
+		AgentHome:                 "/home/agent",
 		CodexProfile:              profile,
 		ContainerOS:               "linux",
 		HostOS:                    goruntime.GOOS,
