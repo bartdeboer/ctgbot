@@ -44,6 +44,8 @@ RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go \
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
+RUN GOBIN=/usr/local/bin go install github.com/bartdeboer/go-supervisor/cmd/supervisor@v0.0.2 \
+    && GOBIN=/usr/local/bin go install github.com/bartdeboer/go-supervisor/cmd/supervisord@v0.0.2
 
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]
