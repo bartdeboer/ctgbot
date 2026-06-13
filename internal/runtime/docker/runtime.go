@@ -418,7 +418,7 @@ func (r *Runtime) idleCmd() []string {
 	if r != nil && len(r.cmd) > 0 {
 		return append([]string{}, r.cmd...)
 	}
-	return []string{"sh", "-c", "if command -v supervisord >/dev/null 2>&1; then exec supervisord --park; else exec tail -f /dev/null; fi"}
+	return []string{"sh", "-c", "if command -v supervisord >/dev/null 2>&1; then exec supervisord; else exec tail -f /dev/null; fi"}
 }
 
 func sandboxAddHosts() []string {
