@@ -273,7 +273,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}
 	instructions := turn.Runtime.Instructions()
 	instructions.RuntimeNotices = append(instructions.RuntimeNotices, c.RuntimeNotices(ctx, workspacePath, turn.Thread.ID)...)
-	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, runtimeProfilePath, instructions)
+	bootstrapText, err := codexBootstrap(runtimeWorkspacePath, instructions)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +432,7 @@ func componentImage(value string) string {
 	return value
 }
 
-func codexBootstrap(workspace string, profile string, instructions component.TurnInstructions) (string, error) {
+func codexBootstrap(workspace string, instructions component.TurnInstructions) (string, error) {
 	chatProvider := strings.TrimSpace(instructions.ChatProvider)
 	if chatProvider == "" {
 		chatProvider = "Chat"
@@ -450,7 +450,6 @@ func codexBootstrap(workspace string, profile string, instructions component.Tur
 		Workspace:                 workspace,
 		WorkspaceInbox:            workspace + "/inbox",
 		AgentHome:                 "/home/agent",
-		CodexProfile:              profile,
 		ContainerOS:               "linux",
 		HostOS:                    goruntime.GOOS,
 		ChatProvider:              chatProvider,

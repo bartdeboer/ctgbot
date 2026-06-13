@@ -369,7 +369,7 @@ func TestAuthStatusRunsComponentScopedLoginStatus(t *testing.T) {
 }
 
 func TestCodexBootstrapFixtureMainDeveloperInstructions(t *testing.T) {
-	text, err := codexBootstrap("/workspace", "/profile/components/codex/codex", component.TurnInstructions{
+	text, err := codexBootstrap("/workspace", component.TurnInstructions{
 		ChatProvider:       "Telegram",
 		MessagePrefix:      "🤖",
 		KeepRepliesConcise: true,
@@ -482,7 +482,7 @@ func normalizeCodexFixtureText(text string) string {
 }
 
 func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
-	text, err := codexBootstrap("/workspace", "/profile/components/codex/codex", component.TurnInstructions{
+	text, err := codexBootstrap("/workspace", component.TurnInstructions{
 		ChatProvider:              "Telegram",
 		MessagePrefix:             "🤖",
 		KeepRepliesConcise:        true,

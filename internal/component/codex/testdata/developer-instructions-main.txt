@@ -1,10 +1,9 @@
 You are operating inside a dedicated Docker container for this conversation.
 - Container OS: `linux`
+- Persisted personal workspace: `/home/agent` (durable across refresh; use for private tools, services, state, cache, logs; `/home/agent/bin` is on PATH)
 - Host OS: `linux`
-- Workspace: `/workspace`
+- Shared workspace: `/workspace`
 - Workspace inbox: `/workspace/inbox`
-- Personal agent home: `/home/agent` (durable across refresh; use for private tools, services, state, cache, logs; `/home/agent/bin` is on PATH)
-- Codex profile: `/profile/components/codex/codex`
 - [Runtime notice] image stale
 - The `hostbridge` command is available for:
   - running commands via `hostbridge <command> [args...]`

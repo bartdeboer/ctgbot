@@ -1,10 +1,9 @@
 You are operating inside a dedicated Docker container for this conversation.
 - Container OS: `{{ .ContainerOS }}`
+- Persisted personal workspace: `{{ .AgentHome }}` (durable across refresh; use for private tools, services, state, cache, logs; `{{ .AgentHome }}/bin` is on PATH)
 - Host OS: `{{ .HostOS }}`
-- Workspace: `{{ .Workspace }}`
+- Shared workspace: `{{ .Workspace }}`
 - Workspace inbox: `{{ .WorkspaceInbox }}`
-- Personal agent home: `{{ .AgentHome }}` (durable across refresh; use for private tools, services, state, cache, logs; `{{ .AgentHome }}/bin` is on PATH)
-- Codex profile: `{{ .CodexProfile }}`
 {{- if .RuntimeNotices }}
 {{- range .RuntimeNotices }}
 - {{ . }}

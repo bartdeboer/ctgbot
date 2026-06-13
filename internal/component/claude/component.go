@@ -262,11 +262,11 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 		"You are Claude Code running inside ctgbot.",
 		"",
 		"Environment:",
-		"- Current workspace: " + workspace,
-		"- Workspace inbox: " + workspace + "/inbox",
-		"- Personal agent home: /home/agent (durable across refresh; use for private tools, services, state, cache, logs; /home/agent/bin is on PATH)",
 		"- Container OS: linux",
+		"- Persisted personal workspace: /home/agent (durable across refresh; use for private tools, services, state, cache, logs; /home/agent/bin is on PATH)",
 		"- Host OS: " + goruntime.GOOS,
+		"- Shared workspace: " + workspace,
+		"- Workspace inbox: " + workspace + "/inbox",
 		"- Chat provider: " + chatProvider,
 	}
 	if prefix := strings.TrimSpace(instructions.MessagePrefix); prefix != "" {
