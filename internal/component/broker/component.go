@@ -19,7 +19,7 @@ const Type = "broker"
 
 type Actions interface {
 	SendPayload(ctx context.Context, threadID modeluuid.UUID, payload message.OutboundPayload) error
-	RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error)
+	RunHostbridgeAllowedCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error)
 	MessageHelp(ctx context.Context, chatID modeluuid.UUID, actor commandengine.Actor) (string, error)
 	RefreshThreadRuntime(ctx context.Context, threadID modeluuid.UUID) (string, error)
 	DroppedList(ctx context.Context, limit int) (string, error)
@@ -185,7 +185,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 			if c == nil || c.Actions == nil {
 				return commandengine.Result{}, fmt.Errorf("missing broker actions")
 			}
-			return c.Actions.RunHostbridgeCommand(ctx, req, cmd)
+			return c.Actions.RunHostbridgeAllowedCommand(ctx, req, cmd)
 		},
 	); err != nil {
 		return err

@@ -155,7 +155,7 @@ func (b *Broker) runCommandsForChat(ctx context.Context, chat coremodel.Chat) (m
 	return hostbridgeserver.MergeNamedAllowedCommands(extra), nil
 }
 
-func (r *ChatRuntime) RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
+func (r *ChatRuntime) RunHostbridgeAllowedCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
 	allowed := hostbridgeserver.DefaultAllowedCommands()
 	if r != nil && r.RunCommands != nil {
 		allowed = r.RunCommands

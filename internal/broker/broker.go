@@ -406,22 +406,22 @@ func (b *Broker) logf(format string, args ...any) {
 	log.Printf(format, args...)
 }
 
-func (b *Broker) RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
+func (b *Broker) RunHostbridgeAllowedCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
 	if req.Context.ChatID.IsNull() {
-		return (&ChatRuntime{}).RunHostbridgeCommand(ctx, req, cmd)
+		return (&ChatRuntime{}).RunHostbridgeAllowedCommand(ctx, req, cmd)
 	}
 	chat, err := b.App.Chat(ctx, req.Context.ChatID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
 	if chat == nil {
-		return (&ChatRuntime{}).RunHostbridgeCommand(ctx, req, cmd)
+		return (&ChatRuntime{}).RunHostbridgeAllowedCommand(ctx, req, cmd)
 	}
 	runtime, err := b.runtimeForChat(ctx, *chat)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return runtime.RunHostbridgeCommand(ctx, req, cmd)
+	return runtime.RunHostbridgeAllowedCommand(ctx, req, cmd)
 }
 
 func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID, actor commandengine.Actor) (string, error) {
