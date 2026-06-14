@@ -41,6 +41,7 @@ type ChatRuntime struct {
 	Relays           []RelayBinding
 	MessageCommands  *commandengine.Engine
 	AgentCommands    *commandengine.Engine
+	RunCommands      map[string]hostbridgeserver.AllowedCommand
 	Profiles         map[modeluuid.UUID]runtimepkg.Profile
 }
 
@@ -406,25 +407,21 @@ func (b *Broker) logf(format string, args ...any) {
 }
 
 func (b *Broker) RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
-	allowed := hostbridgeserver.DefaultAllowedCommands()
-	if !req.Context.ChatID.IsNull() {
-		chat, err := b.App.Chat(ctx, req.Context.ChatID)
-		if err != nil {
-			return commandengine.Result{}, err
-		}
-		if chat != nil {
-			extra, err := b.App.ResolveChatHostbridgeAllowedCommands(ctx, *chat)
-			if err != nil {
-				return commandengine.Result{}, err
-			}
-			allowed = hostbridgeserver.MergeNamedAllowedCommands(extra)
-		}
+	if req.Context.ChatID.IsNull() {
+		return (&ChatRuntime{}).RunHostbridgeCommand(ctx, req, cmd)
 	}
-	runner := &hostbridgeserver.RunCommandRunner{
-		ResolveAllowed:    hostbridgeserver.StaticAllowedCommandResolver(allowed),
-		DefaultTimeoutSec: 30,
+	chat, err := b.App.Chat(ctx, req.Context.ChatID)
+	if err != nil {
+		return commandengine.Result{}, err
 	}
-	return runner.RunCommand(ctx, req, cmd)
+	if chat == nil {
+		return (&ChatRuntime{}).RunHostbridgeCommand(ctx, req, cmd)
+	}
+	runtime, err := b.runtimeForChat(ctx, *chat)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return runtime.RunHostbridgeCommand(ctx, req, cmd)
 }
 
 func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID, actor commandengine.Actor) (string, error) {

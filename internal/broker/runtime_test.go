@@ -1,6 +1,8 @@
 package broker
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
@@ -11,6 +13,8 @@ import (
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
+	hostbridgeserver "github.com/bartdeboer/ctgbot/internal/hostbridge/server"
+	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	"github.com/bartdeboer/go-clistate"
 )
 
@@ -74,6 +78,27 @@ func TestHostbridgeControlCommandsUsesCanonicalAgentSurface(t *testing.T) {
 		if containsString(got, notWant) {
 			t.Fatalf("hostbridgeControlCommands() unexpectedly contains %q in %v", notWant, got)
 		}
+	}
+}
+
+func TestChatRuntimeRunHostbridgeCommandUsesRuntimeAliases(t *testing.T) {
+	runtime := &ChatRuntime{RunCommands: map[string]hostbridgeserver.AllowedCommand{
+		"echo-runtime": {
+			Name: "/bin/echo",
+			Args: []string{"runtime-ok"},
+		},
+	}}
+
+	result, err := runtime.RunHostbridgeCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "echo-runtime"})
+	if err != nil {
+		t.Fatalf("RunHostbridgeCommand() error = %v", err)
+	}
+	if got, want := strings.TrimSpace(result.Text), "runtime-ok"; got != want {
+		t.Fatalf("RunHostbridgeCommand() text = %q, want %q", got, want)
+	}
+
+	if _, err := runtime.RunHostbridgeCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "not-allowed"}); err == nil {
+		t.Fatalf("RunHostbridgeCommand(not-allowed) error = nil")
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
+	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
@@ -25,6 +26,10 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 	workspace := spec.Workspace
 	bindings := spec.Bindings
+	runCommands, err := b.runCommandsForChat(ctx, chat)
+	if err != nil {
+		return nil, err
+	}
 
 	profiles := map[modeluuid.UUID]runtimepkg.Profile{}
 	var (
@@ -133,8 +138,33 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		Relays:           relays,
 		MessageCommands:  messageCommands,
 		AgentCommands:    agentCommands,
+		RunCommands:      runCommands,
 		Profiles:         profiles,
 	}, nil
+}
+
+func (b *Broker) runCommandsForChat(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error) {
+	allowed := hostbridgeserver.DefaultAllowedCommands()
+	if b == nil || b.App == nil {
+		return allowed, nil
+	}
+	extra, err := b.App.ResolveChatHostbridgeAllowedCommands(ctx, chat)
+	if err != nil {
+		return nil, err
+	}
+	return hostbridgeserver.MergeNamedAllowedCommands(extra), nil
+}
+
+func (r *ChatRuntime) RunHostbridgeCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
+	allowed := hostbridgeserver.DefaultAllowedCommands()
+	if r != nil && r.RunCommands != nil {
+		allowed = r.RunCommands
+	}
+	runner := &hostbridgeserver.RunCommandRunner{
+		ResolveAllowed:    hostbridgeserver.StaticAllowedCommandResolver(allowed),
+		DefaultTimeoutSec: 30,
+	}
+	return runner.RunCommand(ctx, req, cmd)
 }
 
 type runtimeSpec struct {
@@ -216,15 +246,8 @@ func (r *agentTurnRuntime) Instructions() component.TurnInstructions {
 			break
 		}
 	}
-	if r.broker != nil && r.broker.App != nil {
-		allowed := hostbridgeserver.DefaultAllowedCommands()
-		extra, err := r.broker.App.ResolveChatHostbridgeAllowedCommands(r.context(), r.chat)
-		if err == nil {
-			allowed = hostbridgeserver.MergeNamedAllowedCommands(extra)
-		}
-		instructions.HostbridgeCommandNames = hostbridgeserver.AllowedCommandUsages(allowed)
-		sort.Strings(instructions.HostbridgeCommandNames)
-	}
+	instructions.HostbridgeCommandNames = hostbridgeserver.AllowedCommandUsages(r.runtime.RunCommands)
+	sort.Strings(instructions.HostbridgeCommandNames)
 	instructions.HostbridgeControlCommands = hostbridgeControlCommands(r.runtime)
 	instructions.HostbridgeFamilyDescriptions = hostbridgeFamilyDescriptions(r.runtime)
 	return instructions
