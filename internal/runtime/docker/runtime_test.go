@@ -76,7 +76,7 @@ func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	}
 }
 
-func TestSandboxDoesNotBindHostbridgeWithoutCommands(t *testing.T) {
+func TestSandboxBindsHostbridgeMountWithoutCommands(t *testing.T) {
 	root := t.TempDir()
 	bridge := hostbridgebridge.NewBridge(root, nil, nil)
 	t.Cleanup(func() {
@@ -88,7 +88,40 @@ func TestSandboxDoesNotBindHostbridgeWithoutCommands(t *testing.T) {
 	profile := factory.ComponentProfile(registration)
 	runtime := factory.Bind(registration, profile, runtimepkg.BindConfig{}).(*Runtime)
 
-	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, true)
+	threadID := modeluuid.New()
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), threadID, nil, true)
+	if err != nil {
+		t.Fatalf("sandbox() error = %v", err)
+	}
+	defer cleanup()
+
+	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_ADDR"), "host.docker.internal:"; len(got) < len(want) || got[:len(want)] != want {
+		t.Fatalf("HOSTBRIDGE_ADDR = %q, want prefix %q", got, want)
+	}
+	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_TLS_DIR"), "/ctgbot/hostbridge-tls"; got != want {
+		t.Fatalf("HOSTBRIDGE_TLS_DIR = %q, want %q", got, want)
+	}
+	if got, want := findEnv(sandbox.Env, "CTGBOT_SANDBOX_ID"), threadID.String(); got != want {
+		t.Fatalf("CTGBOT_SANDBOX_ID = %q, want %q", got, want)
+	}
+	if !hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
+		t.Fatalf("expected hostbridge TLS mount in %#v", sandbox.Mounts)
+	}
+}
+
+func TestSandboxDoesNotBindHostbridgeWhenBridgeIsNotPrepared(t *testing.T) {
+	root := t.TempDir()
+	bridge := hostbridgebridge.NewBridge(root, nil, nil)
+	t.Cleanup(func() {
+		_ = bridge.Close()
+	})
+
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, bridge)
+	registration := coremodel.Component{Type: "mockagent", Name: "helper", Runtime: "docker"}
+	profile := factory.ComponentProfile(registration)
+	runtime := factory.Bind(registration, profile, runtimepkg.BindConfig{}).(*Runtime)
+
+	sandbox, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), modeluuid.New(), nil, false)
 	if err != nil {
 		t.Fatalf("sandbox() error = %v", err)
 	}
@@ -96,9 +129,6 @@ func TestSandboxDoesNotBindHostbridgeWithoutCommands(t *testing.T) {
 
 	if got := findEnv(sandbox.Env, "HOSTBRIDGE_ADDR"); got != "" {
 		t.Fatalf("HOSTBRIDGE_ADDR = %q, want empty", got)
-	}
-	if got := findEnv(sandbox.Env, "HOSTBRIDGE_V2_ADDR"); got != "" {
-		t.Fatalf("HOSTBRIDGE_V2_ADDR = %q, want empty", got)
 	}
 	if hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
 		t.Fatalf("unexpected hostbridge TLS mount in %#v", sandbox.Mounts)

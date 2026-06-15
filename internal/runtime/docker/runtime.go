@@ -371,7 +371,7 @@ func (r *Runtime) sandbox(
 		{Source: homeHost, Target: homeRuntime},
 	}
 	cleanup := func() {}
-	if prepareBridge && r.bridge != nil && commands != nil {
+	if prepareBridge && r.bridge != nil {
 		bridgeEnv, bridgeMount, unregister, err := r.bridge.BindThread(threadID, commands)
 		if err != nil {
 			return nil, nil, err
