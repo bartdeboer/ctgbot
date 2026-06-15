@@ -213,9 +213,9 @@ func TestThreadManagedFileCommandsManageExtraInstructions(t *testing.T) {
 	req := testMessagingRequest(thread.ID, simplerbac.RoleAgent)
 	req.Context.Source = commandengine.SourceHostbridge
 	req.Stdin = "- Prefer git-status alias.\n"
-	result, err := engine.Run(ctx, req, []string{"thread", "managed-file", "put", "extra-instructions.md"})
+	result, err := engine.Run(ctx, req, []string{"thread", "managed-file", "write", "extra-instructions.md", "stdin"})
 	if err != nil {
-		t.Fatalf("Run(managed-file put) error = %v", err)
+		t.Fatalf("Run(managed-file write) error = %v", err)
 	}
 	if !strings.Contains(result.Text, "thread managed file written: extra-instructions.md") {
 		t.Fatalf("put result = %q", result.Text)

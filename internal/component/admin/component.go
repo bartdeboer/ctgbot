@@ -98,8 +98,14 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		componentCommand("component <component> auth status", "Show component auth status", buildAuthStatus, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
 		componentCommand("component <component> managed-file list", "List declared managed files", buildManagedFileList, componentReadSources(), commandengine.InstructionDiscoverable),
 		componentCommand("component <component> managed-file status", "Show managed file presence", buildManagedFileStatus, componentReadSources(), commandengine.InstructionDiscoverable),
-		componentCommand("component <component> managed-file put <file>", "Write a declared managed file from stdin", buildManagedFilePut, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable),
+		componentManagedFileWriteCommand(),
 	}
+}
+
+func componentManagedFileWriteCommand() commandengine.Definition {
+	definition := componentCommand("component <component> managed-file write <file> stdin", "Write a declared managed file from stdin", buildManagedFilePut, []commandengine.Source{commandengine.SourceHostbridge}, commandengine.InstructionDiscoverable)
+	definition.Aliases = []commandengine.Route{{Pattern: "component <component> managed-file put <file>", Hidden: true}}
+	return definition
 }
 
 func (c *Component) CommandDescriptions() []commandengine.Description {

@@ -243,14 +243,16 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 		},
 		{
-			Pattern:               "thread <thread> managed-file put <file>",
+			Pattern:               "thread <thread> managed-file write <file> stdin",
 			Help:                  "Write an operator-managed thread file from stdin",
 			Build:                 buildThreadManagedFilePutCommand,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 			InstructionVisibility: commandengine.InstructionHidden,
 			Aliases: []commandengine.Route{
-				{Pattern: "thread managed-file put <file>", Absolute: true},
+				{Pattern: "thread managed-file write <file> stdin", Absolute: true},
+				{Pattern: "thread <thread> managed-file put <file>", Hidden: true},
+				{Pattern: "thread managed-file put <file>", Absolute: true, Hidden: true},
 			},
 		},
 		{

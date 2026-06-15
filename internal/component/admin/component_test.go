@@ -118,7 +118,7 @@ func TestManagedFilePutWritesDeclaredFileUnderComponentProfile(t *testing.T) {
 	})
 
 	err := runWithStdin(t, "secret", func() error {
-		result, err := engine.Run(context.Background(), testRequest(), []string{"component", "gmail/work", "managed-file", "put", "secrets/oauth_client.json", "--type", "application/json"})
+		result, err := engine.Run(context.Background(), testRequest(), []string{"component", "gmail/work", "managed-file", "write", "secrets/oauth_client.json", "stdin", "--type", "application/json"})
 		if err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ func TestManagedFilePutWritesDeclaredFileUnderComponentProfile(t *testing.T) {
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("Run(put declared) error = %v", err)
+		t.Fatalf("Run(write declared) error = %v", err)
 	}
 
 	path := filepath.Join(profile, "secrets", "oauth_client.json")
