@@ -46,7 +46,9 @@ func TestHostbridgeControlCommandsUsesCanonicalAgentSurface(t *testing.T) {
 	got := hostbridgeControlCommands(&ChatRuntime{AgentCommands: engine})
 	wantContains := []string{
 		"hostbridge sendfile <path>",
+		"hostbridge sendfile stdin",
 		"hostbridge send <text>",
+		"hostbridge send stdin",
 		"hostbridge status",
 		"hostbridge component help",
 		"hostbridge component list",

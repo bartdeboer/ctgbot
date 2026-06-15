@@ -25,8 +25,8 @@ hostbridge [
     now | start [ cron <expr> | <interval> ] | status | stop
   ]
   search <query>
-  send <text>
-  sendfile <path>
+  send [ <text> | stdin ]
+  sendfile [ <path> | stdin ]
   theater [ # thread subscriptions and shared message boards
     list | status | <thread> [ read | status | subscribe | unsubscribe ]
   ]

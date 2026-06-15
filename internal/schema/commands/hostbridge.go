@@ -51,12 +51,15 @@ func HostbridgeCommands() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionEssential,
 		},
 		{
-			Pattern:               "send",
+			Pattern:               "send stdin",
 			Help:                  "Send an outbound message from stdin",
 			Build:                 buildMessagePayload,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                agentPolicy(),
-			InstructionVisibility: commandengine.InstructionHidden,
+			InstructionVisibility: commandengine.InstructionEssential,
+			Aliases: []commandengine.Route{
+				{Pattern: "send", Hidden: true},
+			},
 		},
 		{
 			Pattern:               "message <text>",
@@ -75,12 +78,16 @@ func HostbridgeCommands() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionEssential,
 		},
 		{
-			Pattern:               "sendstdin",
-			Help:                  "Legacy alias for sendfile reading stdin",
+			Pattern:               "sendfile stdin",
+			Help:                  "Send an outbound file from stdin",
 			Build:                 buildSendStdin,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                agentPolicy(),
-			InstructionVisibility: commandengine.InstructionHidden,
+			InstructionVisibility: commandengine.InstructionEssential,
+			Aliases: []commandengine.Route{
+				{Pattern: "sendfile", Hidden: true},
+				{Pattern: "sendstdin", Hidden: true},
+			},
 		},
 	}
 	definitions = append(definitions, TurnCommands()...)

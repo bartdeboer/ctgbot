@@ -5,9 +5,8 @@ config [ get | list | set | help ] - global instance config
 heartbeat [ now | start | status | stop | help ] - autonomous keepalive and self-scheduling
 run <command> - Run a whitelisted host command
 search <query> - Search indexed chat messages
-send - Send an outbound message from stdin
-send <text> - Send an outbound message; hostbridge reads stdin when message args are omitted
-sendfile <path> - Send an outbound file; hostbridge reads stdin when path is omitted
+send [ <text> | stdin | help ] - send commands
+sendfile [ <path> | stdin | help ] - sendfile commands
 status - Show current thread status
 theater [ <thread> | list | status | help ] - thread subscriptions and shared message boards
 thread [ <thread> | config | heartbeat | label | list | status | wake | help ] - thread messaging, config, and attention controls
