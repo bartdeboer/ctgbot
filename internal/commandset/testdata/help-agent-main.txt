@@ -9,5 +9,5 @@ send [ <text> | stdin | help ] - send commands
 sendfile [ <path> | stdin | help ] - sendfile commands
 status - Show current thread status
 theater [ <thread> | list | status | help ] - thread subscriptions and shared message boards
-thread [ <thread> | config | heartbeat | instructions | label | list | status | wake | help ] - thread messaging, config, and attention controls
+thread [ <thread> | config | heartbeat | label | list | managed-file | status | wake | help ] - thread messaging, config, and attention controls
 turn [ config | info | help ] - current turn metadata and output controls

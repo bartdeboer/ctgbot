@@ -24,6 +24,8 @@ import (
 
 const Type = "messaging"
 
+const threadExtraInstructionsFile = "extra-instructions.md"
+
 type Component struct {
 	Service            *messagingdomain.Service
 	Inbound            component.ResolvedInboundQueuer
@@ -82,15 +84,16 @@ type threadConfigUnsetCommand struct {
 	Key       string
 }
 
-type threadInstructionsShowCommand struct {
+type threadManagedFileListCommand struct {
 	ThreadRef string
 }
 
-type threadInstructionsPutCommand struct {
+type threadManagedFilePutCommand struct {
 	ThreadRef string
+	File      string
 }
 
-type threadInstructionsClearCommand struct {
+type threadManagedFileStatusCommand struct {
 	ThreadRef string
 }
 
@@ -119,9 +122,9 @@ func RegisterGobTypes(register func(any)) {
 	register(threadConfigGetCommand{})
 	register(threadConfigSetCommand{})
 	register(threadConfigUnsetCommand{})
-	register(threadInstructionsShowCommand{})
-	register(threadInstructionsPutCommand{})
-	register(threadInstructionsClearCommand{})
+	register(threadManagedFileListCommand{})
+	register(threadManagedFilePutCommand{})
+	register(threadManagedFileStatusCommand{})
 	register(messageListCommand{})
 	register(threadPurgeCommand{})
 	register(messageSendCommand{})
@@ -229,36 +232,36 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 		},
 		{
-			Pattern:               "thread <thread> instructions show",
-			Help:                  "Show operator-owned thread instructions",
-			Build:                 buildThreadInstructionsShowCommand,
+			Pattern:               "thread <thread> managed-file list",
+			Help:                  "List operator-managed thread files",
+			Build:                 buildThreadManagedFileListCommand,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 			InstructionVisibility: commandengine.InstructionHidden,
 			Aliases: []commandengine.Route{
-				{Pattern: "thread instructions show", Absolute: true},
+				{Pattern: "thread managed-file list", Absolute: true},
 			},
 		},
 		{
-			Pattern:               "thread <thread> instructions put stdin",
-			Help:                  "Write operator-owned thread instructions from stdin",
-			Build:                 buildThreadInstructionsPutCommand,
+			Pattern:               "thread <thread> managed-file put <file>",
+			Help:                  "Write an operator-managed thread file from stdin",
+			Build:                 buildThreadManagedFilePutCommand,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 			InstructionVisibility: commandengine.InstructionHidden,
 			Aliases: []commandengine.Route{
-				{Pattern: "thread instructions put stdin", Absolute: true},
+				{Pattern: "thread managed-file put <file>", Absolute: true},
 			},
 		},
 		{
-			Pattern:               "thread <thread> instructions clear",
-			Help:                  "Clear operator-owned thread instructions",
-			Build:                 buildThreadInstructionsClearCommand,
+			Pattern:               "thread <thread> managed-file status",
+			Help:                  "Show operator-managed thread file status",
+			Build:                 buildThreadManagedFileStatusCommand,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
 			InstructionVisibility: commandengine.InstructionHidden,
 			Aliases: []commandengine.Route{
-				{Pattern: "thread instructions clear", Absolute: true},
+				{Pattern: "thread managed-file status", Absolute: true},
 			},
 		},
 		{
@@ -348,13 +351,13 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.Register[threadConfigUnsetCommand](registry, c.handleThreadConfigUnset); err != nil {
 		return err
 	}
-	if err := commandengine.Register[threadInstructionsShowCommand](registry, c.handleThreadInstructionsShow); err != nil {
+	if err := commandengine.Register[threadManagedFileListCommand](registry, c.handleThreadManagedFileList); err != nil {
 		return err
 	}
-	if err := commandengine.Register[threadInstructionsPutCommand](registry, c.handleThreadInstructionsPut); err != nil {
+	if err := commandengine.Register[threadManagedFilePutCommand](registry, c.handleThreadManagedFilePut); err != nil {
 		return err
 	}
-	if err := commandengine.Register[threadInstructionsClearCommand](registry, c.handleThreadInstructionsClear); err != nil {
+	if err := commandengine.Register[threadManagedFileStatusCommand](registry, c.handleThreadManagedFileStatus); err != nil {
 		return err
 	}
 	if err := commandengine.Register[messageListCommand](registry, c.handleMessageList); err != nil {
@@ -500,7 +503,38 @@ func (c *Component) handleThreadConfigUnset(ctx context.Context, req commandengi
 	return commandengine.Result{Text: key + "=" + value}, nil
 }
 
-func (c *Component) handleThreadInstructionsShow(ctx context.Context, req commandengine.Request, cmd threadInstructionsShowCommand) (commandengine.Result, error) {
+func (c *Component) handleThreadManagedFileList(ctx context.Context, req commandengine.Request, cmd threadManagedFileListCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging service")
+	}
+	if _, err := c.resolveThreadID(ctx, req, cmd.ThreadRef); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: threadExtraInstructionsFile + "\toptional\tpublic"}, nil
+}
+
+func (c *Component) handleThreadManagedFilePut(ctx context.Context, req commandengine.Request, cmd threadManagedFilePutCommand) (commandengine.Result, error) {
+	if c == nil || c.ThreadInstructions == nil {
+		return commandengine.Result{}, fmt.Errorf("missing thread instruction manager")
+	}
+	if err := requireThreadManagedFile(cmd.File); err != nil {
+		return commandengine.Result{}, err
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	content := strings.TrimSpace(req.Stdin)
+	if content == "" {
+		return commandengine.Result{}, fmt.Errorf("missing managed file content on stdin")
+	}
+	if err := c.ThreadInstructions.WriteThreadExtraInstructions(ctx, threadID, []byte(content+"\n")); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "thread managed file written: " + threadExtraInstructionsFile}, nil
+}
+
+func (c *Component) handleThreadManagedFileStatus(ctx context.Context, req commandengine.Request, cmd threadManagedFileStatusCommand) (commandengine.Result, error) {
 	if c == nil || c.ThreadInstructions == nil {
 		return commandengine.Result{}, fmt.Errorf("missing thread instruction manager")
 	}
@@ -512,43 +546,11 @@ func (c *Component) handleThreadInstructionsShow(ctx context.Context, req comman
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	text = strings.TrimSpace(text)
-	if text == "" {
-		text = "no thread instructions"
+	state := "missing"
+	if strings.TrimSpace(text) != "" {
+		state = "present"
 	}
-	return commandengine.Result{Text: text}, nil
-}
-
-func (c *Component) handleThreadInstructionsPut(ctx context.Context, req commandengine.Request, cmd threadInstructionsPutCommand) (commandengine.Result, error) {
-	if c == nil || c.ThreadInstructions == nil {
-		return commandengine.Result{}, fmt.Errorf("missing thread instruction manager")
-	}
-	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	content := strings.TrimSpace(req.Stdin)
-	if content == "" {
-		return commandengine.Result{}, fmt.Errorf("missing thread instructions on stdin")
-	}
-	if err := c.ThreadInstructions.WriteThreadExtraInstructions(ctx, threadID, []byte(content+"\n")); err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: "thread instructions written: " + threadID.String()}, nil
-}
-
-func (c *Component) handleThreadInstructionsClear(ctx context.Context, req commandengine.Request, cmd threadInstructionsClearCommand) (commandengine.Result, error) {
-	if c == nil || c.ThreadInstructions == nil {
-		return commandengine.Result{}, fmt.Errorf("missing thread instruction manager")
-	}
-	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
-	if err != nil {
-		return commandengine.Result{}, err
-	}
-	if err := c.ThreadInstructions.ClearThreadExtraInstructions(ctx, threadID); err != nil {
-		return commandengine.Result{}, err
-	}
-	return commandengine.Result{Text: "thread instructions cleared: " + threadID.String()}, nil
+	return commandengine.Result{Text: threadExtraInstructionsFile + "\t" + state + "\toptional\tpublic"}, nil
 }
 
 func (c *Component) handleMessageList(ctx context.Context, req commandengine.Request, cmd messageListCommand) (commandengine.Result, error) {
@@ -838,37 +840,49 @@ func buildThreadConfigUnsetCommand(req *clir.Request) (any, error) {
 	return threadConfigUnsetCommand{ThreadRef: threadRef, Key: key}, nil
 }
 
-func buildThreadInstructionsShowCommand(req *clir.Request) (any, error) {
+func buildThreadManagedFileListCommand(req *clir.Request) (any, error) {
 	threadRef := strings.TrimSpace(req.Params["thread"])
 	if threadRef == "" {
 		threadRef = "current"
 	}
 	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
-		return nil, fmt.Errorf("unexpected thread instructions arguments: %s", extra)
+		return nil, fmt.Errorf("unexpected thread managed-file arguments: %s", extra)
 	}
-	return threadInstructionsShowCommand{ThreadRef: threadRef}, nil
+	return threadManagedFileListCommand{ThreadRef: threadRef}, nil
 }
 
-func buildThreadInstructionsPutCommand(req *clir.Request) (any, error) {
+func buildThreadManagedFilePutCommand(req *clir.Request) (any, error) {
 	threadRef := strings.TrimSpace(req.Params["thread"])
 	if threadRef == "" {
 		threadRef = "current"
 	}
-	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
-		return nil, fmt.Errorf("unexpected thread instructions arguments: %s", extra)
+	file := strings.TrimSpace(req.Params["file"])
+	if file == "" {
+		return nil, fmt.Errorf("missing managed file")
 	}
-	return threadInstructionsPutCommand{ThreadRef: threadRef}, nil
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected thread managed-file arguments: %s", extra)
+	}
+	return threadManagedFilePutCommand{ThreadRef: threadRef, File: file}, nil
 }
 
-func buildThreadInstructionsClearCommand(req *clir.Request) (any, error) {
+func buildThreadManagedFileStatusCommand(req *clir.Request) (any, error) {
 	threadRef := strings.TrimSpace(req.Params["thread"])
 	if threadRef == "" {
 		threadRef = "current"
 	}
 	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
-		return nil, fmt.Errorf("unexpected thread instructions arguments: %s", extra)
+		return nil, fmt.Errorf("unexpected thread managed-file arguments: %s", extra)
 	}
-	return threadInstructionsClearCommand{ThreadRef: threadRef}, nil
+	return threadManagedFileStatusCommand{ThreadRef: threadRef}, nil
+}
+
+func requireThreadManagedFile(file string) error {
+	file = strings.TrimSpace(file)
+	if file != threadExtraInstructionsFile {
+		return fmt.Errorf("thread managed file is not declared: %s", file)
+	}
+	return nil
 }
 
 func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID modeluuid.UUID) string {

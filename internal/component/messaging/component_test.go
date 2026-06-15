@@ -193,7 +193,7 @@ func TestThreadConfigCommandsDenyUserSet(t *testing.T) {
 	}
 }
 
-func TestThreadInstructionsCommandsManageExtraInstructions(t *testing.T) {
+func TestThreadManagedFileCommandsManageExtraInstructions(t *testing.T) {
 	ctx := context.Background()
 	storage, thread := testMessagingStorage(t, ctx)
 	manager := newFakeThreadInstructionManager()
@@ -202,34 +202,34 @@ func TestThreadInstructionsCommandsManageExtraInstructions(t *testing.T) {
 		t.Fatalf("NewEngineForSource() error = %v", err)
 	}
 
+	list, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleAgent), []string{"thread", "managed-file", "list"})
+	if err != nil {
+		t.Fatalf("Run(managed-file list) error = %v", err)
+	}
+	if !strings.Contains(list.Text, "extra-instructions.md") {
+		t.Fatalf("list text = %q", list.Text)
+	}
+
 	req := testMessagingRequest(thread.ID, simplerbac.RoleAgent)
 	req.Context.Source = commandengine.SourceHostbridge
 	req.Stdin = "- Prefer git-status alias.\n"
-	result, err := engine.Run(ctx, req, []string{"thread", "instructions", "put", "stdin"})
+	result, err := engine.Run(ctx, req, []string{"thread", "managed-file", "put", "extra-instructions.md"})
 	if err != nil {
-		t.Fatalf("Run(instructions put) error = %v", err)
+		t.Fatalf("Run(managed-file put) error = %v", err)
 	}
-	if !strings.Contains(result.Text, "thread instructions written") {
+	if !strings.Contains(result.Text, "thread managed file written: extra-instructions.md") {
 		t.Fatalf("put result = %q", result.Text)
 	}
 
-	show, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleAgent), []string{"thread", "instructions", "show"})
+	status, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleAgent), []string{"thread", "managed-file", "status"})
 	if err != nil {
-		t.Fatalf("Run(instructions show) error = %v", err)
+		t.Fatalf("Run(managed-file status) error = %v", err)
 	}
-	if !strings.Contains(show.Text, "Prefer git-status alias") {
-		t.Fatalf("show text = %q", show.Text)
+	if !strings.Contains(status.Text, "extra-instructions.md	present") {
+		t.Fatalf("status text = %q", status.Text)
 	}
-
-	if _, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleAgent), []string{"thread", "instructions", "clear"}); err != nil {
-		t.Fatalf("Run(instructions clear) error = %v", err)
-	}
-	show, err = engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleAgent), []string{"thread", "instructions", "show"})
-	if err != nil {
-		t.Fatalf("Run(instructions show after clear) error = %v", err)
-	}
-	if strings.TrimSpace(show.Text) != "no thread instructions" {
-		t.Fatalf("show after clear = %q", show.Text)
+	if got := manager.text[thread.ID]; !strings.Contains(got, "Prefer git-status alias") {
+		t.Fatalf("managed text = %q", got)
 	}
 }
 
