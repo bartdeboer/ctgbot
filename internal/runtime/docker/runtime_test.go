@@ -168,7 +168,7 @@ func TestSandboxMountsDurableHome(t *testing.T) {
 	}
 	defer cleanup()
 
-	wantHost := filepath.Join(root, "threads", threadID.String(), "sandbox")
+	wantHost := filepath.Join(root, "threads", threadID.String(), "home")
 	if got := sandbox.HomeDir; got != wantHost {
 		t.Fatalf("HomeDir = %q, want %q", got, wantHost)
 	}
@@ -227,7 +227,7 @@ func TestSandboxHomeIsThreadScoped(t *testing.T) {
 	}
 	defer secondCleanup()
 
-	wantHost := filepath.Join(root, "threads", threadID.String(), "sandbox")
+	wantHost := filepath.Join(root, "threads", threadID.String(), "home")
 	if got := firstSandbox.HomeDir; got != wantHost {
 		t.Fatalf("first HomeDir = %q, want %q", got, wantHost)
 	}

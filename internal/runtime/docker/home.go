@@ -32,7 +32,7 @@ func (r *Runtime) resolveHome(threadID modeluuid.UUID) (string, string, error) {
 }
 
 func threadSandboxHomePath(rootDir string, threadID modeluuid.UUID) string {
-	return filepath.Join(rootDir, "threads", threadID.String(), "sandbox")
+	return filepath.Join(rootDir, "threads", threadID.String(), "home")
 }
 
 func (r *Runtime) ensureSandboxReady(ctx context.Context, sbx *sandboxengine.Sandbox) error {
