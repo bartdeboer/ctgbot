@@ -22,7 +22,7 @@ func (f *fakeActions) SendPayload(ctx context.Context, threadID modeluuid.UUID, 
 	return nil
 }
 
-func (f *fakeActions) RunHostbridgeAllowedCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
+func (f *fakeActions) RunHostbridgeAlias(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
 	_, _, _ = ctx, req, cmd
 	return commandengine.Result{}, nil
 }

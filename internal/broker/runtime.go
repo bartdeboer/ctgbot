@@ -26,7 +26,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 	workspace := spec.Workspace
 	bindings := spec.Bindings
-	runCommands, err := b.runCommandsForChat(ctx, chat)
+	hostbridgeAliases, err := b.hostbridgeAliasesForChat(ctx, chat)
 	if err != nil {
 		return nil, err
 	}
@@ -129,21 +129,21 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}
 
 	return &ChatRuntime{
-		Chat:             chat,
-		Workspace:        workspace,
-		RuntimeWorkspace: runtimeWorkspace,
-		Bindings:         bindings,
-		Components:       components,
-		Agents:           agents,
-		Relays:           relays,
-		MessageCommands:  messageCommands,
-		AgentCommands:    agentCommands,
-		RunCommands:      runCommands,
-		Profiles:         profiles,
+		Chat:              chat,
+		Workspace:         workspace,
+		RuntimeWorkspace:  runtimeWorkspace,
+		Bindings:          bindings,
+		Components:        components,
+		Agents:            agents,
+		Relays:            relays,
+		MessageCommands:   messageCommands,
+		AgentCommands:     agentCommands,
+		HostbridgeAliases: hostbridgeAliases,
+		Profiles:          profiles,
 	}, nil
 }
 
-func (b *Broker) runCommandsForChat(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error) {
+func (b *Broker) hostbridgeAliasesForChat(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error) {
 	allowed := hostbridgeserver.DefaultAllowedCommands()
 	if b == nil || b.App == nil {
 		return allowed, nil
@@ -155,10 +155,10 @@ func (b *Broker) runCommandsForChat(ctx context.Context, chat coremodel.Chat) (m
 	return hostbridgeserver.MergeNamedAllowedCommands(extra), nil
 }
 
-func (r *ChatRuntime) RunHostbridgeAllowedCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
+func (r *ChatRuntime) RunHostbridgeAlias(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
 	allowed := hostbridgeserver.DefaultAllowedCommands()
-	if r != nil && r.RunCommands != nil {
-		allowed = r.RunCommands
+	if r != nil && r.HostbridgeAliases != nil {
+		allowed = r.HostbridgeAliases
 	}
 	runner := &hostbridgeserver.RunCommandRunner{
 		ResolveAllowed:    hostbridgeserver.StaticAllowedCommandResolver(allowed),
@@ -246,7 +246,7 @@ func (r *agentTurnRuntime) Instructions() component.TurnInstructions {
 			break
 		}
 	}
-	instructions.HostbridgeCommandNames = hostbridgeserver.AllowedCommandUsages(r.runtime.RunCommands)
+	instructions.HostbridgeCommandNames = hostbridgeserver.AllowedCommandUsages(r.runtime.HostbridgeAliases)
 	sort.Strings(instructions.HostbridgeCommandNames)
 	instructions.HostbridgeControlCommands = hostbridgeControlCommands(r.runtime)
 	instructions.HostbridgeFamilyDescriptions = hostbridgeFamilyDescriptions(r.runtime)

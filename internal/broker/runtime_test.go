@@ -81,24 +81,24 @@ func TestHostbridgeControlCommandsUsesCanonicalAgentSurface(t *testing.T) {
 	}
 }
 
-func TestChatRuntimeRunHostbridgeAllowedCommandUsesRuntimeAliases(t *testing.T) {
-	runtime := &ChatRuntime{RunCommands: map[string]hostbridgeserver.AllowedCommand{
+func TestChatRuntimeRunHostbridgeAliasUsesRuntimeAliases(t *testing.T) {
+	runtime := &ChatRuntime{HostbridgeAliases: map[string]hostbridgeserver.AllowedCommand{
 		"echo-runtime": {
 			Name: "/bin/echo",
 			Args: []string{"runtime-ok"},
 		},
 	}}
 
-	result, err := runtime.RunHostbridgeAllowedCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "echo-runtime"})
+	result, err := runtime.RunHostbridgeAlias(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "echo-runtime"})
 	if err != nil {
-		t.Fatalf("RunHostbridgeAllowedCommand() error = %v", err)
+		t.Fatalf("RunHostbridgeAlias() error = %v", err)
 	}
 	if got, want := strings.TrimSpace(result.Text), "runtime-ok"; got != want {
-		t.Fatalf("RunHostbridgeAllowedCommand() text = %q, want %q", got, want)
+		t.Fatalf("RunHostbridgeAlias() text = %q, want %q", got, want)
 	}
 
-	if _, err := runtime.RunHostbridgeAllowedCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "not-allowed"}); err == nil {
-		t.Fatalf("RunHostbridgeAllowedCommand(not-allowed) error = nil")
+	if _, err := runtime.RunHostbridgeAlias(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "not-allowed"}); err == nil {
+		t.Fatalf("RunHostbridgeAlias(not-allowed) error = nil")
 	}
 }
 

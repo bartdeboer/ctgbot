@@ -32,17 +32,17 @@ type EventOutcome struct {
 }
 
 type ChatRuntime struct {
-	Chat             coremodel.Chat
-	Workspace        string
-	RuntimeWorkspace string
-	Bindings         []coremodel.ChatComponent
-	Components       []*component.Loaded
-	Agents           []AgentBinding
-	Relays           []RelayBinding
-	MessageCommands  *commandengine.Engine
-	AgentCommands    *commandengine.Engine
-	RunCommands      map[string]hostbridgeserver.AllowedCommand
-	Profiles         map[modeluuid.UUID]runtimepkg.Profile
+	Chat              coremodel.Chat
+	Workspace         string
+	RuntimeWorkspace  string
+	Bindings          []coremodel.ChatComponent
+	Components        []*component.Loaded
+	Agents            []AgentBinding
+	Relays            []RelayBinding
+	MessageCommands   *commandengine.Engine
+	AgentCommands     *commandengine.Engine
+	HostbridgeAliases map[string]hostbridgeserver.AllowedCommand
+	Profiles          map[modeluuid.UUID]runtimepkg.Profile
 }
 
 type AgentBinding struct {
@@ -406,22 +406,22 @@ func (b *Broker) logf(format string, args ...any) {
 	log.Printf(format, args...)
 }
 
-func (b *Broker) RunHostbridgeAllowedCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
+func (b *Broker) RunHostbridgeAlias(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
 	if req.Context.ChatID.IsNull() {
-		return (&ChatRuntime{}).RunHostbridgeAllowedCommand(ctx, req, cmd)
+		return (&ChatRuntime{}).RunHostbridgeAlias(ctx, req, cmd)
 	}
 	chat, err := b.App.Chat(ctx, req.Context.ChatID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
 	if chat == nil {
-		return (&ChatRuntime{}).RunHostbridgeAllowedCommand(ctx, req, cmd)
+		return (&ChatRuntime{}).RunHostbridgeAlias(ctx, req, cmd)
 	}
 	runtime, err := b.runtimeForChat(ctx, *chat)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	return runtime.RunHostbridgeAllowedCommand(ctx, req, cmd)
+	return runtime.RunHostbridgeAlias(ctx, req, cmd)
 }
 
 func (b *Broker) MessageHelp(ctx context.Context, chatID modeluuid.UUID, actor commandengine.Actor) (string, error) {
