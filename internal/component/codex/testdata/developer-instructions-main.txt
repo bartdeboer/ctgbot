@@ -31,7 +31,7 @@ hostbridge [
     list | status | <thread> [ read | status | subscribe | unsubscribe ]
   ]
   thread [ # thread messaging, config, and attention controls
-    help | heartbeat [ <schedule> | clear ] | list | status | wake [ list | heartbeat clear | once [ clear | <delay> ] | schedule [ clear <target> | <expr> ] ] | label set | <thread> [ label set | config [ get <key> | list | set <key> <value> | unset <key> ] | message send ] | config [ get <key> | list | set <key> <value> | unset <key> ]
+    help | heartbeat [ <schedule> | clear ] | list | status | wake [ list | heartbeat clear | once [ clear | <delay> ] | schedule [ clear <target> | <expr> ] ] | label set | <thread> [ label set | config [ get <key> | list | set <key> <value> | unset <key> ] | message send [ <message> | stdin ] ] | config [ get <key> | list | set <key> <value> | unset <key> ]
   ]
   turn [ # current turn metadata and output controls
     config [ get <key> | list | set <key> <value> ] | info

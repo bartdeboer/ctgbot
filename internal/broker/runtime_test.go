@@ -54,6 +54,7 @@ func TestHostbridgeControlCommandsUsesCanonicalAgentSurface(t *testing.T) {
 		"hostbridge thread help",
 		"hostbridge thread list",
 		"hostbridge thread <thread> message send <message>",
+		"hostbridge thread <thread> message send stdin",
 		"hostbridge codex help",
 		"hostbridge codex status",
 		"hostbridge codex interrupt",

@@ -236,12 +236,15 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			InstructionVisibility: commandengine.InstructionImportant,
 		},
 		{
-			Pattern: "thread <thread> message send",
-			Help:    "Send a message into another thread from stdin",
-			Build:   buildMessageSendCommand,
-			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
-			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
-			Hidden:  true,
+			Pattern:               "thread <thread> message send stdin",
+			Help:                  "Send a message into another thread from stdin",
+			Build:                 buildMessageSendCommand,
+			Sources:               []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			InstructionVisibility: commandengine.InstructionImportant,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread <thread> message send", Hidden: true},
+			},
 		},
 	}
 }
