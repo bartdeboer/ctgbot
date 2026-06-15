@@ -2,12 +2,12 @@ FROM ctgbot-go-node-python-base:latest
 
 ARG CODEX_VERSION=latest
 
-RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 120 https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 120 https://chatgpt.com/codex/install.sh -o /tmp/install-codex.sh \
     && chmod +x /tmp/install-codex.sh \
     && if [ -n "${CODEX_VERSION}" ] && [ "${CODEX_VERSION}" != "latest" ]; then \
-        CODEX_INSTALL_DIR=/usr/local/bin /tmp/install-codex.sh --release "${CODEX_VERSION}"; \
+        CODEX_NON_INTERACTIVE=true CODEX_INSTALL_DIR=/usr/local/bin /tmp/install-codex.sh --release "${CODEX_VERSION}"; \
     else \
-        CODEX_INSTALL_DIR=/usr/local/bin /tmp/install-codex.sh; \
+        CODEX_NON_INTERACTIVE=true CODEX_INSTALL_DIR=/usr/local/bin /tmp/install-codex.sh; \
     fi \
     && rm -f /tmp/install-codex.sh \
     && mkdir -p /opt/codex \
