@@ -16,6 +16,18 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
+func TestTurnSandboxNamePreservesBase62ThreadIDCase(t *testing.T) {
+	threadID, err := modeluuid.Parse("00VGyvELR38v6AqboKyD48w")
+	if err != nil {
+		t.Fatal(err)
+	}
+	registration := coremodel.Component{Type: "codex", Name: "codex"}
+	want := "ctgbot-codex-" + threadID.String()
+	if got := turnSandboxName(registration, threadID); got != want {
+		t.Fatalf("turnSandboxName() = %q, want %q", got, want)
+	}
+}
+
 func TestSandboxAddsHostbridgeEnvAndMount(t *testing.T) {
 	root := t.TempDir()
 	bridge := hostbridgebridge.NewBridge(root, nil, nil)

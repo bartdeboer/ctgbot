@@ -500,14 +500,14 @@ func componentRuntimeProfilePath(registration coremodel.Component) string {
 }
 
 func safeName(value string, fallback string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.TrimSpace(value)
 	if value == "" {
 		return fallback
 	}
 	var b strings.Builder
 	prevDash := false
 	for _, r := range value {
-		ok := r >= 'a' && r <= 'z' || r >= '0' && r <= '9'
+		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9'
 		if ok {
 			b.WriteRune(r)
 			prevDash = false
