@@ -24,11 +24,15 @@ func (r *Runtime) resolveHome(threadID modeluuid.UUID) (string, string, error) {
 	if threadID.IsNull() {
 		return "", "", fmt.Errorf("missing thread id")
 	}
-	hostPath := filepath.Join(r.rootDir, "threads", threadID.String(), "components", safePathSegment(r.registration.Type, "component"), safePathSegment(r.registration.Name, "default"), "home")
+	hostPath := threadSandboxHomePath(r.rootDir, threadID)
 	if err := prepareHome(hostPath); err != nil {
 		return "", "", err
 	}
 	return hostPath, defaultRuntimeHomePath, nil
+}
+
+func threadSandboxHomePath(rootDir string, threadID modeluuid.UUID) string {
+	return filepath.Join(rootDir, "threads", threadID.String(), "sandbox")
 }
 
 func (r *Runtime) ensureSandboxReady(ctx context.Context, sbx *sandboxengine.Sandbox) error {
@@ -121,14 +125,6 @@ func writeFileIfMissing(path string, content []byte) error {
 		return err
 	}
 	return os.WriteFile(path, content, 0o644)
-}
-
-func safePathSegment(value string, fallback string) string {
-	out := safeName(value, fallback)
-	if out == "" {
-		return fallback
-	}
-	return out
 }
 
 const homeReadme = `# Agent home

@@ -168,7 +168,7 @@ func TestSandboxMountsDurableHome(t *testing.T) {
 	}
 	defer cleanup()
 
-	wantHost := filepath.Join(root, "threads", threadID.String(), "components", "mockagent", "home", "home")
+	wantHost := filepath.Join(root, "threads", threadID.String(), "sandbox")
 	if got := sandbox.HomeDir; got != wantHost {
 		t.Fatalf("HomeDir = %q, want %q", got, wantHost)
 	}
@@ -201,6 +201,38 @@ func TestSandboxMountsDurableHome(t *testing.T) {
 	}
 	if got, want := status.RuntimeHomePath, "/home/agent"; got != want {
 		t.Fatalf("status RuntimeHomePath = %q, want %q", got, want)
+	}
+}
+
+func TestSandboxHomeIsThreadScoped(t *testing.T) {
+	root := t.TempDir()
+	threadID := modeluuid.New()
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil)
+
+	firstRegistration := coremodel.Component{Type: "codex", Name: "codex", Runtime: "docker"}
+	firstProfile := factory.ComponentProfile(firstRegistration)
+	firstRuntime := factory.Bind(firstRegistration, firstProfile, runtimepkg.BindConfig{}).(*Runtime)
+	firstSandbox, firstCleanup, err := firstRuntime.sandbox(context.Background(), filepath.Join(root, "workspace"), threadID, nil, false)
+	if err != nil {
+		t.Fatalf("first sandbox() error = %v", err)
+	}
+	defer firstCleanup()
+
+	secondRegistration := coremodel.Component{Type: "claude", Name: "claude", Runtime: "docker"}
+	secondProfile := factory.ComponentProfile(secondRegistration)
+	secondRuntime := factory.Bind(secondRegistration, secondProfile, runtimepkg.BindConfig{}).(*Runtime)
+	secondSandbox, secondCleanup, err := secondRuntime.sandbox(context.Background(), filepath.Join(root, "workspace"), threadID, nil, false)
+	if err != nil {
+		t.Fatalf("second sandbox() error = %v", err)
+	}
+	defer secondCleanup()
+
+	wantHost := filepath.Join(root, "threads", threadID.String(), "sandbox")
+	if got := firstSandbox.HomeDir; got != wantHost {
+		t.Fatalf("first HomeDir = %q, want %q", got, wantHost)
+	}
+	if got := secondSandbox.HomeDir; got != wantHost {
+		t.Fatalf("second HomeDir = %q, want %q", got, wantHost)
 	}
 }
 
