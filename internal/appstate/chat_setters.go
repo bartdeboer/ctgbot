@@ -112,52 +112,52 @@ func (c ChatConfig) RemoveSkill(skillDir string) error {
 	return c.persistStruct("skills", filtered)
 }
 
-func (h ChatHostbridgeConfig) SetAllowedCommand(name string, command hostbridgepolicy.AllowedCommand) error {
+func (h ChatHostbridgeConfig) SetAlias(name string, command hostbridgepolicy.Alias) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return fmt.Errorf("hostbridge allowed command name is empty")
+		return fmt.Errorf("hostbridge alias name is empty")
 	}
-	normalized, ok := normalizeAllowedCommand(command)
+	normalized, ok := normalizeAlias(command)
 	if !ok {
-		return fmt.Errorf("hostbridge allowed command executable is empty")
+		return fmt.Errorf("hostbridge alias executable is empty")
 	}
-	commands := h.AllowedCommands()
-	if commands == nil {
-		commands = map[string]hostbridgepolicy.AllowedCommand{}
+	aliases := h.Aliases()
+	if aliases == nil {
+		aliases = map[string]hostbridgepolicy.Alias{}
 	}
-	commands[name] = normalized
-	return h.chat.cfg.store.PersistStruct(h.key("allowed_commands"), commands)
+	aliases[name] = normalized
+	return h.chat.cfg.store.PersistStruct(h.key("allowed_commands"), aliases)
 }
 
-func (h ChatHostbridgeConfig) ScaffoldAllowedCommand(name string) error {
+func (h ChatHostbridgeConfig) ScaffoldAlias(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return fmt.Errorf("hostbridge allowed command name is empty")
+		return fmt.Errorf("hostbridge alias name is empty")
 	}
-	commands := map[string]hostbridgepolicy.AllowedCommand{}
-	_ = h.chat.cfg.structValue(h.key("allowed_commands"), &commands)
-	commands[name] = hostbridgepolicy.AllowedCommand{
+	aliases := map[string]hostbridgepolicy.Alias{}
+	_ = h.chat.cfg.structValue(h.key("allowed_commands"), &aliases)
+	aliases[name] = hostbridgepolicy.Alias{
 		Args: []string{},
 		Env:  map[string]string{},
 	}
-	return h.chat.cfg.store.PersistStruct(h.key("allowed_commands"), commands)
+	return h.chat.cfg.store.PersistStruct(h.key("allowed_commands"), aliases)
 }
 
-func (h ChatHostbridgeConfig) RemoveAllowedCommand(name string) error {
+func (h ChatHostbridgeConfig) RemoveAlias(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return fmt.Errorf("hostbridge allowed command name is empty")
+		return fmt.Errorf("hostbridge alias name is empty")
 	}
-	commands := h.AllowedCommands()
-	if len(commands) == 0 {
+	aliases := h.Aliases()
+	if len(aliases) == 0 {
 		return nil
 	}
-	for alias := range commands {
+	for alias := range aliases {
 		if strings.EqualFold(alias, name) {
-			delete(commands, alias)
+			delete(aliases, alias)
 		}
 	}
-	return h.chat.cfg.store.PersistStruct(h.key("allowed_commands"), commands)
+	return h.chat.cfg.store.PersistStruct(h.key("allowed_commands"), aliases)
 }
 
 func (c ChatConfig) persistString(key string, value string) error {
@@ -191,12 +191,12 @@ func validateAndNormalizeSkillPaths(skills []string) ([]string, error) {
 	return normalized, nil
 }
 
-func normalizeAllowedCommand(spec hostbridgepolicy.AllowedCommand) (hostbridgepolicy.AllowedCommand, bool) {
+func normalizeAlias(spec hostbridgepolicy.Alias) (hostbridgepolicy.Alias, bool) {
 	spec.Name = strings.TrimSpace(spec.Name)
 	spec.Dir = strings.TrimSpace(spec.Dir)
 	spec.Delay = strings.TrimSpace(spec.Delay)
 	if spec.Name == "" {
-		return hostbridgepolicy.AllowedCommand{}, false
+		return hostbridgepolicy.Alias{}, false
 	}
 	if len(spec.Args) == 0 {
 		spec.Args = nil

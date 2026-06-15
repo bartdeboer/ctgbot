@@ -49,13 +49,13 @@ func (h HostbridgeConfig) SetRemoteListenAddr(addr string) error {
 	return h.cfg.persistString("hostbridge.remote_listen_addr", strings.TrimSpace(addr))
 }
 
-func (h HostbridgeConfig) ResolveAllowedCommands(clientIdentity string) map[string]hostbridgeserver.AllowedCommand {
+func (h HostbridgeConfig) ResolveAliases(clientIdentity string) map[string]hostbridgeserver.Alias {
 	if h.cfg == nil {
-		return hostbridgeserver.DefaultAllowedCommands()
+		return hostbridgeserver.DefaultAliases()
 	}
 	chatID, ok := h.cfg.ParseChatClientIdentity(clientIdentity)
 	if !ok {
-		return hostbridgeserver.DefaultAllowedCommands()
+		return hostbridgeserver.DefaultAliases()
 	}
-	return hostbridgeserver.MergeNamedAllowedCommands(h.cfg.Chat(chatID).Hostbridge().AllowedCommands())
+	return hostbridgeserver.MergeAliases(h.cfg.Chat(chatID).Hostbridge().Aliases())
 }

@@ -36,7 +36,7 @@ type ComponentManager interface {
 
 type ChatRuntimeResolver interface {
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
-	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
+	ResolveChatHostbridgeAliases(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.Alias, error)
 }
 
 type Service interface {
@@ -73,7 +73,7 @@ type ChatAdminService interface {
 type ComponentAdminService interface {
 	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
-	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
+	ResolveChatHostbridgeAliases(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.Alias, error)
 	RegisterComponent(ctx context.Context, componentRef string, runtimeKind string, profilePath string) (RegisterComponentResult, error)
 	UnregisterComponent(ctx context.Context, componentRef string) (UnregisterComponentResult, error)
 	ListComponents(ctx context.Context) ([]ComponentInfo, error)
@@ -83,7 +83,7 @@ type ComponentAdminService interface {
 type BrokerService interface {
 	ResolveComponent(ctx context.Context, componentID modeluuid.UUID) (*component.Loaded, error)
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
-	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
+	ResolveChatHostbridgeAliases(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.Alias, error)
 	AdmitInbound(ctx context.Context, event component.InboundEvent) (inbound.Admission, error)
 	Chat(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
 	Thread(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
@@ -173,11 +173,11 @@ func (s *service) ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat)
 	return s.ChatRuntimeResolver.ResolveChatWorkspace(ctx, chat)
 }
 
-func (s *service) ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error) {
+func (s *service) ResolveChatHostbridgeAliases(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.Alias, error) {
 	if s == nil || s.ChatRuntimeResolver == nil {
 		return nil, fmt.Errorf("missing chat runtime resolver")
 	}
-	return s.ChatRuntimeResolver.ResolveChatHostbridgeAllowedCommands(ctx, chat)
+	return s.ChatRuntimeResolver.ResolveChatHostbridgeAliases(ctx, chat)
 }
 
 func (s *service) componentManager() (ComponentManager, error) {

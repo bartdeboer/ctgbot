@@ -41,7 +41,7 @@ type ChatRuntime struct {
 	Relays            []RelayBinding
 	MessageCommands   *commandengine.Engine
 	AgentCommands     *commandengine.Engine
-	HostbridgeAliases map[string]hostbridgeserver.AllowedCommand
+	HostbridgeAliases map[string]hostbridgeserver.Alias
 	Profiles          map[modeluuid.UUID]runtimepkg.Profile
 }
 

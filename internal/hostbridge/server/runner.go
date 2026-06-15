@@ -13,7 +13,7 @@ import (
 )
 
 type RunCommandRunner struct {
-	ResolveAllowed    AllowedCommandResolver
+	ResolveAliases    AliasResolver
 	ClientIdentity    string
 	DefaultTimeoutSec int
 }
@@ -31,16 +31,16 @@ func (r *RunCommandRunner) RunCommand(ctx context.Context, req commandengine.Req
 }
 
 func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []string, stdin []byte, timeoutSec int) (string, error) {
-	allowed := StaticAllowedCommandResolver(nil)("")
-	if r != nil && r.ResolveAllowed != nil {
-		allowed = r.ResolveAllowed(r.ClientIdentity)
+	aliases := StaticAliasResolver(nil)("")
+	if r != nil && r.ResolveAliases != nil {
+		aliases = r.ResolveAliases(r.ClientIdentity)
 	}
-	if allowed == nil {
-		allowed = DefaultAllowedCommands()
+	if aliases == nil {
+		aliases = DefaultAliases()
 	}
-	spec, ok := allowed[commandName]
+	spec, ok := aliases[commandName]
 	if !ok {
-		return "", fmt.Errorf("command not allowed: %s", commandName)
+		return "", fmt.Errorf("hostbridge alias not allowed: %s", commandName)
 	}
 
 	plan, err := BuildExecutionPlan(commandName, args, spec)

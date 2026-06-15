@@ -97,5 +97,5 @@ type ComponentResolver interface {
 // WorkspacePolicy resolves the filesystem and hostbridge trust boundary for a chat.
 type WorkspacePolicy interface {
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
-	ResolveChatHostbridgeAllowedCommands(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error)
+	ResolveChatHostbridgeAliases(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.Alias, error)
 }

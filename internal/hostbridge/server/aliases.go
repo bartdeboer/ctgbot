@@ -13,9 +13,9 @@ import (
 	hostbridgepolicy "github.com/bartdeboer/ctgbot/internal/hostbridgepolicy"
 )
 
-type AllowedCommand = hostbridgepolicy.AllowedCommand
+type Alias = hostbridgepolicy.Alias
 
-type AllowedCommandResolver func(clientIdentity string) map[string]AllowedCommand
+type AliasResolver func(clientIdentity string) map[string]Alias
 
 type ExecutionPlan struct {
 	Name  string
@@ -25,12 +25,12 @@ type ExecutionPlan struct {
 	Env   []string
 }
 
-func BuildExecutionPlan(commandName string, args []string, spec AllowedCommand) (ExecutionPlan, error) {
-	spec, ok := normalizeAllowedCommand(spec)
+func BuildExecutionPlan(commandName string, args []string, spec Alias) (ExecutionPlan, error) {
+	spec, ok := normalizeAlias(spec)
 	if !ok {
-		return ExecutionPlan{}, fmt.Errorf("allowed command %q has empty executable name", commandName)
+		return ExecutionPlan{}, fmt.Errorf("hostbridge alias %q has empty executable name", commandName)
 	}
-	delay, err := parseAllowedCommandDelay(commandName, spec.Delay)
+	delay, err := parseAliasDelay(commandName, spec.Delay)
 	if err != nil {
 		return ExecutionPlan{}, err
 	}
@@ -47,10 +47,10 @@ func BuildExecutionPlan(commandName string, args []string, spec AllowedCommand) 
 	}, nil
 }
 
-func DefaultAllowedCommands() map[string]AllowedCommand {
-	allowed := map[string]AllowedCommand{}
+func DefaultAliases() map[string]Alias {
+	aliases := map[string]Alias{}
 	if runtime.GOOS == "windows" {
-		return allowed
+		return aliases
 	}
 	for _, pair := range []struct {
 		name string
@@ -62,60 +62,60 @@ func DefaultAllowedCommands() map[string]AllowedCommand {
 		{name: "uname", path: "/usr/bin/uname"},
 	} {
 		if _, err := os.Stat(pair.path); err == nil {
-			allowed[pair.name] = AllowedCommand{Name: pair.path, AllowExtraArgs: true}
+			aliases[pair.name] = Alias{Name: pair.path, AllowExtraArgs: true}
 		}
 	}
-	return allowed
+	return aliases
 }
 
-func MergeAllowedCommands(extra map[string]string) map[string]AllowedCommand {
-	allowed := DefaultAllowedCommands()
+func MergeExecutableAliases(extra map[string]string) map[string]Alias {
+	aliases := DefaultAliases()
 	for name, executable := range extra {
 		name = strings.TrimSpace(name)
 		executable = strings.TrimSpace(executable)
 		if name == "" || executable == "" {
 			continue
 		}
-		allowed[name] = AllowedCommand{Name: executable}
+		aliases[name] = Alias{Name: executable}
 	}
-	return allowed
+	return aliases
 }
 
-func MergeNamedAllowedCommands(extra map[string]AllowedCommand) map[string]AllowedCommand {
-	allowed := DefaultAllowedCommands()
+func MergeAliases(extra map[string]Alias) map[string]Alias {
+	aliases := DefaultAliases()
 	for name, spec := range extra {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
-		if normalized, ok := normalizeAllowedCommand(spec); ok {
-			allowed[name] = normalized
+		if normalized, ok := normalizeAlias(spec); ok {
+			aliases[name] = normalized
 		}
 	}
-	return allowed
+	return aliases
 }
 
-func AllowedCommandNames(allowed map[string]AllowedCommand) []string {
-	if len(allowed) == 0 {
+func AliasNames(aliases map[string]Alias) []string {
+	if len(aliases) == 0 {
 		return nil
 	}
-	names := make([]string, 0, len(allowed))
-	for name := range allowed {
+	names := make([]string, 0, len(aliases))
+	for name := range aliases {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	return names
 }
 
-func AllowedCommandUsages(allowed map[string]AllowedCommand) []string {
-	if len(allowed) == 0 {
+func AliasUsages(aliases map[string]Alias) []string {
+	if len(aliases) == 0 {
 		return nil
 	}
-	names := AllowedCommandNames(allowed)
+	names := AliasNames(aliases)
 	out := make([]string, 0, len(names))
 	for _, name := range names {
-		spec := allowed[name]
-		if normalized, ok := normalizeAllowedCommand(spec); ok && len(normalized.Subcommands) > 0 {
+		spec := aliases[name]
+		if normalized, ok := normalizeAlias(spec); ok && len(normalized.Subcommands) > 0 {
 			out = append(out, name+" [ "+strings.Join(subcommandNames(normalized.Subcommands), " | ")+" ]")
 			continue
 		}
@@ -124,14 +124,14 @@ func AllowedCommandUsages(allowed map[string]AllowedCommand) []string {
 	return out
 }
 
-func StaticAllowedCommandResolver(allowed map[string]AllowedCommand) AllowedCommandResolver {
-	if allowed == nil {
-		allowed = DefaultAllowedCommands()
+func StaticAliasResolver(aliases map[string]Alias) AliasResolver {
+	if aliases == nil {
+		aliases = DefaultAliases()
 	}
-	return func(string) map[string]AllowedCommand { return allowed }
+	return func(string) map[string]Alias { return aliases }
 }
 
-func normalizeAllowedCommand(spec AllowedCommand) (AllowedCommand, bool) {
+func normalizeAlias(spec Alias) (Alias, bool) {
 	spec.Name = strings.TrimSpace(spec.Name)
 	spec.ArgsPattern = strings.TrimSpace(spec.ArgsPattern)
 	spec.Dir = strings.TrimSpace(spec.Dir)
@@ -140,12 +140,12 @@ func normalizeAllowedCommand(spec AllowedCommand) (AllowedCommand, bool) {
 	spec.Subcommands = cleanSubcommands(spec.Subcommands)
 	spec.Env = cleanCommandEnv(spec.Env)
 	if spec.Name == "" {
-		return AllowedCommand{}, false
+		return Alias{}, false
 	}
 	return spec, true
 }
 
-func buildPlanArgs(commandName string, spec AllowedCommand, runtimeArgs []string) ([]string, error) {
+func buildPlanArgs(commandName string, spec Alias, runtimeArgs []string) ([]string, error) {
 	if len(spec.Subcommands) > 0 {
 		return buildSubcommandPlanArgs(commandName, spec, runtimeArgs)
 	}
@@ -179,7 +179,7 @@ func buildPlanArgs(commandName string, spec AllowedCommand, runtimeArgs []string
 	return planArgs, nil
 }
 
-func buildSubcommandPlanArgs(commandName string, spec AllowedCommand, runtimeArgs []string) ([]string, error) {
+func buildSubcommandPlanArgs(commandName string, spec Alias, runtimeArgs []string) ([]string, error) {
 	if strings.TrimSpace(spec.ArgsPattern) != "" {
 		return nil, fmt.Errorf("command %s cannot combine args_pattern with subcommands", commandName)
 	}
@@ -210,7 +210,7 @@ func buildSubcommandPlanArgs(commandName string, spec AllowedCommand, runtimeArg
 	return planArgs, nil
 }
 
-func buildSubcommandArgs(commandName string, subcommandName string, subcommand hostbridgepolicy.AllowedSubcommand, runtimeArgs []string) ([]string, []string, error) {
+func buildSubcommandArgs(commandName string, subcommandName string, subcommand hostbridgepolicy.AliasSubcommand, runtimeArgs []string) ([]string, []string, error) {
 	templateArgs := append([]string{}, subcommand.Args...)
 	if len(templateArgs) == 0 {
 		templateArgs = []string{subcommandName}
@@ -232,7 +232,7 @@ func buildSubcommandArgs(commandName string, subcommandName string, subcommand h
 	return rendered, extraArgs, nil
 }
 
-func subcommandNames(subcommands map[string]hostbridgepolicy.AllowedSubcommand) []string {
+func subcommandNames(subcommands map[string]hostbridgepolicy.AliasSubcommand) []string {
 	names := make([]string, 0, len(subcommands))
 	for name := range subcommands {
 		names = append(names, name)
@@ -326,11 +326,11 @@ func cleanCommandArgs(args []string) []string {
 	return out
 }
 
-func cleanSubcommands(subcommands map[string]hostbridgepolicy.AllowedSubcommand) map[string]hostbridgepolicy.AllowedSubcommand {
+func cleanSubcommands(subcommands map[string]hostbridgepolicy.AliasSubcommand) map[string]hostbridgepolicy.AliasSubcommand {
 	if len(subcommands) == 0 {
 		return nil
 	}
-	out := make(map[string]hostbridgepolicy.AllowedSubcommand, len(subcommands))
+	out := make(map[string]hostbridgepolicy.AliasSubcommand, len(subcommands))
 	for name, subcommand := range subcommands {
 		name = strings.TrimSpace(name)
 		if name == "" {
@@ -386,7 +386,7 @@ func upsertEnv(env []string, key string, value string) []string {
 	return append(env, prefix+value)
 }
 
-func parseAllowedCommandDelay(commandName string, raw string) (time.Duration, error) {
+func parseAliasDelay(commandName string, raw string) (time.Duration, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return 0, nil

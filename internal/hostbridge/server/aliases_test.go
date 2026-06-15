@@ -7,10 +7,10 @@ import (
 	hostbridgepolicy "github.com/bartdeboer/ctgbot/internal/hostbridgepolicy"
 )
 
-func TestAllowedCommandJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
+func TestAliasJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 	t.Parallel()
 
-	var allowed map[string]AllowedCommand
+	var aliases map[string]Alias
 	if err := json.Unmarshal([]byte(`{
 		"docker": {
 			"name": "docker",
@@ -28,25 +28,25 @@ func TestAllowedCommandJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 				"push": {"args": ["push", "--follow-tags"]}
 			}
 		}
-	}`), &allowed); err != nil {
+	}`), &aliases); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
 
-	if !allowed["docker"].AllowExtraArgs {
-		t.Fatalf("allow_extra_args was not decoded: %#v", allowed["docker"])
+	if !aliases["docker"].AllowExtraArgs {
+		t.Fatalf("allow_extra_args was not decoded: %#v", aliases["docker"])
 	}
-	if got, want := allowed["delete-branch"].ArgsPattern, "<branch>"; got != want {
+	if got, want := aliases["delete-branch"].ArgsPattern, "<branch>"; got != want {
 		t.Fatalf("args_pattern = %q, want %q", got, want)
 	}
-	if _, ok := allowed["git-ctgbot"].Subcommands["fetch"]; !ok {
-		t.Fatalf("subcommands were not decoded: %#v", allowed["git-ctgbot"])
+	if _, ok := aliases["git-ctgbot"].Subcommands["fetch"]; !ok {
+		t.Fatalf("subcommands were not decoded: %#v", aliases["git-ctgbot"])
 	}
 }
 
 func TestBuildExecutionPlanSubstitutesArgsPatternParams(t *testing.T) {
 	t.Parallel()
 
-	plan, err := BuildExecutionPlan("git-branch-delete", []string{"feature/foo"}, AllowedCommand{
+	plan, err := BuildExecutionPlan("git-branch-delete", []string{"feature/foo"}, Alias{
 		Name:        "git",
 		ArgsPattern: "<branch>",
 		Args:        []string{"push", "origin", "--delete", "--", "{{branch}}"},
@@ -70,7 +70,7 @@ func TestBuildExecutionPlanSubstitutesArgsPatternParams(t *testing.T) {
 func TestBuildExecutionPlanArgsPatternRejectsMissingAndExtraArgs(t *testing.T) {
 	t.Parallel()
 
-	spec := AllowedCommand{
+	spec := Alias{
 		Name:        "git",
 		ArgsPattern: "<branch>",
 		Args:        []string{"push", "origin", "--delete", "--", "{{branch}}"},
@@ -86,7 +86,7 @@ func TestBuildExecutionPlanArgsPatternRejectsMissingAndExtraArgs(t *testing.T) {
 func TestBuildExecutionPlanArgsPatternAllowsExtraArgsWhenExplicit(t *testing.T) {
 	t.Parallel()
 
-	plan, err := BuildExecutionPlan("grep-file", []string{"needle", "--line-number"}, AllowedCommand{
+	plan, err := BuildExecutionPlan("grep-file", []string{"needle", "--line-number"}, Alias{
 		Name:           "grep",
 		ArgsPattern:    "<pattern>",
 		Args:           []string{"{{pattern}}"},
@@ -104,7 +104,7 @@ func TestBuildExecutionPlanArgsPatternAllowsExtraArgsWhenExplicit(t *testing.T) 
 func TestBuildExecutionPlanRejectsTemplateWithoutArgsPattern(t *testing.T) {
 	t.Parallel()
 
-	_, err := BuildExecutionPlan("git-branch-delete", []string{"feature/foo"}, AllowedCommand{
+	_, err := BuildExecutionPlan("git-branch-delete", []string{"feature/foo"}, Alias{
 		Name: "git",
 		Args: []string{"push", "origin", "--delete", "--", "{{branch}}"},
 	})
@@ -116,7 +116,7 @@ func TestBuildExecutionPlanRejectsTemplateWithoutArgsPattern(t *testing.T) {
 func TestBuildExecutionPlanRejectsUnresolvedTemplate(t *testing.T) {
 	t.Parallel()
 
-	_, err := BuildExecutionPlan("git-branch-delete", []string{"feature/foo"}, AllowedCommand{
+	_, err := BuildExecutionPlan("git-branch-delete", []string{"feature/foo"}, Alias{
 		Name:        "git",
 		ArgsPattern: "<branch>",
 		Args:        []string{"push", "origin", "--delete", "--", "{{missing}}"},
@@ -129,7 +129,7 @@ func TestBuildExecutionPlanRejectsUnresolvedTemplate(t *testing.T) {
 func TestBuildExecutionPlanPreservesExistingExtraArgBehavior(t *testing.T) {
 	t.Parallel()
 
-	plan, err := BuildExecutionPlan("git-push", []string{"--follow-tags"}, AllowedCommand{
+	plan, err := BuildExecutionPlan("git-push", []string{"--follow-tags"}, Alias{
 		Name:           "git",
 		Args:           []string{"push"},
 		AllowExtraArgs: true,
@@ -146,10 +146,10 @@ func TestBuildExecutionPlanPreservesExistingExtraArgBehavior(t *testing.T) {
 func TestBuildExecutionPlanUsesNamedSubcommand(t *testing.T) {
 	t.Parallel()
 
-	plan, err := BuildExecutionPlan("git-ctgbot", []string{"fetch"}, AllowedCommand{
+	plan, err := BuildExecutionPlan("git-ctgbot", []string{"fetch"}, Alias{
 		Name: "git",
 		Args: []string{"-C", "/workspace/src/ctgbot"},
-		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+		Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
 			"fetch": {},
 			"pull":  {},
 		},
@@ -166,10 +166,10 @@ func TestBuildExecutionPlanUsesNamedSubcommand(t *testing.T) {
 func TestBuildExecutionPlanUsesCustomSubcommandArgs(t *testing.T) {
 	t.Parallel()
 
-	plan, err := BuildExecutionPlan("git-ctgbot", []string{"push"}, AllowedCommand{
+	plan, err := BuildExecutionPlan("git-ctgbot", []string{"push"}, Alias{
 		Name: "git",
 		Args: []string{"-C", "/workspace/src/ctgbot"},
-		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+		Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
 			"push": {Args: []string{"push", "--follow-tags"}},
 		},
 	})
@@ -185,10 +185,10 @@ func TestBuildExecutionPlanUsesCustomSubcommandArgs(t *testing.T) {
 func TestBuildExecutionPlanSubcommandArgsPattern(t *testing.T) {
 	t.Parallel()
 
-	plan, err := BuildExecutionPlan("git-ctgbot", []string{"delete-branch", "feature/foo"}, AllowedCommand{
+	plan, err := BuildExecutionPlan("git-ctgbot", []string{"delete-branch", "feature/foo"}, Alias{
 		Name: "git",
 		Args: []string{"-C", "/workspace/src/ctgbot"},
-		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+		Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
 			"delete-branch": {
 				ArgsPattern: "<branch>",
 				Args:        []string{"push", "origin", "--delete", "--", "{{branch}}"},
@@ -207,9 +207,9 @@ func TestBuildExecutionPlanSubcommandArgsPattern(t *testing.T) {
 func TestBuildExecutionPlanSubcommandsRejectUnknownAndExtraArgs(t *testing.T) {
 	t.Parallel()
 
-	spec := AllowedCommand{
+	spec := Alias{
 		Name: "git",
-		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+		Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
 			"fetch": {},
 		},
 	}
@@ -227,9 +227,9 @@ func TestBuildExecutionPlanSubcommandsRejectUnknownAndExtraArgs(t *testing.T) {
 func TestBuildExecutionPlanSubcommandAllowsExtraArgs(t *testing.T) {
 	t.Parallel()
 
-	plan, err := BuildExecutionPlan("git-ctgbot", []string{"status", "--short"}, AllowedCommand{
+	plan, err := BuildExecutionPlan("git-ctgbot", []string{"status", "--short"}, Alias{
 		Name: "git",
-		Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+		Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
 			"status": {AllowExtraArgs: true},
 		},
 	})
@@ -242,14 +242,14 @@ func TestBuildExecutionPlanSubcommandAllowsExtraArgs(t *testing.T) {
 	}
 }
 
-func TestAllowedCommandUsagesShowsSubcommands(t *testing.T) {
+func TestAliasUsagesShowsSubcommands(t *testing.T) {
 	t.Parallel()
 
-	usages := AllowedCommandUsages(map[string]AllowedCommand{
+	usages := AliasUsages(map[string]Alias{
 		"docker": {Name: "docker", AllowExtraArgs: true},
 		"git-ctgbot": {
 			Name: "git",
-			Subcommands: map[string]hostbridgepolicy.AllowedSubcommand{
+			Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
 				"push":   {},
 				"fetch":  {},
 				"status": {},
@@ -258,7 +258,7 @@ func TestAllowedCommandUsagesShowsSubcommands(t *testing.T) {
 	})
 	want := []string{"docker", "git-ctgbot [ fetch | push | status ]"}
 	if !equalStrings(usages, want) {
-		t.Fatalf("AllowedCommandUsages() = %#v, want %#v", usages, want)
+		t.Fatalf("AliasUsages() = %#v, want %#v", usages, want)
 	}
 }
 

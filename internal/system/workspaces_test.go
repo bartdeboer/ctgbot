@@ -47,7 +47,7 @@ func TestSaveWorkspaceUsesConfiguredPath(t *testing.T) {
 	}
 }
 
-func TestSaveWorkspacePreservesHostbridgeAllowedCommands(t *testing.T) {
+func TestSaveWorkspacePreservesHostbridgeAliases(t *testing.T) {
 	root := t.TempDir()
 	wd, err := os.Getwd()
 	if err != nil {
@@ -69,7 +69,7 @@ func TestSaveWorkspacePreservesHostbridgeAllowedCommands(t *testing.T) {
 		"work": {
 			Path: "workspaces/old-root",
 			Hostbridge: WorkspaceHostbridgeSettings{
-				AllowedCommands: map[string]hostbridgepolicy.AllowedCommand{
+				Aliases: map[string]hostbridgepolicy.Alias{
 					"echo-work": {Name: "/bin/echo", Args: []string{"work"}},
 				},
 			},
@@ -85,8 +85,8 @@ func TestSaveWorkspacePreservesHostbridgeAllowedCommands(t *testing.T) {
 	if got, want := workspace.Path, filepath.Join(root, "workspaces", "new-root"); got != want {
 		t.Fatalf("Path = %q, want %q", got, want)
 	}
-	if got := workspace.HostbridgeAllowedCommands["echo-work"].Name; got != "/bin/echo" {
-		t.Fatalf("AllowedCommands[echo-work].Name = %q, want /bin/echo", got)
+	if got := workspace.HostbridgeAliases["echo-work"].Name; got != "/bin/echo" {
+		t.Fatalf("Aliases[echo-work].Name = %q, want /bin/echo", got)
 	}
 }
 
@@ -112,7 +112,7 @@ func TestConfiguredWorkspacesReadsCurrentKey(t *testing.T) {
 		"work": {
 			Path: "workspaces/work-root",
 			Hostbridge: WorkspaceHostbridgeSettings{
-				AllowedCommands: map[string]hostbridgepolicy.AllowedCommand{
+				Aliases: map[string]hostbridgepolicy.Alias{
 					"echo-work": {Name: "/bin/echo", Args: []string{"work"}},
 				},
 			},
@@ -126,12 +126,12 @@ func TestConfiguredWorkspacesReadsCurrentKey(t *testing.T) {
 	if got, want := configured["work"].Path, "workspaces/work-root"; got != want {
 		t.Fatalf("Path = %q, want %q", got, want)
 	}
-	if got := configured["work"].Hostbridge.AllowedCommands["echo-work"].Name; got != "/bin/echo" {
-		t.Fatalf("AllowedCommands[echo-work].Name = %q, want /bin/echo", got)
+	if got := configured["work"].Hostbridge.Aliases["echo-work"].Name; got != "/bin/echo" {
+		t.Fatalf("Aliases[echo-work].Name = %q, want /bin/echo", got)
 	}
 }
 
-func TestLoadWorkspacesReadsHostbridgeAllowedCommands(t *testing.T) {
+func TestLoadWorkspacesReadsHostbridgeAliases(t *testing.T) {
 	root := t.TempDir()
 	wd, err := os.Getwd()
 	if err != nil {
@@ -153,7 +153,7 @@ func TestLoadWorkspacesReadsHostbridgeAllowedCommands(t *testing.T) {
 		"work": {
 			Path: "workspaces/work-root",
 			Hostbridge: WorkspaceHostbridgeSettings{
-				AllowedCommands: map[string]hostbridgepolicy.AllowedCommand{
+				Aliases: map[string]hostbridgepolicy.Alias{
 					"echo-work": {Name: "/bin/echo", Args: []string{"work"}},
 				},
 			},
@@ -171,11 +171,11 @@ func TestLoadWorkspacesReadsHostbridgeAllowedCommands(t *testing.T) {
 	if got, want := workspace.Path, filepath.Join(root, "workspaces", "work-root"); got != want {
 		t.Fatalf("Path = %q, want %q", got, want)
 	}
-	command := workspace.HostbridgeAllowedCommands["echo-work"]
+	command := workspace.HostbridgeAliases["echo-work"]
 	if got, want := command.Name, "/bin/echo"; got != want {
-		t.Fatalf("AllowedCommands[echo-work].Name = %q, want %q", got, want)
+		t.Fatalf("Aliases[echo-work].Name = %q, want %q", got, want)
 	}
 	if got, want := len(command.Args), 1; got != want {
-		t.Fatalf("AllowedCommands[echo-work].Args len = %d, want %d", got, want)
+		t.Fatalf("Aliases[echo-work].Args len = %d, want %d", got, want)
 	}
 }

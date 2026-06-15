@@ -17,13 +17,13 @@ type Settings struct {
 }
 
 type HostbridgeSettings struct {
-	AllowedCommands map[string]hostbridgepolicy.AllowedCommand `json:"allowed_commands"`
+	Aliases map[string]hostbridgepolicy.Alias `json:"allowed_commands"`
 }
 
 type Workspace struct {
-	Name                      string
-	Path                      string
-	HostbridgeAllowedCommands map[string]hostbridgepolicy.AllowedCommand
+	Name              string
+	Path              string
+	HostbridgeAliases map[string]hostbridgepolicy.Alias
 }
 
 type Info struct {
@@ -120,9 +120,9 @@ func resolve(rootDir string, name string, settings Settings) (Workspace, error) 
 		return Workspace{}, err
 	}
 	return Workspace{
-		Name:                      name,
-		Path:                      path,
-		HostbridgeAllowedCommands: normalizeAllowedCommands(settings.Hostbridge.AllowedCommands),
+		Name:              name,
+		Path:              path,
+		HostbridgeAliases: normalizeAliases(settings.Hostbridge.Aliases),
 	}, nil
 }
 
@@ -158,11 +158,11 @@ func validateName(name string) error {
 	return nil
 }
 
-func normalizeAllowedCommands(raw map[string]hostbridgepolicy.AllowedCommand) map[string]hostbridgepolicy.AllowedCommand {
+func normalizeAliases(raw map[string]hostbridgepolicy.Alias) map[string]hostbridgepolicy.Alias {
 	if len(raw) == 0 {
 		return nil
 	}
-	out := make(map[string]hostbridgepolicy.AllowedCommand, len(raw))
+	out := make(map[string]hostbridgepolicy.Alias, len(raw))
 	for name, spec := range raw {
 		name = strings.TrimSpace(name)
 		spec.Name = strings.TrimSpace(spec.Name)

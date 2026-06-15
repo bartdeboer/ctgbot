@@ -143,25 +143,25 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 	}, nil
 }
 
-func (b *Broker) hostbridgeAliasesForChat(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error) {
-	allowed := hostbridgeserver.DefaultAllowedCommands()
+func (b *Broker) hostbridgeAliasesForChat(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.Alias, error) {
+	allowed := hostbridgeserver.DefaultAliases()
 	if b == nil || b.App == nil {
 		return allowed, nil
 	}
-	extra, err := b.App.ResolveChatHostbridgeAllowedCommands(ctx, chat)
+	extra, err := b.App.ResolveChatHostbridgeAliases(ctx, chat)
 	if err != nil {
 		return nil, err
 	}
-	return hostbridgeserver.MergeNamedAllowedCommands(extra), nil
+	return hostbridgeserver.MergeAliases(extra), nil
 }
 
 func (r *ChatRuntime) RunHostbridgeAlias(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
-	allowed := hostbridgeserver.DefaultAllowedCommands()
+	allowed := hostbridgeserver.DefaultAliases()
 	if r != nil && r.HostbridgeAliases != nil {
 		allowed = r.HostbridgeAliases
 	}
 	runner := &hostbridgeserver.RunCommandRunner{
-		ResolveAllowed:    hostbridgeserver.StaticAllowedCommandResolver(allowed),
+		ResolveAliases:    hostbridgeserver.StaticAliasResolver(allowed),
 		DefaultTimeoutSec: 30,
 	}
 	return runner.RunCommand(ctx, req, cmd)
@@ -246,7 +246,7 @@ func (r *agentTurnRuntime) Instructions() component.TurnInstructions {
 			break
 		}
 	}
-	instructions.HostbridgeCommandNames = hostbridgeserver.AllowedCommandUsages(r.runtime.HostbridgeAliases)
+	instructions.HostbridgeCommandNames = hostbridgeserver.AliasUsages(r.runtime.HostbridgeAliases)
 	sort.Strings(instructions.HostbridgeCommandNames)
 	instructions.HostbridgeControlCommands = hostbridgeControlCommands(r.runtime)
 	instructions.HostbridgeFamilyDescriptions = hostbridgeFamilyDescriptions(r.runtime)

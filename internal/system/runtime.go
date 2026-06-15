@@ -117,7 +117,7 @@ func (s *System) ResolveChatWorkspace(_ context.Context, chat coremodel.Chat) (s
 	return hostPath, nil
 }
 
-func (s *System) ResolveChatHostbridgeAllowedCommands(_ context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.AllowedCommand, error) {
+func (s *System) ResolveChatHostbridgeAliases(_ context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.Alias, error) {
 	if s == nil {
 		return nil, fmt.Errorf("missing system")
 	}
@@ -129,11 +129,11 @@ func (s *System) ResolveChatHostbridgeAllowedCommands(_ context.Context, chat co
 	if err != nil {
 		return nil, err
 	}
-	if len(workspace.HostbridgeAllowedCommands) == 0 {
+	if len(workspace.HostbridgeAliases) == 0 {
 		return nil, nil
 	}
-	out := make(map[string]hostbridgeserver.AllowedCommand, len(workspace.HostbridgeAllowedCommands))
-	for name, spec := range workspace.HostbridgeAllowedCommands {
+	out := make(map[string]hostbridgeserver.Alias, len(workspace.HostbridgeAliases))
+	for name, spec := range workspace.HostbridgeAliases {
 		out[name] = spec
 	}
 	return out, nil

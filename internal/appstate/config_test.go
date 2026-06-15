@@ -74,7 +74,7 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	if err := store.PersistStruct(cfg.Chat(chatID).key("skills"), []string{`D:\bots\ctgbot-01\skills\human-first-coding`}); err != nil {
 		t.Fatalf("persist skills: %v", err)
 	}
-	if err := store.PersistStruct(cfg.Chat(chatID).Hostbridge().key("allowed_commands"), map[string]hostbridgepolicy.AllowedCommand{
+	if err := store.PersistStruct(cfg.Chat(chatID).Hostbridge().key("allowed_commands"), map[string]hostbridgepolicy.Alias{
 		"git-push-workspace-docs": {
 			Name:  "git",
 			Args:  []string{"push"},
@@ -82,7 +82,7 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 			Dir:   `D:\workspace\WORKSPACE-DOCS`,
 		},
 	}); err != nil {
-		t.Fatalf("persist allowed commands: %v", err)
+		t.Fatalf("persist hostbridge aliass: %v", err)
 	}
 
 	chat := cfg.Chat(chatID)
@@ -107,25 +107,25 @@ func TestGroupedChatConfigReadsRealShapedChatConfig(t *testing.T) {
 	if got := chat.Skills(); len(got) != 1 {
 		t.Fatalf("Skills() = %#v", got)
 	}
-	commands := chat.Hostbridge().AllowedCommands()
+	commands := chat.Hostbridge().Aliases()
 	if commands["git-push-workspace-docs"].Name != "git" {
-		t.Fatalf("AllowedCommands() = %#v", commands)
+		t.Fatalf("Aliases() = %#v", commands)
 	}
 }
 
-func TestChatHostbridgeIgnoresLegacyAllowedCommandSpecs(t *testing.T) {
+func TestChatHostbridgeIgnoresLegacyAliasSpecs(t *testing.T) {
 	cfg, store := newTestConfig(t)
 	chatID := modeluuid.New()
 
 	if err := store.PersistStruct(cfg.Chat(chatID).Hostbridge().key("allowed_commands"), []string{"/usr/bin/git"}); err != nil {
-		t.Fatalf("persist legacy allowed commands: %v", err)
+		t.Fatalf("persist legacy hostbridge aliass: %v", err)
 	}
 
-	if got := cfg.Chat(chatID).Hostbridge().AllowedCommands(); got != nil {
-		t.Fatalf("AllowedCommands() = %#v, want nil", got)
+	if got := cfg.Chat(chatID).Hostbridge().Aliases(); got != nil {
+		t.Fatalf("Aliases() = %#v, want nil", got)
 	}
-	if got := cfg.Chat(chatID).Hostbridge().ConfiguredAllowedCommands(); got != nil {
-		t.Fatalf("ConfiguredAllowedCommands() = %#v, want nil", got)
+	if got := cfg.Chat(chatID).Hostbridge().ConfiguredAliases(); got != nil {
+		t.Fatalf("ConfiguredAliases() = %#v, want nil", got)
 	}
 }
 
@@ -242,26 +242,26 @@ func TestChatHostbridgeSetters(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 	chatID := modeluuid.New()
 	hostbridge := cfg.Chat(chatID).Hostbridge()
-	if err := hostbridge.SetAllowedCommand("git-push", hostbridgepolicy.AllowedCommand{Name: "git", Args: []string{"push"}}); err != nil {
-		t.Fatalf("set allowed command: %v", err)
+	if err := hostbridge.SetAlias("git-push", hostbridgepolicy.Alias{Name: "git", Args: []string{"push"}}); err != nil {
+		t.Fatalf("set hostbridge alias: %v", err)
 	}
-	commands := hostbridge.AllowedCommands()
+	commands := hostbridge.Aliases()
 	if commands["git-push"].Name != "git" || len(commands["git-push"].Args) != 1 {
 		t.Fatalf("commands = %#v", commands)
 	}
-	if err := hostbridge.RemoveAllowedCommand("git-push"); err != nil {
-		t.Fatalf("remove allowed command: %v", err)
+	if err := hostbridge.RemoveAlias("git-push"); err != nil {
+		t.Fatalf("remove hostbridge alias: %v", err)
 	}
-	if got := hostbridge.AllowedCommands(); len(got) != 0 {
+	if got := hostbridge.Aliases(); len(got) != 0 {
 		t.Fatalf("commands after remove = %#v", got)
 	}
-	if err := hostbridge.ScaffoldAllowedCommand("deploy"); err != nil {
-		t.Fatalf("scaffold allowed command: %v", err)
+	if err := hostbridge.ScaffoldAlias("deploy"); err != nil {
+		t.Fatalf("scaffold hostbridge alias: %v", err)
 	}
-	if got := hostbridge.AllowedCommands(); len(got) != 0 {
+	if got := hostbridge.Aliases(); len(got) != 0 {
 		t.Fatalf("executable commands after scaffold = %#v, want none until name is configured", got)
 	}
-	configured := hostbridge.ConfiguredAllowedCommands()
+	configured := hostbridge.ConfiguredAliases()
 	if _, ok := configured["deploy"]; !ok {
 		t.Fatalf("configured commands = %#v, want deploy scaffold", configured)
 	}

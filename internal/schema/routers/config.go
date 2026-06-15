@@ -12,7 +12,7 @@ import (
 )
 
 type ConfigHandlers interface {
-	ScaffoldHostbridgeAllowedCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.ConfigHostbridgeScaffold) (commandengine.Result, error)
+	ScaffoldHostbridgeAlias(ctx context.Context, req commandengine.Request, cmd schemacommands.ConfigHostbridgeScaffold) (commandengine.Result, error)
 }
 
 func NewConfigCommandEngine(manager *configengine.Manager, source commandengine.Source, handlers ...ConfigHandlers) (*commandengine.Engine, error) {
@@ -79,7 +79,7 @@ func RegisterConfigHandlers(registry *commandengine.Registry, manager *configeng
 		return nil
 	}
 	return commandengine.Register[schemacommands.ConfigHostbridgeScaffold](registry, func(ctx context.Context, req commandengine.Request, cmd schemacommands.ConfigHostbridgeScaffold) (commandengine.Result, error) {
-		return handler.ScaffoldHostbridgeAllowedCommand(ctx, req, cmd)
+		return handler.ScaffoldHostbridgeAlias(ctx, req, cmd)
 	})
 }
 

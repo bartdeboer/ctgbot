@@ -82,7 +82,7 @@ func TestHostbridgeControlCommandsUsesCanonicalAgentSurface(t *testing.T) {
 }
 
 func TestChatRuntimeRunHostbridgeAliasUsesRuntimeAliases(t *testing.T) {
-	runtime := &ChatRuntime{HostbridgeAliases: map[string]hostbridgeserver.AllowedCommand{
+	runtime := &ChatRuntime{HostbridgeAliases: map[string]hostbridgeserver.Alias{
 		"echo-runtime": {
 			Name: "/bin/echo",
 			Args: []string{"runtime-ok"},

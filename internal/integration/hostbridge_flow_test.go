@@ -355,7 +355,7 @@ func TestHostbridgeSendMediaFlow(t *testing.T) {
 }
 
 func TestHostbridgeRunCommandFlow(t *testing.T) {
-	if _, ok := hostbridgeserver.DefaultAllowedCommands()["pwd"]; !ok {
+	if _, ok := hostbridgeserver.DefaultAliases()["pwd"]; !ok {
 		t.Skip("default hostbridge command pwd is unavailable on this platform")
 	}
 	withTempCwd(t, func(root string) {
@@ -471,7 +471,7 @@ func TestHostbridgeRunCommandFlow(t *testing.T) {
 	})
 }
 
-func TestHostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
+func TestHostbridgeRunUsesWorkspaceAliases(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
 
@@ -525,7 +525,7 @@ func TestHostbridgeRunUsesWorkspaceAllowedCommands(t *testing.T) {
 			"work": {
 				Name: "work",
 				Path: filepath.Join(root, "workspaces", "work"),
-				HostbridgeAllowedCommands: map[string]hostbridgeserver.AllowedCommand{
+				HostbridgeAliases: map[string]hostbridgeserver.Alias{
 					"echo-workspace": {
 						Name: "/bin/echo",
 						Args: []string{"workspace-ok"},

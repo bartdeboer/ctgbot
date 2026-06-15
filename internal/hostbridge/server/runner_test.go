@@ -10,11 +10,11 @@ import (
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
 
-func TestRunCommandRunnerExecutesAllowedCommand(t *testing.T) {
+func TestRunCommandRunnerExecutesAlias(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("default allowed commands are empty on windows")
+		t.Skip("default hostbridge aliass are empty on windows")
 	}
-	runner := &RunCommandRunner{ResolveAllowed: StaticAllowedCommandResolver(nil), DefaultTimeoutSec: 5}
+	runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(nil), DefaultTimeoutSec: 5}
 	result, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "pwd"})
 	if err != nil {
 		t.Fatalf("RunCommand() error = %v", err)
@@ -25,7 +25,7 @@ func TestRunCommandRunnerExecutesAllowedCommand(t *testing.T) {
 }
 
 func TestRunCommandRunnerRejectsUnknownCommand(t *testing.T) {
-	runner := &RunCommandRunner{ResolveAllowed: StaticAllowedCommandResolver(nil), DefaultTimeoutSec: 5}
+	runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(nil), DefaultTimeoutSec: 5}
 	_, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "definitely-not-allowed"})
 	if err == nil {
 		t.Fatal("expected error")
@@ -34,10 +34,10 @@ func TestRunCommandRunnerRejectsUnknownCommand(t *testing.T) {
 
 func TestRunCommandRunnerRegistersNewCommandHandler(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("default allowed commands are empty on windows")
+		t.Skip("default hostbridge aliass are empty on windows")
 	}
 	registry := commandengine.NewRegistry()
-	runner := &RunCommandRunner{ResolveAllowed: StaticAllowedCommandResolver(nil), DefaultTimeoutSec: 5}
+	runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(nil), DefaultTimeoutSec: 5}
 	if err := RegisterRunCommandHandler(registry, runner); err != nil {
 		t.Fatalf("RegisterRunCommandHandler() error = %v", err)
 	}
