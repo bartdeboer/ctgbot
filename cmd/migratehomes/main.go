@@ -225,6 +225,9 @@ func copyDir(target string, rel string, info fs.FileInfo, apply bool, result *co
 	if targetInfo, err := os.Lstat(target); err == nil {
 		if targetInfo.IsDir() {
 			if apply {
+				if err := ensureOwnerWritable(target, targetInfo.Mode().Perm()); err != nil {
+					return err
+				}
 				result.Skipped++
 			} else {
 				result.WouldSkip++
@@ -239,11 +242,34 @@ func copyDir(target string, rel string, info fs.FileInfo, apply bool, result *co
 		result.WouldMake++
 		return nil
 	}
-	if err := os.MkdirAll(target, info.Mode().Perm()); err != nil {
+	if err := os.MkdirAll(target, writableDirMode(info.Mode().Perm())); err != nil {
 		return err
 	}
 	result.MakeDirs++
 	return nil
+}
+
+func writableDirMode(mode fs.FileMode) fs.FileMode {
+	perm := mode.Perm()
+	if perm == 0 {
+		perm = 0o755
+	}
+	return perm | 0o700
+}
+
+func ensureOwnerWritable(path string, fallback fs.FileMode) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	mode := info.Mode().Perm()
+	if mode == 0 {
+		mode = fallback.Perm()
+	}
+	if mode&0o200 != 0 {
+		return nil
+	}
+	return os.Chmod(path, writableDirMode(mode))
 }
 
 func copyFile(source string, target string, rel string, info fs.FileInfo, apply bool, result *copyResult) error {
@@ -273,6 +299,9 @@ func copyFile(source string, target string, rel string, info fs.FileInfo, apply 
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	if err := ensureOwnerWritable(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
 	if err := copyRegularFile(source, target, info); err != nil {
@@ -305,6 +334,9 @@ func copySymlink(source string, target string, rel string, apply bool, result *c
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	if err := ensureOwnerWritable(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
 	if err := os.Symlink(sourceTarget, target); err != nil {

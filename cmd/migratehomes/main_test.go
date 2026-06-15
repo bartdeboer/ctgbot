@@ -71,6 +71,33 @@ func TestMigrateHomesReportsConflictsWithoutOverwrite(t *testing.T) {
 	}
 }
 
+func TestMigrateHomesCopiesIntoReadOnlyModuleCacheDirs(t *testing.T) {
+	root := t.TempDir()
+	oldModDir := filepath.Join(root, "threads", "thread-1", "components", "codex", "codex", "home", "go", "pkg", "mod", "github.com", "bartdeboer", "go-clir@v0.0.5")
+	newModDir := filepath.Join(root, "threads", "thread-1", "home", "go", "pkg", "mod", "github.com", "bartdeboer", "go-clir@v0.0.5")
+	mustWrite(t, filepath.Join(oldModDir, "LICENSE"), "license")
+	if err := os.Chmod(oldModDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(oldModDir, 0o755) })
+	if err := os.MkdirAll(newModDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(newModDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(newModDir, 0o755) })
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"--state-root", root, "--apply"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run code = %d, stderr = %s, stdout = %s", code, stderr.String(), stdout.String())
+	}
+	if got := mustRead(t, filepath.Join(newModDir, "LICENSE")); got != "license" {
+		t.Fatalf("copied LICENSE = %q", got)
+	}
+}
+
 func mustWrite(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
