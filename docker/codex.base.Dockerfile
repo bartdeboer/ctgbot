@@ -2,7 +2,7 @@ FROM ctgbot-go-node-python-base:latest
 
 ARG CODEX_VERSION=latest
 
-RUN curl -fsSL --retry 5 --retry-delay 2 --retry-max-time 120 https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
+RUN curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 120 https://github.com/openai/codex/releases/latest/download/install.sh -o /tmp/install-codex.sh \
     && chmod +x /tmp/install-codex.sh \
     && if [ -n "${CODEX_VERSION}" ] && [ "${CODEX_VERSION}" != "latest" ]; then \
         CODEX_INSTALL_DIR=/usr/local/bin /tmp/install-codex.sh --release "${CODEX_VERSION}"; \
