@@ -25,8 +25,15 @@ import (
 const Type = "messaging"
 
 type Component struct {
-	Service *messagingdomain.Service
-	Inbound component.ResolvedInboundQueuer
+	Service            *messagingdomain.Service
+	Inbound            component.ResolvedInboundQueuer
+	ThreadInstructions ThreadInstructionManager
+}
+
+type ThreadInstructionManager interface {
+	ThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	WriteThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID, content []byte) error
+	ClearThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) error
 }
 
 var _ component.Component = (*Component)(nil)
@@ -75,6 +82,18 @@ type threadConfigUnsetCommand struct {
 	Key       string
 }
 
+type threadInstructionsShowCommand struct {
+	ThreadRef string
+}
+
+type threadInstructionsPutCommand struct {
+	ThreadRef string
+}
+
+type threadInstructionsClearCommand struct {
+	ThreadRef string
+}
+
 type messageListCommand struct {
 	ThreadRef string
 	Cursor    string
@@ -100,13 +119,20 @@ func RegisterGobTypes(register func(any)) {
 	register(threadConfigGetCommand{})
 	register(threadConfigSetCommand{})
 	register(threadConfigUnsetCommand{})
+	register(threadInstructionsShowCommand{})
+	register(threadInstructionsPutCommand{})
+	register(threadInstructionsClearCommand{})
 	register(messageListCommand{})
 	register(threadPurgeCommand{})
 	register(messageSendCommand{})
 }
 
-func New(service *messagingdomain.Service, inbound component.ResolvedInboundQueuer) *Component {
-	return &Component{Service: service, Inbound: inbound}
+func New(service *messagingdomain.Service, inbound component.ResolvedInboundQueuer, instructions ...ThreadInstructionManager) *Component {
+	var manager ThreadInstructionManager
+	if len(instructions) > 0 {
+		manager = instructions[0]
+	}
+	return &Component{Service: service, Inbound: inbound, ThreadInstructions: manager}
 }
 
 func (c *Component) Type() string { return Type }
@@ -203,6 +229,39 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 			},
 		},
 		{
+			Pattern:               "thread <thread> instructions show",
+			Help:                  "Show operator-owned thread instructions",
+			Build:                 buildThreadInstructionsShowCommand,
+			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			InstructionVisibility: commandengine.InstructionHidden,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread instructions show", Absolute: true},
+			},
+		},
+		{
+			Pattern:               "thread <thread> instructions put stdin",
+			Help:                  "Write operator-owned thread instructions from stdin",
+			Build:                 buildThreadInstructionsPutCommand,
+			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			InstructionVisibility: commandengine.InstructionHidden,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread instructions put stdin", Absolute: true},
+			},
+		},
+		{
+			Pattern:               "thread <thread> instructions clear",
+			Help:                  "Clear operator-owned thread instructions",
+			Build:                 buildThreadInstructionsClearCommand,
+			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
+			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent),
+			InstructionVisibility: commandengine.InstructionHidden,
+			Aliases: []commandengine.Route{
+				{Pattern: "thread instructions clear", Absolute: true},
+			},
+		},
+		{
 			Pattern:               "thread list",
 			Help:                  "List recent active threads",
 			Build:                 buildListCommand,
@@ -287,6 +346,15 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 		return err
 	}
 	if err := commandengine.Register[threadConfigUnsetCommand](registry, c.handleThreadConfigUnset); err != nil {
+		return err
+	}
+	if err := commandengine.Register[threadInstructionsShowCommand](registry, c.handleThreadInstructionsShow); err != nil {
+		return err
+	}
+	if err := commandengine.Register[threadInstructionsPutCommand](registry, c.handleThreadInstructionsPut); err != nil {
+		return err
+	}
+	if err := commandengine.Register[threadInstructionsClearCommand](registry, c.handleThreadInstructionsClear); err != nil {
 		return err
 	}
 	if err := commandengine.Register[messageListCommand](registry, c.handleMessageList); err != nil {
@@ -430,6 +498,57 @@ func (c *Component) handleThreadConfigUnset(ctx context.Context, req commandengi
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: key + "=" + value}, nil
+}
+
+func (c *Component) handleThreadInstructionsShow(ctx context.Context, req commandengine.Request, cmd threadInstructionsShowCommand) (commandengine.Result, error) {
+	if c == nil || c.ThreadInstructions == nil {
+		return commandengine.Result{}, fmt.Errorf("missing thread instruction manager")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	text, err := c.ThreadInstructions.ThreadExtraInstructions(ctx, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		text = "no thread instructions"
+	}
+	return commandengine.Result{Text: text}, nil
+}
+
+func (c *Component) handleThreadInstructionsPut(ctx context.Context, req commandengine.Request, cmd threadInstructionsPutCommand) (commandengine.Result, error) {
+	if c == nil || c.ThreadInstructions == nil {
+		return commandengine.Result{}, fmt.Errorf("missing thread instruction manager")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	content := strings.TrimSpace(req.Stdin)
+	if content == "" {
+		return commandengine.Result{}, fmt.Errorf("missing thread instructions on stdin")
+	}
+	if err := c.ThreadInstructions.WriteThreadExtraInstructions(ctx, threadID, []byte(content+"\n")); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "thread instructions written: " + threadID.String()}, nil
+}
+
+func (c *Component) handleThreadInstructionsClear(ctx context.Context, req commandengine.Request, cmd threadInstructionsClearCommand) (commandengine.Result, error) {
+	if c == nil || c.ThreadInstructions == nil {
+		return commandengine.Result{}, fmt.Errorf("missing thread instruction manager")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, cmd.ThreadRef)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if err := c.ThreadInstructions.ClearThreadExtraInstructions(ctx, threadID); err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: "thread instructions cleared: " + threadID.String()}, nil
 }
 
 func (c *Component) handleMessageList(ctx context.Context, req commandengine.Request, cmd messageListCommand) (commandengine.Result, error) {
@@ -717,6 +836,39 @@ func buildThreadConfigUnsetCommand(req *clir.Request) (any, error) {
 		return nil, fmt.Errorf("unexpected thread config arguments: %s", extra)
 	}
 	return threadConfigUnsetCommand{ThreadRef: threadRef, Key: key}, nil
+}
+
+func buildThreadInstructionsShowCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected thread instructions arguments: %s", extra)
+	}
+	return threadInstructionsShowCommand{ThreadRef: threadRef}, nil
+}
+
+func buildThreadInstructionsPutCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected thread instructions arguments: %s", extra)
+	}
+	return threadInstructionsPutCommand{ThreadRef: threadRef}, nil
+}
+
+func buildThreadInstructionsClearCommand(req *clir.Request) (any, error) {
+	threadRef := strings.TrimSpace(req.Params["thread"])
+	if threadRef == "" {
+		threadRef = "current"
+	}
+	if extra := strings.TrimSpace(strings.Join(req.Extra, " ")); extra != "" {
+		return nil, fmt.Errorf("unexpected thread instructions arguments: %s", extra)
+	}
+	return threadInstructionsClearCommand{ThreadRef: threadRef}, nil
 }
 
 func formatThreadList(threads []messagingdomain.ThreadSummary, currentThreadID modeluuid.UUID) string {

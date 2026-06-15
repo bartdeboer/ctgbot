@@ -41,6 +41,8 @@ type ChatRuntimeResolver interface {
 
 type ThreadInstructionResolver interface {
 	ThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	WriteThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID, content []byte) error
+	ClearThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) error
 }
 
 type Service interface {
@@ -193,6 +195,28 @@ func (s *service) ThreadExtraInstructions(ctx context.Context, threadID modeluui
 		return "", nil
 	}
 	return resolver.ThreadExtraInstructions(ctx, threadID)
+}
+
+func (s *service) WriteThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID, content []byte) error {
+	if s == nil || s.Resolver == nil {
+		return fmt.Errorf("missing thread instruction resolver")
+	}
+	resolver, ok := s.Resolver.(ThreadInstructionResolver)
+	if !ok || resolver == nil {
+		return fmt.Errorf("missing thread instruction resolver")
+	}
+	return resolver.WriteThreadExtraInstructions(ctx, threadID, content)
+}
+
+func (s *service) ClearThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) error {
+	if s == nil || s.Resolver == nil {
+		return fmt.Errorf("missing thread instruction resolver")
+	}
+	resolver, ok := s.Resolver.(ThreadInstructionResolver)
+	if !ok || resolver == nil {
+		return fmt.Errorf("missing thread instruction resolver")
+	}
+	return resolver.ClearThreadExtraInstructions(ctx, threadID)
 }
 
 func (s *service) componentManager() (ComponentManager, error) {

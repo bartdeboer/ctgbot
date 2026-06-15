@@ -30,6 +30,40 @@ func TestThreadExtraInstructionsReadsThreadFile(t *testing.T) {
 	}
 }
 
+func TestWriteAndClearThreadExtraInstructions(t *testing.T) {
+	root := t.TempDir()
+	threadID := modeluuid.New()
+	system := &System{StateRoot: root}
+
+	if err := system.WriteThreadExtraInstructions(context.Background(), threadID, []byte("- hello\n")); err != nil {
+		t.Fatalf("WriteThreadExtraInstructions() error = %v", err)
+	}
+	got, err := system.ThreadExtraInstructions(context.Background(), threadID)
+	if err != nil {
+		t.Fatalf("ThreadExtraInstructions() error = %v", err)
+	}
+	if got != "- hello" {
+		t.Fatalf("ThreadExtraInstructions() = %q", got)
+	}
+	info, err := os.Stat(filepath.Join(root, "threads", threadID.String(), "extra-instructions.md"))
+	if err != nil {
+		t.Fatalf("Stat(extra-instructions.md) error = %v", err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0o644); got != want {
+		t.Fatalf("mode = %o, want %o", got, want)
+	}
+	if err := system.ClearThreadExtraInstructions(context.Background(), threadID); err != nil {
+		t.Fatalf("ClearThreadExtraInstructions() error = %v", err)
+	}
+	got, err = system.ThreadExtraInstructions(context.Background(), threadID)
+	if err != nil {
+		t.Fatalf("ThreadExtraInstructions(after clear) error = %v", err)
+	}
+	if got != "" {
+		t.Fatalf("ThreadExtraInstructions(after clear) = %q, want empty", got)
+	}
+}
+
 func TestThreadExtraInstructionsMissingFileIsEmpty(t *testing.T) {
 	got, err := (&System{StateRoot: t.TempDir()}).ThreadExtraInstructions(context.Background(), modeluuid.New())
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 func (s *service) CommandSurfaces(ctx context.Context, chat coremodel.Chat, inbound component.ResolvedInboundQueuer, actions brokercomponent.Actions) ([]component.CommandSurface, error) {
 	surfaces := []component.CommandSurface{
 		componentadmin.New(s.Repository(), s),
-		messagingcomponent.New(messaging.New(s.Repository()), inbound),
+		messagingcomponent.New(messaging.New(s.Repository()), inbound, s),
 		remotecomponent.New(s),
 	}
 	if actions != nil {

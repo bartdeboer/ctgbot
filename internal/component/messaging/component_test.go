@@ -193,6 +193,46 @@ func TestThreadConfigCommandsDenyUserSet(t *testing.T) {
 	}
 }
 
+func TestThreadInstructionsCommandsManageExtraInstructions(t *testing.T) {
+	ctx := context.Background()
+	storage, thread := testMessagingStorage(t, ctx)
+	manager := newFakeThreadInstructionManager()
+	engine, err := commandset.NewEngineForSource(commandengine.SourceHostbridge, New(messagingdomain.New(storage), nil, manager))
+	if err != nil {
+		t.Fatalf("NewEngineForSource() error = %v", err)
+	}
+
+	req := testMessagingRequest(thread.ID, simplerbac.RoleAgent)
+	req.Context.Source = commandengine.SourceHostbridge
+	req.Stdin = "- Prefer git-status alias.\n"
+	result, err := engine.Run(ctx, req, []string{"thread", "instructions", "put", "stdin"})
+	if err != nil {
+		t.Fatalf("Run(instructions put) error = %v", err)
+	}
+	if !strings.Contains(result.Text, "thread instructions written") {
+		t.Fatalf("put result = %q", result.Text)
+	}
+
+	show, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleAgent), []string{"thread", "instructions", "show"})
+	if err != nil {
+		t.Fatalf("Run(instructions show) error = %v", err)
+	}
+	if !strings.Contains(show.Text, "Prefer git-status alias") {
+		t.Fatalf("show text = %q", show.Text)
+	}
+
+	if _, err := engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleAgent), []string{"thread", "instructions", "clear"}); err != nil {
+		t.Fatalf("Run(instructions clear) error = %v", err)
+	}
+	show, err = engine.Run(ctx, testMessagingRequest(thread.ID, simplerbac.RoleAgent), []string{"thread", "instructions", "show"})
+	if err != nil {
+		t.Fatalf("Run(instructions show after clear) error = %v", err)
+	}
+	if strings.TrimSpace(show.Text) != "no thread instructions" {
+		t.Fatalf("show after clear = %q", show.Text)
+	}
+}
+
 func TestThreadPurgeDeletesCurrentThreadMessagesArtifactsAndAgentMappings(t *testing.T) {
 	ctx := context.Background()
 	storage, thread := testMessagingStorage(t, ctx)
@@ -708,4 +748,29 @@ func mustParseModelUUID(t *testing.T, value string) modeluuid.UUID {
 		t.Fatalf("Parse(%q) error = %v", value, err)
 	}
 	return id
+}
+
+type fakeThreadInstructionManager struct {
+	text map[modeluuid.UUID]string
+}
+
+func newFakeThreadInstructionManager() *fakeThreadInstructionManager {
+	return &fakeThreadInstructionManager{text: map[modeluuid.UUID]string{}}
+}
+
+func (m *fakeThreadInstructionManager) ThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	_ = ctx
+	return m.text[threadID], nil
+}
+
+func (m *fakeThreadInstructionManager) WriteThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID, content []byte) error {
+	_ = ctx
+	m.text[threadID] = string(content)
+	return nil
+}
+
+func (m *fakeThreadInstructionManager) ClearThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) error {
+	_ = ctx
+	delete(m.text, threadID)
+	return nil
 }

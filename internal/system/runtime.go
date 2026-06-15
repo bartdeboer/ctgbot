@@ -144,7 +144,7 @@ func (s *System) ThreadExtraInstructions(_ context.Context, threadID modeluuid.U
 	if s == nil || s.StateRoot == "" || threadID.IsNull() {
 		return "", nil
 	}
-	path := filepath.Join(s.StateRoot, "threads", threadID.String(), "extra-instructions.md")
+	path := s.threadExtraInstructionsPath(threadID)
 	body, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
@@ -153,6 +153,62 @@ func (s *System) ThreadExtraInstructions(_ context.Context, threadID modeluuid.U
 		return "", err
 	}
 	return strings.TrimSpace(string(body)), nil
+}
+
+func (s *System) WriteThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID, content []byte) error {
+	if s == nil || s.StateRoot == "" {
+		return fmt.Errorf("missing system state root")
+	}
+	if threadID.IsNull() {
+		return fmt.Errorf("missing thread id")
+	}
+	if s.Storage != nil {
+		thread, err := s.Storage.Threads().GetByID(ctx, threadID)
+		if err != nil {
+			return err
+		}
+		if thread == nil {
+			return fmt.Errorf("thread not found: %s", threadID)
+		}
+	}
+	path := s.threadExtraInstructionsPath(threadID)
+	parent := filepath.Dir(path)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(parent, ".extra-instructions.md.tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpPath, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
+func (s *System) ClearThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) error {
+	_ = ctx
+	if s == nil || s.StateRoot == "" || threadID.IsNull() {
+		return nil
+	}
+	err := os.Remove(s.threadExtraInstructionsPath(threadID))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+func (s *System) threadExtraInstructionsPath(threadID modeluuid.UUID) string {
+	return filepath.Join(s.StateRoot, "threads", threadID.String(), "extra-instructions.md")
 }
 
 func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind string, profilePath string) (*coremodel.Component, error) {
