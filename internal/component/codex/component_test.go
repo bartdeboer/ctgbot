@@ -491,6 +491,7 @@ func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
 		KeepRepliesConcise:        true,
 		HostbridgeCommandNames:    []string{"docker", "git-push-ctgbot"},
 		HostbridgeControlCommands: []string{"hostbridge codex status", "hostbridge config list"},
+		ThreadExtraInstructions:   "- Prefer `hostbridge run git-ctgbot status` for this thread.",
 		RuntimeNotices:            []string{"[Runtime notice] image stale"},
 	})
 	if err != nil {
@@ -507,6 +508,8 @@ func TestCodexBootstrapIncludesTurnInstructions(t *testing.T) {
 		"Available hostbridge run aliases (on host):",
 		"hostbridge run [",
 		"git-push-ctgbot",
+		"Thread-specific instructions:",
+		"Prefer `hostbridge run git-ctgbot status` for this thread.",
 		"[Runtime notice] image stale",
 		"The user interacts through Telegram; keep replies concise",
 		"Start every assistant message with `🤖`",

@@ -18,7 +18,8 @@ import (
 
 func TestClaudeBootstrapIncludesRuntimeNotices(t *testing.T) {
 	text := claudeBootstrap("/workspace", component.TurnInstructions{
-		RuntimeNotices: []string{"[Runtime notice] image stale"},
+		ThreadExtraInstructions: "- Use the repo-specific git alias when mentioned.",
+		RuntimeNotices:          []string{"[Runtime notice] image stale"},
 	})
 	if !strings.Contains(text, "[Runtime notice] image stale") {
 		t.Fatalf("bootstrap text = %q, want runtime notice", text)
@@ -28,6 +29,9 @@ func TestClaudeBootstrapIncludesRuntimeNotices(t *testing.T) {
 	}
 	if !strings.Contains(text, "supervisor --help") {
 		t.Fatalf("bootstrap text = %q, want supervisor hint", text)
+	}
+	if !strings.Contains(text, "Thread-specific instructions:") || !strings.Contains(text, "repo-specific git alias") {
+		t.Fatalf("bootstrap text = %q, want thread-specific instructions", text)
 	}
 }
 

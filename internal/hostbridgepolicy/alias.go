@@ -1,5 +1,12 @@
 package hostbridgepolicy
 
+type AliasInstructionVisibility string
+
+const (
+	AliasInstructionVisible AliasInstructionVisibility = ""
+	AliasInstructionHidden  AliasInstructionVisibility = "hidden"
+)
+
 // Alias describes one host command that an agent may request through
 // hostbridge. It is policy data, not server/runtime machinery, so workspace and
 // app config can depend on this package without importing hostbridge/server.
@@ -12,6 +19,9 @@ type Alias struct {
 	Delay          string                     `json:"delay"`
 	Env            map[string]string          `json:"env"`
 	AllowExtraArgs bool                       `json:"allow_extra_args"`
+	// InstructionVisibility controls whether this allowed alias is shown in
+	// agent-facing prompt synopses. It never affects execution authority.
+	InstructionVisibility AliasInstructionVisibility `json:"instruction_visibility,omitempty"`
 }
 
 // AliasSubcommand describes one named operation under an Alias.

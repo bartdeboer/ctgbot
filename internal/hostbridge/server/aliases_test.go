@@ -273,3 +273,28 @@ func equalStrings(a []string, b []string) bool {
 	}
 	return true
 }
+
+func TestAliasUsagesHidesHiddenAliases(t *testing.T) {
+	t.Parallel()
+
+	aliases := map[string]Alias{
+		"visible": {Name: "/bin/echo"},
+		"hidden": {
+			Name:                  "/bin/echo",
+			InstructionVisibility: hostbridgepolicy.AliasInstructionHidden,
+		},
+		"git-visible": {
+			Name: "/usr/bin/git",
+			Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
+				"fetch":  {},
+				"status": {},
+			},
+		},
+	}
+
+	got := AliasUsages(aliases)
+	want := []string{"git-visible [ fetch | status ]", "visible"}
+	if !equalStrings(got, want) {
+		t.Fatalf("AliasUsages() = %#v, want %#v", got, want)
+	}
+}

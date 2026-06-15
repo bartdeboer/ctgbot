@@ -115,6 +115,9 @@ func AliasUsages(aliases map[string]Alias) []string {
 	out := make([]string, 0, len(names))
 	for _, name := range names {
 		spec := aliases[name]
+		if spec.InstructionVisibility == hostbridgepolicy.AliasInstructionHidden {
+			continue
+		}
 		if normalized, ok := normalizeAlias(spec); ok && len(normalized.Subcommands) > 0 {
 			out = append(out, name+" [ "+strings.Join(subcommandNames(normalized.Subcommands), " | ")+" ]")
 			continue

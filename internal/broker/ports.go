@@ -99,3 +99,10 @@ type WorkspacePolicy interface {
 	ResolveChatWorkspace(ctx context.Context, chat coremodel.Chat) (string, error)
 	ResolveChatHostbridgeAliases(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.Alias, error)
 }
+
+// ThreadInstructionProvider optionally supplies operator-authored prompt text
+// for a specific thread. These instructions are presentation only; they do not
+// grant command authority.
+type ThreadInstructionProvider interface {
+	ThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) (string, error)
+}

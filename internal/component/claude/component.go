@@ -290,6 +290,9 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 		}
 	}
 	lines = append(lines, "", "Available hostbridge run aliases (on host):", "```text", runAliasSynopsis, "```")
+	if extra := strings.TrimSpace(instructions.ThreadExtraInstructions); extra != "" {
+		lines = append(lines, "", "Thread-specific instructions:", extra)
+	}
 	for _, notice := range instructions.RuntimeNotices {
 		if notice = strings.TrimSpace(notice); notice != "" {
 			lines = append(lines, notice)

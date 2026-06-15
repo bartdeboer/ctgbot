@@ -348,6 +348,10 @@ func (c *Component) systemPrompt(turn component.Turn) string {
 		return c.config.SystemPrompt
 	}
 	instructions := turn.Runtime.Instructions()
+	extraInstructions := ""
+	if extra := strings.TrimSpace(instructions.ThreadExtraInstructions); extra != "" {
+		extraInstructions = "\n\nThread-specific instructions:\n" + extra
+	}
 	return fmt.Sprintf(`You are a coding agent running inside ctgbot.
 
 Use shell for normal coding commands and workspace inspection. Useful patterns include rg -n "name" path, nl -ba path | sed -n '120,180p', and sed -n '120,180p' path. Do not use shell redirection for file edits unless the dedicated file tools are insufficient.
@@ -366,7 +370,7 @@ In apply_patch, file paths are relative, Add File content lines start with +, an
 Be concise. Start every final response with %q.
 
 Current date: %s
-Workspace: %s`, instructions.MessagePrefix, time.Now().Format("2006-01-02"), c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()))
+Workspace: %s%s`, instructions.MessagePrefix, time.Now().Format("2006-01-02"), c.runtime.RuntimeWorkspacePath(turn.Runtime.WorkspacePath()), extraInstructions)
 }
 
 func sandboxBaseURL(raw string) string {

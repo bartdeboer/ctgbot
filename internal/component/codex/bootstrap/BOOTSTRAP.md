@@ -32,6 +32,10 @@ You are operating inside a dedicated Docker container for this conversation.
 ```
 {{ .BinariesSynopsis }}
 ```
+{{- if .ThreadExtraInstructions }}
+- Thread-specific instructions:
+{{ .ThreadExtraInstructions }}
+{{- end }}
 - When messaging threads, end your turn to receive their response. Do not poll for replies.
 - Use `hostbridge turn info` and `hostbridge turn config [ list | get <key> | set <key> <value> ]` for current-turn input metadata and output controls.
 - Use `hostbridge model <name> card` for model config options.

@@ -250,6 +250,17 @@ func (r *agentTurnRuntime) Instructions() component.TurnInstructions {
 	sort.Strings(instructions.HostbridgeCommandNames)
 	instructions.HostbridgeControlCommands = hostbridgeControlCommands(r.runtime)
 	instructions.HostbridgeFamilyDescriptions = hostbridgeFamilyDescriptions(r.runtime)
+	if r.broker != nil && r.broker.App != nil && !r.thread.ID.IsNull() {
+		provider, ok := r.broker.App.(ThreadInstructionProvider)
+		if ok && provider != nil {
+			extra, err := provider.ThreadExtraInstructions(r.ctx, r.thread.ID)
+			if err != nil {
+				instructions.RuntimeNotices = append(instructions.RuntimeNotices, "[Runtime notice] failed to read thread extra instructions: "+err.Error())
+			} else {
+				instructions.ThreadExtraInstructions = strings.TrimSpace(extra)
+			}
+		}
+	}
 	return instructions
 }
 

@@ -39,6 +39,10 @@ type ChatRuntimeResolver interface {
 	ResolveChatHostbridgeAliases(ctx context.Context, chat coremodel.Chat) (map[string]hostbridgeserver.Alias, error)
 }
 
+type ThreadInstructionResolver interface {
+	ThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) (string, error)
+}
+
 type Service interface {
 	ChatAdminService
 	WorkspaceAdminService
@@ -178,6 +182,17 @@ func (s *service) ResolveChatHostbridgeAliases(ctx context.Context, chat coremod
 		return nil, fmt.Errorf("missing chat runtime resolver")
 	}
 	return s.ChatRuntimeResolver.ResolveChatHostbridgeAliases(ctx, chat)
+}
+
+func (s *service) ThreadExtraInstructions(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	if s == nil || s.Resolver == nil {
+		return "", nil
+	}
+	resolver, ok := s.Resolver.(ThreadInstructionResolver)
+	if !ok || resolver == nil {
+		return "", nil
+	}
+	return resolver.ThreadExtraInstructions(ctx, threadID)
 }
 
 func (s *service) componentManager() (ComponentManager, error) {

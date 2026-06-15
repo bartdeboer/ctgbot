@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -137,6 +138,21 @@ func (s *System) ResolveChatHostbridgeAliases(_ context.Context, chat coremodel.
 		out[name] = spec
 	}
 	return out, nil
+}
+
+func (s *System) ThreadExtraInstructions(_ context.Context, threadID modeluuid.UUID) (string, error) {
+	if s == nil || s.StateRoot == "" || threadID.IsNull() {
+		return "", nil
+	}
+	path := filepath.Join(s.StateRoot, "threads", threadID.String(), "extra-instructions.md")
+	body, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(body)), nil
 }
 
 func (s *System) EnsureComponent(ctx context.Context, ref string, runtimeKind string, profilePath string) (*coremodel.Component, error) {

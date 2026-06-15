@@ -530,6 +530,7 @@ type TurnInstructions struct {
 	HostbridgeCommandNames       []string
 	HostbridgeControlCommands    []string
 	HostbridgeFamilyDescriptions map[string]string
+	ThreadExtraInstructions      string
 	RuntimeNotices               []string
 }
 

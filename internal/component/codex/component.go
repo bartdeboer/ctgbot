@@ -458,6 +458,7 @@ func codexBootstrap(workspace string, instructions component.TurnInstructions) (
 		BinariesSynopsis:          runAliasSynopsis,
 		HostbridgeControlSynopsis: controlSynopsis,
 		HostbridgeExamples:        agentcommon.HostbridgeExampleLines(controlSynopsis),
+		ThreadExtraInstructions:   strings.TrimSpace(instructions.ThreadExtraInstructions),
 		RuntimeNotices:            append([]string(nil), instructions.RuntimeNotices...),
 	})
 	if err != nil {
