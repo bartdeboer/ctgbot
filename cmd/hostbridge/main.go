@@ -80,11 +80,18 @@ func expandStdinArgs(args []string, stdin io.Reader) ([]string, error) {
 	switch {
 	case len(args) == 1 && args[0] == "send":
 		return appendStdinText(args, stdin)
+	case len(args) == 2 && args[0] == "send" && args[1] == "stdin":
+		return replaceStdinArgWithText(args, len(args)-1, stdin)
 	case len(args) >= 1 && args[0] == "sendfile" && sendfileUsesStdin(args[1:]):
 		out := append([]string{"sendstdin"}, args[1:]...)
 		return out, nil
+	case len(args) >= 2 && args[0] == "sendfile" && args[1] == "stdin":
+		out := append([]string{"sendstdin"}, args[2:]...)
+		return out, nil
 	case len(args) == 4 && args[0] == "thread" && args[2] == "message" && args[3] == "send":
 		return appendStdinText(args, stdin)
+	case len(args) == 5 && args[0] == "thread" && args[2] == "message" && args[3] == "send" && args[4] == "stdin":
+		return replaceStdinArgWithText(args, len(args)-1, stdin)
 	default:
 		return args, nil
 	}
@@ -95,17 +102,37 @@ func sendfileUsesStdin(args []string) bool {
 }
 
 func appendStdinText(args []string, stdin io.Reader) ([]string, error) {
-	data, err := io.ReadAll(stdin)
+	text, err := readStdinText(stdin)
 	if err != nil {
-		return nil, fmt.Errorf("read stdin: %w", err)
+		return nil, err
 	}
-	text := string(data)
 	if strings.TrimSpace(text) == "" {
 		return args, nil
 	}
 	out := append([]string{}, args...)
 	out = append(out, text)
 	return out, nil
+}
+
+func replaceStdinArgWithText(args []string, index int, stdin io.Reader) ([]string, error) {
+	text, err := readStdinText(stdin)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(text) == "" {
+		return args, nil
+	}
+	out := append([]string{}, args...)
+	out[index] = text
+	return out, nil
+}
+
+func readStdinText(stdin io.Reader) (string, error) {
+	data, err := io.ReadAll(stdin)
+	if err != nil {
+		return "", fmt.Errorf("read stdin: %w", err)
+	}
+	return string(data), nil
 }
 
 func parseOrRenderHelp(
