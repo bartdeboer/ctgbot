@@ -72,6 +72,57 @@ func TestExpandStdinArgsThreadMessageSend(t *testing.T) {
 	}
 }
 
+func TestExpandStdinArgsThreadMessageSendLiteralStdin(t *testing.T) {
+	got, err := expandStdinArgs(
+		[]string{"thread", "abc", "message", "send", "stdin"},
+		strings.NewReader("hello `world`\nline two\n"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"thread", "abc", "message", "send", "hello `world`\nline two\n"}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestExpandStdinArgsSendLiteralStdin(t *testing.T) {
+	got, err := expandStdinArgs([]string{"send", "stdin"}, strings.NewReader("hello `world`\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"send", "hello `world`\n"}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestExpandStdinArgsSendfileLiteralStdin(t *testing.T) {
+	got, err := expandStdinArgs([]string{"sendfile", "stdin", "--caption", "note"}, strings.NewReader("ignored by expand"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"sendstdin", "--caption", "note"}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d: %#v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestExpandStdinArgsThreadMessageSendEmptyStdinKeepsArgs(t *testing.T) {
 	args := []string{"thread", "abc", "message", "send"}
 	got, err := expandStdinArgs(args, strings.NewReader(""))
