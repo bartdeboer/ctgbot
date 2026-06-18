@@ -116,6 +116,10 @@ func parseOrRenderHelp(
 	helpWriter io.Writer,
 ) (commandengine.Request, bool, error) {
 	if helpReq, ok := commandengine.ParseHelpRequest(args); ok {
+		if hostbridgeTextCommandHelpShouldWin(helpReq.Scope) {
+			renderHostbridgeTextCommandHelp(helpWriter, helpReq.Scope[0])
+			return commandengine.Request{}, true, nil
+		}
 		match, err := router.Match(ctx, args)
 		if err != nil {
 			return commandengine.Request{}, false, err
@@ -142,6 +146,40 @@ func parseOrRenderHelp(
 
 	req, err := router.Parse(ctx, base, args)
 	return req, false, err
+}
+
+func hostbridgeTextCommandHelpShouldWin(scope []string) bool {
+	if len(scope) != 1 {
+		return false
+	}
+	switch scope[0] {
+	case "send", "sendfile":
+		return true
+	default:
+		return false
+	}
+}
+
+func renderHostbridgeTextCommandHelp(w io.Writer, command string) {
+	switch command {
+	case "send":
+		fmt.Fprintln(w, "Usage:")
+		fmt.Fprintln(w, "  hostbridge send [--type <mime>] [--syntax <language>] <text>")
+		fmt.Fprintln(w, "  hostbridge send <text> [--type <mime>] [--syntax <language>]")
+		fmt.Fprintln(w, "  hostbridge send stdin [--type <mime>] [--syntax <language>]")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "Examples:")
+		fmt.Fprintln(w, "  hostbridge send --type text/plain '<b>not bold</b>'")
+		fmt.Fprintln(w, "  printf 'hello' | hostbridge send stdin --type text/plain")
+	case "sendfile":
+		fmt.Fprintln(w, "Usage:")
+		fmt.Fprintln(w, "  hostbridge sendfile <path> [--caption <text>] [--type <mime>] [--syntax <language>]")
+		fmt.Fprintln(w, "  hostbridge sendfile stdin [--name <filename>] [--caption <text>] [--type <mime>] [--syntax <language>]")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "Examples:")
+		fmt.Fprintln(w, "  hostbridge sendfile report.pdf --caption 'Report'")
+		fmt.Fprintln(w, "  printf 'hello' | hostbridge sendfile stdin --name note.txt --type text/plain")
+	}
 }
 
 func normalizedArgs(args []string, componentRef string) []string {

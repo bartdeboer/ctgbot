@@ -44,7 +44,7 @@ func HostbridgeCommands() []commandengine.Definition {
 		RunCommandDefinition(),
 		{
 			Pattern:               "send <text>",
-			Help:                  "Send an outbound message; hostbridge reads stdin when message args are omitted",
+			Help:                  "Send outbound text; flags: --type <mime>, --syntax <language>, --attach <path>",
 			Build:                 buildMessagePayload,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                agentPolicy(),
@@ -52,7 +52,7 @@ func HostbridgeCommands() []commandengine.Definition {
 		},
 		{
 			Pattern:               "send stdin",
-			Help:                  "Send an outbound message from stdin",
+			Help:                  "Send outbound text from stdin; flags: --type <mime>, --syntax <language>, --attach <path>",
 			Build:                 buildMessagePayload,
 			Sources:               []commandengine.Source{commandengine.SourceHostbridge},
 			Policy:                agentPolicy(),
@@ -145,6 +145,13 @@ func (f *repeatPathFlag) Set(value string) error {
 }
 
 func buildMessagePayload(req *clir.Request) (any, error) {
+	text := strings.TrimSpace(req.Params["text"])
+	extra := append([]string(nil), req.Extra...)
+	if strings.HasPrefix(text, "-") {
+		extra = append([]string{text}, extra...)
+		text = ""
+	}
+
 	fs := flag.NewFlagSet("hostbridge send", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	contentType := fs.String("type", "", "Optional text content type")
@@ -152,13 +159,15 @@ func buildMessagePayload(req *clir.Request) (any, error) {
 	syntax := fs.String("syntax", "", "Optional syntax hint")
 	var attach repeatPathFlag
 	fs.Var(&attach, "attach", "Attachment descriptor; repeat for multiple attachments")
-	if err := fs.Parse(req.Extra); err != nil {
+	if err := fs.Parse(extra); err != nil {
 		return nil, err
 	}
-	if len(fs.Args()) > 0 {
-		return nil, fmt.Errorf("unexpected message arguments: %s", strings.Join(fs.Args(), " "))
+	if args := fs.Args(); len(args) > 0 {
+		if text != "" {
+			return nil, fmt.Errorf("unexpected message arguments: %s", strings.Join(args, " "))
+		}
+		text = strings.TrimSpace(strings.Join(args, " "))
 	}
-
 	attachments := make([]message.Media, 0, len(attach))
 	for _, raw := range attach {
 		media, err := mediafile.ReadDescriptor(raw)
@@ -170,7 +179,7 @@ func buildMessagePayload(req *clir.Request) (any, error) {
 
 	payload := message.OutboundPayload{
 		Text: message.TextMessage{
-			Text:        strings.TrimSpace(req.Params["text"]),
+			Text:        text,
 			ContentType: strings.TrimSpace(*contentType),
 			Syntax:      resolveSyntax(*language, *syntax),
 		},

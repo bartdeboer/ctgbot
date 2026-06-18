@@ -291,6 +291,22 @@ func TestHelpRequestRendersContextualHelpBeforePrefixCommandExecution(t *testing
 			},
 		},
 		{
+			name: "send group help beats text payload",
+			argv: []string{"send", "help"},
+			contains: []string{
+				"hostbridge send [--type <mime>]",
+				"hostbridge send --type text/plain",
+			},
+		},
+		{
+			name: "send flag help beats text payload",
+			argv: []string{"send", "--help"},
+			contains: []string{
+				"hostbridge send [--type <mime>]",
+				"hostbridge send --type text/plain",
+			},
+		},
+		{
 			name: "thread root shows compact command family",
 			argv: []string{"thread", "help"},
 			contains: []string{

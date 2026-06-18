@@ -180,6 +180,25 @@ func TestHostbridgeSendParsesPayloadWithAttachments(t *testing.T) {
 	if got, want := cmd.Payload.Attachments[1].Filename, "two.bin"; got != want {
 		t.Fatalf("second filename = %q, want %q", got, want)
 	}
+
+	req, err = router.Parse(context.Background(), commandengine.Request{
+		Context: commandengine.Context{
+			Actor: commandengine.Actor{Roles: []simplerbac.Role{simplerbac.RoleAgent}},
+		},
+	}, []string{"send", "--type", "text/plain", "<b>not bold</b>"})
+	if err != nil {
+		t.Fatalf("Parse(flags before text) error = %v", err)
+	}
+	cmd, ok = req.Command.(SendPayload)
+	if !ok {
+		t.Fatalf("command = %T, want SendPayload", req.Command)
+	}
+	if got, want := cmd.Payload.Text.Text, "<b>not bold</b>"; got != want {
+		t.Fatalf("text = %q, want %q", got, want)
+	}
+	if got, want := cmd.Payload.Text.ContentType, "text/plain"; got != want {
+		t.Fatalf("text content type = %q, want %q", got, want)
+	}
 }
 
 func TestHostbridgeSendAllowsStdinBodyRoute(t *testing.T) {
