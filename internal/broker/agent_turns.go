@@ -46,7 +46,7 @@ func (b *Broker) runStoredThreadTurn(
 		}
 		if result.Relay != nil && strings.TrimSpace(result.Relay.Text) != "" {
 			payload := turnRuntime.applyTurnOutputDefaults(messagePayload(result.Relay.Text))
-			if err := b.relayOnlyMessageWithPayloadText(ctx, runtime, chat, thread, *result.Relay, payload.Text); err != nil {
+			if err := b.relayOnlyMessage(ctx, runtime, chat, thread, *result.Relay, payload); err != nil {
 				return outbound, err
 			}
 		}
@@ -57,7 +57,7 @@ func (b *Broker) runStoredThreadTurn(
 		finalAlreadyRelayed := strings.TrimSpace(final.Text) == turnRuntime.LastText()
 		if !finalAlreadyRelayed {
 			payload := turnRuntime.applyTurnOutputDefaults(messagePayload(final.Text))
-			message, err := b.storeAndRelayMessageWithPayloadText(ctx, runtime, chat, thread, *final, agentType(agentBinding), payload.Text, nil)
+			message, err := b.storeAndRelayMessageWithPayload(ctx, runtime, chat, thread, *final, agentType(agentBinding), payload)
 			if err != nil {
 				return outbound, err
 			}
