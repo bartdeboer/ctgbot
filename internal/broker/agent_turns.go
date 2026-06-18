@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
 func (b *Broker) runStoredThreadTurn(
@@ -44,7 +45,8 @@ func (b *Broker) runStoredThreadTurn(
 			continue
 		}
 		if result.Relay != nil && strings.TrimSpace(result.Relay.Text) != "" {
-			if err := b.relayOnlyMessage(ctx, runtime, chat, thread, *result.Relay); err != nil {
+			payload := turnRuntime.applyTurnOutputDefaults(messagePayload(result.Relay.Text))
+			if err := b.relayOnlyMessageWithPayloadText(ctx, runtime, chat, thread, *result.Relay, payload.Text); err != nil {
 				return outbound, err
 			}
 		}
@@ -54,7 +56,8 @@ func (b *Broker) runStoredThreadTurn(
 		}
 		finalAlreadyRelayed := strings.TrimSpace(final.Text) == turnRuntime.LastText()
 		if !finalAlreadyRelayed {
-			message, err := b.storeAndRelayMessageWithAttachments(ctx, runtime, chat, thread, *final, agentType(agentBinding), nil)
+			payload := turnRuntime.applyTurnOutputDefaults(messagePayload(final.Text))
+			message, err := b.storeAndRelayMessageWithPayloadText(ctx, runtime, chat, thread, *final, agentType(agentBinding), payload.Text, nil)
 			if err != nil {
 				return outbound, err
 			}
@@ -68,4 +71,8 @@ func (b *Broker) runStoredThreadTurn(
 	}
 
 	return outbound, nil
+}
+
+func messagePayload(text string) message.OutboundPayload {
+	return message.OutboundPayload{Text: message.TextMessage{Text: text}}
 }

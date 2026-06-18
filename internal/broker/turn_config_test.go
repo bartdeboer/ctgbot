@@ -9,6 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
+	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
@@ -26,6 +27,12 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 	if _, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigSet{Key: "voice.name", Value: "F3"}}); err != nil {
 		t.Fatalf("turn config set voice error = %v", err)
 	}
+	if _, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigSet{Key: "output.type", Value: "markdown"}}); err != nil {
+		t.Fatalf("turn config set output type error = %v", err)
+	}
+	if _, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigSet{Key: "output.syntax", Value: "go"}}); err != nil {
+		t.Fatalf("turn config set output syntax error = %v", err)
+	}
 	if !turn.voiceOutput {
 		t.Fatal("voice output = false, want true")
 	}
@@ -34,6 +41,12 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 	}
 	if got, want := turn.voiceName, "F3"; got != want {
 		t.Fatalf("voice name = %q, want %q", got, want)
+	}
+	if got, want := turn.outputType, "text/markdown"; got != want {
+		t.Fatalf("output type = %q, want %q", got, want)
+	}
+	if got, want := turn.outputSyntax, "go"; got != want {
+		t.Fatalf("output syntax = %q, want %q", got, want)
 	}
 
 	result, err := executor.Execute(context.Background(), commandengine.Request{Command: schemacommands.TurnConfigList{}})
@@ -46,6 +59,8 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 		"voice.output=true",
 		"voice.language=nl",
 		"voice.name=F3",
+		"output.type=text/markdown",
+		"output.syntax=go",
 	} {
 		if !strings.Contains(result.Text, want) {
 			t.Fatalf("turn config list text = %q, want %q", result.Text, want)
@@ -68,6 +83,30 @@ func TestTurnCommandExecutorUpdatesCurrentTurnOnly(t *testing.T) {
 	}
 	if turn.voiceName != "" {
 		t.Fatalf("voice name = %q, want unset", turn.voiceName)
+	}
+}
+
+func TestTurnOutputDefaultsFillOnlyMissingPayloadFields(t *testing.T) {
+	turn := &agentTurnRuntime{outputType: "text/markdown", outputSyntax: "go"}
+
+	defaulted := turn.applyTurnOutputDefaults(message.OutboundPayload{
+		Text: message.TextMessage{Text: "fmt.Println(1)"},
+	})
+	if got, want := defaulted.Text.ContentType, "text/markdown"; got != want {
+		t.Fatalf("defaulted content type = %q, want %q", got, want)
+	}
+	if got, want := defaulted.Text.Syntax, "go"; got != want {
+		t.Fatalf("defaulted syntax = %q, want %q", got, want)
+	}
+
+	explicit := turn.applyTurnOutputDefaults(message.OutboundPayload{
+		Text: message.TextMessage{Text: "<b>x</b>", ContentType: "text/html", Syntax: "html"},
+	})
+	if got, want := explicit.Text.ContentType, "text/html"; got != want {
+		t.Fatalf("explicit content type = %q, want %q", got, want)
+	}
+	if got, want := explicit.Text.Syntax, "html"; got != want {
+		t.Fatalf("explicit syntax = %q, want %q", got, want)
 	}
 }
 

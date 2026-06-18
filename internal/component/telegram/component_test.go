@@ -569,6 +569,76 @@ func TestSendTextMessageWithPlainContentTypeUsesPlainParseMode(t *testing.T) {
 		t.Fatalf("message = %#v, want plain parse mode", messages[0])
 	}
 }
+
+func TestSendTextMessageWithPlainContentTypeIgnoresSyntax(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID: "123",
+		Text: message.TextMessage{
+			Text:        "<b>not bold</b>",
+			ContentType: "text/plain",
+			Syntax:      "go",
+		},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 1 {
+		t.Fatalf("messages = %#v, want one", messages)
+	}
+	if messages[0].text != "<b>not bold</b>" || messages[0].parseMode != "" {
+		t.Fatalf("message = %#v, want plain text with syntax ignored", messages[0])
+	}
+}
+
+func TestSendTextMessageWithHTMLContentTypeIgnoresSyntax(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID: "123",
+		Text: message.TextMessage{
+			Text:        "<b>hello</b>",
+			ContentType: "text/html",
+			Syntax:      "go",
+		},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 1 {
+		t.Fatalf("messages = %#v, want one", messages)
+	}
+	if messages[0].text != "<b>hello</b>" || messages[0].parseMode != "HTML" {
+		t.Fatalf("message = %#v, want HTML with syntax ignored", messages[0])
+	}
+}
+
+func TestSendTextMessageWithMarkdownContentTypeUsesSyntaxFence(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api, componentConfig: telegramTestConfig(ComponentConfig{RenderFormat: "html"})}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID: "123",
+		Text: message.TextMessage{
+			Text:        "fmt.Println(1)",
+			ContentType: "text/markdown",
+			Syntax:      "go",
+		},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 1 {
+		t.Fatalf("messages = %#v, want one", messages)
+	}
+	if !strings.Contains(messages[0].text, "```go") || messages[0].parseMode != "MarkdownV2" {
+		t.Fatalf("message = %#v, want markdown fenced code", messages[0])
+	}
+}
+
 func TestSendMediaImageUsesPhoto(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}

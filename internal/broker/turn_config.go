@@ -21,6 +21,8 @@ const (
 	turnConfigVoiceName         = turnconfig.VoiceName
 	turnConfigVoiceModel        = turnconfig.VoiceModel
 	turnConfigVoiceDeviceTarget = turnconfig.VoiceDeviceTarget
+	turnConfigOutputType        = turnconfig.OutputType
+	turnConfigOutputSyntax      = turnconfig.OutputSyntax
 )
 
 type turnCommandExecutor struct {
@@ -187,6 +189,8 @@ func (r *agentTurnRuntime) turnConfigValues() turnconfig.Values {
 		VoiceName:         r.voiceName,
 		VoiceModel:        r.voiceModel,
 		VoiceDeviceTarget: r.voiceDeviceTarget,
+		OutputType:        r.outputType,
+		OutputSyntax:      r.outputSyntax,
 	}
 }
 
@@ -308,6 +312,8 @@ func (r *agentTurnRuntime) applyTurnConfigValues(values turnconfig.Values) {
 	r.voiceName = values.VoiceName
 	r.voiceModel = values.VoiceModel
 	r.voiceDeviceTarget = values.VoiceDeviceTarget
+	r.outputType = values.OutputType
+	r.outputSyntax = values.OutputSyntax
 }
 
 func (r *agentTurnRuntime) turnConfigValue(key string) string {

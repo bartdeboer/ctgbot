@@ -19,6 +19,8 @@ const (
 	VoiceName         = "voice.name"
 	VoiceModel        = "voice.model"
 	VoiceDeviceTarget = "voice.device-target"
+	OutputType        = "output.type"
+	OutputSyntax      = "output.syntax"
 )
 
 type Values struct {
@@ -29,6 +31,8 @@ type Values struct {
 	VoiceName         string
 	VoiceModel        string
 	VoiceDeviceTarget string
+	OutputType        string
+	OutputSyntax      string
 }
 
 type Surface struct {
@@ -48,6 +52,8 @@ func Schema() configsurface.ConfigSchema {
 		{Key: VoiceName, Help: "Voice name/style for this turn", Type: configsurface.FieldTypeEnum, Writable: true, Options: []string{"F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5"}},
 		{Key: VoiceModel, Help: "Voice synthesis model for this turn", Type: configsurface.FieldTypeString, Writable: true},
 		{Key: VoiceDeviceTarget, Help: "Optional target for future voice output devices", Type: configsurface.FieldTypeString, Writable: true},
+		{Key: OutputType, Help: "Default text content type for normal replies this turn", Type: configsurface.FieldTypeEnum, Writable: true, Options: []string{"text/plain", "text/markdown", "text/html"}},
+		{Key: OutputSyntax, Help: "Syntax hint for markdown fenced code blocks in normal replies this turn", Type: configsurface.FieldTypeString, Writable: true},
 	}}
 }
 
@@ -98,6 +104,10 @@ func Value(values Values, key string) (string, error) {
 		return strings.TrimSpace(values.VoiceModel), nil
 	case VoiceDeviceTarget:
 		return strings.TrimSpace(values.VoiceDeviceTarget), nil
+	case OutputType:
+		return strings.TrimSpace(values.OutputType), nil
+	case OutputSyntax:
+		return strings.TrimSpace(values.OutputSyntax), nil
 	default:
 		return "", UnknownKey(key)
 	}
@@ -124,6 +134,14 @@ func Set(values *Values, key string, value string) (string, error) {
 		values.VoiceModel = value
 	case VoiceDeviceTarget:
 		values.VoiceDeviceTarget = value
+	case OutputType:
+		contentType, err := cleanOutputType(value)
+		if err != nil {
+			return "", err
+		}
+		values.OutputType = contentType
+	case OutputSyntax:
+		values.OutputSyntax = value
 	case InputVoice, InputLanguage:
 		return "", fmt.Errorf("turn config %s is read-only", key)
 	default:
@@ -148,6 +166,10 @@ func Unset(values *Values, key string) (string, error) {
 		values.VoiceModel = ""
 	case VoiceDeviceTarget:
 		values.VoiceDeviceTarget = ""
+	case OutputType:
+		values.OutputType = ""
+	case OutputSyntax:
+		values.OutputSyntax = ""
 	case InputVoice, InputLanguage:
 		return "", fmt.Errorf("turn config %s is read-only", key)
 	default:
@@ -189,4 +211,19 @@ func cleanLanguage(value string) string {
 		value = value[:idx]
 	}
 	return value
+}
+
+func cleanOutputType(value string) (string, error) {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "", "default":
+		return "", nil
+	case "plain", "text", "text/plain":
+		return "text/plain", nil
+	case "markdown", "md", "text/markdown":
+		return "text/markdown", nil
+	case "html", "text/html":
+		return "text/html", nil
+	default:
+		return "", fmt.Errorf("turn config %s expects text/plain, text/markdown, or text/html", OutputType)
+	}
 }

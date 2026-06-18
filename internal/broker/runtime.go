@@ -212,6 +212,8 @@ type agentTurnRuntime struct {
 	voiceName             string
 	voiceModel            string
 	voiceDeviceTarget     string
+	outputType            string
+	outputSyntax          string
 	inputFiles            []turnInputFile
 }
 
@@ -285,6 +287,7 @@ func (r *agentTurnRuntime) Send(ctx context.Context, payload message.OutboundPay
 	if r == nil || r.broker == nil || r.runtime == nil {
 		return fmt.Errorf("missing turn runtime")
 	}
+	payload = r.applyTurnOutputDefaults(payload)
 	messages, err := r.broker.deliverPayload(ctx, r.runtime, r.chat, r.thread, payload, r.componentID)
 	if err != nil {
 		return err
@@ -294,6 +297,19 @@ func (r *agentTurnRuntime) Send(ctx context.Context, payload message.OutboundPay
 		r.lastText = text
 	}
 	return nil
+}
+
+func (r *agentTurnRuntime) applyTurnOutputDefaults(payload message.OutboundPayload) message.OutboundPayload {
+	if r == nil {
+		return payload
+	}
+	if strings.TrimSpace(payload.Text.ContentType) == "" {
+		payload.Text.ContentType = strings.TrimSpace(r.outputType)
+	}
+	if strings.TrimSpace(payload.Text.Syntax) == "" {
+		payload.Text.Syntax = strings.TrimSpace(r.outputSyntax)
+	}
+	return payload
 }
 
 func (r *agentTurnRuntime) LastText() string {

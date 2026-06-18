@@ -75,6 +75,10 @@ func (b *Broker) storeAndRelayMessage(ctx context.Context, runtime *ChatRuntime,
 }
 
 func (b *Broker) storeAndRelayMessageWithAttachments(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, threadMessage coremodel.ThreadMessage, sourceType string, attachments []message.Media) (*coremodel.ThreadMessage, error) {
+	return b.storeAndRelayMessageWithPayloadText(ctx, runtime, chat, thread, threadMessage, sourceType, message.TextMessage{Text: threadMessage.Text}, attachments)
+}
+
+func (b *Broker) storeAndRelayMessageWithPayloadText(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, threadMessage coremodel.ThreadMessage, sourceType string, payloadText message.TextMessage, attachments []message.Media) (*coremodel.ThreadMessage, error) {
 	threadMessage.ChatID = chat.ID
 	threadMessage.ThreadID = thread.ID
 	threadMessage.Direction = coremodel.MessageDirectionOutbound
@@ -90,8 +94,11 @@ func (b *Broker) storeAndRelayMessageWithAttachments(ctx context.Context, runtim
 	if err := b.App.StoreOutboundMessage(ctx, &threadMessage, attachments); err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(payloadText.Text) == "" {
+		payloadText.Text = threadMessage.Text
+	}
 	payload := message.OutboundPayload{
-		Text:        message.TextMessage{Text: threadMessage.Text},
+		Text:        payloadText,
 		Attachments: append([]message.Media(nil), attachments...),
 	}
 	if runtime != nil {
@@ -103,6 +110,10 @@ func (b *Broker) storeAndRelayMessageWithAttachments(ctx context.Context, runtim
 }
 
 func (b *Broker) relayOnlyMessage(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, threadMessage coremodel.ThreadMessage) error {
+	return b.relayOnlyMessageWithPayloadText(ctx, runtime, chat, thread, threadMessage, message.TextMessage{Text: threadMessage.Text})
+}
+
+func (b *Broker) relayOnlyMessageWithPayloadText(ctx context.Context, runtime *ChatRuntime, chat coremodel.Chat, thread coremodel.Thread, threadMessage coremodel.ThreadMessage, payloadText message.TextMessage) error {
 	_ = chat
 	if runtime == nil {
 		return nil
@@ -111,7 +122,10 @@ func (b *Broker) relayOnlyMessage(ctx context.Context, runtime *ChatRuntime, cha
 	if text == "" {
 		return nil
 	}
-	payload := message.OutboundPayload{Text: message.TextMessage{Text: text}}
+	if strings.TrimSpace(payloadText.Text) == "" {
+		payloadText.Text = text
+	}
+	payload := message.OutboundPayload{Text: payloadText}
 	return b.relayPayloadToRelayBindings(ctx, runtime.Relays, thread, payload)
 }
 

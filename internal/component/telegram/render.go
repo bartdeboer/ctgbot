@@ -16,6 +16,14 @@ const (
 )
 
 func (c *Component) sendRenderedText(ctx context.Context, chatID int64, threadID int, text string) error {
+	return c.sendRenderedTextWithAttempts(ctx, chatID, threadID, text, c.telegramRenderAttempts())
+}
+
+func (c *Component) sendRenderedMarkdownText(ctx context.Context, chatID int64, threadID int, text string) error {
+	return c.sendRenderedTextWithAttempts(ctx, chatID, threadID, text, telegramMarkdownRenderAttempts())
+}
+
+func (c *Component) sendRenderedTextWithAttempts(ctx context.Context, chatID int64, threadID int, text string, attempts []telegramRenderAttempt) error {
 	if c == nil || c.api == nil {
 		return fmt.Errorf("missing telegram api")
 	}
@@ -35,7 +43,7 @@ func (c *Component) sendRenderedText(ctx context.Context, chatID int64, threadID
 	}
 	chunkDocs := doc.Chunked(telegramSemanticChunkSize)
 	for i, chunkDoc := range chunkDocs {
-		if err := c.sendDocumentChunk(ctx, chatID, threadID, chunkDoc, i+1, len(chunkDocs)); err != nil {
+		if err := c.sendDocumentChunk(ctx, chatID, threadID, chunkDoc, i+1, len(chunkDocs), attempts); err != nil {
 			return err
 		}
 	}
@@ -62,8 +70,7 @@ func (c *Component) sendPlainChunk(ctx context.Context, chatID int64, threadID i
 	return nil
 }
 
-func (c *Component) sendDocumentChunk(ctx context.Context, chatID int64, threadID int, doc *markdown.Document, chunkIndex int, chunkCount int) error {
-	attempts := c.telegramRenderAttempts()
+func (c *Component) sendDocumentChunk(ctx context.Context, chatID int64, threadID int, doc *markdown.Document, chunkIndex int, chunkCount int, attempts []telegramRenderAttempt) error {
 	for i, attempt := range attempts {
 		text, err := doc.Render(markdown.RenderOptions{Format: attempt.format})
 		if err != nil {
@@ -87,6 +94,14 @@ func (c *Component) sendDocumentChunk(ctx context.Context, chatID int64, threadI
 		return nil
 	}
 	return fmt.Errorf("no telegram render mode succeeded")
+}
+
+func telegramMarkdownRenderAttempts() []telegramRenderAttempt {
+	return []telegramRenderAttempt{
+		{format: markdown.RenderMarkdownV2, parseMode: "MarkdownV2", name: "markdown_v2"},
+		{format: markdown.RenderHTML, parseMode: "HTML", name: "html"},
+		{format: markdown.RenderPlain, parseMode: "", name: "plain"},
+	}
 }
 
 func (c *Component) telegramRenderAttempts() []telegramRenderAttempt {
@@ -172,9 +187,6 @@ func (c *Component) sendTextMessage(ctx context.Context, chatID int64, threadID 
 	body := cleanTextForTelegram(text.Text)
 	contentType := strings.TrimSpace(strings.ToLower(text.ContentType))
 	syntax := strings.TrimSpace(text.Syntax)
-	if syntax != "" {
-		return c.sendRenderedText(ctx, chatID, threadID, fencedText(syntax, body))
-	}
 	switch contentType {
 	case "text/html":
 		if body == "" {
@@ -196,6 +208,11 @@ func (c *Component) sendTextMessage(ctx context.Context, chatID int64, threadID 
 			}
 		}
 		return nil
+	case "text/markdown":
+		if syntax != "" {
+			body = fencedText(syntax, body)
+		}
+		return c.sendRenderedMarkdownText(ctx, chatID, threadID, body)
 	default:
 		return c.sendRenderedText(ctx, chatID, threadID, body)
 	}
