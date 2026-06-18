@@ -9,15 +9,22 @@ import (
 )
 
 type TextMessage struct {
-	Text        string
+	Text string
+	// ContentType is a MIME-style rendering hint for outbound text, such as
+	// text/plain, text/markdown, or text/html. Relays may ignore unsupported
+	// values or fall back to their default renderer.
 	ContentType string
-	Syntax      string
+	// Syntax is a language/syntax hint for renderers that support fenced code
+	// blocks. It is intentionally a hint: for example, Telegram uses it only for
+	// text/markdown output and ignores it for text/plain and text/html.
+	Syntax string
 }
 
 type Media struct {
-	Kind              string
-	Filename          string
-	ContentType       string
+	Kind        string
+	Filename    string
+	ContentType string
+	// Syntax is a language/syntax hint for textual media previews.
 	Syntax            string
 	ContentID         string
 	Disposition       string
