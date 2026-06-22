@@ -101,6 +101,13 @@ func (c *Component) handleReply(ctx context.Context, req commandengine.Request, 
 	if err != nil {
 		return commandengine.Result{}, fmt.Errorf("get original gmail message %s: %w", cmd.GmailMessageID, err)
 	}
+	if original == nil {
+		return commandengine.Result{}, fmt.Errorf("get original gmail message %s: empty response", cmd.GmailMessageID)
+	}
+	threadID := strings.TrimSpace(original.ThreadId)
+	if threadID == "" {
+		return commandengine.Result{}, fmt.Errorf("original gmail message %s has no Gmail thread id", cmd.GmailMessageID)
+	}
 	raw, err := client.GetRawMessage(ctx, c.userID(), cmd.GmailMessageID)
 	if err != nil {
 		return commandengine.Result{}, fmt.Errorf("get original raw gmail message %s: %w", cmd.GmailMessageID, err)
@@ -112,7 +119,7 @@ func (c *Component) handleReply(ctx context.Context, req commandengine.Request, 
 	self := c.replySelfEmails(ctx, client)
 	reply, err := buildReplySendRequest(replyBuildInput{
 		Source:       headers,
-		ThreadID:     strings.TrimSpace(original.ThreadId),
+		ThreadID:     threadID,
 		Mode:         cmd.Mode,
 		OverrideTo:   cmd.To,
 		OverrideCc:   cmd.Cc,

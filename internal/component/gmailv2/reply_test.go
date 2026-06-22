@@ -1,9 +1,14 @@
 package gmailv2
 
 import (
+	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
+	gmailapi "google.golang.org/api/gmail/v1"
 )
 
 func TestParseReplySourceHeadersDecodesSubjectAndRequiresMessageID(t *testing.T) {
@@ -104,5 +109,106 @@ func TestBuildReferencesTrimsFromLeft(t *testing.T) {
 	}
 	if strings.Contains(refs, ids[0]) {
 		t.Fatalf("References = %q, want oldest ids trimmed", refs)
+	}
+}
+
+type replyFakeClient struct {
+	message *gmailapi.Message
+	raw     []byte
+	sent    *gmailapi.Message
+}
+
+func (f *replyFakeClient) GetProfile(ctx context.Context, userID string) (*gmailapi.Profile, error) {
+	return &gmailapi.Profile{EmailAddress: "me@example.com"}, nil
+}
+
+func (f *replyFakeClient) ListHistory(ctx context.Context, userID string, startHistoryID uint64, pageToken string) (*gmailapi.ListHistoryResponse, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *replyFakeClient) SearchMessages(ctx context.Context, userID string, query string, limit int64) ([]*gmailapi.Message, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *replyFakeClient) GetMessage(ctx context.Context, userID string, messageID string) (*gmailapi.Message, error) {
+	return f.message, nil
+}
+
+func (f *replyFakeClient) GetRawMessage(ctx context.Context, userID string, messageID string) ([]byte, error) {
+	return append([]byte(nil), f.raw...), nil
+}
+
+func (f *replyFakeClient) GetAttachment(ctx context.Context, userID string, messageID string, attachmentID string) ([]byte, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (f *replyFakeClient) SendMessage(ctx context.Context, userID string, message *gmailapi.Message) (*gmailapi.Message, error) {
+	f.sent = message
+	return &gmailapi.Message{Id: "sent-1", ThreadId: "thread-1"}, nil
+}
+
+func TestHandleReplyFetchesOriginalAndSendsThreadedReply(t *testing.T) {
+	raw := strings.Join([]string{
+		"Message-ID: <orig@example.com>",
+		"References: <root@example.com>",
+		"Subject: Original subject",
+		"From: Sender <sender@example.com>",
+		"To: Me <me@example.com>",
+		"", "body",
+	}, "\r\n")
+	fake := &replyFakeClient{
+		message: &gmailapi.Message{Id: "gmail-1", ThreadId: "thread-1"},
+		raw:     []byte(raw),
+	}
+	component := &Component{clientOverride: fake, mailboxEmail: "me@example.com"}
+
+	result, err := component.handleReply(context.Background(), commandengine.Request{}, ReplyCommand{
+		GmailMessageID: "gmail-1",
+		Body:           "Thanks",
+	})
+	if err != nil {
+		t.Fatalf("handleReply() error = %v", err)
+	}
+	if got := result.Text; !strings.Contains(got, "reply sent") || !strings.Contains(got, "id: sent-1") || !strings.Contains(got, "thread_id: thread-1") {
+		t.Fatalf("result text = %q", got)
+	}
+	if fake.sent == nil {
+		t.Fatalf("SendMessage was not called")
+	}
+	if got, want := fake.sent.ThreadId, "thread-1"; got != want {
+		t.Fatalf("sent ThreadId = %q, want %q", got, want)
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(fake.sent.Raw)
+	if err != nil {
+		t.Fatalf("decode sent raw: %v", err)
+	}
+	text := string(decoded)
+	for _, want := range []string{
+		"To: Sender <sender@example.com>\r\n",
+		"Subject: Re: Original subject\r\n",
+		"In-Reply-To: <orig@example.com>\r\n",
+		"References: <root@example.com> <orig@example.com>\r\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("sent raw = %q, want contains %q", text, want)
+		}
+	}
+}
+
+func TestHandleReplyRejectsMissingOriginalThread(t *testing.T) {
+	fake := &replyFakeClient{message: &gmailapi.Message{Id: "gmail-1"}}
+	component := &Component{clientOverride: fake}
+	_, err := component.handleReply(context.Background(), commandengine.Request{}, ReplyCommand{GmailMessageID: "gmail-1", Body: "Thanks"})
+	if err == nil || !strings.Contains(err.Error(), "no Gmail thread id") {
+		t.Fatalf("handleReply() error = %v, want missing thread id", err)
+	}
+}
+
+func TestHandleReplyRejectsNilOriginalMessage(t *testing.T) {
+	fake := &replyFakeClient{}
+	component := &Component{clientOverride: fake}
+	_, err := component.handleReply(context.Background(), commandengine.Request{}, ReplyCommand{GmailMessageID: "gmail-1", Body: "Thanks"})
+	if err == nil || !strings.Contains(err.Error(), "empty response") {
+		t.Fatalf("handleReply() error = %v, want empty response", err)
 	}
 }
