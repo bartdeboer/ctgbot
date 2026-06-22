@@ -11,7 +11,7 @@ import (
 )
 
 type replyBuildInput struct {
-	Source       replySourceHeaders
+	Source       rawMessageHeaders
 	ThreadID     string
 	Mode         string
 	OverrideTo   []string
@@ -48,7 +48,7 @@ func buildReplySendRequest(input replyBuildInput) (component.MessageSendRequest,
 		Attachments: append([]message.Media(nil), input.Attachments...),
 		ThreadID:    strings.TrimSpace(input.ThreadID),
 		InReplyTo:   messageID,
-		References:  buildReferences(input.Source.References, messageID),
+		References:  appendReferenceMessageID(input.Source.References, messageID),
 	}, nil
 }
 

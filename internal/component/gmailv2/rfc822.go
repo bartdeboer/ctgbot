@@ -10,9 +10,10 @@ import (
 
 const maxReferencesHeaderBytes = 900
 
-type replySourceHeaders struct {
+type rawMessageHeaders struct {
 	MessageID  string
 	References string
+	InReplyTo  string
 	Subject    string
 	From       string
 	ReplyTo    string
@@ -20,27 +21,25 @@ type replySourceHeaders struct {
 	Cc         string
 }
 
-func parseReplySourceHeaders(raw []byte) (replySourceHeaders, error) {
+func parseRawMessageHeaders(raw []byte) (rawMessageHeaders, error) {
 	message, err := mail.ReadMessage(bytes.NewReader(raw))
 	if err != nil {
-		return replySourceHeaders{}, fmt.Errorf("parse original raw message headers: %w", err)
+		return rawMessageHeaders{}, fmt.Errorf("parse raw message headers: %w", err)
 	}
-	headers := replySourceHeaders{
+	headers := rawMessageHeaders{
 		MessageID:  normalizeMessageID(message.Header.Get("Message-ID")),
 		References: strings.TrimSpace(message.Header.Get("References")),
+		InReplyTo:  normalizeMessageID(message.Header.Get("In-Reply-To")),
 		Subject:    decodeHeaderText(message.Header.Get("Subject")),
 		From:       strings.TrimSpace(message.Header.Get("From")),
 		ReplyTo:    strings.TrimSpace(message.Header.Get("Reply-To")),
 		To:         strings.TrimSpace(message.Header.Get("To")),
 		Cc:         strings.TrimSpace(message.Header.Get("Cc")),
 	}
-	if headers.MessageID == "" {
-		return replySourceHeaders{}, fmt.Errorf("original gmail message is missing Message-ID; cannot build RFC reply headers")
-	}
 	return headers, nil
 }
 
-func buildReferences(previous string, messageID string) string {
+func appendReferenceMessageID(previous string, messageID string) string {
 	ids := referenceMessageIDs(previous)
 	messageID = normalizeMessageID(messageID)
 	if messageID != "" && !containsFold(ids, messageID) {

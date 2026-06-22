@@ -11,10 +11,11 @@ import (
 	gmailapi "google.golang.org/api/gmail/v1"
 )
 
-func TestParseReplySourceHeadersDecodesSubjectAndRequiresMessageID(t *testing.T) {
+func TestParseRawMessageHeadersDecodesSelectedHeaders(t *testing.T) {
 	raw := strings.Join([]string{
 		"Message-ID: <orig@example.com>",
 		"References: <root@example.com>",
+		"In-Reply-To: <parent@example.com>",
 		"Subject: =?UTF-8?Q?Hallo_=C3=BCber?=",
 		"From: Sender <sender@example.com>",
 		"Reply-To: Replies <reply@example.com>",
@@ -22,26 +23,34 @@ func TestParseReplySourceHeadersDecodesSubjectAndRequiresMessageID(t *testing.T)
 		"", "body",
 	}, "\r\n")
 
-	headers, err := parseReplySourceHeaders([]byte(raw))
+	headers, err := parseRawMessageHeaders([]byte(raw))
 	if err != nil {
-		t.Fatalf("parseReplySourceHeaders() error = %v", err)
+		t.Fatalf("parseRawMessageHeaders() error = %v", err)
 	}
 	if got, want := headers.MessageID, "<orig@example.com>"; got != want {
 		t.Fatalf("MessageID = %q, want %q", got, want)
 	}
+	if got, want := headers.InReplyTo, "<parent@example.com>"; got != want {
+		t.Fatalf("InReplyTo = %q, want %q", got, want)
+	}
 	if got, want := headers.Subject, "Hallo über"; got != want {
 		t.Fatalf("Subject = %q, want %q", got, want)
 	}
+}
 
-	_, err = parseReplySourceHeaders([]byte("Subject: missing\r\n\r\nbody"))
+func TestBuildReplySendRequestRequiresMessageID(t *testing.T) {
+	_, err := buildReplySendRequest(replyBuildInput{
+		Source: rawMessageHeaders{From: "Sender <sender@example.com>", Subject: "Missing id"},
+		Body:   "Thanks",
+	})
 	if err == nil || !strings.Contains(err.Error(), "missing Message-ID") {
-		t.Fatalf("missing Message-ID error = %v", err)
+		t.Fatalf("buildReplySendRequest() error = %v, want missing Message-ID", err)
 	}
 }
 
 func TestBuildReplySendRequestBuildsThreadingHeaders(t *testing.T) {
 	req, err := buildReplySendRequest(replyBuildInput{
-		Source: replySourceHeaders{
+		Source: rawMessageHeaders{
 			MessageID:  " <orig@example.com> ",
 			References: "<root@example.com> <parent@example.com>",
 			Subject:    "Project update",
@@ -69,7 +78,7 @@ func TestBuildReplySendRequestBuildsThreadingHeaders(t *testing.T) {
 
 func TestReplyRecipientsSelectsReplyToAndReplyAllExcludesSelf(t *testing.T) {
 	req, err := buildReplySendRequest(replyBuildInput{
-		Source: replySourceHeaders{
+		Source: rawMessageHeaders{
 			MessageID: "<orig@example.com>",
 			Subject:   "Re: Existing",
 			From:      "Sender <sender@example.com>",
@@ -95,12 +104,12 @@ func TestReplyRecipientsSelectsReplyToAndReplyAllExcludesSelf(t *testing.T) {
 	}
 }
 
-func TestBuildReferencesTrimsFromLeft(t *testing.T) {
+func TestAppendReferenceMessageIDTrimsFromLeft(t *testing.T) {
 	var ids []string
 	for i := 0; i < 80; i++ {
 		ids = append(ids, fmt.Sprintf("<%02d-long-message-id@example.com>", i))
 	}
-	refs := buildReferences(strings.Join(ids, " "), "<latest@example.com>")
+	refs := appendReferenceMessageID(strings.Join(ids, " "), "<latest@example.com>")
 	if !strings.Contains(refs, "<latest@example.com>") {
 		t.Fatalf("References = %q, want latest id preserved", refs)
 	}
@@ -151,6 +160,7 @@ func TestHandleReplyFetchesOriginalAndSendsThreadedReply(t *testing.T) {
 	raw := strings.Join([]string{
 		"Message-ID: <orig@example.com>",
 		"References: <root@example.com>",
+		"In-Reply-To: <parent@example.com>",
 		"Subject: Original subject",
 		"From: Sender <sender@example.com>",
 		"To: Me <me@example.com>",

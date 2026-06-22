@@ -112,7 +112,7 @@ func (c *Component) handleReply(ctx context.Context, req commandengine.Request, 
 	if err != nil {
 		return commandengine.Result{}, fmt.Errorf("get original raw gmail message %s: %w", cmd.GmailMessageID, err)
 	}
-	headers, err := parseReplySourceHeaders(raw)
+	headers, err := parseRawMessageHeaders(raw)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
