@@ -49,6 +49,7 @@ const defaultSearchLimit int64 = 20
 
 func RegisterGobTypes(register func(any)) {
 	register(MessageCommand{})
+	register(ReplyCommand{})
 	register(searchCommand{})
 	register(fetchCommand{})
 	register(dbHelpCommand{})
@@ -68,6 +69,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 	definitions := []commandengine.Definition{
 		def("status", "Show Gmail v2 component status", func(*clir.Request) (any, error) { return statusCommand{}, nil }, commandengine.SourceCLI),
 		def("message <text>", "Send a Gmail message", buildMessageCommand, commandengine.SourceHostbridge),
+		def("reply <message_id>", "Reply to a Gmail message with RFC threading headers", buildReplyCommand, commandengine.SourceHostbridge),
 		def("query <query>", "Search Gmail messages", func(req *clir.Request) (any, error) { return searchCommand{Query: req.Params["query"]}, nil }, commandengine.SourceHostbridge),
 		def("fetch <message_id>", "Fetch and store a Gmail message", func(req *clir.Request) (any, error) {
 			return fetchCommand{GmailMessageID: req.Params["message_id"]}, nil
@@ -136,6 +138,7 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 			return c.status(ctx)
 		}),
 		commandengine.RegisterPattern[MessageCommand](registry, "message <text>", c.handleMessage),
+		commandengine.RegisterPattern[ReplyCommand](registry, "reply <message_id>", c.handleReply),
 		commandengine.RegisterPattern[searchCommand](registry, "query <query>", c.handleSearch),
 		commandengine.RegisterPattern[fetchCommand](registry, "fetch <message_id>", c.handleFetch),
 		commandengine.RegisterPattern[dbHelpCommand](registry, "db help", c.handleDBHelp),

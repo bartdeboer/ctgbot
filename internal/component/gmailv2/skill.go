@@ -46,8 +46,10 @@ Setup commands:
 
 Replying:
 - Incoming Gmail prompts include Gmail message/thread ids and a ready-to-edit reply command.
-- Send a plain-text email/reply:
-   hostbridge gmailv2/work message '<your reply text>' --to you@example.com --subject 'Re: Subject' --thread-id <gmailThreadId> --in-reply-to <rfcMessageId>
+- Reply to an existing Gmail message with robust RFC reply headers:
+   hostbridge gmailv2/work reply <gmailMessageId> --body '<your reply text>'
+- Send a plain-text email manually:
+   hostbridge gmailv2/work message '<your message text>' --to you@example.com --subject 'Subject'
 - Send HTML with an inline cid image:
    hostbridge gmailv2/work message '<h1>Hello</h1><img src="cid:logo">' --type text/html --to you@example.com --subject 'Inline image' --attach '/workspace/out/logo.png;type=image/png;name=logo.png;cid=logo;disposition=inline'
 

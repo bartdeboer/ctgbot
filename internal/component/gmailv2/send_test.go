@@ -78,3 +78,33 @@ func TestBuildGmailV2SendMessageNestsInlineCIDBeforeRegularAttachments(t *testin
 		}
 	}
 }
+
+func TestBuildGmailV2SendMessageUsesExplicitReferences(t *testing.T) {
+	message, err := buildGmailSendMessage(component.MessageSendRequest{
+		To:         []string{"sender@example.com"},
+		Subject:    "Reply",
+		Body:       "hello",
+		ThreadID:   "gmail-thread-1",
+		InReplyTo:  "<parent@example.com>",
+		References: "<root@example.com> <parent@example.com>",
+	})
+	if err != nil {
+		t.Fatalf("buildGmailSendMessage() error = %v", err)
+	}
+	if got, want := message.ThreadId, "gmail-thread-1"; got != want {
+		t.Fatalf("ThreadId = %q, want %q", got, want)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(message.Raw)
+	if err != nil {
+		t.Fatalf("decode raw error = %v", err)
+	}
+	text := string(raw)
+	for _, want := range []string{
+		"In-Reply-To: <parent@example.com>\r\n",
+		"References: <root@example.com> <parent@example.com>\r\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("raw message = %q, want contains %q", text, want)
+		}
+	}
+}

@@ -335,6 +335,7 @@ type MessageSendRequest struct {
 	Attachments []message.Media
 	ThreadID    string
 	InReplyTo   string
+	References  string
 }
 
 type MessageSendResult struct {

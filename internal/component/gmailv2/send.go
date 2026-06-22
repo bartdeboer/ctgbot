@@ -67,6 +67,13 @@ func buildGmailSendMessage(request component.MessageSendRequest) (*gmailapi.Mess
 	if err != nil {
 		return nil, fmt.Errorf("in-reply-to: %w", err)
 	}
+	references, err := safeHeaderValue(request.References)
+	if err != nil {
+		return nil, fmt.Errorf("references: %w", err)
+	}
+	if references == "" {
+		references = inReplyTo
+	}
 
 	raw, err := buildRFC822Message(rfc822Message{
 		To:          to,
@@ -76,7 +83,7 @@ func buildGmailSendMessage(request component.MessageSendRequest) (*gmailapi.Mess
 		Body:        body,
 		ContentType: request.ContentType,
 		InReplyTo:   inReplyTo,
-		References:  inReplyTo,
+		References:  references,
 		Attachments: request.Attachments,
 	})
 	if err != nil {
