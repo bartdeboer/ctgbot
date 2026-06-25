@@ -142,3 +142,17 @@ func TestSandboxWithoutDockerIsNoop(t *testing.T) {
 }
 
 var _ = containerengine.StateRunning
+
+func TestContainerHelpersSkipNilSandboxes(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	if err := StartContainers(ctx, []*Sandbox{nil, {SandboxSpec: SandboxSpec{Name: "noop"}}}); err != nil {
+		t.Fatalf("StartContainers: %v", err)
+	}
+	if err := StopContainers(ctx, []*Sandbox{nil, {SandboxSpec: SandboxSpec{Name: "noop"}}}); err != nil {
+		t.Fatalf("StopContainers: %v", err)
+	}
+	if err := DeleteContainers(ctx, []*Sandbox{nil, {SandboxSpec: SandboxSpec{Name: "noop"}}}); err != nil {
+		t.Fatalf("DeleteContainers: %v", err)
+	}
+}

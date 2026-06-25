@@ -38,6 +38,31 @@ func (f *fakeActions) RefreshThreadRuntime(ctx context.Context, threadID modeluu
 	return "runtime refreshed", nil
 }
 
+func (f *fakeActions) StartThreadRuntime(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	_, _ = ctx, threadID
+	return "container started", nil
+}
+
+func (f *fakeActions) StopThreadRuntime(ctx context.Context, threadID modeluuid.UUID) (string, error) {
+	_, _ = ctx, threadID
+	return "container stopped", nil
+}
+
+func (f *fakeActions) RefreshAllThreadRuntimes(ctx context.Context) (string, error) {
+	_ = ctx
+	return "containers refreshed", nil
+}
+
+func (f *fakeActions) StartAllKeepRunningThreadRuntimes(ctx context.Context) (string, error) {
+	_ = ctx
+	return "containers started", nil
+}
+
+func (f *fakeActions) StopAllKeepRunningThreadRuntimes(ctx context.Context) (string, error) {
+	_ = ctx
+	return "containers stopped", nil
+}
+
 func (f *fakeActions) DroppedList(ctx context.Context, limit int) (string, error) {
 	_, _ = ctx, limit
 	return "dropped messages", nil

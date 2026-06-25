@@ -24,6 +24,20 @@ func (s *service) Thread(ctx context.Context, threadID modeluuid.UUID) (*coremod
 	return s.Storage.Threads().GetByID(ctx, threadID)
 }
 
+func (s *service) Chats(ctx context.Context) ([]coremodel.Chat, error) {
+	if s == nil || s.Storage == nil {
+		return nil, fmt.Errorf("missing app storage")
+	}
+	return s.Storage.Chats().List(ctx)
+}
+
+func (s *service) Threads(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.Thread, error) {
+	if s == nil || s.Storage == nil {
+		return nil, fmt.Errorf("missing app storage")
+	}
+	return s.Storage.Threads().ListByChatID(ctx, chatID)
+}
+
 func (s *service) ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error) {
 	if s == nil || s.Storage == nil {
 		return nil, fmt.Errorf("missing app storage")

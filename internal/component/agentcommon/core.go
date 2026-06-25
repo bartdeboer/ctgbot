@@ -14,6 +14,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/repository"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
 const DefaultStopAfterTurnTimeout = 5 * time.Second
@@ -108,4 +109,17 @@ func WriterOrDiscard(w io.Writer) io.Writer {
 		return io.Discard
 	}
 	return w
+}
+
+// ThreadSandbox implements component.ThreadSandboxProvider for agent components
+// that use a runtime capable of exposing its backing sandbox.
+func (c *Core) ThreadSandbox(ctx context.Context, request component.ThreadSandboxRequest) (*sandboxengine.Sandbox, error) {
+	if c == nil || c.Runtime == nil {
+		return nil, fmt.Errorf("missing runtime")
+	}
+	provider, ok := c.Runtime.(runtimepkg.ThreadSandboxProvider)
+	if !ok {
+		return nil, fmt.Errorf("runtime does not expose thread sandbox: %T", c.Runtime)
+	}
+	return provider.ThreadSandbox(ctx, request.WorkspacePath, request.Thread.ID)
 }

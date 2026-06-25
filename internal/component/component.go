@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimepkg "github.com/bartdeboer/ctgbot/internal/runtime"
 	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
 type Component interface {
@@ -509,10 +510,32 @@ type RuntimeImageProvider interface {
 	RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Target, error)
 }
 
-// ThreadRuntimeController lets a component expose lifecycle controls for the
-// runtime it uses for a specific ctgbot thread. Broker-level shortcuts can use
-// this without knowing whether the component is Codex, Claude, or a local
-// tool-loop agent.
+// ThreadSandboxProvider lets a component expose the sandbox backing a thread.
+// The component/runtime still owns how that sandbox is built; broker-level
+// commands only receive the Sandbox object and pass it to sandboxengine.
+type ThreadSandboxProvider interface {
+	Component
+	ThreadSandbox(ctx context.Context, request ThreadSandboxRequest) (*sandboxengine.Sandbox, error)
+}
+
+// ThreadSandboxKeepRunning exposes the component policy bit used by the
+// operator-level container start/stop-all commands. It is deliberately separate
+// from sandboxengine: keep-running is ctgbot policy, not container mechanics.
+type ThreadSandboxKeepRunning interface {
+	Component
+	ThreadSandboxKeepRunning(ctx context.Context, request ThreadSandboxRequest) (bool, error)
+	SetThreadSandboxKeepRunning(ctx context.Context, request ThreadSandboxRequest, keepRunning *bool) error
+}
+
+type ThreadSandboxRequest struct {
+	Chat          coremodel.Chat
+	Thread        coremodel.Thread
+	WorkspacePath string
+}
+
+// ThreadRuntimeController is the legacy component-local refresh hook used by
+// older agent command implementations. New broker-level container controls use
+// ThreadSandboxProvider and sandboxengine instead.
 type ThreadRuntimeController interface {
 	Component
 	RefreshThreadRuntime(ctx context.Context, request ThreadRuntimeControlRequest) error

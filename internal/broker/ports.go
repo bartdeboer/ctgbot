@@ -42,6 +42,8 @@ type InboundAdmitter interface {
 type ChatThreadRegistry interface {
 	Chat(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
 	Thread(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
+	Chats(ctx context.Context) ([]coremodel.Chat, error)
+	Threads(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.Thread, error)
 	EnsureThread(ctx context.Context, binding coremodel.ChatComponent, componentThreadID string) (*coremodel.Thread, error)
 }
 

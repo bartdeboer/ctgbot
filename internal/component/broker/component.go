@@ -22,6 +22,11 @@ type Actions interface {
 	RunHostbridgeAlias(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error)
 	MessageHelp(ctx context.Context, chatID modeluuid.UUID, actor commandengine.Actor) (string, error)
 	RefreshThreadRuntime(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	StartThreadRuntime(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	StopThreadRuntime(ctx context.Context, threadID modeluuid.UUID) (string, error)
+	RefreshAllThreadRuntimes(ctx context.Context) (string, error)
+	StartAllKeepRunningThreadRuntimes(ctx context.Context) (string, error)
+	StopAllKeepRunningThreadRuntimes(ctx context.Context) (string, error)
 	DroppedList(ctx context.Context, limit int) (string, error)
 	DroppedView(ctx context.Context, ref string) (string, error)
 	DroppedAllow(ctx context.Context, ref string) (string, error)
@@ -36,7 +41,9 @@ var _ component.CommandSurface = (*Component)(nil)
 var _ component.CommandDescriptionSurface = (*Component)(nil)
 
 type helpCommand struct{}
-type refreshCommand struct{}
+type containerRefreshCommand struct{ All bool }
+type containerStartCommand struct{ All bool }
+type containerStopCommand struct{ All bool }
 
 type droppedListCommand struct {
 	Limit int
@@ -54,8 +61,28 @@ func New(actions Actions) *Component {
 	return &Component{Actions: actions}
 }
 
+func containerCommand(pattern string, help string, command any, rootOnly bool) commandengine.Definition {
+	definition := commandengine.Definition{
+		Pattern:               pattern,
+		Help:                  help,
+		Build:                 func(_ *clir.Request) (any, error) { return command, nil },
+		Sources:               []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+		Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+		InstructionVisibility: commandengine.InstructionImportant,
+	}
+	if rootOnly {
+		definition.Policy = simplerbac.Any(simplerbac.RoleRoot)
+	}
+	if pattern == "container refresh" {
+		definition.Aliases = []commandengine.Route{{Pattern: "refresh", Hidden: true}}
+	}
+	return definition
+}
+
 func RegisterGobTypes(register func(any)) {
-	register(refreshCommand{})
+	register(containerRefreshCommand{})
+	register(containerStartCommand{})
+	register(containerStopCommand{})
 	register(droppedListCommand{})
 	register(droppedViewCommand{})
 	register(droppedAllowCommand{})
@@ -68,20 +95,12 @@ func (c *Component) Type() string {
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	definitions := schemacommands.HostbridgeCommands()
 	out := []commandengine.Definition{
-		{
-			Pattern: "refresh",
-			Help:    "Refresh the current thread runtime container",
-			Build: func(req *clir.Request) (any, error) {
-				_ = req
-				return refreshCommand{}, nil
-			},
-			Sources:               []commandengine.Source{commandengine.SourceMessage},
-			Policy:                simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
-			InstructionVisibility: commandengine.InstructionImportant,
-			Aliases: []commandengine.Route{
-				{Pattern: "container refresh", Hidden: true},
-			},
-		},
+		containerCommand("container refresh", "Refresh the current thread runtime container", containerRefreshCommand{}, false),
+		containerCommand("container start", "Start the current thread runtime container and mark it keep-running", containerStartCommand{}, false),
+		containerCommand("container stop", "Stop the current thread runtime container and clear keep-running", containerStopCommand{}, false),
+		containerCommand("container refresh all", "Refresh all ctgbot-managed thread runtime containers", containerRefreshCommand{All: true}, true),
+		containerCommand("container start all", "Start all keep-running thread runtime containers", containerStartCommand{All: true}, true),
+		containerCommand("container stop all", "Stop all keep-running thread runtime containers without changing keep-running", containerStopCommand{All: true}, true),
 		{
 			Pattern: "help",
 			Help:    "Show available commands",
@@ -159,24 +178,13 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	); err != nil {
 		return err
 	}
-	if err := commandengine.Register[refreshCommand](
-		registry,
-		func(ctx context.Context, req commandengine.Request, cmd refreshCommand) (commandengine.Result, error) {
-			_ = cmd
-			if c == nil || c.Actions == nil {
-				return commandengine.Result{}, fmt.Errorf("missing broker actions")
-			}
-			threadID := req.Context.ThreadID
-			if threadID.IsNull() {
-				threadID = req.Context.SandboxID
-			}
-			text, err := c.Actions.RefreshThreadRuntime(ctx, threadID)
-			if err != nil {
-				return commandengine.Result{}, err
-			}
-			return commandengine.Result{Text: text}, nil
-		},
-	); err != nil {
+	if err := commandengine.Register[containerRefreshCommand](registry, c.handleContainerRefresh); err != nil {
+		return err
+	}
+	if err := commandengine.Register[containerStartCommand](registry, c.handleContainerStart); err != nil {
+		return err
+	}
+	if err := commandengine.Register[containerStopCommand](registry, c.handleContainerStop); err != nil {
 		return err
 	}
 	if err := commandengine.Register[schemacommands.RunCommand](
@@ -258,6 +266,71 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 			return commandengine.Result{}, nil
 		},
 	)
+}
+
+func (c *Component) handleContainerRefresh(ctx context.Context, req commandengine.Request, cmd containerRefreshCommand) (commandengine.Result, error) {
+	if c == nil || c.Actions == nil {
+		return commandengine.Result{}, fmt.Errorf("missing broker actions")
+	}
+	var (
+		text string
+		err  error
+	)
+	if cmd.All {
+		text, err = c.Actions.RefreshAllThreadRuntimes(ctx)
+	} else {
+		text, err = c.Actions.RefreshThreadRuntime(ctx, c.currentThreadID(req))
+	}
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: text}, nil
+}
+
+func (c *Component) handleContainerStart(ctx context.Context, req commandengine.Request, cmd containerStartCommand) (commandengine.Result, error) {
+	if c == nil || c.Actions == nil {
+		return commandengine.Result{}, fmt.Errorf("missing broker actions")
+	}
+	var (
+		text string
+		err  error
+	)
+	if cmd.All {
+		text, err = c.Actions.StartAllKeepRunningThreadRuntimes(ctx)
+	} else {
+		text, err = c.Actions.StartThreadRuntime(ctx, c.currentThreadID(req))
+	}
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: text}, nil
+}
+
+func (c *Component) handleContainerStop(ctx context.Context, req commandengine.Request, cmd containerStopCommand) (commandengine.Result, error) {
+	if c == nil || c.Actions == nil {
+		return commandengine.Result{}, fmt.Errorf("missing broker actions")
+	}
+	var (
+		text string
+		err  error
+	)
+	if cmd.All {
+		text, err = c.Actions.StopAllKeepRunningThreadRuntimes(ctx)
+	} else {
+		text, err = c.Actions.StopThreadRuntime(ctx, c.currentThreadID(req))
+	}
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	return commandengine.Result{Text: text}, nil
+}
+
+func (c *Component) currentThreadID(req commandengine.Request) modeluuid.UUID {
+	threadID := req.Context.ThreadID
+	if threadID.IsNull() {
+		threadID = req.Context.SandboxID
+	}
+	return threadID
 }
 
 func (c *Component) sendPayload(

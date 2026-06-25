@@ -87,6 +87,8 @@ type BrokerService interface {
 	AdmitInbound(ctx context.Context, event component.InboundEvent) (inbound.Admission, error)
 	Chat(ctx context.Context, chatID modeluuid.UUID) (*coremodel.Chat, error)
 	Thread(ctx context.Context, threadID modeluuid.UUID) (*coremodel.Thread, error)
+	Chats(ctx context.Context) ([]coremodel.Chat, error)
+	Threads(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.Thread, error)
 	ThreadMessages(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
 	ForEachMessage(ctx context.Context, scope component.MessageScope, visit component.MessageVisitor) error
 	EnabledChatComponents(ctx context.Context, chatID modeluuid.UUID) ([]coremodel.ChatComponent, error)

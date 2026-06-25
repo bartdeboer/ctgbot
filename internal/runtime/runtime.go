@@ -9,6 +9,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	runtimeimage "github.com/bartdeboer/ctgbot/internal/runtime/image"
+	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
 type Profile struct {
@@ -66,6 +67,14 @@ type ThreadRuntimeFactory interface {
 		profile Profile,
 		config BindConfig,
 	) ThreadRuntime
+}
+
+// ThreadSandboxProvider exposes the sandbox backing a thread runtime.
+// It is intentionally narrower than ThreadRuntime: callers can control the
+// container lifecycle without knowing how runtime/docker derives the sandbox
+// name, mounts, ports, or hostbridge setup.
+type ThreadSandboxProvider interface {
+	ThreadSandbox(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (*sandboxengine.Sandbox, error)
 }
 
 type ServiceRuntime interface {

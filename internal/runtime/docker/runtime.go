@@ -218,6 +218,15 @@ func (r *Runtime) Status(
 	return r.statusForSandbox(ctx, workspacePath, sbx)
 }
 
+func (r *Runtime) ThreadSandbox(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (*sandboxengine.Sandbox, error) {
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, false)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	return sbx, nil
+}
+
 func (r *Runtime) Exec(
 	ctx context.Context,
 	workspacePath string,

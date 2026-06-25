@@ -2,6 +2,7 @@ Available commands:
 codex [ chat | compact | config | container | goal | interrupt | status | help ] - agent lifecycle and config
 component [ <component> | list | help ] - component setup and inspection
 config [ get | list | set | help ] - global instance config
+container [ refresh | start | stop | help ] - container commands
 heartbeat [ now | start | status | stop | help ] - autonomous keepalive and self-scheduling
 run <command> - Run a whitelisted host command
 search <query> - Search indexed chat messages
