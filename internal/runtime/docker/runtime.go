@@ -219,7 +219,7 @@ func (r *Runtime) Status(
 }
 
 func (r *Runtime) ThreadSandbox(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (*sandboxengine.Sandbox, error) {
-	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, false)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, true)
 	if err != nil {
 		return nil, err
 	}

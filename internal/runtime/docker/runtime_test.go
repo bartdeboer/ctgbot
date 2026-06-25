@@ -121,6 +121,32 @@ func TestSandboxBindsHostbridgeMountWithoutCommands(t *testing.T) {
 	}
 }
 
+func TestThreadSandboxBindsHostbridgeMount(t *testing.T) {
+	root := t.TempDir()
+	bridge := hostbridgebridge.NewBridge(root, nil, nil)
+	t.Cleanup(func() {
+		_ = bridge.Close()
+	})
+
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, bridge)
+	registration := coremodel.Component{Type: "mockagent", Name: "thread-sandbox", Runtime: "docker"}
+	profile := factory.ComponentProfile(registration)
+	runtime := factory.Bind(registration, profile, runtimepkg.BindConfig{}).(*Runtime)
+
+	threadID := modeluuid.New()
+	sandbox, err := runtime.ThreadSandbox(context.Background(), filepath.Join(root, "workspace"), threadID)
+	if err != nil {
+		t.Fatalf("ThreadSandbox() error = %v", err)
+	}
+
+	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_TLS_DIR"), "/ctgbot/hostbridge-tls"; got != want {
+		t.Fatalf("HOSTBRIDGE_TLS_DIR = %q, want %q", got, want)
+	}
+	if !hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
+		t.Fatalf("expected hostbridge TLS mount in %#v", sandbox.Mounts)
+	}
+}
+
 func TestSandboxDoesNotBindHostbridgeWhenBridgeIsNotPrepared(t *testing.T) {
 	root := t.TempDir()
 	bridge := hostbridgebridge.NewBridge(root, nil, nil)
