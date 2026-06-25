@@ -147,7 +147,7 @@ func TestThreadSandboxBindsHostbridgeMount(t *testing.T) {
 	}
 }
 
-func TestSandboxDoesNotBindHostbridgeWhenBridgeIsNotPrepared(t *testing.T) {
+func TestThreadSandboxAlwaysIncludesHostbridgeClientMaterials(t *testing.T) {
 	root := t.TempDir()
 	bridge := hostbridgebridge.NewBridge(root, nil, nil)
 	t.Cleanup(func() {
@@ -165,11 +165,14 @@ func TestSandboxDoesNotBindHostbridgeWhenBridgeIsNotPrepared(t *testing.T) {
 	}
 	defer cleanup()
 
-	if got := findEnv(sandbox.Env, "HOSTBRIDGE_ADDR"); got != "" {
-		t.Fatalf("HOSTBRIDGE_ADDR = %q, want empty", got)
+	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_ADDR"), "host.docker.internal:"; len(got) < len(want) || got[:len(want)] != want {
+		t.Fatalf("HOSTBRIDGE_ADDR = %q, want prefix %q", got, want)
 	}
-	if hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
-		t.Fatalf("unexpected hostbridge TLS mount in %#v", sandbox.Mounts)
+	if got, want := findEnv(sandbox.Env, "HOSTBRIDGE_TLS_DIR"), "/ctgbot/hostbridge-tls"; got != want {
+		t.Fatalf("HOSTBRIDGE_TLS_DIR = %q, want %q", got, want)
+	}
+	if !hasMount(sandbox.Mounts, "/ctgbot/hostbridge-tls", true) {
+		t.Fatalf("expected hostbridge TLS mount in %#v", sandbox.Mounts)
 	}
 }
 

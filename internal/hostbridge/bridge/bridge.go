@@ -81,13 +81,38 @@ func (b *Bridge) BindThread(
 	threadID modeluuid.UUID,
 	commands commandengine.CommandExecutor,
 ) ([]string, sandboxengine.Mount, func(), error) {
-	address, _, httpURL, tlsDir, unregister, err := b.bindThread(threadID, commands)
+	env, mount, err := b.ThreadClientMaterials(threadID, commands)
 	if err != nil {
 		return nil, sandboxengine.Mount{}, nil, err
 	}
+	unregister, err := b.RegisterThreadCommands(threadID, commands)
+	if err != nil {
+		return nil, sandboxengine.Mount{}, nil, err
+	}
+	return env, mount, unregister, nil
+}
+
+func (b *Bridge) ThreadClientMaterials(
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) ([]string, sandboxengine.Mount, error) {
+	if b == nil {
+		return nil, sandboxengine.Mount{}, fmt.Errorf("missing hostbridge")
+	}
+	if threadID.IsNull() {
+		return nil, sandboxengine.Mount{}, fmt.Errorf("missing thread id")
+	}
+	address, _, err := b.ensureStarted()
+	if err != nil {
+		return nil, sandboxengine.Mount{}, err
+	}
+	tlsDir, err := b.ensureClientTLSDir(threadID)
+	if err != nil {
+		return nil, sandboxengine.Mount{}, err
+	}
 	env := []string{
 		"HOSTBRIDGE_ADDR=" + address,
-		"HOSTBRIDGE_V2_ADDR=" + httpURL,
+		"HOSTBRIDGE_V2_ADDR=" + b.containerHTTPURL,
 		"HOSTBRIDGE_TLS_DIR=" + TLSDir,
 		"HOSTBRIDGE_V2_TLS_DIR=" + TLSDir,
 		"CTGBOT_SANDBOX_ID=" + threadID.String(),
@@ -100,7 +125,23 @@ func (b *Bridge) BindThread(
 		Target:   TLSDir,
 		ReadOnly: true,
 	}
-	return env, mount, unregister, nil
+	return env, mount, nil
+}
+
+func (b *Bridge) RegisterThreadCommands(
+	threadID modeluuid.UUID,
+	commands commandengine.CommandExecutor,
+) (func(), error) {
+	if b == nil {
+		return nil, fmt.Errorf("missing hostbridge")
+	}
+	if threadID.IsNull() {
+		return nil, fmt.Errorf("missing thread id")
+	}
+	if _, _, err := b.ensureStarted(); err != nil {
+		return nil, err
+	}
+	return b.register(threadID, commands), nil
 }
 
 func (b *Bridge) DoCommand(

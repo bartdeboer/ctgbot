@@ -165,7 +165,7 @@ func (r *Runtime) Start(
 	workspacePath string,
 	threadID modeluuid.UUID,
 ) (runtimepkg.Status, error) {
-	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, true)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, false)
 	if err != nil {
 		return runtimepkg.Status{}, err
 	}
@@ -219,7 +219,7 @@ func (r *Runtime) Status(
 }
 
 func (r *Runtime) ThreadSandbox(ctx context.Context, workspacePath string, threadID modeluuid.UUID) (*sandboxengine.Sandbox, error) {
-	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, true)
+	sbx, cleanup, err := r.sandbox(ctx, workspacePath, threadID, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -380,14 +380,20 @@ func (r *Runtime) sandbox(
 		{Source: homeHost, Target: homeRuntime},
 	}
 	cleanup := func() {}
-	if prepareBridge && r.bridge != nil {
-		bridgeEnv, bridgeMount, unregister, err := r.bridge.BindThread(threadID, commands)
+	if r.bridge != nil {
+		bridgeEnv, bridgeMount, err := r.bridge.ThreadClientMaterials(threadID, commands)
 		if err != nil {
 			return nil, nil, err
 		}
 		env = append(env, bridgeEnv...)
 		mounts = append(mounts, bridgeMount)
-		cleanup = unregister
+		if prepareBridge {
+			unregister, err := r.bridge.RegisterThreadCommands(threadID, commands)
+			if err != nil {
+				return nil, nil, err
+			}
+			cleanup = unregister
+		}
 	}
 	name := turnSandboxName(r.registration, threadID)
 	spec := sandboxengine.NewBuilder(name).
