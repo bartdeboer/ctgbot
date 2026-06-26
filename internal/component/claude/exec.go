@@ -73,7 +73,7 @@ func (r *Runner) RunTurn(ctx context.Context, runtime ExecRuntime, request TurnR
 	parsed, parseErr := parseClaudeOutput(stdoutBuf.String())
 	if err != nil {
 		if parsed.Reply != "" {
-			return parsed, fmt.Errorf("claude exec: %w", err)
+			return parsed, fmt.Errorf("claude exec: %w: %s", err, trimErrorDetail(parsed.Reply))
 		}
 		if detail := trimErrorDetail(stderrBuf.String()); detail != "" {
 			return TurnResult{}, fmt.Errorf("claude exec: %w: %s", err, detail)
