@@ -12,7 +12,9 @@ type TextMessage struct {
 	Text string
 	// ContentType is a MIME-style rendering hint for outbound text, such as
 	// text/plain, text/markdown, or text/html. Relays may ignore unsupported
-	// values or fall back to their default renderer.
+	// values or fall back when their target cannot render the requested format.
+	// For example, Telegram HTML means Telegram's limited HTML parse-mode subset,
+	// not arbitrary browser HTML.
 	ContentType string
 	// Syntax is a language/syntax hint for renderers that support fenced code
 	// blocks. It is intentionally a hint: for example, Telegram uses it only for

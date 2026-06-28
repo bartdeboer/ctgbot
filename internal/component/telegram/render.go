@@ -189,15 +189,7 @@ func (c *Component) sendTextMessage(ctx context.Context, chatID int64, threadID 
 	syntax := strings.TrimSpace(text.Syntax)
 	switch contentType {
 	case "text/html":
-		if body == "" {
-			body = "(empty response)"
-		}
-		for _, chunk := range splitTelegramText(body, telegramMessageMax) {
-			if err := c.api.SendMessage(ctx, chatID, threadID, chunk, "HTML"); err != nil {
-				return err
-			}
-		}
-		return nil
+		return c.sendHTMLTextMessage(ctx, chatID, threadID, body)
 	case "text/plain":
 		if body == "" {
 			body = "(empty response)"
@@ -216,6 +208,38 @@ func (c *Component) sendTextMessage(ctx context.Context, chatID int64, threadID 
 	default:
 		return c.sendRenderedText(ctx, chatID, threadID, body)
 	}
+}
+
+func (c *Component) sendHTMLTextMessage(ctx context.Context, chatID int64, threadID int, body string) error {
+	if body == "" {
+		body = "(empty response)"
+	}
+	if !isTelegramHTMLSubset(body) {
+		return c.sendPlainTextChunks(ctx, chatID, threadID, plainTextFromHTML(body))
+	}
+	for _, chunk := range splitTelegramText(body, telegramMessageMax) {
+		if err := c.api.SendMessage(ctx, chatID, threadID, chunk, "HTML"); err != nil {
+			if isTelegramFormattingError(err) {
+				c.logf("telegram html send failed, falling back to plain text: %v preview=%q", err, telegramPreview(body))
+				return c.sendPlainTextChunks(ctx, chatID, threadID, plainTextFromHTML(body))
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Component) sendPlainTextChunks(ctx context.Context, chatID int64, threadID int, body string) error {
+	body = cleanTextForTelegram(body)
+	if body == "" {
+		body = "(empty response)"
+	}
+	for _, chunk := range splitTelegramText(body, telegramMessageMax) {
+		if err := c.api.SendMessage(ctx, chatID, threadID, chunk, ""); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func fencedText(syntax string, body string) string {

@@ -548,6 +548,59 @@ func TestSendTextMessageWithHTMLContentTypeUsesHTMLParseMode(t *testing.T) {
 	}
 }
 
+func TestSendTextMessageWithHTMLContentTypeFallsBackForUnsupportedTelegramHTML(t *testing.T) {
+	api := &fakeTelegramAPI{}
+	c := &Component{api: api}
+
+	body := `<p>Hello <b>world</b></p><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>`
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID: "123",
+		Text: message.TextMessage{
+			Text:        body,
+			ContentType: "text/html",
+		},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 1 {
+		t.Fatalf("messages = %#v, want one", messages)
+	}
+	if messages[0].parseMode != "" {
+		t.Fatalf("parseMode = %q, want plain fallback", messages[0].parseMode)
+	}
+	if strings.Contains(messages[0].text, "<p>") || strings.Contains(messages[0].text, "<table>") {
+		t.Fatalf("text = %q, want readable text without unsupported HTML tags", messages[0].text)
+	}
+	for _, want := range []string{"Hello world", "A", "B", "1", "2"} {
+		if !strings.Contains(messages[0].text, want) {
+			t.Fatalf("text = %q, want substring %q", messages[0].text, want)
+		}
+	}
+}
+
+func TestSendTextMessageWithHTMLContentTypeFallsBackWhenTelegramRejectsEntities(t *testing.T) {
+	api := &fakeTelegramAPI{sendMessageErrs: []error{fmt.Errorf("Bad Request: can't parse entities")}}
+	c := &Component{api: api}
+
+	if err := c.Send(context.Background(), message.OutboundPayload{
+		ProviderChannelID: "123",
+		Text: message.TextMessage{
+			Text:        "<b>hello</b>",
+			ContentType: "text/html",
+		},
+	}); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	messages := api.messageSnapshot()
+	if len(messages) != 2 {
+		t.Fatalf("messages = %#v, want HTML attempt plus plain fallback", messages)
+	}
+	if messages[0].parseMode != "HTML" || messages[1].parseMode != "" || messages[1].text != "hello" {
+		t.Fatalf("messages = %#v, want rejected HTML then plain text", messages)
+	}
+}
+
 func TestSendTextMessageWithPlainContentTypeUsesPlainParseMode(t *testing.T) {
 	api := &fakeTelegramAPI{}
 	c := &Component{api: api}
