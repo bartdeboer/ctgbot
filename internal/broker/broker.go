@@ -355,21 +355,12 @@ func (b *Broker) runAgentTurn(
 	if agentBinding.TurnHandler == nil {
 		return nil, nil
 	}
-	history, err := b.App.ThreadMessages(ctx, thread.ID)
-	if err != nil {
-		return nil, err
-	}
-	for i := range history {
-		if history[i].ID == inbound.ID {
-			history[i] = inbound
-		}
-	}
 	result, err := agentBinding.TurnHandler.HandleTurn(ctx, component.Turn{
 		Chat:    chat,
 		Thread:  thread,
 		Inbound: inbound,
 		Prompt:  prompt,
-		History: history,
+		Data:    turnData{app: b.App},
 		Runtime: turnRuntime,
 	})
 	if err != nil || result == nil {

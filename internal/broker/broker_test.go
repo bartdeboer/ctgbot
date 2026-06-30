@@ -172,6 +172,8 @@ type fakeAgentRecorder struct {
 	streamText   string
 	finalText    string
 	relayText    string
+	loadHistory  bool
+	historyLens  []int
 	entered      chan struct{}
 	release      <-chan struct{}
 	interrupted  chan struct{}
@@ -185,8 +187,16 @@ type fakeAgent struct {
 
 func (c *fakeAgent) Type() string { return "codex" }
 func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*component.TurnResult, error) {
-	_ = ctx
 	c.recorder.prompts = append(c.recorder.prompts, turn.PromptText())
+	if c.recorder.loadHistory {
+		history, err := turn.LoadHistory(ctx)
+		if err != nil {
+			return nil, err
+		}
+		c.recorder.historyLens = append(c.recorder.historyLens, len(history))
+	} else {
+		c.recorder.historyLens = append(c.recorder.historyLens, len(turn.History))
+	}
 	for _, cmd := range c.recorder.turnCommands {
 		if _, err := turn.Runtime.Commands().Execute(context.Background(), commandengine.Request{Command: cmd}); err != nil {
 			return nil, err
@@ -595,6 +605,9 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	if agentRecorder.prompts[0] != "hello" {
 		t.Fatalf("agent prompt = %q", agentRecorder.prompts[0])
 	}
+	if got, want := agentRecorder.historyLens, []int{0}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("agent history lens = %#v, want %#v", got, want)
+	}
 	if got, want := len(messengerRecorder.payloads), 2; got != want {
 		t.Fatalf("relay payloads = %d, want %d", got, want)
 	}
@@ -610,6 +623,60 @@ func TestHandleInboundRoutesThroughBoundAgentAndRelay(t *testing.T) {
 	}
 	if got, want := len(messages), 3; got != want {
 		t.Fatalf("stored messages = %d, want %d", got, want)
+	}
+}
+
+func TestTurnLoadHistoryLazilyReadsThreadHistory(t *testing.T) {
+	root := t.TempDir()
+	storage := repository.NewMemory()
+	messengerRecorder := &fakeMessengerRecorder{}
+	agentRecorder := &fakeAgentRecorder{loadHistory: true}
+	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+	b := newTestBroker(storage, system, nil)
+
+	chat := &coremodel.Chat{Label: "team", Enabled: true}
+	if err := storage.Chats().Save(context.Background(), chat); err != nil {
+		t.Fatal(err)
+	}
+	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+	if err := storage.Components().Save(context.Background(), telegram); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Components().Save(context.Background(), codex); err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range []coremodel.ChatComponent{
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
+		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+	} {
+		binding := binding
+		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, text := range []string{"first", "second"} {
+		_, err := b.HandleInbound(context.Background(), component.InboundEvent{
+			ComponentID: telegram.ID,
+			ExternalID:  "msg-" + text,
+			Payload: message.InboundPayload{
+				ProviderType:      "telegram",
+				ProviderChannelID: "chat-1",
+				ProviderThreadID:  "thread-7",
+				ProviderMessageID: "msg-" + text,
+				Actor:             message.Actor{ID: "bart", Label: "bart", Roles: []simplerbac.Role{simplerbac.RoleUser}},
+				Text:              message.TextMessage{Text: text},
+			},
+		})
+		if err != nil {
+			t.Fatalf("HandleInbound(%s) error = %v", text, err)
+		}
+	}
+
+	if got, want := agentRecorder.historyLens, []int{1, 4}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("agent history lens = %#v, want %#v", got, want)
 	}
 }
 

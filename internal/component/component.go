@@ -436,9 +436,37 @@ type Turn struct {
 	Inbound coremodel.ThreadMessage
 	// Prompt is the prepared text for LLM-style turn handlers. Inbound remains
 	// the canonical stored message so non-LLM handlers can inspect the raw post.
-	Prompt  string
+	Prompt string
+	// History is kept for legacy in-memory/test turns. Broker-backed turns should
+	// prefer Data so component authors explicitly read only the data they need.
 	History []coremodel.ThreadMessage
+	Data    TurnData
 	Runtime TurnRuntime
+}
+
+// TurnData is the read-side app boundary exposed to turn handlers. It keeps
+// handlers away from raw storage/GORM while still allowing intentional access
+// to ctgbot conversation data when a component genuinely needs it.
+type TurnData interface {
+	ForEachMessage(ctx context.Context, scope MessageScope, visit MessageVisitor) error
+}
+
+func (t Turn) LoadHistory(ctx context.Context) ([]coremodel.ThreadMessage, error) {
+	if t.Data != nil {
+		var out []coremodel.ThreadMessage
+		err := t.Data.ForEachMessage(ctx, MessageScope{ThreadID: t.Thread.ID}, func(message coremodel.ThreadMessage) error {
+			if message.ID == t.Inbound.ID {
+				message = t.Inbound
+			}
+			out = append(out, message)
+			return nil
+		})
+		return out, err
+	}
+	if len(t.History) == 0 {
+		return nil, nil
+	}
+	return append([]coremodel.ThreadMessage(nil), t.History...), nil
 }
 
 func (t Turn) PromptText() string {

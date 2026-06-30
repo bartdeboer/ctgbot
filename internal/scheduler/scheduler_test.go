@@ -57,6 +57,42 @@ func TestRunDueQueuesJobsSequentially(t *testing.T) {
 	}
 }
 
+func TestFinishJobUsesPreviousDueTimeToAvoidIntervalDrift(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	due := time.Date(2026, 6, 30, 1, 0, 0, 0, time.UTC)
+	finished := due.Add(17 * time.Minute)
+	job, err := NewJob("nightly", "24h", []string{"do", "work"}, due)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := FinishJob(ctx, storage.ScheduledJobs(), job, nil, finished); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := storage.ScheduledJobs().List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := *jobs[0].NextRunAt, due.Add(24*time.Hour); !got.Equal(want) {
+		t.Fatalf("next run = %v, want %v", got, want)
+	}
+}
+
+func TestFinishJobCoalescesMissedIntervals(t *testing.T) {
+	due := time.Date(2026, 6, 30, 1, 0, 0, 0, time.UTC)
+	finished := due.Add(49 * time.Hour)
+	job, err := NewJob("nightly", "24h", []string{"do", "work"}, due)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	next := nextIntervalRunAt(job, 24*time.Hour, finished)
+	if got, want := next, due.Add(72*time.Hour); !got.Equal(want) {
+		t.Fatalf("next run = %v, want %v", got, want)
+	}
+}
+
 type fakeProvider struct{ engine *commandengine.Engine }
 
 func (p fakeProvider) ScheduledCommandEngine(ctx context.Context) (*commandengine.Engine, error) {
