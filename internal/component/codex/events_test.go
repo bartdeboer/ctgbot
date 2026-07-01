@@ -87,6 +87,7 @@ func TestEventWriterSuppressesCodexProtocolAgentMessages(t *testing.T) {
 		`{"type":"item.completed","item":{"type":"agent_message","text":"<tool_call>functions.exec_command agext:json {}</tool_call>"}}`,
 		`{"type":"item.completed","item":{"type":"agent_message","text":"{\"cmd\":\"git status\",\"yield_time_ms\":1000}"}}`,
 		`{"type":"item.completed","item":{"type":"agent_message","text":"{\"plan\":[{\"step\":\"inspect\",\"status\":\"in_progress\"}]}"}}`,
+		`{"type":"item.completed","item":{"type":"agent_message","text":"{\"plan\":[{\"step\":\"inspect\",\"status\":\"in_progress\"}],\"explanation\":\"working\"} \n      «»?"}}`,
 		`{"type":"item.completed","item":{"type":"agent_message","text":"hello"}}`,
 		`{"type":"item.completed","item":{"type":"agent_message","text":"{\"ok\":true}"}}`,
 		`{"type":"item.completed","item":{"type":"agent_message","text":"<tool_result>{}</tool_result>"}}`,

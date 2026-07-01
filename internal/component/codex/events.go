@@ -172,8 +172,8 @@ func isCodexProtocolMessage(text string) bool {
 }
 
 func isCodexToolArgumentMessage(text string) bool {
-	var payload map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(strings.TrimSpace(text)), &payload); err != nil {
+	payload, ok := leadingJSONObject(strings.TrimSpace(text))
+	if !ok {
 		return false
 	}
 	for _, key := range []string{
@@ -186,6 +186,49 @@ func isCodexToolArgumentMessage(text string) bool {
 		}
 	}
 	return false
+}
+
+func leadingJSONObject(text string) (map[string]json.RawMessage, bool) {
+	if !strings.HasPrefix(text, "{") {
+		return nil, false
+	}
+	depth := 0
+	inString := false
+	escaped := false
+	for i, r := range text {
+		if inString {
+			if escaped {
+				escaped = false
+				continue
+			}
+			switch r {
+			case '\\':
+				escaped = true
+			case '"':
+				inString = false
+			}
+			continue
+		}
+		switch r {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				var payload map[string]json.RawMessage
+				if err := json.Unmarshal([]byte(text[:i+1]), &payload); err != nil {
+					return nil, false
+				}
+				return payload, true
+			}
+			if depth < 0 {
+				return nil, false
+			}
+		}
+	}
+	return nil, false
 }
 
 func parseEvent(line string) (codexEvent, error) {
