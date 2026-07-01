@@ -211,6 +211,18 @@ func PrepareJob(job *coremodel.ScheduledJob, now time.Time) error {
 	return nil
 }
 
+func nextIntervalRunAt(job coremodel.ScheduledJob, every time.Duration, finishedAt time.Time) time.Time {
+	base := finishedAt.UTC()
+	if job.NextRunAt != nil && !job.NextRunAt.IsZero() {
+		base = job.NextRunAt.UTC()
+	}
+	next := base.Add(every)
+	for !next.After(finishedAt.UTC()) {
+		next = next.Add(every)
+	}
+	return next
+}
+
 func Argv(job coremodel.ScheduledJob) ([]string, error) {
 	var argv []string
 	if err := json.Unmarshal([]byte(job.CommandJSON), &argv); err != nil {
@@ -234,7 +246,7 @@ func FinishJob(ctx context.Context, jobs repository.ScheduledJobRepository, job 
 		return err
 	}
 	job.LastRunAt = &finishedAt
-	next := finishedAt.Add(every)
+	next := nextIntervalRunAt(job, every, finishedAt)
 	job.NextRunAt = &next
 	if runErr != nil {
 		job.LastStatus = coremodel.ScheduledJobStatusFailed
