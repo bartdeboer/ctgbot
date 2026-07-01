@@ -93,6 +93,42 @@ func TestFinishJobCoalescesMissedIntervals(t *testing.T) {
 	}
 }
 
+func TestNewScheduledJobCronSetsNextCalendarRun(t *testing.T) {
+	now := time.Date(2026, 7, 1, 21, 0, 0, 0, time.UTC)
+	job, err := NewScheduledJob("nightly", JobSchedule{Cron: "30 3 * * *", Timezone: "Europe/Amsterdam"}, []string{"do", "work"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 7, 2, 1, 30, 0, 0, time.UTC)
+	if job.NextRunAt == nil || !job.NextRunAt.Equal(want) {
+		t.Fatalf("next run = %v, want %s", job.NextRunAt, want)
+	}
+}
+
+func TestFinishJobCronUsesNextCalendarRun(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	started := time.Date(2026, 7, 2, 1, 30, 0, 0, time.UTC)
+	finished := started.Add(17 * time.Minute)
+	job, err := NewScheduledJob("nightly", JobSchedule{Cron: "30 3 * * *", Timezone: "Europe/Amsterdam"}, []string{"do", "work"}, started.Add(-time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.NextRunAt = &started
+
+	if err := FinishJob(ctx, storage.ScheduledJobs(), job, nil, finished); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := storage.ScheduledJobs().List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 7, 3, 1, 30, 0, 0, time.UTC)
+	if got := jobs[0].NextRunAt; got == nil || !got.Equal(want) {
+		t.Fatalf("next run = %v, want %s", got, want)
+	}
+}
+
 type fakeProvider struct{ engine *commandengine.Engine }
 
 func (p fakeProvider) ScheduledCommandEngine(ctx context.Context) (*commandengine.Engine, error) {

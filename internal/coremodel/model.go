@@ -302,6 +302,8 @@ type ScheduledJob struct {
 	Name        string         `gorm:"uniqueIndex"`
 	Enabled     bool           `gorm:"index"`
 	Every       string
+	Cron        string
+	Timezone    string
 	CommandJSON string
 	LastRunAt   *time.Time
 	NextRunAt   *time.Time `gorm:"index"`

@@ -58,6 +58,24 @@ func TestSchedulerCommandBuilders(t *testing.T) {
 	}
 }
 
+func TestSchedulerCommandBuilderAcceptsCron(t *testing.T) {
+	cmdAny, err := buildJobAddCommand(&clir.Request{Params: map[string]string{"name": "nightly"}, Extra: []string{"--cron", "30 1 * * *", "--tz", "Europe/Amsterdam", "indexing", "run", "default-search-title"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := cmdAny.(jobAddCommand)
+	if cmd.Name != "nightly" || cmd.Cron != "30 1 * * *" || cmd.Timezone != "Europe/Amsterdam" || strings.Join(cmd.Command, " ") != "indexing run default-search-title" {
+		t.Fatalf("cmd = %#v", cmd)
+	}
+}
+
+func TestSchedulerCommandBuilderRejectsMixedSchedules(t *testing.T) {
+	_, err := buildJobAddCommand(&clir.Request{Params: map[string]string{"name": "nightly"}, Extra: []string{"--every", "24h", "--cron", "30 1 * * *", "do", "work"}})
+	if err == nil {
+		t.Fatal("buildJobAddCommand error = nil, want error")
+	}
+}
+
 func newTestComponent(t *testing.T) *Component {
 	t.Helper()
 	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: t.TempDir()}, repository.NewMemory(), nil)

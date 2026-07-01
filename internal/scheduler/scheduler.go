@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/repository"
+	"github.com/bartdeboer/ctgbot/internal/schedule"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 	"github.com/bartdeboer/ctgbot/internal/timedintent"
 )
@@ -167,12 +168,22 @@ func RunJob(ctx context.Context, engine *commandengine.Engine, job coremodel.Sch
 	return err
 }
 
+type JobSchedule struct {
+	Every    string
+	Cron     string
+	Timezone string
+}
+
 func NewJob(name string, every string, argv []string, now time.Time) (coremodel.ScheduledJob, error) {
+	return NewScheduledJob(name, JobSchedule{Every: every}, argv, now)
+}
+
+func NewScheduledJob(name string, spec JobSchedule, argv []string, now time.Time) (coremodel.ScheduledJob, error) {
 	commandJSON, err := json.Marshal(argv)
 	if err != nil {
 		return coremodel.ScheduledJob{}, err
 	}
-	job := coremodel.ScheduledJob{Name: name, Enabled: true, Every: every, CommandJSON: string(commandJSON)}
+	job := coremodel.ScheduledJob{Name: name, Enabled: true, Every: spec.Every, Cron: spec.Cron, Timezone: spec.Timezone, CommandJSON: string(commandJSON)}
 	if err := PrepareJob(&job, now); err != nil {
 		return coremodel.ScheduledJob{}, err
 	}
@@ -185,15 +196,30 @@ func PrepareJob(job *coremodel.ScheduledJob, now time.Time) error {
 	}
 	job.Name = strings.TrimSpace(job.Name)
 	job.Every = strings.TrimSpace(job.Every)
+	job.Cron = strings.TrimSpace(job.Cron)
+	job.Timezone = strings.TrimSpace(job.Timezone)
 	job.CommandJSON = strings.TrimSpace(job.CommandJSON)
 	if job.Name == "" {
 		return fmt.Errorf("missing job name")
 	}
-	if job.Every == "" {
+	if job.Every == "" && job.Cron == "" {
 		return fmt.Errorf("missing schedule interval")
 	}
-	if _, err := time.ParseDuration(job.Every); err != nil {
-		return fmt.Errorf("parse --every: %w", err)
+	if job.Every != "" && job.Cron != "" {
+		return fmt.Errorf("use either --every or --cron, not both")
+	}
+	if job.Every != "" {
+		if job.Timezone != "" {
+			return fmt.Errorf("--tz requires --cron")
+		}
+		if _, err := time.ParseDuration(job.Every); err != nil {
+			return fmt.Errorf("parse --every: %w", err)
+		}
+	}
+	if job.Cron != "" {
+		if _, err := schedule.ParseCron(job.Cron, job.Timezone); err != nil {
+			return fmt.Errorf("parse --cron: %w", err)
+		}
 	}
 	if _, err := Argv(*job); err != nil {
 		return err
@@ -202,13 +228,23 @@ func PrepareJob(job *coremodel.ScheduledJob, now time.Time) error {
 		now = time.Now().UTC()
 	}
 	if job.NextRunAt == nil {
-		next := now.UTC()
+		next, err := firstRunAt(*job, now)
+		if err != nil {
+			return err
+		}
 		job.NextRunAt = &next
 	}
 	if job.LastStatus == "" {
 		job.LastStatus = coremodel.ScheduledJobStatusNever
 	}
 	return nil
+}
+
+func firstRunAt(job coremodel.ScheduledJob, now time.Time) (time.Time, error) {
+	if strings.TrimSpace(job.Cron) != "" {
+		return schedule.NextCron(job.Cron, job.Timezone, now)
+	}
+	return now.UTC(), nil
 }
 
 func nextIntervalRunAt(job coremodel.ScheduledJob, every time.Duration, finishedAt time.Time) time.Time {
@@ -241,12 +277,11 @@ func FinishJob(ctx context.Context, jobs repository.ScheduledJobRepository, job 
 	if finishedAt.IsZero() {
 		finishedAt = time.Now().UTC()
 	}
-	every, err := time.ParseDuration(job.Every)
+	next, err := nextRunAt(job, finishedAt)
 	if err != nil {
 		return err
 	}
 	job.LastRunAt = &finishedAt
-	next := nextIntervalRunAt(job, every, finishedAt)
 	job.NextRunAt = &next
 	if runErr != nil {
 		job.LastStatus = coremodel.ScheduledJobStatusFailed
@@ -256,4 +291,15 @@ func FinishJob(ctx context.Context, jobs repository.ScheduledJobRepository, job 
 		job.LastError = ""
 	}
 	return jobs.Save(ctx, &job)
+}
+
+func nextRunAt(job coremodel.ScheduledJob, finishedAt time.Time) (time.Time, error) {
+	if strings.TrimSpace(job.Cron) != "" {
+		return schedule.NextCron(job.Cron, job.Timezone, finishedAt)
+	}
+	every, err := time.ParseDuration(job.Every)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return nextIntervalRunAt(job, every, finishedAt), nil
 }
