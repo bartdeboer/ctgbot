@@ -1127,6 +1127,8 @@ func (r memoryScheduledJobs) Save(ctx context.Context, job *coremodel.ScheduledJ
 	}
 	job.Name = strings.TrimSpace(job.Name)
 	job.Every = strings.TrimSpace(job.Every)
+	job.Cron = strings.TrimSpace(job.Cron)
+	job.Timezone = strings.TrimSpace(job.Timezone)
 	job.CommandJSON = strings.TrimSpace(job.CommandJSON)
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()
@@ -1138,10 +1140,11 @@ func (r memoryScheduledJobs) Save(ctx context.Context, job *coremodel.ScheduledJ
 				if job.LastRunAt == nil {
 					job.LastRunAt = existing.LastRunAt
 				}
-				if job.LastStatus == "" {
+				preserveStatus := job.LastStatus == ""
+				if preserveStatus {
 					job.LastStatus = existing.LastStatus
 				}
-				if job.LastError == "" {
+				if preserveStatus && job.LastError == "" {
 					job.LastError = existing.LastError
 				}
 				break

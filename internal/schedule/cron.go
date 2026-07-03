@@ -1,4 +1,4 @@
-package timedintent
+package schedule
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ import (
 
 const DefaultTimezone = "UTC"
 
-func nextCronDue(expr string, timezone string, after time.Time) (time.Time, error) {
-	schedule, err := parseCron(expr, timezone)
+func NextCron(expr string, timezone string, after time.Time) (time.Time, error) {
+	schedule, err := ParseCron(expr, timezone)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -25,13 +25,13 @@ func nextCronDue(expr string, timezone string, after time.Time) (time.Time, erro
 	return next.UTC(), nil
 }
 
-func parseCron(expr string, timezone string) (cron.Schedule, error) {
+func ParseCron(expr string, timezone string) (cron.Schedule, error) {
 	expr = strings.TrimSpace(expr)
 	if expr == "" {
 		return nil, fmt.Errorf("missing cron expression")
 	}
 	timezone = strings.TrimSpace(timezone)
-	if hasCronTimezone(expr) {
+	if HasCronTimezone(expr) {
 		if timezone != "" {
 			return nil, fmt.Errorf("use either --tz or CRON_TZ in cron expression, not both")
 		}
@@ -46,7 +46,7 @@ func parseCron(expr string, timezone string) (cron.Schedule, error) {
 	return cron.ParseStandard("CRON_TZ=" + timezone + " " + expr)
 }
 
-func hasCronTimezone(expr string) bool {
+func HasCronTimezone(expr string) bool {
 	expr = strings.TrimSpace(expr)
 	return strings.HasPrefix(expr, "TZ=") || strings.HasPrefix(expr, "CRON_TZ=")
 }

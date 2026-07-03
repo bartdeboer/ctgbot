@@ -80,6 +80,8 @@ func TestFinishJobUsesPreviousDueTimeToAvoidIntervalDrift(t *testing.T) {
 }
 
 func TestFinishJobCoalescesMissedIntervals(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
 	due := time.Date(2026, 6, 30, 1, 0, 0, 0, time.UTC)
 	finished := due.Add(49 * time.Hour)
 	job, err := NewJob("nightly", "24h", []string{"do", "work"}, due)
@@ -87,9 +89,51 @@ func TestFinishJobCoalescesMissedIntervals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	next := nextIntervalRunAt(job, 24*time.Hour, finished)
-	if got, want := next, due.Add(72*time.Hour); !got.Equal(want) {
+	if err := FinishJob(ctx, storage.ScheduledJobs(), job, nil, finished); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := storage.ScheduledJobs().List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := *jobs[0].NextRunAt, due.Add(72*time.Hour); !got.Equal(want) {
 		t.Fatalf("next run = %v, want %v", got, want)
+	}
+}
+
+func TestNewScheduledJobCronSetsNextCalendarRun(t *testing.T) {
+	now := time.Date(2026, 7, 1, 21, 0, 0, 0, time.UTC)
+	job, err := NewScheduledJob("nightly", JobSchedule{Cron: "30 3 * * *", Timezone: "Europe/Amsterdam"}, []string{"do", "work"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 7, 2, 1, 30, 0, 0, time.UTC)
+	if job.NextRunAt == nil || !job.NextRunAt.Equal(want) {
+		t.Fatalf("next run = %v, want %s", job.NextRunAt, want)
+	}
+}
+
+func TestFinishJobCronUsesNextCalendarRun(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
+	started := time.Date(2026, 7, 2, 1, 30, 0, 0, time.UTC)
+	finished := started.Add(17 * time.Minute)
+	job, err := NewScheduledJob("nightly", JobSchedule{Cron: "30 3 * * *", Timezone: "Europe/Amsterdam"}, []string{"do", "work"}, started.Add(-time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	job.NextRunAt = &started
+
+	if err := FinishJob(ctx, storage.ScheduledJobs(), job, nil, finished); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := storage.ScheduledJobs().List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 7, 3, 1, 30, 0, 0, time.UTC)
+	if got := jobs[0].NextRunAt; got == nil || !got.Equal(want) {
+		t.Fatalf("next run = %v, want %s", got, want)
 	}
 }
 
