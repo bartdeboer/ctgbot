@@ -212,8 +212,12 @@ func PrepareJob(job *coremodel.ScheduledJob, now time.Time) error {
 		if job.Timezone != "" {
 			return fmt.Errorf("--tz requires --cron")
 		}
-		if _, err := time.ParseDuration(job.Every); err != nil {
+		every, err := time.ParseDuration(job.Every)
+		if err != nil {
 			return fmt.Errorf("parse --every: %w", err)
+		}
+		if every <= 0 {
+			return fmt.Errorf("--every must be positive")
 		}
 	}
 	if job.Cron != "" {
@@ -293,5 +297,5 @@ func nextDueAfterRun(job coremodel.ScheduledJob, finishedAt time.Time) (time.Tim
 	if job.NextRunAt != nil && !job.NextRunAt.IsZero() {
 		previousDue = job.NextRunAt.UTC()
 	}
-	return schedule.NextAnchoredInterval(previousDue, every, finishedAt), nil
+	return schedule.NextAnchoredInterval(previousDue, every, finishedAt)
 }

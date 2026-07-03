@@ -76,6 +76,14 @@ func TestSchedulerCommandBuilderRejectsMixedSchedules(t *testing.T) {
 	}
 }
 
+func TestSchedulerJobAddRejectsNonPositiveEvery(t *testing.T) {
+	ctx := context.Background()
+	component := newTestComponent(t)
+	if _, err := component.handleJobAdd(ctx, commandengine.Request{}, jobAddCommand{Name: "poll", Every: "0s", Command: []string{"do", "work"}}); err == nil {
+		t.Fatal("handleJobAdd error = nil, want error")
+	}
+}
+
 func TestSchedulerJobAddReplacesEveryWithCron(t *testing.T) {
 	ctx := context.Background()
 	component := newTestComponent(t)
