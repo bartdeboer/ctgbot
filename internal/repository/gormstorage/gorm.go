@@ -893,6 +893,8 @@ func (r *gormScheduledJobs) Save(ctx context.Context, job *coremodel.ScheduledJo
 	}
 	job.Name = clean(job.Name)
 	job.Every = clean(job.Every)
+	job.Cron = clean(job.Cron)
+	job.Timezone = clean(job.Timezone)
 	job.CommandJSON = clean(job.CommandJSON)
 	if job.ID.IsNull() {
 		var existing coremodel.ScheduledJob
@@ -903,10 +905,11 @@ func (r *gormScheduledJobs) Save(ctx context.Context, job *coremodel.ScheduledJo
 			if job.LastRunAt == nil {
 				job.LastRunAt = existing.LastRunAt
 			}
-			if job.LastStatus == "" {
+			preserveStatus := job.LastStatus == ""
+			if preserveStatus {
 				job.LastStatus = existing.LastStatus
 			}
-			if job.LastError == "" {
+			if preserveStatus && job.LastError == "" {
 				job.LastError = existing.LastError
 			}
 		} else if err != gorm.ErrRecordNotFound {

@@ -76,6 +76,28 @@ func TestSchedulerCommandBuilderRejectsMixedSchedules(t *testing.T) {
 	}
 }
 
+func TestSchedulerJobAddReplacesEveryWithCron(t *testing.T) {
+	ctx := context.Background()
+	component := newTestComponent(t)
+	if _, err := component.handleJobAdd(ctx, commandengine.Request{}, jobAddCommand{Name: "nightly", Every: "24h", Command: []string{"do", "work"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := component.handleJobAdd(ctx, commandengine.Request{}, jobAddCommand{Name: "nightly", Cron: "30 1 * * *", Timezone: "UTC", Command: []string{"do", "work"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	jobs, err := component.jobs.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("jobs = %#v, want one replacement", jobs)
+	}
+	if jobs[0].Every != "" || jobs[0].Cron != "30 1 * * *" || jobs[0].Timezone != "UTC" {
+		t.Fatalf("job = %#v, want cron replacement", jobs[0])
+	}
+}
+
 func newTestComponent(t *testing.T) *Component {
 	t.Helper()
 	created, err := New(context.Background(), coremodel.Component{Type: Type, Name: Type}, nil, runtimepkg.Profile{Path: t.TempDir()}, repository.NewMemory(), nil)
