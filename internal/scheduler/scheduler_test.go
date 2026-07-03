@@ -80,6 +80,8 @@ func TestFinishJobUsesPreviousDueTimeToAvoidIntervalDrift(t *testing.T) {
 }
 
 func TestFinishJobCoalescesMissedIntervals(t *testing.T) {
+	ctx := context.Background()
+	storage := repository.NewMemory()
 	due := time.Date(2026, 6, 30, 1, 0, 0, 0, time.UTC)
 	finished := due.Add(49 * time.Hour)
 	job, err := NewJob("nightly", "24h", []string{"do", "work"}, due)
@@ -87,8 +89,14 @@ func TestFinishJobCoalescesMissedIntervals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	next := nextIntervalRunAt(job, 24*time.Hour, finished)
-	if got, want := next, due.Add(72*time.Hour); !got.Equal(want) {
+	if err := FinishJob(ctx, storage.ScheduledJobs(), job, nil, finished); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := storage.ScheduledJobs().List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := *jobs[0].NextRunAt, due.Add(72*time.Hour); !got.Equal(want) {
 		t.Fatalf("next run = %v, want %v", got, want)
 	}
 }

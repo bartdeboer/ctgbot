@@ -228,7 +228,7 @@ func PrepareJob(job *coremodel.ScheduledJob, now time.Time) error {
 		now = time.Now().UTC()
 	}
 	if job.NextRunAt == nil {
-		next, err := firstRunAt(*job, now)
+		next, err := initialDueAt(*job, now)
 		if err != nil {
 			return err
 		}
@@ -240,23 +240,11 @@ func PrepareJob(job *coremodel.ScheduledJob, now time.Time) error {
 	return nil
 }
 
-func firstRunAt(job coremodel.ScheduledJob, now time.Time) (time.Time, error) {
+func initialDueAt(job coremodel.ScheduledJob, now time.Time) (time.Time, error) {
 	if strings.TrimSpace(job.Cron) != "" {
 		return schedule.NextCron(job.Cron, job.Timezone, now)
 	}
 	return now.UTC(), nil
-}
-
-func nextIntervalRunAt(job coremodel.ScheduledJob, every time.Duration, finishedAt time.Time) time.Time {
-	base := finishedAt.UTC()
-	if job.NextRunAt != nil && !job.NextRunAt.IsZero() {
-		base = job.NextRunAt.UTC()
-	}
-	next := base.Add(every)
-	for !next.After(finishedAt.UTC()) {
-		next = next.Add(every)
-	}
-	return next
 }
 
 func Argv(job coremodel.ScheduledJob) ([]string, error) {
@@ -277,7 +265,7 @@ func FinishJob(ctx context.Context, jobs repository.ScheduledJobRepository, job 
 	if finishedAt.IsZero() {
 		finishedAt = time.Now().UTC()
 	}
-	next, err := nextRunAt(job, finishedAt)
+	next, err := nextDueAfterRun(job, finishedAt)
 	if err != nil {
 		return err
 	}
@@ -293,7 +281,7 @@ func FinishJob(ctx context.Context, jobs repository.ScheduledJobRepository, job 
 	return jobs.Save(ctx, &job)
 }
 
-func nextRunAt(job coremodel.ScheduledJob, finishedAt time.Time) (time.Time, error) {
+func nextDueAfterRun(job coremodel.ScheduledJob, finishedAt time.Time) (time.Time, error) {
 	if strings.TrimSpace(job.Cron) != "" {
 		return schedule.NextCron(job.Cron, job.Timezone, finishedAt)
 	}
@@ -301,5 +289,9 @@ func nextRunAt(job coremodel.ScheduledJob, finishedAt time.Time) (time.Time, err
 	if err != nil {
 		return time.Time{}, err
 	}
-	return nextIntervalRunAt(job, every, finishedAt), nil
+	previousDue := finishedAt.UTC()
+	if job.NextRunAt != nil && !job.NextRunAt.IsZero() {
+		previousDue = job.NextRunAt.UTC()
+	}
+	return schedule.NextAnchoredInterval(previousDue, every, finishedAt), nil
 }
