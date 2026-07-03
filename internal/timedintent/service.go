@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 	"github.com/bartdeboer/ctgbot/internal/repository"
+	"github.com/bartdeboer/ctgbot/internal/schedule"
 )
 
 const (
@@ -113,7 +114,7 @@ func (s *Service) StartCronHeartbeat(ctx context.Context, threadID modeluuid.UUI
 	}
 	expr = strings.TrimSpace(expr)
 	timezone = strings.TrimSpace(timezone)
-	next, err := nextCronDue(expr, timezone, s.now())
+	next, err := schedule.NextCron(expr, timezone, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("parse heartbeat cron: %w", err)
 	}
@@ -192,7 +193,7 @@ func (s *Service) ScheduleWakeCron(ctx context.Context, threadID modeluuid.UUID,
 	}
 	expr = strings.TrimSpace(expr)
 	timezone = strings.TrimSpace(timezone)
-	next, err := nextCronDue(expr, timezone, s.now())
+	next, err := schedule.NextCron(expr, timezone, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("parse scheduled wake cron: %w", err)
 	}
@@ -477,7 +478,7 @@ func shouldExpire(intent coremodel.TimedIntent, now time.Time) bool {
 func nextAfterDelivery(intent coremodel.TimedIntent, now time.Time) (*time.Time, bool, error) {
 	cronExpr := strings.TrimSpace(intent.Cron)
 	if cronExpr != "" {
-		next, err := nextCronDue(cronExpr, intent.Timezone, now)
+		next, err := schedule.NextCron(cronExpr, intent.Timezone, now)
 		if err != nil {
 			return nil, false, err
 		}
@@ -500,7 +501,7 @@ func nextAfterDelivery(intent coremodel.TimedIntent, now time.Time) (*time.Time,
 
 func nextHeartbeatDue(intent coremodel.TimedIntent, now time.Time) (time.Time, error) {
 	if cronExpr := strings.TrimSpace(intent.Cron); cronExpr != "" {
-		return nextCronDue(cronExpr, intent.Timezone, now)
+		return schedule.NextCron(cronExpr, intent.Timezone, now)
 	}
 	every, err := time.ParseDuration(strings.TrimSpace(intent.Every))
 	if err != nil {
