@@ -80,3 +80,13 @@ func TestCommandDefinitionsExposeValidationSliceAndStubs(t *testing.T) {
 		}
 	}
 }
+
+func TestWaitForClientWaitsOnMissingAuthUntilContextCancel(t *testing.T) {
+	c := &Component{componentConfig: ComponentConfig{PollInterval: "1ms"}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := c.waitForClient(ctx, time.Millisecond)
+	if err == nil || err != context.Canceled {
+		t.Fatalf("waitForClient() error = %v, want context.Canceled", err)
+	}
+}

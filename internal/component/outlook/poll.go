@@ -14,7 +14,7 @@ func (c *Component) RunInbound(ctx context.Context, emit component.InboundEmitte
 		return fmt.Errorf("missing inbound emitter")
 	}
 	interval := c.componentConfig.pollInterval()
-	client, err := c.client(ctx)
+	client, err := c.waitForClient(ctx, interval)
 	if err != nil {
 		return err
 	}
@@ -22,10 +22,8 @@ func (c *Component) RunInbound(ctx context.Context, emit component.InboundEmitte
 		if err := c.pollOnce(ctx, client, emit); err != nil {
 			c.logf("outlook poll failed component=%s err=%v", c.registration.Ref(), err)
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(interval):
+		if err := waitInterval(ctx, interval); err != nil {
+			return err
 		}
 	}
 }
@@ -69,6 +67,51 @@ func (c *Component) pollOnce(ctx context.Context, client outlookClient, emit com
 	state.LastSyncedAt = time.Now().UTC()
 	return c.saveState(state)
 }
+
+func (c *Component) waitForClient(ctx context.Context, interval time.Duration) (outlookClient, error) {
+	logged := false
+	for {
+		client, err := c.client(ctx)
+		if err == nil {
+			if logged {
+				c.logf("outlook source authenticated component=%s", c.registration.Ref())
+			}
+			return client, nil
+		}
+		if !isMissingAuthMaterial(err) {
+			return nil, err
+		}
+		if !logged {
+			c.logf("outlook source unavailable component=%s err=%v", c.registration.Ref(), err)
+			logged = true
+		}
+		if waitErr := waitInterval(ctx, interval); waitErr != nil {
+			return nil, waitErr
+		}
+	}
+}
+
+func waitInterval(ctx context.Context, interval time.Duration) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if interval <= 0 {
+		interval = DefaultPollInterval
+	}
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func isMissingAuthMaterial(err error) bool {
+	return err != nil && strings.Contains(err.Error(), errMissingAuthMaterial.Error())
+}
+
 func mapKeys(m map[string]bool) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
