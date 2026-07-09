@@ -20,6 +20,7 @@ import (
 	messagingcomponent "github.com/bartdeboer/ctgbot/internal/component/messaging"
 	modelcomponent "github.com/bartdeboer/ctgbot/internal/component/model"
 	opscomponent "github.com/bartdeboer/ctgbot/internal/component/ops"
+	outlookcomponent "github.com/bartdeboer/ctgbot/internal/component/outlook"
 	remotecomponent "github.com/bartdeboer/ctgbot/internal/component/remote"
 	schedulercomponent "github.com/bartdeboer/ctgbot/internal/component/scheduler"
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
@@ -107,6 +108,7 @@ func RegisterGobTypes(register func(any)) {
 	sqlcomponent.RegisterGobTypes(register)
 	gmailcomponent.RegisterGobTypes(register)
 	gmailv2component.RegisterGobTypes(register)
+	outlookcomponent.RegisterGobTypes(register)
 	heartbeatcomponent.RegisterGobTypes(register)
 	indexingcomponent.RegisterGobTypes(register)
 	schedulercomponent.RegisterGobTypes(register)
@@ -137,6 +139,8 @@ func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 		return (*gmailcomponent.Component)(nil), true
 	case gmailv2component.Type:
 		return (*gmailv2component.Component)(nil), true
+	case outlookcomponent.Type:
+		return (*outlookcomponent.Component)(nil), true
 	case heartbeatcomponent.Type:
 		return (*heartbeatcomponent.Component)(nil), true
 	case indexingcomponent.Type:

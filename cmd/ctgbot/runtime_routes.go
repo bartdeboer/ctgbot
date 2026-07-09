@@ -29,6 +29,7 @@ import (
 	llamacppagentcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacppagent"
 	modelcomponent "github.com/bartdeboer/ctgbot/internal/component/model"
 	opscomponent "github.com/bartdeboer/ctgbot/internal/component/ops"
+	"github.com/bartdeboer/ctgbot/internal/component/outlook"
 	processcomponent "github.com/bartdeboer/ctgbot/internal/component/process"
 	schedulercomponent "github.com/bartdeboer/ctgbot/internal/component/scheduler"
 	semanticcomponent "github.com/bartdeboer/ctgbot/internal/component/semantic"
@@ -165,6 +166,11 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 			Logger:                rtSystem.Logger,
 			ResolveChatWorkspace:  rtSystem.ResolveChatWorkspace,
 		})
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(outlook.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return outlook.NewWithOptions(ctx, registration, runtime, profile, storage, outlook.Options{Logger: rtSystem.Logger, ResolveChatWorkspace: rtSystem.ResolveChatWorkspace})
 	}); err != nil {
 		return nil, err
 	}
