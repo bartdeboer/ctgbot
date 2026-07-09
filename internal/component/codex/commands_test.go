@@ -211,7 +211,7 @@ func TestCodexConfigSurfaceCommands(t *testing.T) {
 		for _, want := range []string{
 			"model=",
 			"Codex model for this thread",
-			"options: gpt-5.5, gpt-5.4",
+			"options: gpt-5.6, gpt-5.6-sol",
 			"effort=",
 			"options: low, medium, high, xhigh",
 			"container.keep-running=false",
@@ -238,7 +238,7 @@ func TestCodexConfigSurfaceCommands(t *testing.T) {
 		for _, want := range []string{
 			"model=gpt-test",
 			"type: string",
-			"options: gpt-5.5, gpt-5.4",
+			"options: gpt-5.6, gpt-5.6-sol",
 			"writable: true",
 		} {
 			if !strings.Contains(get.Text, want) {
