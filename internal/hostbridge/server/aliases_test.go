@@ -14,7 +14,8 @@ func TestAliasJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{
 		"docker": {
 			"name": "docker",
-			"allow_extra_args": true
+			"allow_extra_args": true,
+			"stdin_max_bytes": 1048576
 		},
 		"delete-branch": {
 			"name": "git",
@@ -34,6 +35,9 @@ func TestAliasJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 
 	if !aliases["docker"].AllowExtraArgs {
 		t.Fatalf("allow_extra_args was not decoded: %#v", aliases["docker"])
+	}
+	if got, want := aliases["docker"].StdinMaxBytes, int64(1048576); got != want {
+		t.Fatalf("stdin_max_bytes = %d, want %d", got, want)
 	}
 	if got, want := aliases["delete-branch"].ArgsPattern, "<branch>"; got != want {
 		t.Fatalf("args_pattern = %q, want %q", got, want)

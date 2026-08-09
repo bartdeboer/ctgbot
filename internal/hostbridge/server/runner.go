@@ -23,14 +23,14 @@ func RegisterRunCommandHandler(registry *commandengine.Registry, runner *RunComm
 }
 
 func (r *RunCommandRunner) RunCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
-	text, err := r.run(ctx, cmd.Command, cmd.Args, cmd.Stdin, cmd.Timeout)
+	text, err := r.run(ctx, cmd.Command, cmd.Args, req.Stdin, cmd.Timeout)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: text}, nil
 }
 
-func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []string, stdin []byte, timeoutSec int) (string, error) {
+func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []string, stdin string, timeoutSec int) (string, error) {
 	aliases := StaticAliasResolver(nil)("")
 	if r != nil && r.ResolveAliases != nil {
 		aliases = r.ResolveAliases(r.ClientIdentity)
@@ -47,6 +47,9 @@ func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []s
 	if err != nil {
 		return "", err
 	}
+	if err := validateAliasStdin(commandName, spec, stdin); err != nil {
+		return "", err
+	}
 
 	timeout := r.defaultTimeoutSec(timeoutSec)
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
@@ -55,7 +58,7 @@ func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []s
 	command := exec.CommandContext(runCtx, plan.Name, plan.Args...)
 	command.Dir = plan.Dir
 	command.Env = plan.Env
-	command.Stdin = bytes.NewReader(stdin)
+	command.Stdin = strings.NewReader(stdin)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	command.Stdout = &stdout
@@ -85,6 +88,19 @@ func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []s
 		text = stderr.String()
 	}
 	return text, nil
+}
+
+func validateAliasStdin(commandName string, spec Alias, stdin string) error {
+	if stdin == "" {
+		return nil
+	}
+	if spec.StdinMaxBytes <= 0 {
+		return fmt.Errorf("hostbridge alias does not allow stdin: %s", commandName)
+	}
+	if int64(len(stdin)) > spec.StdinMaxBytes {
+		return fmt.Errorf("hostbridge alias stdin exceeds %d bytes: %s", spec.StdinMaxBytes, commandName)
+	}
+	return nil
 }
 
 func (r *RunCommandRunner) defaultTimeoutSec(timeout int) int {

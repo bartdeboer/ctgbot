@@ -3,13 +3,101 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	gmailcomponent "github.com/bartdeboer/ctgbot/internal/component/gmail"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
+
+func TestReadRunStdinReadsPipedBytesExactly(t *testing.T) {
+	want := "{\"text\":\"line one\\n`backticks` $dollar \\\\ tail\"}\n"
+	stdin := &testStdin{Reader: strings.NewReader(want)}
+	got, err := readRunStdin([]string{"run", "leaseweb", "domain", "apply", "--file", "-"}, stdin, int64(len(want)))
+	if err != nil {
+		t.Fatalf("readRunStdin() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("readRunStdin() = %q, want %q", got, want)
+	}
+}
+
+func TestReadRunStdinLeavesTerminalUntouched(t *testing.T) {
+	stdin := &testStdin{Reader: strings.NewReader("must remain unread"), Mode: os.ModeCharDevice}
+	got, err := readRunStdin([]string{"run", "leaseweb"}, stdin, 1024)
+	if err != nil {
+		t.Fatalf("readRunStdin() error = %v", err)
+	}
+	if got != "" {
+		t.Fatalf("readRunStdin() = %q, want empty", got)
+	}
+	if stdin.Reads != 0 {
+		t.Fatalf("terminal stdin was read %d times", stdin.Reads)
+	}
+}
+
+func TestReadRunStdinTreatsUnavailableDescriptorAsEmpty(t *testing.T) {
+	stdin := &testStdin{Reader: strings.NewReader("must remain unread"), StatErr: errors.New("bad file descriptor")}
+	got, err := readRunStdin([]string{"run", "leaseweb"}, stdin, 1024)
+	if err != nil {
+		t.Fatalf("readRunStdin() error = %v", err)
+	}
+	if got != "" || stdin.Reads != 0 {
+		t.Fatalf("unavailable stdin = %q, reads = %d; want untouched", got, stdin.Reads)
+	}
+}
+
+func TestReadRunStdinRejectsPayloadOverGlobalLimit(t *testing.T) {
+	stdin := &testStdin{Reader: strings.NewReader("12345")}
+	_, err := readRunStdin([]string{"run", "leaseweb"}, stdin, 4)
+	if err == nil || !strings.Contains(err.Error(), "exceeds 4 bytes") {
+		t.Fatalf("readRunStdin() error = %v, want global limit", err)
+	}
+}
+
+func TestReadRunStdinIgnoresOtherCommands(t *testing.T) {
+	stdin := &testStdin{Reader: strings.NewReader("must remain unread")}
+	got, err := readRunStdin([]string{"send", "hello"}, stdin, 1024)
+	if err != nil {
+		t.Fatalf("readRunStdin() error = %v", err)
+	}
+	if got != "" || stdin.Reads != 0 {
+		t.Fatalf("non-run stdin = %q, reads = %d; want untouched", got, stdin.Reads)
+	}
+}
+
+type testStdin struct {
+	Reader  io.Reader
+	Mode    os.FileMode
+	Reads   int
+	StatErr error
+}
+
+func (s *testStdin) Read(p []byte) (int, error) {
+	s.Reads++
+	return s.Reader.Read(p)
+}
+
+func (s *testStdin) Stat() (os.FileInfo, error) {
+	if s.StatErr != nil {
+		return nil, s.StatErr
+	}
+	return testFileInfo{mode: s.Mode}, nil
+}
+
+type testFileInfo struct{ mode os.FileMode }
+
+func (i testFileInfo) Name() string       { return "stdin" }
+func (i testFileInfo) Size() int64        { return 0 }
+func (i testFileInfo) Mode() os.FileMode  { return i.mode }
+func (i testFileInfo) ModTime() time.Time { return time.Time{} }
+func (i testFileInfo) IsDir() bool        { return false }
+func (i testFileInfo) Sys() any           { return nil }
 
 func TestNormalizedArgsLegacyCodexShorthand(t *testing.T) {
 	tests := []struct {

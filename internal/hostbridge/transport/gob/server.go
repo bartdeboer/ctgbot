@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 
@@ -13,9 +14,14 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/identity"
 )
 
+const DefaultMaxCommandRequestBytes int64 = 16 << 20
+
+var errCommandRequestTooLarge = errors.New("hostbridge command request too large")
+
 // Server decodes and encodes one gob hostbridge command per connection.
 type Server struct {
-	Handler transport.CommandHandler
+	Handler         transport.CommandHandler
+	MaxRequestBytes int64
 }
 
 func (s *Server) ServeConn(ctx context.Context, conn io.ReadWriteCloser) error {
@@ -26,10 +32,18 @@ func (s *Server) ServeConn(ctx context.Context, conn io.ReadWriteCloser) error {
 	if s == nil || s.Handler == nil {
 		return fmt.Errorf("missing command handler")
 	}
-	dec := gob.NewDecoder(conn)
+	limit := s.MaxRequestBytes
+	if limit <= 0 {
+		limit = DefaultMaxCommandRequestBytes
+	}
+	bounded := &io.LimitedReader{R: conn, N: limit}
+	dec := gob.NewDecoder(bounded)
 	enc := gob.NewEncoder(conn)
 	var req hostbridge.CommandRequest
 	if err := dec.Decode(&req); err != nil {
+		if bounded.N == 0 {
+			return fmt.Errorf("decode command request: %w (limit %d bytes)", errCommandRequestTooLarge, limit)
+		}
 		return fmt.Errorf("decode command request: %w", err)
 	}
 	resp := s.Handler.HandleCommand(ctx, connectionPeerIdentity(conn), req)

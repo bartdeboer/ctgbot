@@ -18,7 +18,6 @@ import (
 type RunCommand struct {
 	Command string
 	Args    []string
-	Stdin   []byte
 	Timeout int
 }
 

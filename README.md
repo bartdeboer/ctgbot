@@ -258,6 +258,10 @@ hostbridge git-fetch
 hostbridge git-push
 ```
 
+Run aliases deny non-empty stdin by default. Set `stdin_max_bytes` to a
+positive byte limit only for an alias that intentionally accepts piped input;
+stdin remains separate from the alias argument vector.
+
 ## Optional components
 
 ### Claude

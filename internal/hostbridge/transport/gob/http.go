@@ -11,8 +11,6 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/hostbridge/transport"
 )
 
-const defaultMaxHTTPCommandBytes int64 = 16 << 20
-
 // HTTPHandler carries the existing gob command protocol over one HTTP request.
 // The HTTP layer is transport only: gob still owns command encoding, and the
 // CommandHandler still owns authorization and execution.
@@ -32,7 +30,7 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	limit := h.MaxBodySize
 	if limit <= 0 {
-		limit = defaultMaxHTTPCommandBytes
+		limit = DefaultMaxCommandRequestBytes
 	}
 	body, err := io.ReadAll(io.LimitReader(req.Body, limit+1))
 	if err != nil {

@@ -20,6 +20,13 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
 
+const maxRunStdinBytes int64 = 8 << 20
+
+type stdinReader interface {
+	io.Reader
+	Stat() (os.FileInfo, error)
+}
+
 func main() {
 	args := normalizedArgs(os.Args[1:], currentComponentRef())
 	var err error
@@ -38,6 +45,11 @@ func main() {
 	}
 
 	base, err := baseRequest()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
+	base.Stdin, err = readRunStdin(args, os.Stdin, maxRunStdinBytes)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -74,6 +86,32 @@ func main() {
 	if strings.TrimSpace(resp.Result.Text) != "" {
 		fmt.Fprintln(os.Stdout, resp.Result.Text)
 	}
+}
+
+func readRunStdin(args []string, stdin stdinReader, limit int64) (string, error) {
+	if len(args) < 2 || args[0] != "run" || stdin == nil {
+		return "", nil
+	}
+	info, err := stdin.Stat()
+	if err != nil {
+		// An unavailable descriptor carries no piped input. Treat it like a
+		// terminal rather than blocking an otherwise unrelated run command.
+		return "", nil
+	}
+	if info.Mode()&os.ModeCharDevice != 0 {
+		return "", nil
+	}
+	if limit <= 0 {
+		return "", fmt.Errorf("hostbridge run stdin is disabled")
+	}
+	data, err := io.ReadAll(io.LimitReader(stdin, limit+1))
+	if err != nil {
+		return "", fmt.Errorf("read stdin: %w", err)
+	}
+	if int64(len(data)) > limit {
+		return "", fmt.Errorf("hostbridge run stdin exceeds %d bytes", limit)
+	}
+	return string(data), nil
 }
 
 func expandStdinArgs(args []string, stdin io.Reader) ([]string, error) {

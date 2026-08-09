@@ -12,6 +12,9 @@ type Alias struct {
 	Delay          string                     `json:"delay"`
 	Env            map[string]string          `json:"env"`
 	AllowExtraArgs bool                       `json:"allow_extra_args"`
+	// StdinMaxBytes opts this alias into piped stdin and bounds the accepted
+	// payload. Zero denies non-empty stdin.
+	StdinMaxBytes int64 `json:"stdin_max_bytes,omitempty"`
 }
 
 // AliasSubcommand describes one named operation under an Alias.
