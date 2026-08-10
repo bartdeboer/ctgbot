@@ -169,6 +169,33 @@ func TestRunnerRunTurnReturnsCleanCancellationForRuntimeInterrupt(t *testing.T) 
 	})
 }
 
+func TestRunnerRunTurnReturnsStructuredCodexError(t *testing.T) {
+	withTempCwd(t, func(root string) {
+		store, err := clistate.NewCwd("ctgbot", "config")
+		if err != nil {
+			t.Fatalf("new store: %v", err)
+		}
+		cfg, err := appstate.NewConfig(root, store)
+		if err != nil {
+			t.Fatalf("new config: %v", err)
+		}
+		runtime := &fakeExecRuntime{
+			workspace: "/workspace",
+			execErr:   errors.New("exit status 1"),
+			stdoutJSON: strings.Join([]string{
+				`{"type":"turn.started"}`,
+				`{"type":"error","message":"Selected model is at capacity. Please try a different model."}`,
+				`{"type":"turn.failed","error":{"message":"Selected model is at capacity. Please try a different model."}}`,
+			}, "\n") + "\n",
+		}
+		_, err = NewRunner(cfg, nil).RunTurn(context.Background(), runtime, nil, TurnRequest{Prompt: "hello"})
+		want := "codex exec: exit status 1: Selected model is at capacity. Please try a different model."
+		if err == nil || err.Error() != want {
+			t.Fatalf("RunTurn() error = %v, want %q", err, want)
+		}
+	})
+}
+
 type capturingOutput struct {
 	messages []string
 }

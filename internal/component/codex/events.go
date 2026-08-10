@@ -17,6 +17,7 @@ type eventWriter struct {
 
 	threadID          string
 	agentMessage      string
+	errorMessage      string
 	inputTokens       int
 	cachedInputTokens int
 	outputTokens      int
@@ -25,8 +26,14 @@ type eventWriter struct {
 type codexEvent struct {
 	Type     string     `json:"type"`
 	ThreadID string     `json:"thread_id"`
+	Message  string     `json:"message"`
+	Error    codexError `json:"error"`
 	Item     codexItem  `json:"item"`
 	Usage    codexUsage `json:"usage"`
+}
+
+type codexError struct {
+	Message string `json:"message"`
 }
 
 type codexItem struct {
@@ -87,6 +94,13 @@ func (w *eventWriter) AgentMessage() string {
 	return w.agentMessage
 }
 
+func (w *eventWriter) ErrorMessage() string {
+	if w == nil {
+		return ""
+	}
+	return w.errorMessage
+}
+
 func (w *eventWriter) InputTokens() int {
 	if w == nil {
 		return 0
@@ -133,6 +147,10 @@ func (w *eventWriter) handleLine(line string) {
 	}
 
 	switch ev.Type {
+	case "error":
+		w.rememberError(ev.Message)
+	case "turn.failed":
+		w.rememberError(ev.Error.Message)
 	case "thread.started":
 		w.threadID = strings.TrimSpace(ev.ThreadID)
 		if w.threadID != "" {
@@ -155,6 +173,13 @@ func (w *eventWriter) handleLine(line string) {
 		w.cachedInputTokens = ev.Usage.CachedInputTokens
 		w.outputTokens = ev.Usage.OutputTokens
 		w.log("codex json turn completed input_tokens=%d cached_input_tokens=%d output_tokens=%d", w.inputTokens, w.cachedInputTokens, w.outputTokens)
+	}
+}
+
+func (w *eventWriter) rememberError(message string) {
+	message = strings.TrimSpace(message)
+	if message != "" {
+		w.errorMessage = message
 	}
 }
 

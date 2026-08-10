@@ -115,6 +115,9 @@ func (r *Runner) RunTurn(ctx context.Context, runtime ExecRuntime, output Output
 		if readErr == nil && lastMessage != "" {
 			return TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, fmt.Errorf("codex exec: %w", err)
 		}
+		if detail := trimErrorDetail(stdout.ErrorMessage()); detail != "" {
+			return TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
+		}
 		if detail := trimErrorDetail(stderrBuf.String()); detail != "" {
 			return TurnResult{}, fmt.Errorf("codex exec: %w: %s", err, detail)
 		}

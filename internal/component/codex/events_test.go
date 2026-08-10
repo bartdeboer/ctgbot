@@ -74,6 +74,20 @@ func TestEventWriterHandlesPartialWritesAndFinalLine(t *testing.T) {
 	}
 }
 
+func TestEventWriterExtractsLatestStructuredError(t *testing.T) {
+	writer := newEventWriter(nil, nil)
+	input := strings.Join([]string{
+		`{"type":"error","message":"Selected model is at capacity."}`,
+		`{"type":"turn.failed","error":{"message":"Please try a different model."}}`,
+	}, "\n") + "\n"
+	if _, err := writer.Write([]byte(input)); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if got, want := writer.ErrorMessage(), "Please try a different model."; got != want {
+		t.Fatalf("ErrorMessage() = %q, want %q", got, want)
+	}
+}
+
 func TestEventWriterSuppressesCodexProtocolAgentMessages(t *testing.T) {
 	var logs []string
 	var messages []string
