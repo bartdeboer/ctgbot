@@ -121,7 +121,6 @@ func buildRunCommand(req *clir.Request) (any, error) {
 	return RunCommand{
 		Command: command,
 		Args:    append([]string{}, req.Extra...),
-		Timeout: 30,
 	}, nil
 }
 

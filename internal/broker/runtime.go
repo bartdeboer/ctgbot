@@ -161,8 +161,7 @@ func (r *ChatRuntime) RunHostbridgeAlias(ctx context.Context, req commandengine.
 		allowed = r.HostbridgeAliases
 	}
 	runner := &hostbridgeserver.RunCommandRunner{
-		ResolveAliases:    hostbridgeserver.StaticAliasResolver(allowed),
-		DefaultTimeoutSec: 30,
+		ResolveAliases: hostbridgeserver.StaticAliasResolver(allowed),
 	}
 	return runner.RunCommand(ctx, req, cmd)
 }

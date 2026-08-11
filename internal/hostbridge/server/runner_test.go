@@ -85,6 +85,13 @@ func TestRunCommandRunnerCancellationTerminatesChild(t *testing.T) {
 	}
 }
 
+func TestRunCommandRunnerDefaultsToOneMinute(t *testing.T) {
+	runner := &RunCommandRunner{}
+	if got := runner.defaultTimeoutSec(0); got != 60 {
+		t.Fatalf("defaultTimeoutSec(0) = %d, want 60", got)
+	}
+}
+
 func writeExecutable(t *testing.T, contents string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "probe.sh")

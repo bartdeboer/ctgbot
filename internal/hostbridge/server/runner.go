@@ -12,6 +12,8 @@ import (
 	schemacommands "github.com/bartdeboer/ctgbot/internal/schema/commands"
 )
 
+const defaultRunCommandTimeoutSec = 60
+
 type RunCommandRunner struct {
 	ResolveAliases    AliasResolver
 	ClientIdentity    string
@@ -110,5 +112,5 @@ func (r *RunCommandRunner) defaultTimeoutSec(timeout int) int {
 	if r != nil && r.DefaultTimeoutSec > 0 {
 		return r.DefaultTimeoutSec
 	}
-	return 30
+	return defaultRunCommandTimeoutSec
 }
