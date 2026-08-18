@@ -267,6 +267,19 @@ func TestChatHostbridgeSetters(t *testing.T) {
 	}
 }
 
+func TestChatHostbridgeSetAliasRejectsContradictoryCWDPolicy(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+	hostbridge := cfg.Chat(modeluuid.New()).Hostbridge()
+	err := hostbridge.SetAlias("git", hostbridgepolicy.Alias{
+		Name:        "git",
+		Dir:         "/workspace",
+		AllowedCWDs: []string{"/workspace/src/ctgbot"},
+	})
+	if err == nil {
+		t.Fatal("SetAlias() error = nil")
+	}
+}
+
 func TestHostbridgeConfiguredTCPListenAddr(t *testing.T) {
 	cfg, store := newTestConfig(t)
 

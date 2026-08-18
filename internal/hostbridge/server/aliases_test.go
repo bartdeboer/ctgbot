@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 
 	hostbridgepolicy "github.com/bartdeboer/ctgbot/internal/hostbridgepolicy"
@@ -23,7 +24,7 @@ func TestAliasJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 		},
 		"git-ctgbot": {
 			"name": "git",
-			"args": ["-C", "/workspace/src/ctgbot"],
+			"allowed_cwds": ["/workspace/src/ctgbot"],
 			"subcommands": {
 				"fetch": {},
 				"push": {"args": ["push", "--follow-tags"]}
@@ -44,6 +45,139 @@ func TestAliasJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 	}
 	if _, ok := aliases["git-ctgbot"].Subcommands["fetch"]; !ok {
 		t.Fatalf("subcommands were not decoded: %#v", aliases["git-ctgbot"])
+	}
+	if got, want := aliases["git-ctgbot"].AllowedCWDs, []string{"/workspace/src/ctgbot"}; !equalStrings(got, want) {
+		t.Fatalf("allowed_cwds = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildExecutionPlanConsumesAllowedCWD(t *testing.T) {
+	t.Parallel()
+
+	repo := t.TempDir()
+	plan, err := BuildExecutionPlan("git", []string{"--cwd", repo, "status"}, Alias{
+		Name:        "git",
+		AllowedCWDs: []string{repo},
+		Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
+			"status": {Args: []string{"status", "--short"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildExecutionPlan() error = %v", err)
+	}
+	if got, want := plan.Dir, repo; got != want {
+		t.Fatalf("Dir = %q, want %q", got, want)
+	}
+	if got, want := plan.Args, []string{"status", "--short"}; !equalStrings(got, want) {
+		t.Fatalf("Args = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildExecutionPlanRejectsUnlistedCWD(t *testing.T) {
+	t.Parallel()
+
+	allowed := t.TempDir()
+	unlisted := t.TempDir()
+	_, err := BuildExecutionPlan("git", []string{"--cwd", unlisted, "status"}, Alias{
+		Name:        "git",
+		AllowedCWDs: []string{allowed},
+		Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
+			"status": {},
+		},
+	})
+	if err == nil {
+		t.Fatal("BuildExecutionPlan() error = nil")
+	}
+}
+
+func TestBuildExecutionPlanDoesNotDiscloseRequestedPathState(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	allowed := t.TempDir()
+	file := root + "/file"
+	if err := os.WriteFile(file, []byte("not a directory"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	want := "command git working directory is not allowed"
+	for _, requested := range []string{root + "/missing", file, root} {
+		_, err := BuildExecutionPlan("git", []string{"--cwd", requested, "status"}, Alias{
+			Name:        "git",
+			AllowedCWDs: []string{allowed},
+			Subcommands: map[string]hostbridgepolicy.AliasSubcommand{"status": {}},
+		})
+		if err == nil || err.Error() != want {
+			t.Fatalf("BuildExecutionPlan(%q) error = %v, want %q", requested, err, want)
+		}
+	}
+}
+
+func TestBuildExecutionPlanSkipsUnavailableAllowedCWD(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := t.TempDir()
+	plan, err := BuildExecutionPlan("git", []string{"--cwd", repo, "status"}, Alias{
+		Name:        "git",
+		AllowedCWDs: []string{root + "/not-cloned-yet", repo},
+		Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
+			"status": {},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildExecutionPlan() error = %v", err)
+	}
+	if plan.Dir != repo {
+		t.Fatalf("Dir = %q, want %q", plan.Dir, repo)
+	}
+}
+
+func TestBuildExecutionPlanRejectsMissingOrRelativeCWD(t *testing.T) {
+	t.Parallel()
+
+	allowed := t.TempDir()
+	spec := Alias{Name: "git", AllowedCWDs: []string{allowed}, AllowExtraArgs: true}
+	for _, args := range [][]string{{"status"}, {"--cwd"}, {"--cwd", "relative", "status"}} {
+		if _, err := BuildExecutionPlan("git", args, spec); err == nil {
+			t.Fatalf("BuildExecutionPlan(%#v) error = nil", args)
+		}
+	}
+}
+
+func TestBuildExecutionPlanAllowsSymlinkResolvingToListedCWD(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	repo := t.TempDir()
+	link := root + "/repo"
+	if err := os.Symlink(repo, link); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+	plan, err := BuildExecutionPlan("git", []string{"--cwd", link}, Alias{
+		Name:           "git",
+		AllowedCWDs:    []string{repo},
+		AllowExtraArgs: true,
+	})
+	if err != nil {
+		t.Fatalf("BuildExecutionPlan() error = %v", err)
+	}
+	if got, want := plan.Dir, repo; got != want {
+		t.Fatalf("Dir = %q, want %q", got, want)
+	}
+}
+
+func TestBuildExecutionPlanRejectsFixedAndDynamicCWD(t *testing.T) {
+	t.Parallel()
+
+	repo := t.TempDir()
+	_, err := BuildExecutionPlan("git", []string{"--cwd", repo}, Alias{
+		Name:           "git",
+		Dir:            repo,
+		AllowedCWDs:    []string{repo},
+		AllowExtraArgs: true,
+	})
+	if err == nil {
+		t.Fatal("BuildExecutionPlan() error = nil")
 	}
 }
 
@@ -252,7 +386,8 @@ func TestAliasUsagesShowsSubcommands(t *testing.T) {
 	usages := AliasUsages(map[string]Alias{
 		"docker": {Name: "docker", AllowExtraArgs: true},
 		"git-ctgbot": {
-			Name: "git",
+			Name:        "git",
+			AllowedCWDs: []string{"/workspace/src/ctgbot"},
 			Subcommands: map[string]hostbridgepolicy.AliasSubcommand{
 				"push":   {},
 				"fetch":  {},
@@ -260,7 +395,7 @@ func TestAliasUsagesShowsSubcommands(t *testing.T) {
 			},
 		},
 	})
-	want := []string{"docker", "git-ctgbot [ fetch | push | status ]"}
+	want := []string{"docker", "git-ctgbot --cwd <path> [ fetch | push | status ]"}
 	if !equalStrings(usages, want) {
 		t.Fatalf("AliasUsages() = %#v, want %#v", usages, want)
 	}

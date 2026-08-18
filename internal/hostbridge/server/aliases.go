@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
@@ -26,9 +27,16 @@ type ExecutionPlan struct {
 }
 
 func BuildExecutionPlan(commandName string, args []string, spec Alias) (ExecutionPlan, error) {
-	spec, ok := normalizeAlias(spec)
-	if !ok {
+	spec = hostbridgepolicy.NormalizeAlias(spec)
+	if spec.Name == "" {
 		return ExecutionPlan{}, fmt.Errorf("hostbridge alias %q has empty executable name", commandName)
+	}
+	if err := hostbridgepolicy.ValidateAlias(spec); err != nil {
+		return ExecutionPlan{}, fmt.Errorf("hostbridge alias %q is invalid: %w", commandName, err)
+	}
+	dir, args, err := resolveWorkingDirectory(commandName, spec, args)
+	if err != nil {
+		return ExecutionPlan{}, err
 	}
 	delay, err := parseAliasDelay(commandName, spec.Delay)
 	if err != nil {
@@ -41,7 +49,7 @@ func BuildExecutionPlan(commandName string, args []string, spec Alias) (Executio
 	return ExecutionPlan{
 		Name:  spec.Name,
 		Args:  planArgs,
-		Dir:   spec.Dir,
+		Dir:   dir,
 		Delay: delay,
 		Env:   sanitizedEnv(spec.Env),
 	}, nil
@@ -115,11 +123,18 @@ func AliasUsages(aliases map[string]Alias) []string {
 	out := make([]string, 0, len(names))
 	for _, name := range names {
 		spec := aliases[name]
-		if normalized, ok := normalizeAlias(spec); ok && len(normalized.Subcommands) > 0 {
-			out = append(out, name+" [ "+strings.Join(subcommandNames(normalized.Subcommands), " | ")+" ]")
+		normalized, ok := normalizeAlias(spec)
+		if !ok {
 			continue
 		}
-		out = append(out, name)
+		usage := name
+		if len(normalized.AllowedCWDs) > 0 {
+			usage += " --cwd <path>"
+		}
+		if len(normalized.Subcommands) > 0 {
+			usage += " [ " + strings.Join(subcommandNames(normalized.Subcommands), " | ") + " ]"
+		}
+		out = append(out, usage)
 	}
 	return out
 }
@@ -132,17 +147,60 @@ func StaticAliasResolver(aliases map[string]Alias) AliasResolver {
 }
 
 func normalizeAlias(spec Alias) (Alias, bool) {
-	spec.Name = strings.TrimSpace(spec.Name)
-	spec.ArgsPattern = strings.TrimSpace(spec.ArgsPattern)
-	spec.Dir = strings.TrimSpace(spec.Dir)
-	spec.Delay = strings.TrimSpace(spec.Delay)
-	spec.Args = cleanCommandArgs(spec.Args)
-	spec.Subcommands = cleanSubcommands(spec.Subcommands)
-	spec.Env = cleanCommandEnv(spec.Env)
-	if spec.Name == "" {
+	spec = hostbridgepolicy.NormalizeAlias(spec)
+	if hostbridgepolicy.ValidateAlias(spec) != nil {
 		return Alias{}, false
 	}
 	return spec, true
+}
+
+func resolveWorkingDirectory(commandName string, spec Alias, args []string) (string, []string, error) {
+	if len(spec.AllowedCWDs) == 0 {
+		return spec.Dir, append([]string{}, args...), nil
+	}
+	if spec.Dir != "" {
+		return "", nil, fmt.Errorf("command %s cannot combine dir with allowed_cwds", commandName)
+	}
+	if len(args) < 2 || args[0] != "--cwd" {
+		return "", nil, fmt.Errorf("command %s requires --cwd <path>", commandName)
+	}
+
+	requested, err := canonicalWorkingDirectory(args[1])
+	if err != nil {
+		return "", nil, fmt.Errorf("command %s working directory is not allowed", commandName)
+	}
+	for _, allowed := range spec.AllowedCWDs {
+		candidate, err := canonicalWorkingDirectory(allowed)
+		if err != nil {
+			continue
+		}
+		if requested == candidate {
+			return requested, append([]string{}, args[2:]...), nil
+		}
+	}
+	return "", nil, fmt.Errorf("command %s working directory is not allowed", commandName)
+}
+
+func canonicalWorkingDirectory(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("path must be absolute")
+	}
+	resolved, err := filepath.EvalSymlinks(filepath.Clean(path))
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("path is not a directory")
+	}
+	return resolved, nil
 }
 
 func buildPlanArgs(commandName string, spec Alias, runtimeArgs []string) ([]string, error) {
@@ -315,53 +373,6 @@ func hasArgTemplate(args []string) bool {
 		}
 	}
 	return false
-}
-
-func cleanCommandArgs(args []string) []string {
-	if len(args) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(args))
-	out = append(out, args...)
-	return out
-}
-
-func cleanSubcommands(subcommands map[string]hostbridgepolicy.AliasSubcommand) map[string]hostbridgepolicy.AliasSubcommand {
-	if len(subcommands) == 0 {
-		return nil
-	}
-	out := make(map[string]hostbridgepolicy.AliasSubcommand, len(subcommands))
-	for name, subcommand := range subcommands {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-		subcommand.Args = cleanCommandArgs(subcommand.Args)
-		subcommand.ArgsPattern = strings.TrimSpace(subcommand.ArgsPattern)
-		out[name] = subcommand
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func cleanCommandEnv(env map[string]string) map[string]string {
-	if len(env) == 0 {
-		return nil
-	}
-	out := make(map[string]string, len(env))
-	for key, value := range env {
-		key = strings.TrimSpace(key)
-		if key == "" || strings.ContainsRune(key, '=') {
-			continue
-		}
-		out[key] = value
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
 }
 
 func sanitizedEnv(extra map[string]string) []string {

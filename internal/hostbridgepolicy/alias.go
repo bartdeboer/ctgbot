@@ -4,14 +4,18 @@ package hostbridgepolicy
 // hostbridge. It is policy data, not server/runtime machinery, so workspace and
 // app config can depend on this package without importing hostbridge/server.
 type Alias struct {
-	Name           string                     `json:"name"`
-	Args           []string                   `json:"args"`
-	ArgsPattern    string                     `json:"args_pattern,omitempty"`
-	Subcommands    map[string]AliasSubcommand `json:"subcommands,omitempty"`
-	Dir            string                     `json:"dir"`
-	Delay          string                     `json:"delay"`
-	Env            map[string]string          `json:"env"`
-	AllowExtraArgs bool                       `json:"allow_extra_args"`
+	Name        string                     `json:"name"`
+	Args        []string                   `json:"args"`
+	ArgsPattern string                     `json:"args_pattern,omitempty"`
+	Subcommands map[string]AliasSubcommand `json:"subcommands,omitempty"`
+	Dir         string                     `json:"dir"`
+	// AllowedCWDs lets the caller select one exact working directory with a
+	// leading --cwd <path> pair. Hostbridge consumes that pair before invoking
+	// the executable. It cannot be combined with Dir.
+	AllowedCWDs    []string          `json:"allowed_cwds,omitempty"`
+	Delay          string            `json:"delay"`
+	Env            map[string]string `json:"env"`
+	AllowExtraArgs bool              `json:"allow_extra_args"`
 	// StdinMaxBytes opts this alias into piped stdin and bounds the accepted
 	// payload. Zero denies non-empty stdin.
 	StdinMaxBytes int64 `json:"stdin_max_bytes,omitempty"`

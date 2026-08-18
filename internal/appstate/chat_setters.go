@@ -121,6 +121,9 @@ func (h ChatHostbridgeConfig) SetAlias(name string, command hostbridgepolicy.Ali
 	if !ok {
 		return fmt.Errorf("hostbridge alias executable is empty")
 	}
+	if err := hostbridgepolicy.ValidateAlias(normalized); err != nil {
+		return fmt.Errorf("invalid hostbridge alias: %w", err)
+	}
 	aliases := h.Aliases()
 	if aliases == nil {
 		aliases = map[string]hostbridgepolicy.Alias{}
@@ -192,17 +195,9 @@ func validateAndNormalizeSkillPaths(skills []string) ([]string, error) {
 }
 
 func normalizeAlias(spec hostbridgepolicy.Alias) (hostbridgepolicy.Alias, bool) {
-	spec.Name = strings.TrimSpace(spec.Name)
-	spec.Dir = strings.TrimSpace(spec.Dir)
-	spec.Delay = strings.TrimSpace(spec.Delay)
+	spec = hostbridgepolicy.NormalizeAlias(spec)
 	if spec.Name == "" {
 		return hostbridgepolicy.Alias{}, false
-	}
-	if len(spec.Args) == 0 {
-		spec.Args = nil
-	}
-	if len(spec.Env) == 0 {
-		spec.Env = nil
 	}
 	return spec, true
 }

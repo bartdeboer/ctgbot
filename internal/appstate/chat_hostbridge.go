@@ -38,17 +38,9 @@ func normalizeAliases(raw map[string]hostbridgepolicy.Alias) map[string]hostbrid
 	out := make(map[string]hostbridgepolicy.Alias, len(raw))
 	for name, spec := range raw {
 		name = strings.TrimSpace(name)
-		spec.Name = strings.TrimSpace(spec.Name)
-		spec.Dir = strings.TrimSpace(spec.Dir)
-		spec.Delay = strings.TrimSpace(spec.Delay)
-		if name == "" || spec.Name == "" {
+		spec = hostbridgepolicy.NormalizeAlias(spec)
+		if name == "" || hostbridgepolicy.ValidateAlias(spec) != nil {
 			continue
-		}
-		if len(spec.Args) == 0 {
-			spec.Args = nil
-		}
-		if len(spec.Env) == 0 {
-			spec.Env = nil
 		}
 		out[name] = spec
 	}
@@ -68,16 +60,7 @@ func normalizeConfiguredAliases(raw map[string]hostbridgepolicy.Alias) map[strin
 		if name == "" {
 			continue
 		}
-		spec.Name = strings.TrimSpace(spec.Name)
-		spec.Dir = strings.TrimSpace(spec.Dir)
-		spec.Delay = strings.TrimSpace(spec.Delay)
-		if len(spec.Args) == 0 {
-			spec.Args = nil
-		}
-		if len(spec.Env) == 0 {
-			spec.Env = nil
-		}
-		out[name] = spec
+		out[name] = hostbridgepolicy.NormalizeAlias(spec)
 	}
 	if len(out) == 0 {
 		return nil

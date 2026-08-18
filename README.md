@@ -233,16 +233,18 @@ Example `.ctgbot/config.json`:
       "path": "/absolute/path/to/workspace",
       "hostbridge": {
         "allowed_commands": {
-          "git-fetch": {
+          "git": {
             "name": "git",
-            "args": ["fetch", "--all", "--prune"],
-            "dir": "/absolute/path/to/workspace"
-          },
-          "git-push": {
-            "name": "git",
-            "args": ["push"],
-            "dir": "/absolute/path/to/workspace",
-            "delay": "500ms"
+            "allowed_cwds": [
+              "/absolute/path/to/workspace/service-a",
+              "/absolute/path/to/workspace/service-b"
+            ],
+            "subcommands": {
+              "fetch": {},
+              "pull": {"args": ["pull", "--ff-only"]},
+              "push": {},
+              "status": {"args": ["status", "--short"]}
+            }
           }
         }
       }
@@ -254,9 +256,14 @@ Example `.ctgbot/config.json`:
 Agents can then run:
 
 ```bash
-hostbridge git-fetch
-hostbridge git-push
+hostbridge run git --cwd /absolute/path/to/workspace/service-a status
+hostbridge run git --cwd /absolute/path/to/workspace/service-b push
 ```
+
+When `allowed_cwds` is present, Hostbridge consumes the leading
+`--cwd <absolute-path>` pair, resolves symlinks, and requires an exact match
+with one configured directory before starting the command. The executable does
+not receive those two arguments. `dir` and `allowed_cwds` cannot be combined.
 
 Run aliases deny non-empty stdin by default. Set `stdin_max_bytes` to a
 positive byte limit only for an alias that intentionally accepts piped input;

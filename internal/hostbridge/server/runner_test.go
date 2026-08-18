@@ -115,6 +115,26 @@ func TestRunCommandRunnerExecutesAlias(t *testing.T) {
 	}
 }
 
+func TestRunCommandRunnerUsesAllowedCWDWithoutForwardingIt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires /bin/pwd")
+	}
+	repo := t.TempDir()
+	runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(map[string]Alias{
+		"repo-pwd": {Name: "/bin/pwd", AllowedCWDs: []string{repo}},
+	})}
+	result, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{
+		Command: "repo-pwd",
+		Args:    []string{"--cwd", repo},
+	})
+	if err != nil {
+		t.Fatalf("RunCommand() error = %v", err)
+	}
+	if got, want := strings.TrimSpace(result.Text), repo; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
 func TestRunCommandRunnerRejectsUnknownCommand(t *testing.T) {
 	runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(nil), DefaultTimeoutSec: 5}
 	_, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "definitely-not-allowed"})
