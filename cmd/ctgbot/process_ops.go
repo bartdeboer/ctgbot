@@ -17,9 +17,10 @@ import (
 )
 
 type projectProcessActions struct {
-	globalStore *clistate.Store
-	stop        context.CancelFunc
-	logger      *log.Logger
+	globalStore   *clistate.Store
+	stop          context.CancelFunc
+	beginShutdown func(force bool) (outstanding int, accepted bool)
+	logger        *log.Logger
 }
 
 func (p *projectProcessActions) GoGenerate(ctx context.Context) error {
@@ -146,10 +147,19 @@ func (p *projectProcessActions) ImageBuild(ctx context.Context, noCache bool) er
 	return p.BuildRuntimeImages(ctx, noCache)
 }
 
-func (p *projectProcessActions) Quit(ctx context.Context) error {
+func (p *projectProcessActions) Quit(ctx context.Context, force bool) error {
 	_ = ctx
+	if p == nil {
+		return nil
+	}
+	if p.beginShutdown != nil {
+		outstanding, accepted := p.beginShutdown(force)
+		if !accepted {
+			return fmt.Errorf("quit refused: %d turns active or queued; use /quit force", outstanding)
+		}
+	}
 	p.logf("shutting down ctgbot")
-	if p == nil || p.stop == nil {
+	if p.stop == nil {
 		return nil
 	}
 	time.AfterFunc(250*time.Millisecond, p.stop)

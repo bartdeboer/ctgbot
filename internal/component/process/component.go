@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -21,7 +22,7 @@ type Actions interface {
 	Upgrade(ctx context.Context, all bool) error
 	ImageList(ctx context.Context) (string, error)
 	ImageBuild(ctx context.Context, noCache bool) error
-	Quit(ctx context.Context) error
+	Quit(ctx context.Context, force bool) error
 }
 
 type Component struct {
@@ -38,7 +39,7 @@ type upgradeCommand struct{}
 type upgradeAllCommand struct{}
 type imageListCommand struct{}
 type imageBuildCommand struct{ NoCache bool }
-type quitCommand struct{}
+type quitCommand struct{ Force bool }
 type versionCommand struct{}
 
 func New(actions Actions) *Component {
@@ -97,7 +98,7 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 	)...)
 	definitions = append(definitions, processCommandDefinitions(
 		"quit",
-		"Stop ctgbot",
+		"Stop ctgbot when idle; add force to stop while turns are running",
 		buildQuitCommand,
 		[]commandengine.Route{{Pattern: "quit", Absolute: true}},
 		simplerbac.Any(simplerbac.RoleRoot),
@@ -168,9 +169,13 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	}); err != nil {
 		return err
 	}
-	if err := registerProcessPattern[quitCommand](registry, "quit", func(ctx context.Context) (commandengine.Result, error) {
-		if err := c.quit(ctx); err != nil {
+	if err := commandengine.RegisterPattern[quitCommand](registry, "quit", func(ctx context.Context, req commandengine.Request, cmd quitCommand) (commandengine.Result, error) {
+		_ = req
+		if err := c.quit(ctx, cmd.Force); err != nil {
 			return commandengine.Result{}, err
+		}
+		if cmd.Force {
+			return commandengine.Result{Text: "force quit requested"}, nil
 		}
 		return commandengine.Result{Text: "quit requested"}, nil
 	}); err != nil {
@@ -217,11 +222,11 @@ func (c *Component) imageBuild(ctx context.Context, noCache bool) error {
 	return c.Actions.ImageBuild(ctx, noCache)
 }
 
-func (c *Component) quit(ctx context.Context) error {
+func (c *Component) quit(ctx context.Context, force bool) error {
 	if c == nil || c.Actions == nil {
 		return fmt.Errorf("missing process actions")
 	}
-	return c.Actions.Quit(ctx)
+	return c.Actions.Quit(ctx, force)
 }
 
 func processCommandDefinitions(localPattern string, help string, build commandengine.BuildFunc, aliases []commandengine.Route, policy simplerbac.Rule) []commandengine.Definition {
@@ -300,8 +305,13 @@ func buildImageBuildCommand(req *clir.Request) (any, error) {
 }
 
 func buildQuitCommand(req *clir.Request) (any, error) {
-	_ = req
-	return quitCommand{}, nil
+	if len(req.Extra) == 0 {
+		return quitCommand{}, nil
+	}
+	if len(req.Extra) == 1 && strings.EqualFold(strings.TrimSpace(req.Extra[0]), "force") {
+		return quitCommand{Force: true}, nil
+	}
+	return nil, fmt.Errorf("usage: quit [force]")
 }
 
 func buildVersionCommand(req *clir.Request) (any, error) {

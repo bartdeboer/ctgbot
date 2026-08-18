@@ -2440,8 +2440,8 @@ func (f *fakeProcessActions) ImageBuild(ctx context.Context, noCache bool) error
 	return nil
 }
 
-func (f *fakeProcessActions) Quit(ctx context.Context) error {
-	_ = ctx
+func (f *fakeProcessActions) Quit(ctx context.Context, force bool) error {
+	_, _ = ctx, force
 	return nil
 }
 

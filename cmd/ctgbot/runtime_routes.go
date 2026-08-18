@@ -64,10 +64,21 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			runCtx, stop := signal.NotifyContext(req.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			rtSystem, err := openSystem(req.Context(), store, newRuntimeProcessActions(globalStore, stop, nil), nil)
+			processActions := newRuntimeProcessActions(globalStore, stop, nil)
+			rtSystem, err := openSystem(req.Context(), store, processActions, nil)
 			if err != nil {
 				return err
 			}
+			logf := func(format string, args ...any) {}
+			if rtSystem.Logger != nil {
+				logf = rtSystem.Logger.Printf
+			}
+			appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logf)
+			mainBroker := broker.New(appService, logf)
+			// Bind shutdown admission before Hostbridge can invoke the process
+			// command. Leaving this callback unset makes quit fail open.
+			processActions.beginShutdown = mainBroker.BeginShutdown
+
 			if _, _, err := rtSystem.StartHostbridge(); err != nil {
 				return fmt.Errorf("start hostbridge: %w", err)
 			}
@@ -77,11 +88,6 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			fmt.Printf("state_root: %s\n", rtSystem.StateRoot)
 			fmt.Printf("database: %s\n", rtSystem.DBPath)
 
-			logf := func(format string, args ...any) {}
-			if rtSystem.Logger != nil {
-				logf = rtSystem.Logger.Printf
-			}
-			appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logf)
 			group, groupCtx := errgroup.WithContext(runCtx)
 			if remoteAddr := strings.TrimSpace(rtSystem.Config.Hostbridge().RemoteListenAddr()); remoteAddr != "" {
 				identityManager := identity.NewManager(filepath.Join(rtSystem.StateRoot, "identity"), "")
@@ -104,7 +110,6 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 					return ignoreRuntimeStop(groupCtx, listener.Run(groupCtx))
 				})
 			}
-			mainBroker := broker.New(appService, logf)
 			timedService := timedintent.New(appService.TimedIntentRepository(), mainBroker, appService, logf)
 			mainBroker.TurnCompleted = func(ctx context.Context, threadID modeluuid.UUID) {
 				if err := timedService.ResetHeartbeatFloor(ctx, threadID, time.Now().UTC()); err != nil {
@@ -214,6 +219,9 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 			logf = rtSystem.Logger.Printf
 		}
 		appService := app.NewServiceWithLogger(storage, rtSystem, logf)
+		// This constructor fallback is used only as ChatPayloadSender. The active
+		// ChatRuntime replaces it with the main broker before component use; this
+		// broker must never become a second inbound turn owner.
 		return heartbeatcomponent.New(ctx, registration, runtime, profile, storage, broker.New(appService, logf))
 	}); err != nil {
 		return nil, err

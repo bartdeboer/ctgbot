@@ -2,15 +2,19 @@ package broker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
+var ErrTurnGateClosed = errors.New("turn gate is shutting down")
+
 type ThreadTurnGate struct {
-	mu    sync.Mutex
-	gates map[modeluuid.UUID]*threadTurnSemaphore
+	mu      sync.Mutex
+	gates   map[modeluuid.UUID]*threadTurnSemaphore
+	closing bool
 }
 
 type threadTurnSemaphore struct {
@@ -48,7 +52,10 @@ func (g *ThreadTurnGate) Acquire(ctx context.Context, threadID modeluuid.UUID) (
 		ctx = context.Background()
 	}
 
-	gate := g.retain(threadID)
+	gate, err := g.retain(threadID)
+	if err != nil {
+		return nil, err
+	}
 	select {
 	case gate.sem <- struct{}{}:
 		return func() {
@@ -61,6 +68,30 @@ func (g *ThreadTurnGate) Acquire(ctx context.Context, threadID modeluuid.UUID) (
 	}
 }
 
+// BeginShutdown atomically closes turn admission when the gate is idle.
+// Force closes admission regardless of work already holding or waiting for a
+// scope; cancellation remains the runtime owner's responsibility.
+func (g *ThreadTurnGate) BeginShutdown(force bool) (outstanding int, accepted bool) {
+	if g == nil {
+		return 0, true
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, gate := range g.gates {
+		if gate != nil {
+			outstanding += gate.refs
+		}
+	}
+	if outstanding > 0 && !force {
+		return outstanding, false
+	}
+	if g.closing {
+		return outstanding, true
+	}
+	g.closing = true
+	return outstanding, true
+}
+
 func (g *ThreadTurnGate) Busy(threadID modeluuid.UUID) bool {
 	if g == nil || threadID.IsNull() {
 		return false
@@ -71,9 +102,12 @@ func (g *ThreadTurnGate) Busy(threadID modeluuid.UUID) bool {
 	return gate != nil && len(gate.sem) > 0
 }
 
-func (g *ThreadTurnGate) retain(threadID modeluuid.UUID) *threadTurnSemaphore {
+func (g *ThreadTurnGate) retain(threadID modeluuid.UUID) (*threadTurnSemaphore, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.closing {
+		return nil, ErrTurnGateClosed
+	}
 	if g.gates == nil {
 		g.gates = map[modeluuid.UUID]*threadTurnSemaphore{}
 	}
@@ -83,7 +117,7 @@ func (g *ThreadTurnGate) retain(threadID modeluuid.UUID) *threadTurnSemaphore {
 		g.gates[threadID] = gate
 	}
 	gate.refs++
-	return gate
+	return gate, nil
 }
 
 func (g *ThreadTurnGate) release(threadID modeluuid.UUID, gate *threadTurnSemaphore) {

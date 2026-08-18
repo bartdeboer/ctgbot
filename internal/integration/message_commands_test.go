@@ -425,7 +425,7 @@ func TestMultipleNamedAgentCommandSurfacesDisableTypeShorthand(t *testing.T) {
 func TestProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
-		for _, text := range []string{"/quit", "/process quit"} {
+		for _, text := range []string{"/quit", "/process quit", "/quit force", "/process quit force"} {
 			system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
 				t,
 				root,
@@ -516,7 +516,18 @@ func TestProcessQuitMessageAliasesAreIntercepted(t *testing.T) {
 func TestProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 	withTempCwd(t, func(root string) {
 		ctx := context.Background()
-		for _, text := range []string{"/quit", "/process quit"} {
+		cases := []struct {
+			text  string
+			force bool
+		}{
+			{text: "/quit"},
+			{text: "/process quit"},
+			{text: "/quit force", force: true},
+			{text: "/process quit force", force: true},
+		}
+		for _, tc := range cases {
+			text := tc.text
+			actions := &recordingProcessActions{}
 			system, storage, messengerState, agentState, runtimeState := newMessageCommandTestSystem(
 				t,
 				root,
@@ -534,7 +545,7 @@ func TestProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 				func(registry *component.Registry) error {
 					return registry.Add(processcomponent.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
 						_, _, _, _, _ = ctx, registration, runtime, profile, storage
-						return processcomponent.New(&noopProcessActions{}), nil
+						return processcomponent.New(actions), nil
 					})
 				},
 			)
@@ -580,10 +591,17 @@ func TestProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 			if runtimeState.execCalls != 0 {
 				t.Fatalf("runtime exec calls for %q = %d, want 0", text, runtimeState.execCalls)
 			}
+			if actions.quitCalls != 1 || actions.quitForce != tc.force {
+				t.Fatalf("quit calls for %q = %d force=%v, want 1 force=%v", text, actions.quitCalls, actions.quitForce, tc.force)
+			}
 			if got, want := len(messengerState.relayPayloads), 1; got != want {
 				t.Fatalf("relay payload count for %q = %d, want %d", text, got, want)
 			}
-			if got, want := messengerState.relayPayloads[0].Text.Text, "quit requested"; got != want {
+			wantText := "quit requested"
+			if tc.force {
+				wantText = "force quit requested"
+			}
+			if got, want := messengerState.relayPayloads[0].Text.Text, wantText; got != want {
 				t.Fatalf("relay text for %q = %q, want %q", text, got, want)
 			}
 			threads, err := storage.Threads().ListByChatID(ctx, chat.ID)
@@ -600,7 +618,7 @@ func TestProcessQuitMessageAliasesAllowOperators(t *testing.T) {
 			if got, want := len(messages), 1; got != want {
 				t.Fatalf("stored messages for %q = %d, want %d", text, got, want)
 			}
-			if got, want := messages[0].Text, "quit requested"; got != want {
+			if got, want := messages[0].Text, wantText; got != want {
 				t.Fatalf("stored message text for %q = %q, want %q", text, got, want)
 			}
 		}
@@ -1078,8 +1096,8 @@ func (n *noopProcessActions) ImageBuild(ctx context.Context, noCache bool) error
 	return nil
 }
 
-func (n *noopProcessActions) Quit(ctx context.Context) error {
-	_ = ctx
+func (n *noopProcessActions) Quit(ctx context.Context, force bool) error {
+	_, _ = ctx, force
 	return nil
 }
 
@@ -1091,6 +1109,7 @@ type recordingProcessActions struct {
 	imageListCalls  int
 	imageBuildCalls int
 	quitCalls       int
+	quitForce       bool
 }
 
 func (r *recordingProcessActions) GoGenerate(ctx context.Context) error {
@@ -1127,8 +1146,9 @@ func (r *recordingProcessActions) ImageBuild(ctx context.Context, noCache bool) 
 	return nil
 }
 
-func (r *recordingProcessActions) Quit(ctx context.Context) error {
+func (r *recordingProcessActions) Quit(ctx context.Context, force bool) error {
 	_ = ctx
 	r.quitCalls++
+	r.quitForce = force
 	return nil
 }

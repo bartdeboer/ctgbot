@@ -2,12 +2,14 @@ package process
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
+	"github.com/bartdeboer/go-clir"
 )
 
 func TestProcessCommandDefinitions(t *testing.T) {
@@ -153,5 +155,37 @@ func TestProcessCommandDefinitionsDoNotExposeHostbridgeRoutes(t *testing.T) {
 				t.Fatalf("definition %q unexpectedly exposes hostbridge source", definition.CanonicalPattern())
 			}
 		}
+	}
+}
+
+func TestBuildQuitCommand(t *testing.T) {
+	tests := []struct {
+		name      string
+		extra     []string
+		want      quitCommand
+		wantError bool
+	}{
+		{name: "normal", want: quitCommand{}},
+		{name: "force", extra: []string{"force"}, want: quitCommand{Force: true}},
+		{name: "force case insensitive", extra: []string{"FORCE"}, want: quitCommand{Force: true}},
+		{name: "unknown argument", extra: []string{"now"}, wantError: true},
+		{name: "too many arguments", extra: []string{"force", "now"}, wantError: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := buildQuitCommand(&clir.Request{Extra: tt.extra})
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("buildQuitCommand() error = nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("buildQuitCommand() error = %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("buildQuitCommand() = %#v, want %#v", got, tt.want)
+			}
+		})
 	}
 }

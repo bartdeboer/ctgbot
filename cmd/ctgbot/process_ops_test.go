@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bartdeboer/go-clistate"
 )
@@ -116,5 +117,50 @@ func TestUpgradeRunsDocumentedCLIContract(t *testing.T) {
 	}
 	if !reflect.DeepEqual(steps, want) {
 		t.Fatalf("upgrade steps = %#v, want %#v", steps, want)
+	}
+}
+
+func TestQuitRefusesNormalShutdownWhileTurnsAreOutstanding(t *testing.T) {
+	stopped := make(chan struct{}, 1)
+	actions := &projectProcessActions{
+		beginShutdown: func(force bool) (int, bool) {
+			if force {
+				t.Fatal("normal quit requested forced shutdown")
+			}
+			return 2, false
+		},
+		stop: func() { stopped <- struct{}{} },
+	}
+
+	err := actions.Quit(context.Background(), false)
+	if err == nil || err.Error() != "quit refused: 2 turns active or queued; use /quit force" {
+		t.Fatalf("Quit(false) error = %v", err)
+	}
+	select {
+	case <-stopped:
+		t.Fatal("refused quit stopped the runtime")
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func TestQuitForceStopsWithOutstandingTurns(t *testing.T) {
+	stopped := make(chan struct{}, 1)
+	actions := &projectProcessActions{
+		beginShutdown: func(force bool) (int, bool) {
+			if !force {
+				t.Fatal("forced quit requested normal shutdown")
+			}
+			return 2, true
+		},
+		stop: func() { stopped <- struct{}{} },
+	}
+
+	if err := actions.Quit(context.Background(), true); err != nil {
+		t.Fatalf("Quit(true) error = %v", err)
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("forced quit did not stop the runtime")
 	}
 }

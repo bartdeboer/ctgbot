@@ -389,6 +389,15 @@ func (b *Broker) ensureReady() error {
 	return nil
 }
 
+// BeginShutdown atomically stops new turn admission when no turn is active or
+// queued, unless force explicitly accepts outstanding work for cancellation.
+func (b *Broker) BeginShutdown(force bool) (outstanding int, accepted bool) {
+	if b == nil || b.Turns == nil {
+		return 0, true
+	}
+	return b.Turns.BeginShutdown(force)
+}
+
 func (b *Broker) logf(format string, args ...any) {
 	if b != nil && b.Logf != nil {
 		b.Logf(format, args...)

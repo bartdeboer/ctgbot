@@ -382,6 +382,7 @@ Allowlist commands:
 /status
 /version
 /quit
+/quit force
 /upgrade
 /codex status
 /codex compact
@@ -394,6 +395,11 @@ Allowlist commands:
 /ops components add gmailv2/work
 /ops components remove gmailv2/work
 ```
+
+`/quit` refuses while turns are active or queued at turn admission. Telegram
+preserves same-thread input order, so it first delivers input still waiting in
+the debounce window. `/quit force` stops while admitted turns are running; an
+operating-system termination signal remains the immediate out-of-band path.
 
 ## Useful hostbridge commands
 
