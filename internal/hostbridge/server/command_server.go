@@ -48,10 +48,18 @@ func (s *CommandServer) HandleCommand(ctx context.Context, peer transport.PeerId
 		}
 	}
 	result, err := executor.Execute(ctx, req.Request)
-	if err != nil {
-		return hostbridge.CommandResponse{Error: err.Error()}
+	resp := hostbridge.CommandResponse{Result: result}
+	if execution := result.Execution; execution != nil && execution.ExitCode != 0 {
+		// Retain the compatibility error for old gob clients. The execution
+		// outcome remains authoritative to updated clients.
+		resp.Error = executionFailureMessage(*execution)
 	}
-	return hostbridge.CommandResponse{Result: result}
+	if err != nil {
+		if resp.Error == "" {
+			resp.Error = err.Error()
+		}
+	}
+	return resp
 }
 
 var _ transport.CommandHandler = (*CommandServer)(nil)

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 )
 
 type sseStream struct {
@@ -49,6 +51,16 @@ func (s *sseStream) Started() {
 
 func (s *sseStream) Completed(result string, elapsed time.Duration) {
 	s.write("completed", sseData{ExitCode: 0, Summary: result, ElapsedMS: elapsed.Milliseconds()})
+}
+
+func (s *sseStream) Executed(result commandengine.ExecutionResult, elapsed time.Duration) {
+	if result.Stdout != "" {
+		s.Stdout(result.Stdout)
+	}
+	if result.Stderr != "" {
+		s.Stderr(result.Stderr)
+	}
+	s.write("completed", sseData{ExitCode: result.ExitCode, ElapsedMS: elapsed.Milliseconds()})
 }
 
 func (s *sseStream) Failed(err error, elapsed time.Duration) {

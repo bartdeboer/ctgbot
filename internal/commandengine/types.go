@@ -68,10 +68,21 @@ type HelpRequest struct {
 
 type Result struct {
 	Text string
+	// Execution preserves the process boundary for commands that run an
+	// external executable. A non-zero child exit is an observed outcome, not a
+	// command transport failure; callers can replay both streams and propagate
+	// the exact exit code. Nil keeps ordinary command results text-shaped.
+	Execution *ExecutionResult
 	// PassthroughPrompt is consumed only by the message broker path. It lets a
 	// matched command intentionally continue as a normal agent prompt without
 	// teaching commandengine anything about agent turns.
 	PassthroughPrompt string
+}
+
+type ExecutionResult struct {
+	Stdout   string
+	Stderr   string
+	ExitCode int
 }
 
 type BuildFunc func(req *clir.Request) (any, error)

@@ -70,7 +70,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			writeError(w, req, http.StatusOK, err, elapsed)
 			return
 		}
-		writeResult(w, req, result.Text, elapsed)
+		writeResult(w, req, result, elapsed)
 		return
 	}
 	if wantsSSE(req) {
@@ -80,20 +80,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		stream.Started()
 		result, err := h.Runner.Run(req.Context(), base, argv)
 		elapsed := time.Since(started)
-		if err != nil {
+		if err != nil && result.Execution == nil {
 			stream.Failed(err, elapsed)
 			return
 		}
-		stream.Completed(result.Text, elapsed)
+		if result.Execution != nil {
+			stream.Executed(*result.Execution, elapsed)
+		} else {
+			stream.Completed(result.Text, elapsed)
+		}
 		return
 	}
 	result, err := h.Runner.Run(req.Context(), base, argv)
 	elapsed := time.Since(started).Milliseconds()
-	if err != nil {
+	if err != nil && result.Execution == nil {
 		writeError(w, req, http.StatusOK, err, elapsed)
 		return
 	}
-	writeResult(w, req, result.Text, elapsed)
+	writeResult(w, req, result, elapsed)
 }
 
 func (h *Handler) help(ctx context.Context, base commandengine.Request, scope []string) (commandengine.Result, error) {
@@ -149,16 +153,28 @@ func (h *Handler) baseRequestFromRequest(req *http.Request) (commandengine.Reque
 	return commandengine.Request{Context: ctx}, nil
 }
 
-func writeResult(w http.ResponseWriter, req *http.Request, stdout string, elapsedMS int64) {
-	w.Header().Set("X-Command-Exit-Code", "0")
+func writeResult(w http.ResponseWriter, req *http.Request, result commandengine.Result, elapsedMS int64) {
+	exitCode := 0
+	stdout := result.Text
+	stderr := ""
+	if result.Execution != nil {
+		exitCode = result.Execution.ExitCode
+		stdout = result.Execution.Stdout
+		stderr = result.Execution.Stderr
+	}
+	w.Header().Set("X-Command-Exit-Code", strconv.Itoa(exitCode))
 	w.Header().Set("X-Elapsed-Ms", strconv.FormatInt(elapsedMS, 10))
 	if wantsJSON(req) {
-		writeJSON(w, http.StatusOK, JSONResponse{ExitCode: 0, Stdout: stdout, ElapsedMS: elapsedMS})
+		writeJSON(w, http.StatusOK, JSONResponse{ExitCode: exitCode, Stdout: stdout, Stderr: stderr, ElapsedMS: elapsedMS})
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, stdout)
+	if stdout != "" {
+		_, _ = io.WriteString(w, stdout)
+	} else {
+		_, _ = io.WriteString(w, stderr)
+	}
 }
 
 func writeError(w http.ResponseWriter, req *http.Request, status int, err error, elapsedMS int64) {

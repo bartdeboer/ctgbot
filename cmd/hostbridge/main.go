@@ -79,13 +79,39 @@ func main() {
 		tlsConfig,
 	))
 	resp, err := client.DoCommand(context.Background(), hostbridge.CommandRequest{Request: req})
+	exitCode := writeCommandResponse(os.Stdout, os.Stderr, resp, err)
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+}
+
+func writeCommandResponse(stdout, stderr io.Writer, resp hostbridge.CommandResponse, err error) int {
+	if resp.Result.Execution != nil {
+		exitCode := writeCommandResult(stdout, stderr, resp.Result)
+		if exitCode != 0 {
+			return exitCode
+		}
+	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, "error:", err)
+		return 1
 	}
-	if strings.TrimSpace(resp.Result.Text) != "" {
-		fmt.Fprintln(os.Stdout, resp.Result.Text)
+	if resp.Result.Execution != nil {
+		return 0
 	}
+	return writeCommandResult(stdout, stderr, resp.Result)
+}
+
+func writeCommandResult(stdout, stderr io.Writer, result commandengine.Result) int {
+	if result.Execution != nil {
+		_, _ = io.WriteString(stdout, result.Execution.Stdout)
+		_, _ = io.WriteString(stderr, result.Execution.Stderr)
+		return result.Execution.ExitCode
+	}
+	if strings.TrimSpace(result.Text) != "" {
+		fmt.Fprintln(stdout, result.Text)
+	}
+	return 0
 }
 
 func readRunStdin(args []string, stdin stdinReader, limit int64) (string, error) {

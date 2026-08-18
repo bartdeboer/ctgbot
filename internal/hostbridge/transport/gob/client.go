@@ -77,6 +77,10 @@ func (r *CommandRunner) RunCommand(ctx context.Context, req hostbridge.CommandRe
 	if err := gob.NewDecoder(bytes.NewReader(respPayload)).Decode(&resp); err != nil {
 		return hostbridge.CommandResponse{}, fmt.Errorf("decode command response: %w", err)
 	}
+	// New servers retain Error for old-client compatibility on non-zero child
+	// exits. Updated callers can inspect the returned structured outcome while
+	// the non-nil error preserves the established "no error means success"
+	// contract for every existing consumer.
 	if strings.TrimSpace(resp.Error) != "" {
 		return resp, errors.New(resp.Error)
 	}

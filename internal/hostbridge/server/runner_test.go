@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -26,8 +27,77 @@ func TestRunCommandRunnerForwardsStdinByteForByte(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunCommand() error = %v", err)
 	}
-	if result.Text != stdin {
-		t.Fatalf("stdout = %q, want exact stdin %q", result.Text, stdin)
+	if result.Execution == nil {
+		t.Fatal("RunCommand() execution = nil")
+	}
+	if result.Execution.Stdout != stdin {
+		t.Fatalf("stdout = %q, want exact stdin %q", result.Execution.Stdout, stdin)
+	}
+}
+
+func TestRunCommandRunnerPreservesProcessOutcome(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires executable shell script")
+	}
+	tests := []struct {
+		name     string
+		exitCode int
+	}{
+		{name: "success", exitCode: 0},
+		{name: "typed nonzero", exitCode: 2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			executable := writeExecutable(t, "#!/bin/sh\nprintf '{\"status\":\"degraded\"}\\n'\nprintf 'health diagnostic\\n' >&2\nexit \"$1\"\n")
+			runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(map[string]Alias{
+				"probe": {Name: executable, Args: []string{fmt.Sprint(tc.exitCode)}},
+			})}
+			result, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "probe"})
+			if tc.exitCode == 0 && err != nil {
+				t.Fatalf("RunCommand() error = %v", err)
+			}
+			if tc.exitCode != 0 && (err == nil || !strings.Contains(err.Error(), "exit status 2: health diagnostic")) {
+				t.Fatalf("RunCommand() error = %v, want typed child exit", err)
+			}
+			if result.Execution == nil {
+				t.Fatal("RunCommand() execution = nil")
+			}
+			if got, want := result.Execution.Stdout, "{\"status\":\"degraded\"}\n"; got != want {
+				t.Fatalf("stdout = %q, want %q", got, want)
+			}
+			if got, want := result.Execution.Stderr, "health diagnostic\n"; got != want {
+				t.Fatalf("stderr = %q, want %q", got, want)
+			}
+			if got := result.Execution.ExitCode; got != tc.exitCode {
+				t.Fatalf("exit code = %d, want %d", got, tc.exitCode)
+			}
+		})
+	}
+}
+
+func TestRunCommandRunnerPreservesSignaledProcessOutcome(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX signals")
+	}
+	executable := writeExecutable(t, "#!/bin/sh\nprintf 'before signal\\n'\nprintf 'signal diagnostic\\n' >&2\nkill -TERM $$\n")
+	runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(map[string]Alias{
+		"probe": {Name: executable},
+	})}
+	result, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "probe"})
+	if err == nil || !strings.Contains(err.Error(), "exit status 143: signal diagnostic") {
+		t.Fatalf("RunCommand() error = %v, want signaled child outcome", err)
+	}
+	if result.Execution == nil {
+		t.Fatal("RunCommand() execution = nil")
+	}
+	if got, want := result.Execution.Stdout, "before signal\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if got, want := result.Execution.Stderr, "signal diagnostic\n"; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+	if got, want := result.Execution.ExitCode, 143; got != want {
+		t.Fatalf("exit code = %d, want %d", got, want)
 	}
 }
 
@@ -110,7 +180,7 @@ func TestRunCommandRunnerExecutesAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunCommand() error = %v", err)
 	}
-	if strings.TrimSpace(result.Text) == "" {
+	if result.Execution == nil || strings.TrimSpace(result.Execution.Stdout) == "" {
 		t.Fatal("expected command output")
 	}
 }
@@ -130,7 +200,10 @@ func TestRunCommandRunnerUsesAllowedCWDWithoutForwardingIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunCommand() error = %v", err)
 	}
-	if got, want := strings.TrimSpace(result.Text), repo; got != want {
+	if result.Execution == nil {
+		t.Fatal("RunCommand() execution = nil")
+	}
+	if got, want := strings.TrimSpace(result.Execution.Stdout), repo; got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 }
@@ -159,7 +232,20 @@ func TestRunCommandRunnerRegistersNewCommandHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if strings.TrimSpace(result.Text) == "" {
+	if result.Execution == nil || strings.TrimSpace(result.Execution.Stdout) == "" {
 		t.Fatal("expected command output")
+	}
+}
+
+func TestRunCommandRunnerReturnsSpawnFailureAsOrdinaryError(t *testing.T) {
+	runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(map[string]Alias{
+		"missing": {Name: filepath.Join(t.TempDir(), "not-installed")},
+	})}
+	result, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "missing"})
+	if err == nil {
+		t.Fatal("RunCommand() error = nil, want spawn failure")
+	}
+	if result.Execution != nil {
+		t.Fatalf("RunCommand() execution = %+v, want nil", result.Execution)
 	}
 }

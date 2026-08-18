@@ -2,6 +2,7 @@ package v2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -77,6 +78,36 @@ func TestClientRequestsJSONResponse(t *testing.T) {
 	}
 	if resp.JSON.ExitCode != 0 || resp.JSON.Stdout != "json:hello" || resp.Text != "json:hello" {
 		t.Fatalf("response = %+v", resp)
+	}
+}
+
+func TestClientPreservesExecutionJSON(t *testing.T) {
+	engine := newTestEngine(t, commandengine.SourceHostbridge, func(context.Context, commandengine.Request, e2eEchoCommand) (commandengine.Result, error) {
+		return commandengine.Result{Execution: &commandengine.ExecutionResult{
+			Stdout:   "{\"status\":\"degraded\"}\n",
+			Stderr:   "health diagnostic\n",
+			ExitCode: 2,
+		}}, errors.New("exit status 2: health diagnostic")
+	})
+	server := httptest.NewServer(NewServer(engine, ServerConfig{
+		Source: commandengine.SourceHostbridge,
+		Auth:   StaticActorAuth{Actor: commandengine.Actor{ID: "agent-1", Roles: []simplerbac.Role{simplerbac.RoleAgent}}},
+	}).Handler)
+	defer server.Close()
+
+	client := &Client{BaseURL: server.URL}
+	resp, err := client.Run(context.Background(), RunRequest{Command: []string{"echo"}, WantJSON: true})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if resp.ExitCode != 2 || resp.JSON.ExitCode != 2 {
+		t.Fatalf("exit response = %+v", resp)
+	}
+	if got, want := resp.JSON.Stdout, "{\"status\":\"degraded\"}\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if got, want := resp.JSON.Stderr, "health diagnostic\n"; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
 	}
 }
 
@@ -191,6 +222,49 @@ func TestHandlerStreamsCommandFailureAsSSE(t *testing.T) {
 		`"text":"before failure"`,
 		"event: failed\n",
 		`"error":"failed oops"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("SSE body missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestHandlerStreamsExecutionOutcomeAsSSE(t *testing.T) {
+	engine := newStreamTestEngine(t, commandengine.SourceHostbridge, func(context.Context, commandengine.Request, e2eStreamCommand) (commandengine.Result, error) {
+		return commandengine.Result{Execution: &commandengine.ExecutionResult{
+			Stdout:   "{\"status\":\"degraded\"}\n",
+			Stderr:   "health diagnostic\n",
+			ExitCode: 2,
+		}}, errors.New("exit status 2: health diagnostic")
+	})
+	server := httptest.NewServer(NewServer(engine, ServerConfig{
+		Source: commandengine.SourceHostbridge,
+		Auth:   StaticActorAuth{Actor: commandengine.Actor{ID: "agent-1", Roles: []simplerbac.Role{simplerbac.RoleAgent}}},
+	}).Handler)
+	defer server.Close()
+
+	httpReq, err := http.NewRequest(http.MethodPost, server.URL+"/v2/run/stream/health", nil)
+	if err != nil {
+		t.Fatalf("NewRequest() error = %v", err)
+	}
+	httpReq.Header.Set("Accept", "text/event-stream")
+	httpResp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	defer httpResp.Body.Close()
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+	text := string(body)
+	for _, want := range []string{
+		"event: stdout\n",
+		`"text":"{\"status\":\"degraded\"}\n"`,
+		"event: stderr\n",
+		`"text":"health diagnostic\n"`,
+		"event: completed\n",
+		`"exit_code":2`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SSE body missing %q:\n%s", want, text)

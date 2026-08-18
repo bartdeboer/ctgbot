@@ -62,6 +62,28 @@ func TestCommandRunnerReturnsCommandError(t *testing.T) {
 	}
 }
 
+func TestCommandRunnerReturnsStructuredExecutionWithCompatibilityError(t *testing.T) {
+	want := &commandengine.ExecutionResult{
+		Stdout:   "{\"status\":\"degraded\"}\n",
+		Stderr:   "health diagnostic\n",
+		ExitCode: 2,
+	}
+	runner := &CommandRunner{Transport: &fakeByteTransport{resp: hostbridge.CommandResponse{
+		Result: commandengine.Result{Execution: want},
+		Error:  "exit status 2: health diagnostic",
+	}}}
+	resp, err := runner.RunCommand(context.Background(), hostbridge.CommandRequest{})
+	if err == nil || err.Error() != "exit status 2: health diagnostic" {
+		t.Fatalf("RunCommand() error = %v, want compatibility error", err)
+	}
+	if resp.Result.Execution == nil || *resp.Result.Execution != *want {
+		t.Fatalf("execution = %+v, want %+v", resp.Result.Execution, want)
+	}
+	if resp.Error == "" {
+		t.Fatal("legacy response error was not retained")
+	}
+}
+
 func TestCommandRunnerReturnsTransportError(t *testing.T) {
 	want := errors.New("transport down")
 	runner := &CommandRunner{Transport: &fakeByteTransport{err: want}}

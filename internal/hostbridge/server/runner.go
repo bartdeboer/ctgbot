@@ -3,9 +3,11 @@ package server
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
@@ -25,14 +27,28 @@ func RegisterRunCommandHandler(registry *commandengine.Registry, runner *RunComm
 }
 
 func (r *RunCommandRunner) RunCommand(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
-	text, err := r.run(ctx, cmd.Command, cmd.Args, req.Stdin, cmd.Timeout)
-	if err != nil {
+	execution, err := r.run(ctx, cmd.Command, cmd.Args, req.Stdin, cmd.Timeout)
+	if execution == nil {
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: text}, nil
+	result := commandengine.Result{
+		// Keep the pre-outcome projection for in-process callers that still read
+		// Text. Hostbridge transports use Execution as the lossless authority.
+		Text:      executionText(*execution),
+		Execution: execution,
+	}
+	return result, err
 }
 
-func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []string, stdin string, timeoutSec int) (string, error) {
+func executionText(execution commandengine.ExecutionResult) string {
+	text := execution.Stdout
+	if strings.TrimSpace(text) == "" {
+		text = execution.Stderr
+	}
+	return text
+}
+
+func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []string, stdin string, timeoutSec int) (*commandengine.ExecutionResult, error) {
 	aliases := StaticAliasResolver(nil)("")
 	if r != nil && r.ResolveAliases != nil {
 		aliases = r.ResolveAliases(r.ClientIdentity)
@@ -42,15 +58,15 @@ func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []s
 	}
 	spec, ok := aliases[commandName]
 	if !ok {
-		return "", fmt.Errorf("hostbridge alias not allowed: %s", commandName)
+		return nil, fmt.Errorf("hostbridge alias not allowed: %s", commandName)
 	}
 
 	plan, err := BuildExecutionPlan(commandName, args, spec)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if err := validateAliasStdin(commandName, spec, stdin); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	timeout := r.defaultTimeoutSec(timeoutSec)
@@ -70,26 +86,54 @@ func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []s
 		select {
 		case <-time.After(plan.Delay):
 		case <-runCtx.Done():
-			return "", runCtx.Err()
+			return nil, runCtx.Err()
 		}
 	}
 
-	if err := command.Run(); err != nil {
-		detail := strings.TrimSpace(stderr.String())
-		if detail == "" {
-			detail = strings.TrimSpace(stdout.String())
-		}
-		if detail != "" {
-			return "", fmt.Errorf("%w: %s", err, detail)
-		}
-		return "", err
+	err = command.Run()
+	execution := commandengine.ExecutionResult{
+		Stdout: stdout.String(),
+		Stderr: stderr.String(),
 	}
+	if err == nil {
+		return &execution, nil
+	}
+	if runCtx.Err() != nil {
+		return nil, runCtx.Err()
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if exitCode, ok := processExitCode(exitErr); ok {
+			execution.ExitCode = exitCode
+			return &execution, errors.New(executionFailureMessage(execution))
+		}
+	}
+	return nil, err
+}
 
-	text := stdout.String()
-	if strings.TrimSpace(text) == "" {
-		text = stderr.String()
+func processExitCode(err *exec.ExitError) (int, bool) {
+	if code := err.ExitCode(); code >= 0 {
+		return code, true
 	}
-	return text, nil
+	status, ok := err.Sys().(syscall.WaitStatus)
+	if !ok || !status.Signaled() {
+		return 0, false
+	}
+	// Match the conventional shell representation while preserving a single,
+	// portable integer exit field for callers.
+	return 128 + int(status.Signal()), true
+}
+
+func executionFailureMessage(execution commandengine.ExecutionResult) string {
+	message := fmt.Sprintf("exit status %d", execution.ExitCode)
+	detail := strings.TrimSpace(execution.Stderr)
+	if detail == "" {
+		detail = strings.TrimSpace(execution.Stdout)
+	}
+	if detail == "" {
+		return message
+	}
+	return message + ": " + detail
 }
 
 func validateAliasStdin(commandName string, spec Alias, stdin string) error {

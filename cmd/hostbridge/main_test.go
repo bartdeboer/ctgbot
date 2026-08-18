@@ -12,8 +12,75 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	gmailcomponent "github.com/bartdeboer/ctgbot/internal/component/gmail"
+	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	"github.com/bartdeboer/ctgbot/internal/simplerbac"
 )
+
+func TestWriteCommandResultPreservesExecutionStreamsAndExitCode(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	result := commandengine.Result{Execution: &commandengine.ExecutionResult{
+		Stdout:   "{\"status\":\"degraded\"}\n\x00",
+		Stderr:   "health diagnostic\n\x80",
+		ExitCode: 2,
+	}}
+	if got := writeCommandResult(&stdout, &stderr, result); got != 2 {
+		t.Fatalf("exit code = %d, want 2", got)
+	}
+	if got, want := stdout.String(), result.Execution.Stdout; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if got, want := stderr.String(), result.Execution.Stderr; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+}
+
+func TestWriteCommandResponseUsesExecutionOutcomeDespiteCompatibilityError(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	resp := hostbridge.CommandResponse{Result: commandengine.Result{Execution: &commandengine.ExecutionResult{
+		Stdout:   "{\"status\":\"degraded\"}\n\x00",
+		Stderr:   "health diagnostic\n\x80",
+		ExitCode: 2,
+	}}}
+	if got := writeCommandResponse(&stdout, &stderr, resp, errors.New("exit status 2: health diagnostic")); got != 2 {
+		t.Fatalf("exit code = %d, want 2", got)
+	}
+	if got, want := stdout.String(), resp.Result.Execution.Stdout; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if got, want := stderr.String(), resp.Result.Execution.Stderr; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+}
+
+func TestWriteCommandResponseKeepsOrdinaryErrorsAtExitOne(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got := writeCommandResponse(&stdout, &stderr, hostbridge.CommandResponse{}, errors.New("admission denied")); got != 1 {
+		t.Fatalf("exit code = %d, want 1", got)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if got, want := stderr.String(), "error: admission denied\n"; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+}
+
+func TestWriteCommandResultKeepsOrdinaryTextBehavior(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got := writeCommandResult(&stdout, &stderr, commandengine.Result{Text: "ok"}); got != 0 {
+		t.Fatalf("exit code = %d, want 0", got)
+	}
+	if got, want := stdout.String(), "ok\n"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
 
 func TestReadRunStdinReadsPipedBytesExactly(t *testing.T) {
 	want := "{\"text\":\"line one\\n`backticks` $dollar \\\\ tail\"}\n"

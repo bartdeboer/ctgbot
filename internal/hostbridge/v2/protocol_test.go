@@ -248,6 +248,44 @@ func TestHandlerReturnsJSONWhenRequested(t *testing.T) {
 	}
 }
 
+func TestHandlerReturnsExecutionOutcomeAsJSON(t *testing.T) {
+	runner := &fakeRunner{result: commandengine.Result{Execution: &commandengine.ExecutionResult{
+		Stdout:   "{\"status\":\"degraded\"}\n",
+		Stderr:   "health diagnostic\n",
+		ExitCode: 2,
+	}}, err: errors.New("exit status 2: health diagnostic")}
+	handler := NewHandler(runner)
+
+	req := httptest.NewRequest(http.MethodPost, "/v2/run/health", nil)
+	req.Header.Set("Accept", "application/json")
+	rr := httptest.NewRecorder()
+
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got, want := rr.Header().Get("X-Command-Exit-Code"), "2"; got != want {
+		t.Fatalf("exit header = %q, want %q", got, want)
+	}
+	var resp JSONResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode JSON response: %v", err)
+	}
+	if got, want := resp.ExitCode, 2; got != want {
+		t.Fatalf("exit code = %d, want %d", got, want)
+	}
+	if got, want := resp.Stdout, runner.result.Execution.Stdout; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if got, want := resp.Stderr, runner.result.Execution.Stderr; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+	if resp.Error != "" {
+		t.Fatalf("error = %q, want empty process outcome", resp.Error)
+	}
+}
+
 func TestHandlerReportsCommandErrorAsCommandFailure(t *testing.T) {
 	runner := &fakeRunner{err: errors.New("boom")}
 	handler := NewHandler(runner)
