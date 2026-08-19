@@ -10,6 +10,7 @@ import (
 type acquiredPermit struct {
 	position int
 	release  func()
+	err      error
 }
 
 func TestAliasExecutionQueueAdmitsWaitersFIFO(t *testing.T) {
@@ -133,6 +134,110 @@ func TestAliasExecutionQueueCloseWakesWaiters(t *testing.T) {
 	queue.Close()
 }
 
+func TestAliasExecutionQueueCancelRacingWithGrantKeepsLaneReusable(t *testing.T) {
+	for round := 0; round < 100; round++ {
+		queue := NewAliasExecutionQueue()
+		_, err := queue.Acquire(context.Background(), "registry")
+		if err != nil {
+			t.Fatalf("round %d: Acquire(active) error = %v", round, err)
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		first := make(chan acquiredPermit, 1)
+		go func() {
+			release, acquireErr := queue.Acquire(ctx, "registry")
+			first <- acquiredPermit{release: release, err: acquireErr}
+		}()
+		waitForQueueWaiters(t, queue, "registry", 1)
+
+		next := make(chan acquiredPermit, 1)
+		go func() {
+			release, acquireErr := queue.Acquire(context.Background(), "registry")
+			next <- acquiredPermit{release: release, err: acquireErr}
+		}()
+		waitForQueueWaiters(t, queue, "registry", 2)
+
+		// Cancellation wakes the waiter while q.mu is held. Grant it before
+		// unlocking so the selected cancellation branch observes granted=true
+		// and must hand the lane to the next waiter.
+		queue.mu.Lock()
+		cancel()
+		queue.releaseLocked("registry")
+		queue.mu.Unlock()
+
+		firstResult := <-first
+		if !errors.Is(firstResult.err, context.Canceled) {
+			t.Fatalf("round %d: first Acquire() error = %v, want context.Canceled", round, firstResult.err)
+		}
+		nextResult := <-next
+		if nextResult.err != nil {
+			t.Fatalf("round %d: next Acquire() error = %v", round, nextResult.err)
+		}
+		nextResult.release()
+		assertQueueKeyDrained(t, queue, "registry")
+	}
+}
+
+func TestAliasExecutionQueueCloseBetweenGrantAndReceiveRefusesWaiter(t *testing.T) {
+	queue := NewAliasExecutionQueue()
+	_, err := queue.Acquire(context.Background(), "registry")
+	if err != nil {
+		t.Fatalf("Acquire(active) error = %v", err)
+	}
+	waiting := make(chan error, 1)
+	go func() {
+		_, acquireErr := queue.Acquire(context.Background(), "registry")
+		waiting <- acquireErr
+	}()
+	waitForQueueWaiters(t, queue, "registry", 1)
+
+	queue.mu.Lock()
+	queue.releaseLocked("registry")
+	queue.closeLocked()
+	queue.mu.Unlock()
+
+	if err := <-waiting; !errors.Is(err, ErrAliasExecutionQueueClosed) {
+		t.Fatalf("Acquire() error = %v, want queue closed", err)
+	}
+	assertQueueKeyDrained(t, queue, "registry")
+}
+
+func TestAliasExecutionQueueDuplicateReleaseDoesNotAdmitTwoWaiters(t *testing.T) {
+	queue := NewAliasExecutionQueue()
+	releaseActive, err := queue.Acquire(context.Background(), "registry")
+	if err != nil {
+		t.Fatalf("Acquire(active) error = %v", err)
+	}
+
+	acquired := make(chan acquiredPermit, 2)
+	for position := 1; position <= 2; position++ {
+		position := position
+		go func() {
+			release, acquireErr := queue.Acquire(context.Background(), "registry")
+			acquired <- acquiredPermit{position: position, release: release, err: acquireErr}
+		}()
+		waitForQueueWaiters(t, queue, "registry", position)
+	}
+
+	releaseActive()
+	first := <-acquired
+	if first.position != 1 || first.err != nil {
+		t.Fatalf("first permit = %+v, want waiter 1", first)
+	}
+	releaseActive()
+	select {
+	case permit := <-acquired:
+		t.Fatalf("duplicate release admitted waiter early: %+v", permit)
+	case <-time.After(20 * time.Millisecond):
+	}
+	first.release()
+	second := <-acquired
+	if second.position != 2 || second.err != nil {
+		t.Fatalf("second permit = %+v, want waiter 2", second)
+	}
+	second.release()
+}
+
 func waitForQueueWaiters(t *testing.T, queue *AliasExecutionQueue, key string, want int) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
@@ -150,4 +255,13 @@ func waitForQueueWaiters(t *testing.T, queue *AliasExecutionQueue, key string, w
 		time.Sleep(time.Millisecond)
 	}
 	t.Fatalf("queue %q did not reach %d waiters", key, want)
+}
+
+func assertQueueKeyDrained(t *testing.T, queue *AliasExecutionQueue, key string) {
+	t.Helper()
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	if state := queue.keys[key]; state != nil {
+		t.Fatalf("queue %q retained state: %+v", key, state)
+	}
 }

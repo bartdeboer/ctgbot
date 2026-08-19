@@ -69,6 +69,15 @@ func New(app App, logf func(format string, args ...any)) *Broker {
 	return broker
 }
 
+// Close releases process-scoped Broker resources. Active host commands remain
+// governed by their request contexts; serialized waiters are refused.
+func (b *Broker) Close() {
+	if b == nil || b.HostbridgeQueue == nil {
+		return
+	}
+	b.HostbridgeQueue.Close()
+}
+
 type inboundRouteOptions struct {
 	bypassEventFilters bool
 }

@@ -14,7 +14,7 @@ func NormalizeAlias(spec Alias) Alias {
 	spec.ArgsPattern = strings.TrimSpace(spec.ArgsPattern)
 	spec.Dir = strings.TrimSpace(spec.Dir)
 	spec.Delay = strings.TrimSpace(spec.Delay)
-	spec.SerializationKey = strings.TrimSpace(spec.SerializationKey)
+	spec.SerializationKey = strings.ToLower(strings.TrimSpace(spec.SerializationKey))
 	spec.Args = cloneStrings(spec.Args)
 	spec.AllowedCWDs = normalizeCWDs(spec.AllowedCWDs)
 	spec.Subcommands = normalizeSubcommands(spec.Subcommands)

@@ -7,7 +7,7 @@ func TestNormalizeAliasOwnsAllPolicyCollections(t *testing.T) {
 
 	spec := NormalizeAlias(Alias{
 		Name:             " git ",
-		SerializationKey: " registry ",
+		SerializationKey: " Registry ",
 		Args:             []string{"status"},
 		AllowedCWDs:      []string{" /workspace/src/ctgbot "},
 		Subcommands: map[string]AliasSubcommand{
@@ -43,5 +43,15 @@ func TestValidateAliasRejectsCWDPolicyContradictions(t *testing.T) {
 		if err := ValidateAlias(NormalizeAlias(spec)); err == nil {
 			t.Fatalf("ValidateAlias(%#v) error = nil", spec)
 		}
+	}
+}
+
+func TestNormalizeAliasMakesSerializationKeysCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
+	upper := NormalizeAlias(Alias{Name: "workspace", SerializationKey: " Workspace-Registry "})
+	lower := NormalizeAlias(Alias{Name: "workspace", SerializationKey: "workspace-registry"})
+	if upper.SerializationKey != lower.SerializationKey {
+		t.Fatalf("serialization keys differ: %q != %q", upper.SerializationKey, lower.SerializationKey)
 	}
 }

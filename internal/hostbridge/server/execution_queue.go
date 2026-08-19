@@ -32,10 +32,11 @@ func NewAliasExecutionQueue() *AliasExecutionQueue {
 	return &AliasExecutionQueue{keys: map[string]*aliasExecutionState{}}
 }
 
-// Acquire waits for the next position under key. The returned release must be
-// called exactly once; it is safe to call more than once defensively.
+// Acquire waits for the next position under key. Call the returned release
+// when execution ends. Duplicate calls are ignored so one owner cannot
+// accidentally hand the lane to multiple waiters.
 func (q *AliasExecutionQueue) Acquire(ctx context.Context, key string) (func(), error) {
-	key = strings.TrimSpace(key)
+	key = strings.ToLower(strings.TrimSpace(key))
 	if key == "" {
 		return func() {}, nil
 	}
@@ -107,6 +108,10 @@ func (q *AliasExecutionQueue) Close() {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.closeLocked()
+}
+
+func (q *AliasExecutionQueue) closeLocked() {
 	if q.closed {
 		return
 	}

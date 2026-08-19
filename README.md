@@ -270,11 +270,13 @@ positive byte limit only for an alias that intentionally accepts piped input;
 stdin remains separate from the alias argument vector.
 
 Set `serialization_key` when commands that mutate one shared resource must run
-one at a time. Calls sharing a key wait in process-local FIFO order for up to
-one minute; aliases without a key remain concurrent. Queueing is bounded
-separately from the command's execution timeout, and runtime shutdown refuses
-new calls and releases queued waiters. An active command must not synchronously
-invoke and await another alias sharing its serialization key.
+one at a time. Keys are trimmed and lowercased. Calls sharing a key wait in
+process-local FIFO order; aliases without a key remain concurrent. Each waiter
+has its own one-minute queue budget, separate from the command's fresh
+execution timeout. Runtime shutdown refuses new calls and releases queued
+waiters. An active command must not synchronously invoke and await another
+alias sharing its serialization key; the queue bound makes such a mistake fail
+rather than deadlock permanently.
 
 ## Optional components
 

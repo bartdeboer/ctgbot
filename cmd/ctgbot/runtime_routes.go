@@ -75,6 +75,9 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			}
 			appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logf)
 			mainBroker := broker.New(appService, logf)
+			// The run handler owns the process-wide Hostbridge queue. Keep it
+			// open if one inbound source exits while other runtime work remains.
+			defer mainBroker.Close()
 			// Bind shutdown admission before Hostbridge can invoke the process
 			// command. Leaving this callback unset makes quit fail open.
 			processActions.beginShutdown = mainBroker.BeginShutdown
@@ -221,7 +224,8 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 		appService := app.NewServiceWithLogger(storage, rtSystem, logf)
 		// This constructor fallback is used only as ChatPayloadSender. The active
 		// ChatRuntime replaces it with the main broker before component use; this
-		// broker must never become a second inbound turn owner.
+		// broker must never become a second inbound turn owner, so its private
+		// Hostbridge queue never serves alias execution either.
 		return heartbeatcomponent.New(ctx, registration, runtime, profile, storage, broker.New(appService, logf))
 	}); err != nil {
 		return nil, err
