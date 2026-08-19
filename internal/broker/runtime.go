@@ -139,6 +139,7 @@ func (b *Broker) runtimeForChat(ctx context.Context, chat coremodel.Chat) (*Chat
 		MessageCommands:   messageCommands,
 		AgentCommands:     agentCommands,
 		HostbridgeAliases: hostbridgeAliases,
+		HostbridgeQueue:   b.HostbridgeQueue,
 		Profiles:          profiles,
 	}, nil
 }
@@ -162,6 +163,7 @@ func (r *ChatRuntime) RunHostbridgeAlias(ctx context.Context, req commandengine.
 	}
 	runner := &hostbridgeserver.RunCommandRunner{
 		ResolveAliases: hostbridgeserver.StaticAliasResolver(allowed),
+		ExecutionQueue: r.HostbridgeQueue,
 	}
 	return runner.RunCommand(ctx, req, cmd)
 }

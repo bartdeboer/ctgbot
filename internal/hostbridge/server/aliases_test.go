@@ -16,6 +16,7 @@ func TestAliasJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 		"docker": {
 			"name": "docker",
 			"allow_extra_args": true,
+			"serialization_key": "docker-daemon",
 			"stdin_max_bytes": 1048576
 		},
 		"delete-branch": {
@@ -39,6 +40,9 @@ func TestAliasJSONAcceptsSnakeCaseExtraArgs(t *testing.T) {
 	}
 	if got, want := aliases["docker"].StdinMaxBytes, int64(1048576); got != want {
 		t.Fatalf("stdin_max_bytes = %d, want %d", got, want)
+	}
+	if got, want := aliases["docker"].SerializationKey, "docker-daemon"; got != want {
+		t.Fatalf("serialization_key = %q, want %q", got, want)
 	}
 	if got, want := aliases["delete-branch"].ArgsPattern, "<branch>"; got != want {
 		t.Fatalf("args_pattern = %q, want %q", got, want)

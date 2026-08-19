@@ -12,6 +12,9 @@ func (b *Broker) Run(ctx context.Context) error {
 	if err := b.ensureReady(); err != nil {
 		return err
 	}
+	// Closing the process-owned queue wakes Hostbridge calls still waiting for
+	// serialized aliases while active commands unwind through request contexts.
+	defer b.HostbridgeQueue.Close()
 	sources, err := b.App.EnabledInboundSources(ctx)
 	if err != nil {
 		return err

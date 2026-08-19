@@ -15,11 +15,14 @@ import (
 )
 
 const defaultRunCommandTimeoutSec = 60
+const defaultAliasQueueWait = time.Minute
 
 type RunCommandRunner struct {
 	ResolveAliases    AliasResolver
 	ClientIdentity    string
 	DefaultTimeoutSec int
+	ExecutionQueue    *AliasExecutionQueue
+	QueueWaitTimeout  time.Duration
 }
 
 func RegisterRunCommandHandler(registry *commandengine.Registry, runner *RunCommandRunner) error {
@@ -68,7 +71,14 @@ func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []s
 	if err := validateAliasStdin(commandName, spec, stdin); err != nil {
 		return nil, err
 	}
+	release, err := r.acquireExecution(ctx, commandName, spec.SerializationKey)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
+	// Queueing has its own bound. A caller that reaches the front receives a
+	// fresh execution timeout rather than spending it while another call runs.
 	timeout := r.defaultTimeoutSec(timeoutSec)
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
@@ -109,6 +119,29 @@ func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []s
 		}
 	}
 	return nil, err
+}
+
+func (r *RunCommandRunner) acquireExecution(ctx context.Context, commandName string, key string) (func(), error) {
+	if strings.TrimSpace(key) == "" {
+		return func() {}, nil
+	}
+	if r == nil || r.ExecutionQueue == nil {
+		return nil, fmt.Errorf("hostbridge alias serialization is unavailable: %s", commandName)
+	}
+	wait := r.QueueWaitTimeout
+	if wait <= 0 {
+		wait = defaultAliasQueueWait
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	release, err := r.ExecutionQueue.Acquire(waitCtx, key)
+	if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+		return nil, fmt.Errorf("hostbridge alias queue wait timed out: %s", commandName)
+	}
+	if errors.Is(err, ErrAliasExecutionQueueClosed) {
+		return nil, fmt.Errorf("hostbridge alias queue is closed: %s", commandName)
+	}
+	return release, err
 }
 
 func processExitCode(err *exec.ExitError) (int, bool) {

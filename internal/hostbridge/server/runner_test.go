@@ -162,6 +162,93 @@ func TestRunCommandRunnerDefaultsToOneMinute(t *testing.T) {
 	}
 }
 
+func TestRunCommandRunnerBoundsSerializedQueueWaitSeparately(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires /bin/true")
+	}
+	queue := NewAliasExecutionQueue()
+	release, err := queue.Acquire(context.Background(), "registry")
+	if err != nil {
+		t.Fatalf("Acquire(active) error = %v", err)
+	}
+	runner := &RunCommandRunner{
+		ResolveAliases: StaticAliasResolver(map[string]Alias{
+			"workspace": {Name: "/bin/true", SerializationKey: "registry"},
+		}),
+		ExecutionQueue:   queue,
+		QueueWaitTimeout: 20 * time.Millisecond,
+	}
+	_, err = runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "workspace"})
+	if err == nil || err.Error() != "hostbridge alias queue wait timed out: workspace" {
+		t.Fatalf("RunCommand() error = %v, want bounded queue timeout", err)
+	}
+
+	release()
+	if _, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "workspace"}); err != nil {
+		t.Fatalf("RunCommand(after release) error = %v", err)
+	}
+}
+
+func TestRunCommandRunnerCancelsSerializedQueueWait(t *testing.T) {
+	queue := NewAliasExecutionQueue()
+	release, err := queue.Acquire(context.Background(), "registry")
+	if err != nil {
+		t.Fatalf("Acquire(active) error = %v", err)
+	}
+	defer release()
+	runner := &RunCommandRunner{
+		ResolveAliases: StaticAliasResolver(map[string]Alias{
+			"workspace": {Name: "workspace", SerializationKey: "registry"},
+		}),
+		ExecutionQueue:   queue,
+		QueueWaitTimeout: time.Second,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = runner.RunCommand(ctx, commandengine.Request{}, schemacommands.RunCommand{Command: "workspace"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RunCommand() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestRunCommandRunnerValidatesBeforeSerializedQueueWait(t *testing.T) {
+	queue := NewAliasExecutionQueue()
+	release, err := queue.Acquire(context.Background(), "registry")
+	if err != nil {
+		t.Fatalf("Acquire(active) error = %v", err)
+	}
+	defer release()
+
+	runner := &RunCommandRunner{
+		ResolveAliases: StaticAliasResolver(map[string]Alias{
+			"workspace": {Name: "workspace", SerializationKey: "registry"},
+		}),
+		ExecutionQueue:   queue,
+		QueueWaitTimeout: time.Second,
+	}
+	started := time.Now()
+	_, err = runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{
+		Command: "workspace",
+		Args:    []string{"unexpected"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not allow extra args") {
+		t.Fatalf("RunCommand() error = %v, want plan rejection", err)
+	}
+	if elapsed := time.Since(started); elapsed > 100*time.Millisecond {
+		t.Fatalf("validation waited behind queue for %s", elapsed)
+	}
+}
+
+func TestRunCommandRunnerFailsClosedWithoutSharedQueue(t *testing.T) {
+	runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(map[string]Alias{
+		"workspace": {Name: "workspace", SerializationKey: "registry"},
+	})}
+	_, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "workspace"})
+	if err == nil || err.Error() != "hostbridge alias serialization is unavailable: workspace" {
+		t.Fatalf("RunCommand() error = %v, want missing queue denial", err)
+	}
+}
+
 func writeExecutable(t *testing.T, contents string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "probe.sh")

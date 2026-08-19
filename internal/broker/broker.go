@@ -19,10 +19,11 @@ import (
 )
 
 type Broker struct {
-	App           App
-	Turns         *ThreadTurnGate
-	Logf          func(format string, args ...any)
-	TurnCompleted func(ctx context.Context, threadID modeluuid.UUID)
+	App             App
+	Turns           *ThreadTurnGate
+	HostbridgeQueue *hostbridgeserver.AliasExecutionQueue
+	Logf            func(format string, args ...any)
+	TurnCompleted   func(ctx context.Context, threadID modeluuid.UUID)
 }
 
 type EventOutcome struct {
@@ -42,6 +43,7 @@ type ChatRuntime struct {
 	MessageCommands   *commandengine.Engine
 	AgentCommands     *commandengine.Engine
 	HostbridgeAliases map[string]hostbridgeserver.Alias
+	HostbridgeQueue   *hostbridgeserver.AliasExecutionQueue
 	Profiles          map[modeluuid.UUID]runtimepkg.Profile
 }
 
@@ -59,9 +61,10 @@ type RelayBinding struct {
 
 func New(app App, logf func(format string, args ...any)) *Broker {
 	broker := &Broker{
-		App:   app,
-		Turns: NewThreadTurnGate(),
-		Logf:  logf,
+		App:             app,
+		Turns:           NewThreadTurnGate(),
+		HostbridgeQueue: hostbridgeserver.NewAliasExecutionQueue(),
+		Logf:            logf,
 	}
 	return broker
 }
@@ -386,6 +389,9 @@ func (b *Broker) ensureReady() error {
 	if b.Turns == nil {
 		b.Turns = NewThreadTurnGate()
 	}
+	if b.HostbridgeQueue == nil {
+		b.HostbridgeQueue = hostbridgeserver.NewAliasExecutionQueue()
+	}
 	return nil
 }
 
@@ -408,14 +414,14 @@ func (b *Broker) logf(format string, args ...any) {
 
 func (b *Broker) RunHostbridgeAlias(ctx context.Context, req commandengine.Request, cmd schemacommands.RunCommand) (commandengine.Result, error) {
 	if req.Context.ChatID.IsNull() {
-		return (&ChatRuntime{}).RunHostbridgeAlias(ctx, req, cmd)
+		return (&ChatRuntime{HostbridgeQueue: b.HostbridgeQueue}).RunHostbridgeAlias(ctx, req, cmd)
 	}
 	chat, err := b.App.Chat(ctx, req.Context.ChatID)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
 	if chat == nil {
-		return (&ChatRuntime{}).RunHostbridgeAlias(ctx, req, cmd)
+		return (&ChatRuntime{HostbridgeQueue: b.HostbridgeQueue}).RunHostbridgeAlias(ctx, req, cmd)
 	}
 	runtime, err := b.runtimeForChat(ctx, *chat)
 	if err != nil {

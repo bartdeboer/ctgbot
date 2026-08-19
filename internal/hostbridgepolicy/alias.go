@@ -16,6 +16,9 @@ type Alias struct {
 	Delay          string            `json:"delay"`
 	Env            map[string]string `json:"env"`
 	AllowExtraArgs bool              `json:"allow_extra_args"`
+	// SerializationKey places this alias in one process-local execution lane.
+	// Aliases with the same non-empty key execute one at a time.
+	SerializationKey string `json:"serialization_key,omitempty"`
 	// StdinMaxBytes opts this alias into piped stdin and bounds the accepted
 	// payload. Zero denies non-empty stdin.
 	StdinMaxBytes int64 `json:"stdin_max_bytes,omitempty"`

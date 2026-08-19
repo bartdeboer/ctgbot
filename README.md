@@ -269,6 +269,13 @@ Run aliases deny non-empty stdin by default. Set `stdin_max_bytes` to a
 positive byte limit only for an alias that intentionally accepts piped input;
 stdin remains separate from the alias argument vector.
 
+Set `serialization_key` when commands that mutate one shared resource must run
+one at a time. Calls sharing a key wait in process-local FIFO order for up to
+one minute; aliases without a key remain concurrent. Queueing is bounded
+separately from the command's execution timeout, and runtime shutdown refuses
+new calls and releases queued waiters. An active command must not synchronously
+invoke and await another alias sharing its serialization key.
+
 ## Optional components
 
 ### Claude

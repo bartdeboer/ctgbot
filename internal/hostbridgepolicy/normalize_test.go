@@ -6,9 +6,10 @@ func TestNormalizeAliasOwnsAllPolicyCollections(t *testing.T) {
 	t.Parallel()
 
 	spec := NormalizeAlias(Alias{
-		Name:        " git ",
-		Args:        []string{"status"},
-		AllowedCWDs: []string{" /workspace/src/ctgbot "},
+		Name:             " git ",
+		SerializationKey: " registry ",
+		Args:             []string{"status"},
+		AllowedCWDs:      []string{" /workspace/src/ctgbot "},
 		Subcommands: map[string]AliasSubcommand{
 			" status ": {Args: []string{"status", "--short"}},
 		},
@@ -16,6 +17,9 @@ func TestNormalizeAliasOwnsAllPolicyCollections(t *testing.T) {
 	})
 	if spec.Name != "git" {
 		t.Fatalf("Name = %q, want git", spec.Name)
+	}
+	if got, want := spec.SerializationKey, "registry"; got != want {
+		t.Fatalf("SerializationKey = %q, want %q", got, want)
 	}
 	if got, want := spec.AllowedCWDs[0], "/workspace/src/ctgbot"; got != want {
 		t.Fatalf("AllowedCWDs[0] = %q, want %q", got, want)
