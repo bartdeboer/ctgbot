@@ -26,8 +26,8 @@ func TestClaudeBootstrapIncludesRuntimeNotices(t *testing.T) {
 	if !strings.Contains(text, "Persisted personal workspace: /home/agent") {
 		t.Fatalf("bootstrap text = %q, want agent home hint", text)
 	}
-	if !strings.Contains(text, "supervisor --help") {
-		t.Fatalf("bootstrap text = %q, want supervisor hint", text)
+	if !strings.Contains(text, "use `supervisorctl`") || !strings.Contains(text, "legacy sandbox image") {
+		t.Fatalf("bootstrap text = %q, want supervisorctl compatibility hint", text)
 	}
 }
 

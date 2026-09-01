@@ -6,7 +6,7 @@ FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ARG CTGBOT_UID=1000
 ARG CTGBOT_GID=1000
-ARG SUPERVISOR_VERSION=v0.0.11
+ARG SUPERVISOR_VERSION=v0.0.12
 ENV PATH="/usr/local/go/bin:${PATH}"
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
@@ -61,6 +61,11 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 RUN CGO_ENABLED=0 GOBIN=/usr/local/bin go install \
+        -trimpath \
+        -buildvcs=false \
+        -ldflags="-s -w -buildid=" \
+        github.com/bartdeboer/go-supervisor/cmd/supervisorctl@${SUPERVISOR_VERSION} \
+    && CGO_ENABLED=0 GOBIN=/usr/local/bin go install \
         -trimpath \
         -buildvcs=false \
         -ldflags="-s -w -buildid=" \

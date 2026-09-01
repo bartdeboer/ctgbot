@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +60,28 @@ func TestBuildContextTarIncludesGeneratedVersionButSkipsGeneratedTarball(t *test
 	}
 	if found["internal/buildassets/assets/src.tar.gz"] {
 		t.Fatalf("build context tar should not contain generated src.tar.gz")
+	}
+}
+
+func TestRuntimeBaseImagesInstallSupervisorControlCompatibility(t *testing.T) {
+	for _, name := range []string{
+		"docker/go-node-python.base.Dockerfile",
+		"docker/go-node-python-cuda.base.Dockerfile",
+	} {
+		path, err := filepathFromModule(name)
+		if err != nil {
+			t.Fatalf("%s path: %v", name, err)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		text := string(body)
+		for _, command := range []string{"cmd/supervisorctl", "cmd/supervisor", "cmd/supervisord"} {
+			if !strings.Contains(text, "github.com/bartdeboer/go-supervisor/"+command+"@${SUPERVISOR_VERSION}") {
+				t.Fatalf("%s does not install %s", name, command)
+			}
+		}
 	}
 }
 

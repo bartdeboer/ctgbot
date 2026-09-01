@@ -276,7 +276,7 @@ func claudeBootstrap(workspace string, instructions component.TurnInstructions) 
 		lines = append(lines, "Keep replies concise.")
 	}
 	lines = append(lines, "Do not add Co-Authored-By trailers to commits unless the operator explicitly asks for them.")
-	lines = append(lines, "For persistent services, use the `supervisor` command; run `supervisor --help` for usage.")
+	lines = append(lines, "For persistent services, use `supervisorctl`; if it is unavailable in a legacy sandbox image, use `supervisor`.")
 	lines = append(lines, "When messaging threads, end your turn to receive their response. Do not poll for replies.")
 	lines = append(lines, "Use `hostbridge turn info` and `hostbridge turn config [ list | get <key> | set <key> <value> ]` for current-turn input metadata and output controls.")
 	lines = append(lines, "Use `hostbridge model <name> card` for model config options.")
