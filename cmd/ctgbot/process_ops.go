@@ -45,6 +45,9 @@ func (p *projectProcessActions) Install(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := runProjectCommandFunc(ctx, projectDir, nil, "go", "generate", "./internal/buildassets"); err != nil {
+		return fmt.Errorf("generate embedded build context: %w", err)
+	}
 	env := buildInstallEnv(p.globalStore)
 	return runProjectCommandFunc(ctx, projectDir, env, "go", goInstallArgs()...)
 }

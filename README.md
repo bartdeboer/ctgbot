@@ -100,6 +100,10 @@ go run ./cmd/ctgbot install
 ctgbot version
 ```
 
+Installation generates and embeds the runtime-image build context in the
+`ctgbot` binary. Later image commands therefore run from the instance folder,
+not from the source repository.
+
 ### 2. Create an instance folder
 
 ctgbot stores instance state in the current directory under `.ctgbot/`.

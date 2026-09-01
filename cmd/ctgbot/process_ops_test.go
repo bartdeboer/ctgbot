@@ -48,6 +48,46 @@ func TestGoInstallArgsInstallsHostCtgbotOnly(t *testing.T) {
 	}
 }
 
+func TestInstallGeneratesEmbeddedBuildContextBeforeInstalling(t *testing.T) {
+	oldProject := runProjectCommandFunc
+	t.Cleanup(func() { runProjectCommandFunc = oldProject })
+
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldwd) })
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	store, err := clistate.NewCwd("ctgbot", "config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectDir := t.TempDir()
+	if err := store.PersistString("project_dir", projectDir); err != nil {
+		t.Fatal(err)
+	}
+
+	var commands []string
+	runProjectCommandFunc = func(ctx context.Context, dir string, env []string, name string, args ...string) error {
+		_, _ = ctx, env
+		commands = append(commands, fmt.Sprintf("%s:%s %s", dir, name, strings.Join(args, " ")))
+		return nil
+	}
+
+	if err := (&projectProcessActions{globalStore: store}).Install(context.Background()); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	want := []string{
+		projectDir + ":go generate ./internal/buildassets",
+		projectDir + ":go install ./cmd/ctgbot",
+	}
+	if !reflect.DeepEqual(commands, want) {
+		t.Fatalf("commands = %#v, want %#v", commands, want)
+	}
+}
+
 func TestRunInstalledImageBuildCommand(t *testing.T) {
 	old := runInstalledCtgbotCommandFunc
 	t.Cleanup(func() { runInstalledCtgbotCommandFunc = old })
