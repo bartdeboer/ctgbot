@@ -77,10 +77,19 @@ func TestRuntimeBaseImagesInstallSupervisorControlCompatibility(t *testing.T) {
 			t.Fatalf("read %s: %v", name, err)
 		}
 		text := string(body)
-		for _, command := range []string{"cmd/supervisorctl", "cmd/supervisor", "cmd/supervisord"} {
+		if !strings.Contains(text, "ARG SUPERVISOR_VERSION=v0.1.0") {
+			t.Fatalf("%s does not pin go-supervisor v0.1.0", name)
+		}
+		for _, command := range []string{"cmd/supervisorctl", "cmd/supervisord"} {
 			if !strings.Contains(text, "github.com/bartdeboer/go-supervisor/"+command+"@${SUPERVISOR_VERSION}") {
 				t.Fatalf("%s does not install %s", name, command)
 			}
+		}
+		if strings.Contains(text, "go-supervisor/cmd/supervisor@") {
+			t.Fatalf("%s installs foreground supervisor in a sandbox", name)
+		}
+		if !strings.Contains(text, "cp /usr/local/bin/supervisorctl /usr/local/bin/supervisor") {
+			t.Fatalf("%s does not provide the legacy supervisor control alias", name)
 		}
 	}
 }

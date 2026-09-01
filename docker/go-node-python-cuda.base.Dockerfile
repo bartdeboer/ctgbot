@@ -6,7 +6,7 @@ FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ARG CTGBOT_UID=1000
 ARG CTGBOT_GID=1000
-ARG SUPERVISOR_VERSION=v0.0.12
+ARG SUPERVISOR_VERSION=v0.1.0
 ENV PATH="/usr/local/go/bin:${PATH}"
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
@@ -69,12 +69,8 @@ RUN CGO_ENABLED=0 GOBIN=/usr/local/bin go install \
         -trimpath \
         -buildvcs=false \
         -ldflags="-s -w -buildid=" \
-        github.com/bartdeboer/go-supervisor/cmd/supervisor@${SUPERVISOR_VERSION} \
-    && CGO_ENABLED=0 GOBIN=/usr/local/bin go install \
-        -trimpath \
-        -buildvcs=false \
-        -ldflags="-s -w -buildid=" \
-        github.com/bartdeboer/go-supervisor/cmd/supervisord@${SUPERVISOR_VERSION}
+        github.com/bartdeboer/go-supervisor/cmd/supervisord@${SUPERVISOR_VERSION} \
+    && cp /usr/local/bin/supervisorctl /usr/local/bin/supervisor
 
 WORKDIR /workspace
 CMD ["tail", "-f", "/dev/null"]
