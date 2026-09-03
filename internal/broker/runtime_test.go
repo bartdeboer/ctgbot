@@ -2,6 +2,9 @@ package broker
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -102,6 +105,35 @@ func TestChatRuntimeRunHostbridgeAliasUsesRuntimeAliases(t *testing.T) {
 
 	if _, err := runtime.RunHostbridgeAlias(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "not-allowed"}); err == nil {
 		t.Fatalf("RunHostbridgeAlias(not-allowed) error = nil")
+	}
+}
+
+func TestChatRuntimeMapsHostbridgeCWDFromRuntimeWorkspace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires /bin/pwd")
+	}
+	hostWorkspace := t.TempDir()
+	repo := filepath.Join(hostWorkspace, "project")
+	if err := os.Mkdir(repo, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	chatRuntime := &ChatRuntime{
+		Workspace:        hostWorkspace,
+		RuntimeWorkspace: "/workspace",
+		HostbridgeAliases: map[string]hostbridgeserver.Alias{
+			"repo-pwd": {Name: "/bin/pwd", AllowedCWDs: []string{repo}},
+		},
+	}
+
+	result, err := chatRuntime.RunHostbridgeAlias(context.Background(), commandengine.Request{}, schemacommands.RunCommand{
+		Command: "repo-pwd",
+		Args:    []string{"--cwd", "/workspace/project"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Execution == nil || strings.TrimSpace(result.Execution.Stdout) != repo {
+		t.Fatalf("execution = %#v, want cwd %q", result.Execution, repo)
 	}
 }
 

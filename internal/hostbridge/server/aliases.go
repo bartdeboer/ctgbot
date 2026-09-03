@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -201,6 +202,61 @@ func canonicalWorkingDirectory(path string) (string, error) {
 		return "", fmt.Errorf("path is not a directory")
 	}
 	return resolved, nil
+}
+
+// workspaceHostPath translates the working directory seen by a sandbox into
+// the corresponding host directory. Absolute host paths remain valid for
+// compatibility; relative paths are interpreted from the sandbox workspace.
+func workspaceHostPath(hostRoot string, runtimeRoot string, requested string) (string, bool, error) {
+	hostRoot = strings.TrimSpace(hostRoot)
+	runtimeRoot = strings.TrimSpace(runtimeRoot)
+	requested = strings.TrimSpace(requested)
+	if hostRoot == "" || runtimeRoot == "" || requested == "" {
+		return requested, false, nil
+	}
+
+	relative := ""
+	switch {
+	case path.IsAbs(requested):
+		if !path.IsAbs(runtimeRoot) {
+			return requested, false, nil
+		}
+		runtimeRoot = path.Clean(runtimeRoot)
+		requested = path.Clean(requested)
+		switch {
+		case requested == runtimeRoot:
+			relative = "."
+		case strings.HasPrefix(requested, runtimeRoot+"/"):
+			relative = strings.TrimPrefix(requested, runtimeRoot+"/")
+		default:
+			return requested, false, nil
+		}
+	case filepath.IsAbs(requested):
+		return requested, false, nil
+	default:
+		relative = path.Clean(requested)
+		if escapesWorkspace(relative) {
+			return "", false, fmt.Errorf("working directory escapes workspace")
+		}
+	}
+
+	root, err := canonicalWorkingDirectory(hostRoot)
+	if err != nil {
+		return "", false, err
+	}
+	candidate, err := canonicalWorkingDirectory(filepath.Join(root, filepath.FromSlash(relative)))
+	if err != nil {
+		return "", false, err
+	}
+	relativeToRoot, err := filepath.Rel(root, candidate)
+	if err != nil || escapesWorkspace(filepath.ToSlash(relativeToRoot)) {
+		return "", false, fmt.Errorf("working directory escapes workspace")
+	}
+	return candidate, true, nil
+}
+
+func escapesWorkspace(relative string) bool {
+	return relative == ".." || strings.HasPrefix(relative, "../")
 }
 
 func buildPlanArgs(commandName string, spec Alias, runtimeArgs []string) ([]string, error) {

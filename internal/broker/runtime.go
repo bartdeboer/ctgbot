@@ -162,8 +162,10 @@ func (r *ChatRuntime) RunHostbridgeAlias(ctx context.Context, req commandengine.
 		allowed = r.HostbridgeAliases
 	}
 	runner := &hostbridgeserver.RunCommandRunner{
-		ResolveAliases: hostbridgeserver.StaticAliasResolver(allowed),
-		ExecutionQueue: r.HostbridgeQueue,
+		ResolveAliases:       hostbridgeserver.StaticAliasResolver(allowed),
+		WorkspaceHostPath:    r.Workspace,
+		WorkspaceRuntimePath: r.RuntimeWorkspace,
+		ExecutionQueue:       r.HostbridgeQueue,
 	}
 	return runner.RunCommand(ctx, req, cmd)
 }

@@ -260,14 +260,18 @@ Example `.ctgbot/config.json`:
 Agents can then run:
 
 ```bash
-hostbridge run git --cwd /absolute/path/to/workspace/service-a status
-hostbridge run git --cwd /absolute/path/to/workspace/service-b push
+hostbridge run git --cwd /workspace/service-a status
+hostbridge run git --cwd service-b push
 ```
 
 When `allowed_cwds` is present, Hostbridge consumes the leading
-`--cwd <absolute-path>` pair, resolves symlinks, and requires an exact match
-with one configured directory before starting the command. The executable does
-not receive those two arguments. `dir` and `allowed_cwds` cannot be combined.
+`--cwd <path>` pair. An agent may use its mounted workspace path (normally
+`/workspace/...`) or a path relative to that workspace; Hostbridge translates
+it to the corresponding host path. Absolute host paths remain accepted for
+compatibility. The resolved host directory must exactly match one configured
+`allowed_cwds` entry before the command starts. Symlink escapes are rejected,
+and the executable does not receive the two `--cwd` arguments. `dir` and
+`allowed_cwds` cannot be combined.
 
 Run aliases deny non-empty stdin by default. Set `stdin_max_bytes` to a
 positive byte limit only for an alias that intentionally accepts piped input;

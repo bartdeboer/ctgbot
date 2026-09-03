@@ -18,11 +18,13 @@ const defaultRunCommandTimeoutSec = 60
 const defaultAliasQueueWait = time.Minute
 
 type RunCommandRunner struct {
-	ResolveAliases    AliasResolver
-	ClientIdentity    string
-	DefaultTimeoutSec int
-	ExecutionQueue    *AliasExecutionQueue
-	QueueWaitTimeout  time.Duration
+	ResolveAliases       AliasResolver
+	ClientIdentity       string
+	WorkspaceHostPath    string
+	WorkspaceRuntimePath string
+	DefaultTimeoutSec    int
+	ExecutionQueue       *AliasExecutionQueue
+	QueueWaitTimeout     time.Duration
 }
 
 func RegisterRunCommandHandler(registry *commandengine.Registry, runner *RunCommandRunner) error {
@@ -64,6 +66,10 @@ func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []s
 		return nil, fmt.Errorf("hostbridge alias not allowed: %s", commandName)
 	}
 
+	args, err := r.hostArguments(spec, args)
+	if err != nil {
+		return nil, fmt.Errorf("command %s working directory is not allowed", commandName)
+	}
 	plan, err := BuildExecutionPlan(commandName, args, spec)
 	if err != nil {
 		return nil, err
@@ -119,6 +125,21 @@ func (r *RunCommandRunner) run(ctx context.Context, commandName string, args []s
 		}
 	}
 	return nil, err
+}
+
+func (r *RunCommandRunner) hostArguments(spec Alias, args []string) ([]string, error) {
+	out := append([]string(nil), args...)
+	if r == nil || len(spec.AllowedCWDs) == 0 || len(out) < 2 || out[0] != "--cwd" {
+		return out, nil
+	}
+	hostPath, mapped, err := workspaceHostPath(r.WorkspaceHostPath, r.WorkspaceRuntimePath, out[1])
+	if err != nil {
+		return nil, err
+	}
+	if mapped {
+		out[1] = hostPath
+	}
+	return out, nil
 }
 
 func (r *RunCommandRunner) acquireExecution(ctx context.Context, commandName string, key string) (func(), error) {

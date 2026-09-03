@@ -9,9 +9,10 @@ type Alias struct {
 	ArgsPattern string                     `json:"args_pattern,omitempty"`
 	Subcommands map[string]AliasSubcommand `json:"subcommands,omitempty"`
 	Dir         string                     `json:"dir"`
-	// AllowedCWDs lets the caller select one exact working directory with a
-	// leading --cwd <path> pair. Hostbridge consumes that pair before invoking
-	// the executable. It cannot be combined with Dir.
+	// AllowedCWDs lists exact host directories the caller may select with a
+	// leading --cwd <path> pair. A sandbox caller may name the corresponding
+	// runtime workspace path; Hostbridge translates it before matching. The pair
+	// is consumed before invocation. AllowedCWDs cannot be combined with Dir.
 	AllowedCWDs    []string          `json:"allowed_cwds,omitempty"`
 	Delay          string            `json:"delay"`
 	Env            map[string]string `json:"env"`

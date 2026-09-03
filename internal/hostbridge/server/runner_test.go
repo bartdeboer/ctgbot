@@ -295,6 +295,66 @@ func TestRunCommandRunnerUsesAllowedCWDWithoutForwardingIt(t *testing.T) {
 	}
 }
 
+func TestRunCommandRunnerMapsSandboxCWDToHostWorkspace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires /bin/pwd")
+	}
+	hostWorkspace := t.TempDir()
+	repo := filepath.Join(hostWorkspace, "src", "project")
+	if err := os.MkdirAll(repo, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runner := &RunCommandRunner{
+		ResolveAliases: StaticAliasResolver(map[string]Alias{
+			"repo-pwd": {Name: "/bin/pwd", AllowedCWDs: []string{repo}},
+		}),
+		WorkspaceHostPath:    hostWorkspace,
+		WorkspaceRuntimePath: "/workspace",
+	}
+
+	for _, cwd := range []string{"/workspace/src/project", "src/project", repo} {
+		result, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{
+			Command: "repo-pwd",
+			Args:    []string{"--cwd", cwd},
+		})
+		if err != nil {
+			t.Fatalf("RunCommand(--cwd %q) error = %v", cwd, err)
+		}
+		if result.Execution == nil {
+			t.Fatalf("RunCommand(--cwd %q) execution = nil", cwd)
+		}
+		if got := strings.TrimSpace(result.Execution.Stdout); got != repo {
+			t.Fatalf("RunCommand(--cwd %q) stdout = %q, want %q", cwd, got, repo)
+		}
+	}
+}
+
+func TestRunCommandRunnerRejectsSandboxCWDSymlinkEscape(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires symlinks")
+	}
+	hostWorkspace := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(hostWorkspace, "outside")); err != nil {
+		t.Fatal(err)
+	}
+	runner := &RunCommandRunner{
+		ResolveAliases: StaticAliasResolver(map[string]Alias{
+			"repo-pwd": {Name: "/bin/pwd", AllowedCWDs: []string{outside}},
+		}),
+		WorkspaceHostPath:    hostWorkspace,
+		WorkspaceRuntimePath: "/workspace",
+	}
+
+	_, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{
+		Command: "repo-pwd",
+		Args:    []string{"--cwd", "/workspace/outside"},
+	})
+	if err == nil || err.Error() != "command repo-pwd working directory is not allowed" {
+		t.Fatalf("RunCommand() error = %v", err)
+	}
+}
+
 func TestRunCommandRunnerRejectsUnknownCommand(t *testing.T) {
 	runner := &RunCommandRunner{ResolveAliases: StaticAliasResolver(nil), DefaultTimeoutSec: 5}
 	_, err := runner.RunCommand(context.Background(), commandengine.Request{}, schemacommands.RunCommand{Command: "definitely-not-allowed"})
