@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 	"github.com/bartdeboer/ctgbot/internal/modeluuid"
@@ -160,6 +161,13 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	providerThreadID, err := c.providerThreadID(turn.Runtime)
 	if err != nil {
 		return nil, err
+	}
+	keepRunning, err := c.ThreadSandboxKeepRunning(ctx, component.ThreadSandboxRequest{Thread: turn.Thread})
+	if err != nil {
+		return nil, err
+	}
+	if !keepRunning {
+		defer agentcommon.StopAfterTurn(c.runtime, turn.Runtime.WorkspacePath(), turn.Thread.ID, agentcommon.DefaultStopAfterTurnTimeout, c.logf)
 	}
 	result, runErr := c.runToolloop(ctx, turn, session, profile, files, providerThreadID, prompt)
 	if bindErr := c.bindProviderThreadID(turn.Runtime, result.ConversationID); bindErr != nil && runErr == nil {

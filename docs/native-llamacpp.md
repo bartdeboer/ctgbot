@@ -71,6 +71,15 @@ There is no persistent log or dedicated log command. After an unclean ctgbot exi
 an orphan may remain: inspect it manually. Startup refuses an occupied port;
 there is no automatic orphan recovery or adoption of existing processes.
 
+## Agent sandbox lifetime
+
+The llamacppagent Docker sandbox stops after each turn by default, including
+failed or cancelled execution. Results are read before normal shutdown.
+Use the thread's `/container start` to persist `keep_running=true`;
+`/container stop` clears it. This component-owned thread setting does not
+control the shared inference server: `backend_idle_timeout` and the backend's
+manual start/stop policy remain separate.
+
 ## Networking and acceptance gates
 
 Native servers listen on 127.0.0.1. `expose_to_sandboxes` does not change this to an

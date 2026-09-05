@@ -127,3 +127,54 @@ func (f *fakeOutputHandler) Send(ctx context.Context, payload message.OutboundPa
 	}
 	return nil
 }
+
+// Cancellation must not expose buffers/results while Exec is still writing.
+func TestRunnerCancellationJoinsExecBeforeReadingResult(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "result.json")
+	started, cancelled, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	defer close(release)
+	runtime := fakeExecRuntime{run: func(ctx context.Context, stdout, stderr io.Writer, _ string, _ ...string) error {
+		close(started)
+		<-ctx.Done()
+		close(cancelled)
+		<-release
+		_, _ = io.WriteString(stdout, "last output")
+		if err := os.WriteFile(path, []byte(`{"conversation_id":"late-result"}`), 0600); err != nil {
+			return err
+		}
+		return ctx.Err()
+	}}
+	type outcome struct {
+		result ToolloopTurnResult
+		err    error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		result, err := NewRunner(nil).RunTurn(ctx, runtime, nil, ToolloopTurnRequest{
+			Prompt: "test", ResultHost: path, ResultRuntime: path,
+			EventsHost: filepath.Join(dir, "events.jsonl"),
+		})
+		done <- outcome{result, err}
+	}()
+	<-started
+	cancel()
+	<-cancelled
+	select {
+	case <-done:
+		t.Fatal("RunTurn returned before cancelled Exec finished")
+	case <-time.After(30 * time.Millisecond):
+	}
+	// Unblock Exec without closing the channel twice in deferred cleanup.
+	release <- struct{}{}
+	select {
+	case got := <-done:
+		if got.err == nil || got.result.ProviderThreadID != "late-result" || !strings.Contains(got.err.Error(), "last output") {
+			t.Fatalf("result=%+v err=%v", got.result, got.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("RunTurn did not join Exec")
+	}
+}

@@ -132,6 +132,9 @@ func (r *Runner) forwardEventsUntilDone(ctx context.Context, path string, output
 			return err
 		case <-ticker.C:
 		case <-ctx.Done():
+			// Exec owns the output writers and runtime relay. Join it before
+			// reading results or allowing turn cleanup to stop the sandbox.
+			<-done
 			return ctx.Err()
 		}
 	}
