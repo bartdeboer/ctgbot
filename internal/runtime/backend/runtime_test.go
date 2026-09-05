@@ -23,7 +23,7 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 	t.Parallel()
 
 	factory := New("/state/components", nil)
-	runtime := factory.BindBackend(
+	bound, bindErr := factory.BindBackend(
 		coremodel.Component{Type: "llamacpp", Name: "qwen3-q5"},
 		runtimepkg.Profile{Path: "/state/components/llamacpp/qwen3-q5"},
 		runtimepkg.BindConfig{
@@ -44,6 +44,10 @@ func TestBindBackendBuildsContainerSpecFromRuntimeAndServiceConfig(t *testing.T)
 		},
 	)
 
+	if bindErr != nil {
+		t.Fatal(bindErr)
+	}
+	runtime := bound.(*Runtime)
 	spec, err := runtime.containerSpec()
 	if err != nil {
 		t.Fatalf("containerSpec() error = %v", err)
@@ -80,13 +84,17 @@ func TestBindBackendPropagatesBaseEnvOverRuntimeEnv(t *testing.T) {
 	t.Parallel()
 
 	factory := New("/state/components", nil).WithEnv("GIT_AUTHOR_NAME=Human")
-	runtime := factory.BindBackend(
+	bound, bindErr := factory.BindBackend(
 		coremodel.Component{Type: "llamacpp", Name: "qwen3-q5"},
 		runtimepkg.Profile{Path: "/state/components/llamacpp/qwen3-q5"},
 		runtimepkg.BindConfig{Env: []string{"GIT_AUTHOR_NAME=Bot"}},
 		ServiceSpec{Env: []string{"GIT_AUTHOR_NAME=Service"}},
 	)
 
+	if bindErr != nil {
+		t.Fatal(bindErr)
+	}
+	runtime := bound.(*Runtime)
 	spec, err := runtime.containerSpec()
 	if err != nil {
 		t.Fatalf("containerSpec() error = %v", err)

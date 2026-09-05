@@ -2,6 +2,7 @@ package llamacpp
 
 import (
 	"encoding/json"
+	backendruntime "github.com/bartdeboer/ctgbot/internal/runtime/backend"
 	"slices"
 	"testing"
 
@@ -183,5 +184,29 @@ func TestServiceSpecCanExposePortToSandboxes(t *testing.T) {
 	})
 	if !slices.Equal(spec.Ports, []string{"18080:8080"}) {
 		t.Fatalf("Ports = %#v", spec.Ports)
+	}
+}
+
+func TestNativeServiceSpecPathsAndListener(t *testing.T) {
+	config := &backendruntime.NativeConfig{Executable: "/Users/Bart Tools/llama", Args: []string{"serve"}}
+	model := resolvedModel{ModelPath: "/Users/Bart Models/qwen.gguf", ChatTemplatePath: "/Users/Bart Templates/qwen.jinja", MMProjPath: "/Users/Bart Vision/mm.gguf", HostPort: 19080, ContextSize: 16384, GPULayers: 99, ExposeToSandboxes: true}
+	spec := nativeServiceSpec(model, config)
+	if len(spec.Mounts) != 0 || len(spec.Ports) != 0 {
+		t.Fatal("native container mappings", spec)
+	}
+	for flag, want := range map[string]string{"-m": model.ModelPath, "--chat-template-file": model.ChatTemplatePath, "--mmproj": model.MMProjPath, "--host": "127.0.0.1", "--port": "19080"} {
+		i := slices.Index(spec.Cmd, flag)
+		if i < 0 || spec.Cmd[i+1] != want {
+			t.Fatalf("%s: %#v", flag, spec.Cmd)
+		}
+	}
+	if spec.Native != config || spec.BaseURL != "http://127.0.0.1:19080" {
+		t.Fatal(spec)
+	}
+	model.Mode = "embedding"
+	model.Pooling = "mean"
+	spec = nativeServiceSpec(model, config)
+	if !slices.Contains(spec.Cmd, "--embedding") || !slices.Contains(spec.Cmd, "mean") {
+		t.Fatal(spec.Cmd)
 	}
 }

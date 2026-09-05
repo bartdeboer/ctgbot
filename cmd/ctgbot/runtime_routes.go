@@ -73,11 +73,18 @@ func registerRuntimeRoutes(r *clir.Router, store *clistate.Store, globalStore *c
 			if rtSystem.Logger != nil {
 				logf = rtSystem.Logger.Printf
 			}
+			closeNative, err := ownNativeBackends(rtSystem, logf)
+			if err != nil {
+				return err
+			}
+			defer closeNative()
+
 			appService := app.NewServiceWithLogger(rtSystem.Storage, rtSystem, logf)
 			mainBroker := broker.New(appService, logf)
 			// The run handler owns the process-wide Hostbridge queue. Keep it
 			// open if one inbound source exits while other runtime work remains.
 			defer mainBroker.Close()
+			defer func() { mainBroker.BeginShutdown(true); stop() }()
 			// Bind shutdown admission before Hostbridge can invoke the process
 			// command. Leaving this callback unset makes quit fail open.
 			processActions.beginShutdown = mainBroker.BeginShutdown
@@ -293,4 +300,20 @@ func ignoreRuntimeStop(ctx context.Context, err error) error {
 		return nil
 	}
 	return err
+}
+
+// Only the resident run route uses this seam; one-shot CLI uses openSystem alone.
+func ownNativeBackends(s *systempkg.System, logf func(string, ...any)) (func(), error) {
+	cleanup := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := s.CloseNativeBackends(ctx); err != nil {
+			logf("close native backends: %v", err)
+		}
+	}
+	if err := s.EnableNativeBackends(); err != nil {
+		cleanup()
+		return nil, err
+	}
+	return cleanup, nil
 }

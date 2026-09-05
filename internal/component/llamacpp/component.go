@@ -25,6 +25,7 @@ import (
 )
 
 type Component struct {
+	nativeConfig    *backendruntime.NativeConfig
 	registration    coremodel.Component
 	componentConfig ComponentConfig
 	runtimeConfig   runtimepkg.BindConfig
@@ -70,6 +71,10 @@ func New(
 	if !ok {
 		return nil, fmt.Errorf("llamacpp requires backend runtime, got %T", runtimeFactory)
 	}
+	nativeConfig, err := backendruntime.LoadNativeConfig(profile.Path)
+	if err != nil {
+		return nil, err
+	}
 	runtimeConfig, err := loadRuntimeConfig(profile.Path)
 	if err != nil {
 		return nil, err
@@ -82,6 +87,7 @@ func New(
 		registration:    registration,
 		componentConfig: componentConfig,
 		runtimeConfig:   runtimeConfig,
+		nativeConfig:    nativeConfig,
 		backendFactory:  backendFactory,
 		profile:         profile,
 		resolver:        resolver,
@@ -146,7 +152,7 @@ func (c *Component) beginSession(ctx context.Context, options component.Inferenc
 	return session, err
 }
 
-func (c *Component) beginSessionWithRuntime(ctx context.Context, options component.InferenceSessionOptions) (component.InferenceSession, *backendruntime.Runtime, resolvedModel, error) {
+func (c *Component) beginSessionWithRuntime(ctx context.Context, options component.InferenceSessionOptions) (component.InferenceSession, runtimepkg.ServiceRuntime, resolvedModel, error) {
 	if c == nil {
 		return nil, nil, resolvedModel{}, fmt.Errorf("missing llamacpp component")
 	}
@@ -188,7 +194,7 @@ func (c *Component) isRunning(ctx context.Context) (bool, error) {
 	return isRunning(ctx, runtime)
 }
 
-func isRunning(ctx context.Context, runtime *backendruntime.Runtime) (bool, error) {
+func isRunning(ctx context.Context, runtime runtimepkg.ServiceRuntime) (bool, error) {
 	if runtime == nil {
 		return false, nil
 	}
@@ -485,7 +491,7 @@ func (c *Component) logf(format string, args ...any) {
 	}
 }
 
-func (c *Component) runtimeForModel(name string) (*backendruntime.Runtime, resolvedModel, error) {
+func (c *Component) runtimeForModel(name string) (runtimepkg.ServiceRuntime, resolvedModel, error) {
 	model, err := c.resolveModel(name)
 	if err != nil {
 		return nil, resolvedModel{}, err
@@ -497,7 +503,13 @@ func (c *Component) runtimeForModel(name string) (*backendruntime.Runtime, resol
 	if model.Name != "" && model.Name != "default" {
 		registration.Name = c.registration.Name + "-" + model.Name
 	}
-	return c.backendFactory.BindBackend(registration, c.profile, c.runtimeConfig, serviceSpec(model)), model, nil
+	spec := serviceSpec(model)
+	if c.nativeConfig != nil {
+		spec = nativeServiceSpec(model, c.nativeConfig)
+	}
+	spec.Identity = c.registration.ID.String() + ":" + c.registration.Ref() + ":" + model.Name
+	runtime, err := c.backendFactory.BindBackend(registration, c.profile, c.runtimeConfig, spec)
+	return runtime, model, err
 }
 
 type completionResponseFormat struct {
@@ -522,3 +534,30 @@ type openAIChatSession struct {
 func (s openAIChatSession) BaseURL() string { return strings.TrimSpace(s.baseURL) }
 func (s openAIChatSession) Model() string   { return strings.TrimSpace(s.model) }
 func (s openAIChatSession) APIKey() string  { return strings.TrimSpace(s.apiKey) }
+
+// Reuse model flags while realizing paths and the listener for a native host.
+func nativeServiceSpec(model resolvedModel, config *backendruntime.NativeConfig) backendruntime.ServiceSpec {
+	spec := serviceSpec(model)
+	paths := map[string]string{}
+	for _, mount := range spec.Mounts {
+		for _, arg := range spec.Cmd {
+			if strings.HasPrefix(arg, mount.Target+"/") {
+				paths[arg] = filepath.Join(mount.Source, strings.TrimPrefix(arg, mount.Target+"/"))
+			}
+		}
+	}
+	for i, arg := range spec.Cmd {
+		if path, ok := paths[arg]; ok {
+			spec.Cmd[i] = path
+		}
+		if i > 0 && spec.Cmd[i-1] == "--host" {
+			spec.Cmd[i] = "127.0.0.1"
+		}
+		if i > 0 && spec.Cmd[i-1] == "--port" {
+			spec.Cmd[i] = strconv.Itoa(model.HostPort)
+		}
+	}
+	spec.Mounts, spec.Ports = nil, nil
+	spec.Native = config
+	return spec
+}
