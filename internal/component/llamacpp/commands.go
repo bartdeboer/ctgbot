@@ -26,9 +26,12 @@ type statusCommand struct{}
 const CompletionStdinMaxBytes = 1 << 20
 
 type completionCommand struct {
-	Stdin  bool
-	Prompt string
-	Model  string
+	Reasoning    component.ReasoningMode
+	MaxTokens    int
+	MaxTokensSet bool
+	Stdin        bool
+	Prompt       string
+	Model        string
 }
 
 type embedCommand struct {
@@ -49,9 +52,9 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		llamacppCommand("start", startCommand{}, "Start the default llama.cpp model service", nil),
 		llamacppCommand("stop", stopCommand{}, "Stop the default llama.cpp model service", nil),
 		llamacppCommand("status", statusCommand{}, "Show default llama.cpp model service status", nil),
-		llamacppCommand("completion <prompt>", nil, "Run a completion with the default llama.cpp model; --stdin reads a document", buildCompletionCommand),
+		llamacppCommand("completion <prompt>", nil, "Run a completion with the default llama.cpp model; options: --stdin, --reasoning default|enabled|disabled, --max-tokens N", buildCompletionCommand),
 		llamacppCommand("embed <text>", nil, "Embed text with the default llama.cpp embedding model", buildEmbedCommand),
-		llamacppCommand("model <model> completion <prompt>", nil, "Run a completion with a specific llama.cpp model; --stdin reads a document", buildModelCompletionCommand),
+		llamacppCommand("model <model> completion <prompt>", nil, "Run a completion with a specific llama.cpp model; options: --stdin, --reasoning default|enabled|disabled, --max-tokens N", buildModelCompletionCommand),
 		llamacppCommand("model <model> embed <text>", nil, "Embed text with a specific llama.cpp embedding model", buildModelEmbedCommand),
 	}
 }
@@ -152,6 +155,8 @@ func buildCompletionCommand(req *clir.Request) (any, error) {
 	fs := flag.NewFlagSet("completion", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	stdin := fs.Bool("stdin", false, "Read a document from piped stdin")
+	reasoning := fs.String("reasoning", "default", "default, enabled or disabled")
+	maxTokens := fs.Int("max-tokens", 0, "Positive output token limit")
 	if err := fs.Parse(req.Extra); err != nil {
 		return nil, fmt.Errorf("invalid completion options")
 	}
@@ -159,13 +164,32 @@ func buildCompletionCommand(req *clir.Request) (any, error) {
 		return nil, fmt.Errorf("unexpected completion arguments")
 	}
 	prompt := strings.TrimSpace(req.Params["prompt"])
-	if prompt == "--stdin" {
-		return nil, fmt.Errorf("completion --stdin requires a quoted instruction before the flag")
+	if prompt == "--stdin" || prompt == "--reasoning" || prompt == "--max-tokens" {
+		return nil, fmt.Errorf("completion requires a quoted instruction before options")
 	}
 	if prompt == "" {
 		return nil, fmt.Errorf("missing prompt")
 	}
-	return completionCommand{Prompt: prompt, Stdin: *stdin}, nil
+	cmd := completionCommand{Prompt: prompt, Stdin: *stdin}
+	switch *reasoning {
+	case "default":
+	case "enabled":
+		cmd.Reasoning = component.ReasoningEnabled
+	case "disabled":
+		cmd.Reasoning = component.ReasoningDisabled
+	default:
+		return nil, fmt.Errorf("--reasoning must be default, enabled or disabled")
+	}
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "max-tokens" {
+			cmd.MaxTokens = *maxTokens
+			cmd.MaxTokensSet = true
+		}
+	})
+	if err := cmd.validateOptions(); err != nil {
+		return nil, err
+	}
+	return cmd, nil
 }
 
 func buildModelCompletionCommand(req *clir.Request) (any, error) {
@@ -203,11 +227,18 @@ func buildModelEmbedCommand(req *clir.Request) (any, error) {
 }
 
 func (c *Component) handleCompletionCommand(ctx context.Context, req commandengine.Request, cmd completionCommand) (commandengine.Result, error) {
+	if err := cmd.validateOptions(); err != nil {
+		return commandengine.Result{}, err
+	}
 	prompt, err := completionCommandPrompt(cmd, req.Stdin)
 	if err != nil {
 		return commandengine.Result{}, err
 	}
-	result, err := c.Complete(ctx, component.CompletionRequest{Model: cmd.Model, Prompt: prompt})
+	request := component.CompletionRequest{Model: cmd.Model, Prompt: prompt, Reasoning: cmd.Reasoning}
+	if cmd.MaxTokensSet {
+		request.MaxOutputTokens = cmd.MaxTokens
+	}
+	result, err := c.Complete(ctx, request)
 	if err != nil {
 		if cmd.Stdin {
 			// Providers may echo submitted input in error bodies.
@@ -218,7 +249,11 @@ func (c *Component) handleCompletionCommand(ctx context.Context, req commandengi
 		}
 		return commandengine.Result{}, err
 	}
-	return commandengine.Result{Text: completionResultText(result)}, nil
+	text := completionResultText(result)
+	if text == "" {
+		return commandengine.Result{}, fmt.Errorf("model returned no final answer; try --reasoning disabled or a larger --max-tokens limit")
+	}
+	return commandengine.Result{Text: text}, nil
 }
 
 func (c *Component) handleEmbedCommand(ctx context.Context, req commandengine.Request, cmd embedCommand) (commandengine.Result, error) {
@@ -311,4 +346,16 @@ func completionCommandPrompt(cmd completionCommand, document string) (component.
 		{Role: component.CompletionRoleSystem, Content: cmd.Prompt},
 		{Role: component.CompletionRoleUser, Content: document, PreserveWhitespace: true},
 	}}, nil
+}
+
+func (cmd completionCommand) validateOptions() error {
+	if (cmd.MaxTokensSet && cmd.MaxTokens <= 0) || cmd.MaxTokens < 0 {
+		return fmt.Errorf("--max-tokens must be positive")
+	}
+	switch cmd.Reasoning {
+	case component.ReasoningDefault, component.ReasoningEnabled, component.ReasoningDisabled:
+		return nil
+	default:
+		return fmt.Errorf("--reasoning must be default, enabled or disabled")
+	}
 }

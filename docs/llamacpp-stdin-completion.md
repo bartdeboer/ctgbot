@@ -36,3 +36,27 @@ or secret-redaction feature.
 The existing typed catalog, authorization, Gob transport, response handling and
 backend session policy are reused. No streaming response or universal Gob
 cancellation propagation guarantee is introduced.
+
+
+## Per-invocation output controls
+
+Append `--reasoning default|enabled|disabled` and/or `--max-tokens N` (positive
+integer). Omitted options retain the existing model defaults. These options also
+work for ordinary prompt-only completion and selected-model routes.
+
+```sh
+cat document.txt | hostbridge llamacpp model qwen3.5-9b-q4 completion "Summarize in three bullets" --stdin --reasoning disabled --max-tokens 512
+```
+
+Reasoning maps to the existing template option `enable_thinking`; support depends
+on the model/template. The output token budget may include reasoning, not just
+visible final text. No automatic retry or shared-default change occurs.
+
+A response without final text now fails explicitly:
+`model returned no final answer; try --reasoning disabled or a larger --max-tokens limit`.
+This does not diagnose the cause or expose reasoning, finish metadata, or input.
+Nonempty answers are returned normally; this check does not certify completeness.
+
+Both the running ctgbot instance and the invoking Hostbridge client need this
+updated command schema before retrying. Merely editing source does not upgrade
+a running instance.
