@@ -22,6 +22,9 @@ func completionPromptToChat(prompt component.CompletionPrompt) []chatMessage {
 		if role == "" {
 			continue
 		}
+		if message.PreserveWhitespace {
+			content = message.Content
+		}
 		out = append(out, chatMessage{Role: role, Content: content})
 	}
 	return out

@@ -495,8 +495,10 @@ const (
 )
 
 type CompletionMessage struct {
-	Role    CompletionRole
-	Content string
+	// PreserveWhitespace keeps document input verbatim through prompt serialization.
+	PreserveWhitespace bool
+	Role               CompletionRole
+	Content            string
 }
 
 type CompletionPrompt struct {

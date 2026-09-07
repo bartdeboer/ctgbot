@@ -2,8 +2,11 @@ package llamacpp
 
 import (
 	"context"
+	"flag"
 	"fmt"
+	"io"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
@@ -19,7 +22,11 @@ type startCommand struct{}
 type stopCommand struct{}
 type statusCommand struct{}
 
+// CompletionStdinMaxBytes bounds instruction plus document bytes, not model tokens.
+const CompletionStdinMaxBytes = 1 << 20
+
 type completionCommand struct {
+	Stdin  bool
 	Prompt string
 	Model  string
 }
@@ -42,9 +49,9 @@ func (c *Component) CommandDefinitions() []commandengine.Definition {
 		llamacppCommand("start", startCommand{}, "Start the default llama.cpp model service", nil),
 		llamacppCommand("stop", stopCommand{}, "Stop the default llama.cpp model service", nil),
 		llamacppCommand("status", statusCommand{}, "Show default llama.cpp model service status", nil),
-		llamacppCommand("completion <prompt>", nil, "Run a completion with the default llama.cpp model", buildCompletionCommand),
+		llamacppCommand("completion <prompt>", nil, "Run a completion with the default llama.cpp model; --stdin reads a document", buildCompletionCommand),
 		llamacppCommand("embed <text>", nil, "Embed text with the default llama.cpp embedding model", buildEmbedCommand),
-		llamacppCommand("model <model> completion <prompt>", nil, "Run a completion with a specific llama.cpp model", buildModelCompletionCommand),
+		llamacppCommand("model <model> completion <prompt>", nil, "Run a completion with a specific llama.cpp model; --stdin reads a document", buildModelCompletionCommand),
 		llamacppCommand("model <model> embed <text>", nil, "Embed text with a specific llama.cpp embedding model", buildModelEmbedCommand),
 	}
 }
@@ -142,11 +149,23 @@ func (c *Component) formatStatus(title string, model resolvedModel, status runti
 }
 
 func buildCompletionCommand(req *clir.Request) (any, error) {
+	fs := flag.NewFlagSet("completion", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	stdin := fs.Bool("stdin", false, "Read a document from piped stdin")
+	if err := fs.Parse(req.Extra); err != nil {
+		return nil, fmt.Errorf("invalid completion options")
+	}
+	if len(fs.Args()) != 0 {
+		return nil, fmt.Errorf("unexpected completion arguments")
+	}
 	prompt := strings.TrimSpace(req.Params["prompt"])
+	if prompt == "--stdin" {
+		return nil, fmt.Errorf("completion --stdin requires a quoted instruction before the flag")
+	}
 	if prompt == "" {
 		return nil, fmt.Errorf("missing prompt")
 	}
-	return completionCommand{Prompt: prompt}, nil
+	return completionCommand{Prompt: prompt, Stdin: *stdin}, nil
 }
 
 func buildModelCompletionCommand(req *clir.Request) (any, error) {
@@ -184,15 +203,19 @@ func buildModelEmbedCommand(req *clir.Request) (any, error) {
 }
 
 func (c *Component) handleCompletionCommand(ctx context.Context, req commandengine.Request, cmd completionCommand) (commandengine.Result, error) {
-	_, _ = req, c
-	result, err := c.Complete(ctx, component.CompletionRequest{
-		Model: cmd.Model,
-		Prompt: component.CompletionPrompt{Messages: []component.CompletionMessage{{
-			Role:    component.CompletionRoleUser,
-			Content: cmd.Prompt,
-		}}},
-	})
+	prompt, err := completionCommandPrompt(cmd, req.Stdin)
 	if err != nil {
+		return commandengine.Result{}, err
+	}
+	result, err := c.Complete(ctx, component.CompletionRequest{Model: cmd.Model, Prompt: prompt})
+	if err != nil {
+		if cmd.Stdin {
+			// Providers may echo submitted input in error bodies.
+			if ctx.Err() != nil {
+				return commandengine.Result{}, ctx.Err()
+			}
+			return commandengine.Result{}, fmt.Errorf("stdin completion failed; backend error details withheld to protect document contents")
+		}
 		return commandengine.Result{}, err
 	}
 	return commandengine.Result{Text: completionResultText(result)}, nil
@@ -259,4 +282,33 @@ func llamacppInstructionVisibility(pattern string) commandengine.InstructionVisi
 		return commandengine.InstructionImportant
 	}
 	return commandengine.InstructionDiscoverable
+}
+
+// CompletionUsesStdin lets the Hostbridge client capture input only after typed
+// catalog parsing, including named component prefixes.
+func CompletionUsesStdin(command any) bool {
+	cmd, ok := command.(completionCommand)
+	return ok && cmd.Stdin
+}
+
+func completionCommandPrompt(cmd completionCommand, document string) (component.CompletionPrompt, error) {
+	if !cmd.Stdin {
+		return component.CompletionPrompt{Messages: []component.CompletionMessage{{Role: component.CompletionRoleUser, Content: cmd.Prompt}}}, nil
+	}
+	if len(cmd.Prompt) > CompletionStdinMaxBytes || len(document) > CompletionStdinMaxBytes-len(cmd.Prompt) {
+		return component.CompletionPrompt{}, fmt.Errorf("completion instruction plus stdin exceeds %d bytes", CompletionStdinMaxBytes)
+	}
+	if !utf8.ValidString(cmd.Prompt) || !utf8.ValidString(document) {
+		return component.CompletionPrompt{}, fmt.Errorf("completion instruction and stdin must be UTF-8")
+	}
+	if strings.TrimSpace(cmd.Prompt) == "" {
+		return component.CompletionPrompt{}, fmt.Errorf("completion --stdin requires an instruction")
+	}
+	if strings.TrimSpace(document) == "" {
+		return component.CompletionPrompt{}, fmt.Errorf("completion --stdin requires a nonblank piped document; this transport supplied no usable stdin")
+	}
+	return component.CompletionPrompt{Messages: []component.CompletionMessage{
+		{Role: component.CompletionRoleSystem, Content: cmd.Prompt},
+		{Role: component.CompletionRoleUser, Content: document, PreserveWhitespace: true},
+	}}, nil
 }

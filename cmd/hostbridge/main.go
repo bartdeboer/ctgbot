@@ -10,6 +10,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/commandset"
+	"github.com/bartdeboer/ctgbot/internal/component/llamacpp"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge"
 	clientpkg "github.com/bartdeboer/ctgbot/internal/hostbridge/client"
 	"github.com/bartdeboer/ctgbot/internal/hostbridge/cmdsurface"
@@ -66,6 +67,11 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		printHelp(base.Context.Actor)
+		os.Exit(1)
+	}
+
+	if err := captureCompletionStdin(&req, os.Stdin); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 
@@ -450,4 +456,27 @@ func currentComponentRef() string {
 		return ref
 	}
 	return cmdsurface.DefaultComponentType
+}
+
+// Input is opt-in and selected by the parsed command, never by document contents.
+func captureCompletionStdin(req *commandengine.Request, stdin stdinReader) error {
+	if !llamacpp.CompletionUsesStdin(req.Command) {
+		return nil
+	}
+	if stdin == nil {
+		return fmt.Errorf("completion --stdin requires piped input")
+	}
+	info, err := stdin.Stat()
+	if err != nil || info.Mode()&os.ModeCharDevice != 0 {
+		return fmt.Errorf("completion --stdin requires piped input; terminal input is not read")
+	}
+	data, err := io.ReadAll(io.LimitReader(stdin, llamacpp.CompletionStdinMaxBytes+1))
+	if err != nil {
+		return fmt.Errorf("read completion stdin failed")
+	}
+	if len(data) > llamacpp.CompletionStdinMaxBytes {
+		return fmt.Errorf("completion stdin exceeds %d bytes", llamacpp.CompletionStdinMaxBytes)
+	}
+	req.Stdin = string(data)
+	return nil
 }
