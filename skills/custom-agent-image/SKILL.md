@@ -29,7 +29,7 @@ keep dependency caches/project output outside permanent toolchain layers where
 practical. A layer above Codex is simplest, but its packages may rebuild whenever
 the parent changes. Only move it lower if that cost justifies more recipe wiring.
 
-The builder consumes an embedded tar context. `internal/buildassets/files.go`
+With `context` omitted, the builder consumes an embedded tar context. `internal/buildassets/files.go`
 maps `docker/` to the context root: configure `codex-work.Dockerfile`, **not**
 `docker/codex-work.Dockerfile` or an arbitrary file in the instance directory.
 Additional COPY inputs must also be included in the selected context. Installed
@@ -69,9 +69,52 @@ Declare the entire needed chain: a nested target does not automatically acquire
 the component's default dependencies. Every FROM tag must match the corresponding
 built image. Adapt to Claude/other agents using their actual recipes, not Codex's.
 
+## External host-directory context (optional)
+
+To maintain recipes outside ctgbot's embedded assets, set `context` on the
+component's runtime build settings. For example, keep the entire `uses` chain
+shown above and change the root fields to:
+
+```json
+{
+  "image": "ctgbot-codex-work:latest",
+  "context": "/workspace/src/agent-images",
+  "dockerfile": "recipes/codex-work.Dockerfile"
+}
+```
+
+This snippet shows only the root fields to merge; it does not replace the
+previously declared dependency chain. Its Dockerfile still explicitly uses
+`FROM ctgbot-codex:latest`.
+
+- The directory must exist on the **host running ctgbot's image builder**,
+  not merely in an agent container. Use a canonical absolute host path (on a Mac,
+  for example `/Users/bart/agent-images`), not `~`, environment interpolation,
+  a URL, or a relative path.
+- `dockerfile` is relative to that target's context. It must be a regular file;
+  absolute paths, traversal outside the context, and symlink escapes are rejected.
+- Docker receives the directory directly and handles `.dockerignore` and COPY
+  inputs. Keep credentials, private state, models and caches out of the context
+  using appropriate exclusions. ctgbot does not implement its own ignore rules.
+- Context is **per-target, never inherited**. A nested `uses` entry may set
+  `"Context": "/workspace/src/base-image"`; an entry without Context still uses
+  embedded assets. External root targets do not acquire implicit embedded
+  dependencies based on a matching Dockerfile name. Declare necessary `uses`
+  explicitly; FROM and dependency ordering remain separate.
+- Reusing one image tag with different contexts is rejected, including an
+  embedded/external conflict. Use distinct tags. Context aliases may be rejected
+  conservatively; configure the same canonical spelling consistently.
+- External builds retain build-target/time labels, but omit ctgbot source,
+  version and embedded-Hostbridge labels: an external recipe does not prove those
+  contents. Preserve those binaries through an explicit trusted FROM image.
+- Once this feature is installed, editing external recipes does not require
+  regenerating ctgbot's embedded tar or reinstalling ctgbot. Rebuild through the
+  existing image commands, then refresh affected containers; a build alone does
+  not replace running containers. Keep contexts operator-controlled while building.
+
 ## Validate and roll out only within the authorized scope
 
-1. Check embedded-file inclusion, runtime config parsing, dependency order and
+1. Check embedded-file inclusion (or external host paths), runtime config parsing, dependency order and
    image/tag agreement. Relevant code/tests: `internal/buildassets`,
    `internal/runtime/image`, `internal/app/runtime_images.go`, and the selected
    agent's `RuntimeImageTargets` implementation/tests.

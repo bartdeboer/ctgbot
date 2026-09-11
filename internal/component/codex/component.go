@@ -95,6 +95,7 @@ func New(
 			Storage:             storage,
 			ResolveWorkspace:    resolveWorkspace,
 			Logger:              logger,
+			RuntimeImageContext: bindConfig.Context,
 			RuntimeImage:        bindConfig.Image,
 			RuntimeDockerfile:   agentcommon.FirstNonEmpty(bindConfig.Dockerfile, cfg.Docker().Dockerfile()),
 			RuntimeImageUses:    bindConfig.Uses,
@@ -131,6 +132,7 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		dockerfile = "codex.Dockerfile"
 	}
 	target := runtimeimage.Target{
+		Context:    c.RuntimeImageContext,
 		Name:       Type,
 		Image:      image,
 		Dockerfile: dockerfile,
@@ -141,6 +143,9 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		if !target.NoCache {
 			target.NoCache = true
 		}
+		return []runtimeimage.Target{target}, nil
+	}
+	if target.Context != "" {
 		return []runtimeimage.Target{target}, nil
 	}
 	switch dockerfile {

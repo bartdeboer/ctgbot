@@ -77,7 +77,7 @@ func New(ctx context.Context, registration coremodel.Component, runtime runtimep
 		resolver:          resolver,
 		synthesisGate:     workgate.New(),
 		runtimeImage:      runtimeConfig.Image,
-		runtimeDockerfile: DefaultDockerfile,
+		runtimeDockerfile: firstNonEmpty(runtimeConfig.Dockerfile, DefaultDockerfile),
 	}, nil
 }
 
@@ -105,6 +105,9 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		Name:       Type,
 		Image:      firstNonEmpty(c.runtimeImage, DefaultImage),
 		Dockerfile: firstNonEmpty(c.runtimeDockerfile, DefaultDockerfile),
+		Context:    c.runtimeConfig.Context,
+		Uses:       c.runtimeConfig.Uses,
+		NoCache:    c.runtimeConfig.NoCache,
 	}}, nil
 }
 

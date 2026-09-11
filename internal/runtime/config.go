@@ -27,6 +27,10 @@ func LoadBindConfig(profilePath string) (BindConfig, error) {
 }
 
 func (c BindConfig) Clean() BindConfig {
+	c.Context = strings.TrimSpace(c.Context)
+	if c.Context != "" {
+		c.Context = filepath.Clean(c.Context)
+	}
 	c.Image = strings.TrimSpace(c.Image)
 	c.Dockerfile = strings.TrimSpace(c.Dockerfile)
 	c.Entrypoint = strings.TrimSpace(c.Entrypoint)

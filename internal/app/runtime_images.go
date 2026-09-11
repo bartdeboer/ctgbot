@@ -50,12 +50,17 @@ func dedupeRuntimeImageTargets(targets []runtimeimage.Target) ([]runtimeimage.Ta
 	flattened := flattenRuntimeImageTargets(targets)
 	out := make([]runtimeimage.Target, 0, len(flattened))
 	seen := map[string]struct{}{}
+	contexts := map[string]string{}
 	for _, target := range flattened {
 		target = cleanRuntimeImageTarget(target)
 		if target.Image == "" {
 			continue
 		}
-		key := target.Image + "\x00" + target.Dockerfile
+		if prior, ok := contexts[target.Image]; ok && prior != target.Context {
+			return nil, fmt.Errorf("conflicting runtime image contexts for %s: %q and %q", target.Image, prior, target.Context)
+		}
+		contexts[target.Image] = target.Context
+		key := target.Image + "\x00" + target.Dockerfile + "\x00" + target.Context
 		if _, ok := seen[key]; ok {
 			continue
 		}
@@ -80,7 +85,7 @@ func cleanRuntimeImageTarget(target runtimeimage.Target) runtimeimage.Target {
 }
 
 func runtimeImageTargetSortKey(target runtimeimage.Target) string {
-	return strings.Join([]string{target.Name, target.Image, target.Dockerfile}, "\x00")
+	return strings.Join([]string{target.Name, target.Image, target.Dockerfile, target.Context}, "\x00")
 }
 
 func flattenRuntimeImageTargets(targets []runtimeimage.Target) []runtimeimage.Target {

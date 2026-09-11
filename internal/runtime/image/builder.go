@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -33,6 +34,9 @@ type Builder struct {
 // optional build dependency that should be built first; the Dockerfile must
 // still explicitly FROM that dependency image when it needs it.
 type Target struct {
+	// Context selects an absolute host directory; empty uses embedded assets.
+	// Each dependency selects its own context independently.
+	Context    string
 	Name       string
 	Image      string
 	Dockerfile string
@@ -41,6 +45,10 @@ type Target struct {
 }
 
 func (t Target) Clean() Target {
+	t.Context = strings.TrimSpace(t.Context)
+	if t.Context != "" {
+		t.Context = filepath.Clean(t.Context)
+	}
 	t.Name = strings.TrimSpace(t.Name)
 	t.Image = strings.TrimSpace(t.Image)
 	t.Dockerfile = strings.TrimSpace(t.Dockerfile)
@@ -56,20 +64,24 @@ func (b *Builder) BuildTarget(ctx context.Context, target Target, noCache bool) 
 	if err != nil {
 		return err
 	}
-	buildContext, err := buildassets.BuildContextTar()
-	if err != nil {
-		return err
-	}
-	defer buildContext.Close()
-
 	args := dockerBuildArgs(target, noCache || target.NoCache, b.buildLabels(ctx, target))
-
 	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Stdin = buildContext
+	contextLabel := target.Context
+	if target.Context == "" {
+		buildContext, err := buildassets.BuildContextTar()
+		if err != nil {
+			return err
+		}
+		defer buildContext.Close()
+		cmd.Stdin = buildContext
+		contextLabel = "embedded_tar"
+	} else {
+		// -f is relative to this host directory; Docker processes .dockerignore.
+		cmd.Dir = target.Context
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	b.logf("building docker image target=%s image=%s dockerfile=%s build_context=embedded_tar", target.Name, target.Image, target.Dockerfile)
+	b.logf("building docker image target=%s image=%s dockerfile=%s build_context=%s", target.Name, target.Image, target.Dockerfile, contextLabel)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("docker build: %w", err)
 	}
@@ -98,11 +110,12 @@ func dockerBuildArgs(target Target, noCache bool, labels map[string]string) []st
 	if noCache {
 		args = append(args, "--no-cache")
 	}
-	args = append(args, "-")
+	args = append(args, firstNonEmpty(target.Context, "-"))
 	return args
 }
 
 func normalizeTarget(target Target) (Target, error) {
+	target = target.Clean()
 	target.Name = strings.TrimSpace(target.Name)
 	target.Image = strings.TrimSpace(target.Image)
 	target.Dockerfile = strings.TrimSpace(target.Dockerfile)
@@ -122,6 +135,9 @@ func normalizeTarget(target Target) (Target, error) {
 	if target.Dockerfile == "" {
 		target.Dockerfile = "Dockerfile"
 	}
+	if target.Context != "" {
+		return validateExternalTarget(target)
+	}
 	return target, nil
 }
 
@@ -131,6 +147,13 @@ func (b *Builder) buildLabels(ctx context.Context, target Target) map[string]str
 		LabelBuiltAt:     time.Now().UTC().Format(time.RFC3339Nano),
 		LabelHostbridge:  "embedded",
 		LabelVersion:     buildassets.Version(),
+	}
+	if target.Context != "" {
+		// External recipes may not contain ctgbot/Hostbridge at all. Do not
+		// label their source or contents with the builder's checkout identity.
+		delete(labels, LabelHostbridge)
+		delete(labels, LabelVersion)
+		return labels
 	}
 	if commit := CurrentGitCommit(ctx, b.SourceDir); commit != "" {
 		labels[LabelGitCommit] = commit

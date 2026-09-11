@@ -105,6 +105,7 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		Name:       Type,
 		Image:      firstNonEmpty(c.runtimeConfig.Image, DefaultImage),
 		Dockerfile: firstNonEmpty(c.runtimeConfig.Dockerfile, DefaultDockerfile),
+		Context:    c.runtimeConfig.Context,
 		NoCache:    c.runtimeConfig.NoCache,
 		Uses:       c.runtimeConfig.Uses,
 	}
@@ -114,7 +115,7 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		}
 		return []runtimeimage.Target{target}, nil
 	}
-	if target.Dockerfile != DefaultDockerfile {
+	if target.Context != "" || target.Dockerfile != DefaultDockerfile {
 		return []runtimeimage.Target{target}, nil
 	}
 	target.Uses = &runtimeimage.Target{

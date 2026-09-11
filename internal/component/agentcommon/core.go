@@ -27,6 +27,7 @@ type Core struct {
 	Storage             repository.Storage
 	ResolveWorkspace    func(context.Context, coremodel.Chat) (string, error)
 	Logger              *log.Logger
+	RuntimeImageContext string
 	RuntimeImage        string
 	RuntimeDockerfile   string
 	RuntimeImageUses    *runtimeimage.Target

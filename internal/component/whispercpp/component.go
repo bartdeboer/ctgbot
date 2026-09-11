@@ -86,6 +86,7 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		Name:       Type,
 		Image:      firstNonEmpty(c.runtimeConfig.Image, DefaultImage),
 		Dockerfile: firstNonEmpty(c.runtimeConfig.Dockerfile, DefaultDockerfile),
+		Context:    c.runtimeConfig.Context,
 		NoCache:    c.runtimeConfig.NoCache,
 		Uses:       c.runtimeConfig.Uses,
 	}}, nil

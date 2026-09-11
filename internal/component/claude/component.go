@@ -81,6 +81,7 @@ func New(ctx context.Context, registration coremodel.Component, runtimeFactory r
 			Storage:             storage,
 			ResolveWorkspace:    resolveWorkspace,
 			Logger:              logger,
+			RuntimeImageContext: bindConfig.Context,
 			RuntimeImage:        bindConfig.Image,
 			RuntimeDockerfile:   agentcommon.FirstNonEmpty(bindConfig.Dockerfile, componentConfig.Dockerfile, DefaultDockerfile),
 			RuntimeImageUses:    bindConfig.Uses,
@@ -99,6 +100,7 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		return nil, nil
 	}
 	target := runtimeimage.Target{
+		Context:    c.RuntimeImageContext,
 		Name:       Type,
 		Image:      agentcommon.FirstNonEmpty(c.RuntimeImage, DefaultImage),
 		Dockerfile: agentcommon.FirstNonEmpty(c.RuntimeDockerfile, DefaultDockerfile),
@@ -111,7 +113,7 @@ func (c *Component) RuntimeImageTargets(ctx context.Context) ([]runtimeimage.Tar
 		}
 		return []runtimeimage.Target{target}, nil
 	}
-	if target.Dockerfile != DefaultDockerfile {
+	if target.Context != "" || target.Dockerfile != DefaultDockerfile {
 		return []runtimeimage.Target{target}, nil
 	}
 	base := runtimeimage.Target{

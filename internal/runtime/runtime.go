@@ -17,6 +17,7 @@ type Profile struct {
 }
 
 type BindConfig struct {
+	Context     string               `json:"context,omitempty"`
 	Image       string               `json:"image"`
 	Dockerfile  string               `json:"dockerfile,omitempty"`
 	Entrypoint  string               `json:"entrypoint,omitempty"`
