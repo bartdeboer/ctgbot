@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
@@ -194,31 +193,6 @@ func (r *Runtime) containerSpec() (containerengine.ContainerSpec, error) {
 		SecurityOpts: securityOpts,
 		Cmd:          append([]string{}, r.service.Cmd...),
 	}, nil
-}
-
-func (r *Runtime) waitReady(ctx context.Context) error {
-	healthURL := strings.TrimSpace(r.service.HealthURL)
-	if healthURL == "" {
-		return nil
-	}
-	deadline := time.Now().Add(2 * time.Minute)
-	var lastErr error
-	for time.Now().Before(deadline) {
-		req, err := newHealthRequest(ctx, healthURL)
-		if err != nil {
-			return err
-		}
-		lastErr = probeHealth(req)
-		if lastErr == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
-	return fmt.Errorf("backend service not ready: %w", lastErr)
 }
 
 func (r *Runtime) containerName() string {

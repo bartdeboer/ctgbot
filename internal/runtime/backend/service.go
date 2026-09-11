@@ -2,8 +2,6 @@ package backend
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -22,19 +20,6 @@ func (s ServiceSpec) clean() ServiceSpec {
 
 func newHealthRequest(ctx context.Context, url string) (*http.Request, error) {
 	return http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSpace(url), nil)
-}
-
-func probeHealth(req *http.Request) error {
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("health status %s", resp.Status)
-	}
-	return nil
 }
 
 func cleanStrings(values []string) []string {
