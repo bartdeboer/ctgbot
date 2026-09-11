@@ -33,6 +33,13 @@ The project’s main responsibilities are:
 - `docker/codex.Dockerfile`: Codex runtime image
 - `docker/claude.Dockerfile`: Claude runtime image
 
+## Repository Skills
+
+Read the relevant file directly; no skill installation is required.
+
+- [Custom agent images](skills/custom-agent-image/SKILL.md): toolchains, embedded build context and image dependencies.
+- [Hostbridge alias management](skills/hostbridge-alias-management/SKILL.md): host command access and workspace permissions.
+
 ## Main Commands
 
 - `go run ./cmd/ctgbot run`
