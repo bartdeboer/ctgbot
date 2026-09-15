@@ -288,6 +288,11 @@ rather than deadlock permanently.
 
 ## Optional components
 
+### GitHub Copilot CLI
+
+Initial Docker-only provider; see [setup and limitations](docs/copilot.md).
+Employer CLI/model access and real image/auth acceptance are separate gates.
+
 ### Claude
 
 Minimal Claude chat setup:

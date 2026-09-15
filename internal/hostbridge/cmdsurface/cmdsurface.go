@@ -11,6 +11,7 @@ import (
 	claudecomponent "github.com/bartdeboer/ctgbot/internal/component/claude"
 	codexcomponent "github.com/bartdeboer/ctgbot/internal/component/codex"
 	configcomponent "github.com/bartdeboer/ctgbot/internal/component/config"
+	copilotcomponent "github.com/bartdeboer/ctgbot/internal/component/copilot"
 	gmailcomponent "github.com/bartdeboer/ctgbot/internal/component/gmail"
 	gmailv2component "github.com/bartdeboer/ctgbot/internal/component/gmailv2"
 	heartbeatcomponent "github.com/bartdeboer/ctgbot/internal/component/heartbeat"
@@ -131,6 +132,8 @@ func GlobalDirectPrefixes() []string {
 
 func surfaceForType(componentType string) (componentpkg.CommandSurface, bool) {
 	switch strings.TrimSpace(componentType) {
+	case copilotcomponent.Type:
+		return (*copilotcomponent.Component)(nil), true
 	case claudecomponent.Type:
 		return (*claudecomponent.Component)(nil), true
 	case codexcomponent.Type:

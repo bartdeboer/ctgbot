@@ -19,6 +19,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/component"
 	"github.com/bartdeboer/ctgbot/internal/component/claude"
 	"github.com/bartdeboer/ctgbot/internal/component/codex"
+	"github.com/bartdeboer/ctgbot/internal/component/copilot"
 	allowlistfilter "github.com/bartdeboer/ctgbot/internal/component/filter/allowlist"
 	guardcomponent "github.com/bartdeboer/ctgbot/internal/component/filter/guard"
 	"github.com/bartdeboer/ctgbot/internal/component/gmail"
@@ -162,6 +163,11 @@ func newRuntimeRegistry(rtSystem *systempkg.System, processActions processcompon
 	}
 	if err := registry.Add(codex.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
 		return codex.New(ctx, registration, runtime, profile, storage, rtSystem.Config, rtSystem.ResolveChatWorkspace, rtSystem.Logger, "")
+	}); err != nil {
+		return nil, err
+	}
+	if err := registry.Add(copilot.Type, func(ctx context.Context, registration coremodel.Component, runtime runtimepkg.Factory, profile runtimepkg.Profile, storage repository.Storage) (component.Component, error) {
+		return copilot.New(ctx, registration, runtime, profile, storage, rtSystem.ResolveChatWorkspace, rtSystem.Logger)
 	}); err != nil {
 		return nil, err
 	}
