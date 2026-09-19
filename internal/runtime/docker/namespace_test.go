@@ -11,17 +11,17 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/sandboxengine"
 )
 
-func TestContainerNamePrefixFromProfile(t *testing.T) {
+func TestContainerNamespaceFromProfile(t *testing.T) {
 	thread, err := modeluuid.Parse("00VGyvELR38v6AqboKyD48w")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct{ name, config, prefix string }{
+	for _, tc := range []struct{ name, config, namespace string }{
 		{"omitted", `{}`, ""},
-		{"empty", `{"container_name_prefix":"  "}`, ""},
-		{"custom", `{"container_name_prefix":" work- "}`, "work-"},
-		{"full-prefix", `{"container_name_prefix":"work-codex-"}`, "work-codex-"},
-		{"docker-characters", `{"container_name_prefix":"Work_1.dev"}`, "Work_1.dev"},
+		{"empty", `{"container_namespace":"  "}`, ""},
+		{"custom", `{"container_namespace":" work "}`, "work"},
+		{"component-namespace", `{"container_namespace":"work-codex"}`, "work-codex"},
+		{"docker-characters", `{"container_namespace":"Work_1.dev"}`, "Work_1.dev"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -40,9 +40,9 @@ func TestContainerNamePrefixFromProfile(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				want := tc.prefix + thread.String()
-				wantAuth := tc.prefix + "auth"
-				if tc.prefix == "" {
+				want := "ctgbot-" + tc.namespace + "-" + thread.String()
+				wantAuth := "ctgbot-" + tc.namespace + "-auth"
+				if tc.namespace == "" {
 					want = "ctgbot-" + safeName(registration.Ref(), "") + "-" + thread.String()
 					wantAuth = "ctgbot-auth-" + safeName(registration.Ref(), "")
 				}
@@ -50,7 +50,7 @@ func TestContainerNamePrefixFromProfile(t *testing.T) {
 					t.Fatalf("name=%q hostname=%q want=%q", sbx.Name, sbx.Hostname, want)
 				}
 				if sbx.HomeDir != filepath.Join(root, "threads", thread.String(), "home") || sbx.ProfileDir != root {
-					t.Fatal("prefix changed durable paths")
+					t.Fatal("namespace changed durable paths")
 				}
 				auth, err := rt.ThreadSandbox(t.Context(), "", modeluuid.UUID{})
 				if err != nil {
@@ -64,19 +64,19 @@ func TestContainerNamePrefixFromProfile(t *testing.T) {
 	}
 }
 
-func TestInvalidContainerNamePrefixBeforeSandboxCreation(t *testing.T) {
-	for _, prefix := range []string{"../work", "a/b", "two words", "-work", "bad\x00prefix"} {
-		t.Run(prefix, func(t *testing.T) {
+func TestInvalidContainerNamespaceBeforeSandboxCreation(t *testing.T) {
+	for _, namespace := range []string{"../work", "a/b", "two words", "-work", "bad\x00namespace"} {
+		t.Run(namespace, func(t *testing.T) {
 			// Unimplemented manager methods panic if validation reaches sandbox creation.
-			rt := New(t.TempDir(), "", nil, nil).Bind(coremodel.Component{Type: "codex", Name: "codex"}, runtimepkg.Profile{}, runtimepkg.BindConfig{ContainerNamePrefix: prefix}).(*Runtime)
-			rt.sandboxes = forbiddenPrefixManager{}
+			rt := New(t.TempDir(), "", nil, nil).Bind(coremodel.Component{Type: "codex", Name: "codex"}, runtimepkg.Profile{}, runtimepkg.BindConfig{ContainerNamespace: namespace}).(*Runtime)
+			rt.sandboxes = forbiddenNamespaceManager{}
 			for _, id := range []modeluuid.UUID{{}, modeluuid.New()} {
 				if _, err := rt.ThreadSandbox(t.Context(), "unused", id); err == nil {
-					t.Fatal("invalid prefix accepted")
+					t.Fatal("invalid namespace accepted")
 				}
 			}
 		})
 	}
 }
 
-type forbiddenPrefixManager struct{ sandboxengine.RuntimeManager }
+type forbiddenNamespaceManager struct{ sandboxengine.RuntimeManager }

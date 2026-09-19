@@ -325,32 +325,33 @@ cat > .ctgbot/components/claude/claude/runtime.json <<'JSON'
 JSON
 ```
 
-### Agent container name prefix
+### Agent container namespace
 
-Set `container_name_prefix` in the agent component's `runtime.json` (merge it
+Set `container_namespace` in the agent component's `runtime.json` (merge it
 with existing settings), for example `.ctgbot/components/codex/codex/runtime.json`:
 
 ```json
-{"container_name_prefix": "work-"}
+{"container_namespace": "work-codex"}
 ```
 
-The value replaces the **entire** generated prefix, including any component name
-and separator: `work-` produces `work-<threadID>` and `work-auth` for authentication;
-`work-codex-` produces `work-codex-<threadID>` and `work-codex-auth`. No separator
-or component name is added. Omitted or blank preserves existing names such as
-`ctgbot-codex-<threadID>` and `ctgbot-auth-codex`.
+ctgbot supplies the `ctgbot-` prefix and separators. `work` produces
+`ctgbot-work-<threadID>` and `ctgbot-work-auth`; `work-codex` produces
+`ctgbot-work-codex-<threadID>` and `ctgbot-work-codex-auth`.
+Omitted or blank preserves existing names such as `ctgbot-codex-<threadID>`
+and `ctgbot-auth-codex`. Do not include `ctgbot-` or a trailing separator in
+normal namespace values.
 
-Use a distinct custom prefix for each component/instance sharing a Docker daemon:
-custom prefixes replace the component-name namespace too. Prefixes must start
-with a letter/digit and contain only letters, digits, `.`, `_` or `-`. This setting
-applies to the shared Docker **thread runtime**, not backend-service containers
-or image tags.
+Use a distinct custom namespace for each component/instance sharing a Docker
+daemon: a custom namespace replaces the component-derived namespace, rather
+than adding to it. Values must start with a letter/digit and contain only
+letters, digits, `.`, `_` or `-`. This setting applies to the shared Docker
+**thread runtime**, not backend-service containers or image tags.
 
-Stop/remove old containers before changing the prefix, then restart ctgbot and
-recreate the affected containers. No image rebuild is needed solely for this
-setting. Existing containers are not renamed, adopted or removed automatically;
-a refresh after changing the setting targets the new name. Profiles, thread
-homes and conversation mappings are unchanged.
+Stop/remove old containers before changing the namespace, then restart ctgbot
+and recreate the affected containers. No image rebuild is needed solely for
+this setting. Existing containers are not renamed, adopted or removed
+automatically; a refresh after changing the setting targets the new name.
+Profiles, thread homes and conversation mappings are unchanged.
 
 ### Gmail v2
 

@@ -31,8 +31,8 @@ type BindConfig struct {
 	NoCache     bool                 `json:"no_cache,omitempty"`
 	Uses        *runtimeimage.Target `json:"uses,omitempty"`
 
-	// ContainerNamePrefix is the complete literal Docker thread/auth name prefix.
-	ContainerNamePrefix string `json:"container_name_prefix,omitempty"`
+	// ContainerNamespace replaces the component-derived namespace in Docker names.
+	ContainerNamespace string `json:"container_namespace,omitempty"`
 }
 
 type ThreadConfig struct {
