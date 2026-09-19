@@ -65,7 +65,11 @@ func (r *Runner) RunTurn(ctx context.Context, runtime ExecRuntime, output Output
 		return TurnResult{}, fmt.Errorf("missing prompt")
 	}
 
-	if timeout := r.Config.Codex().SessionTimeout(); timeout > 0 {
+	timeout, err := r.Config.Codex().SessionTimeout()
+	if err != nil {
+		return TurnResult{}, err
+	}
+	if timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
@@ -90,7 +94,7 @@ func (r *Runner) RunTurn(ctx context.Context, runtime ExecRuntime, output Output
 			r.logf("send codex agent message failed: %v", err)
 		}
 	})
-	err := runtime.Exec(ctx, stdout, io.MultiWriter(os.Stderr, &stderrBuf), args[0], args[1:]...)
+	err = runtime.Exec(ctx, stdout, io.MultiWriter(os.Stderr, &stderrBuf), args[0], args[1:]...)
 	stdout.Flush()
 
 	nextProviderThreadID := strings.TrimSpace(request.ProviderThreadID)

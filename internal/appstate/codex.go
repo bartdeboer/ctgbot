@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,12 +25,35 @@ func (c CodexConfig) SetModel(model string) error {
 	return c.cfg.persistString("codex.model", strings.TrimSpace(model))
 }
 
-func (c CodexConfig) SessionTimeout() time.Duration {
-	return c.cfg.duration("session.timeout_min", 10, time.Minute)
+// SessionTimeout adds no wall-clock deadline unless explicitly configured.
+// Keep the legacy storage key and bare-number unit (minutes).
+func (c CodexConfig) SessionTimeout() (time.Duration, error) {
+	return parseCodexSessionTimeout(c.cfg.string("session.timeout_min", ""))
 }
 
 func (c CodexConfig) SetSessionTimeout(raw string) error {
-	return c.cfg.persistString("session.timeout_min", strings.TrimSpace(raw))
+	raw = strings.TrimSpace(raw)
+	if _, err := parseCodexSessionTimeout(raw); err != nil {
+		return err
+	}
+	return c.cfg.persistString("session.timeout_min", raw)
+}
+
+func parseCodexSessionTimeout(raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	// ParseDuration checks overflow; multiplying a legacy integer by time.Minute
+	// directly can wrap into a valid-looking (or negative) duration.
+	if _, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		raw += "m"
+	}
+	timeout, err := time.ParseDuration(raw)
+	if err != nil || timeout < 0 {
+		return 0, fmt.Errorf("invalid codex.session-timeout %q: use zero (no deadline) or a positive duration; bare numbers are minutes", raw)
+	}
+	return timeout, nil
 }
 
 func (c CodexConfig) ProfileHostPath() string {

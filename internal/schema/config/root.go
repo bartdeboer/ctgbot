@@ -1,7 +1,10 @@
 package config
 
 import (
+	"fmt"
+
 	"github.com/bartdeboer/ctgbot/internal/appstate"
+	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/configengine"
 )
 
@@ -30,11 +33,34 @@ func GitUserEmail(cfg *appstate.Config) configengine.Item {
 }
 
 func CodexSessionTimeout(cfg *appstate.Config) configengine.Item {
-	return rootString("codex.session-timeout", "Codex session timeout", configengine.ValueDuration, cfg,
-		func(cfg *appstate.Config) string { return cfg.Codex().SessionTimeout().String() },
-		func(cfg *appstate.Config, value string) error { return cfg.Codex().SetSessionTimeout(value) },
-		rootAgentOrElevated(), rootOrElevated(),
-	)
+	get := func(ctx commandengine.Context) (configengine.Value, error) {
+		if cfg == nil {
+			return configengine.Value{}, fmt.Errorf("missing config")
+		}
+		timeout, err := cfg.Codex().SessionTimeout()
+		if err != nil {
+			return configengine.Value{}, err
+		}
+		return configengine.String(timeout.String()), nil
+	}
+	return configengine.Item{
+		Key:         "codex.session-timeout",
+		Help:        "Codex turn timeout (default 0: no deadline; bare numbers are minutes)",
+		Scope:       configengine.ScopeRoot,
+		ValueType:   configengine.ValueDuration,
+		ReadPolicy:  rootAgentOrElevated(),
+		WritePolicy: rootOrElevated(),
+		Get:         get,
+		Set: func(ctx commandengine.Context, value configengine.Value) (configengine.Value, error) {
+			if cfg == nil {
+				return configengine.Value{}, fmt.Errorf("missing config")
+			}
+			if err := cfg.Codex().SetSessionTimeout(value.String()); err != nil {
+				return configengine.Value{}, err
+			}
+			return get(ctx)
+		},
+	}
 }
 
 func CodexModel(cfg *appstate.Config) configengine.Item {

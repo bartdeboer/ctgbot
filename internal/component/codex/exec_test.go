@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
@@ -15,6 +16,7 @@ import (
 )
 
 type fakeExecRuntime struct {
+	execContext         context.Context
 	workspace           string
 	execErr             error
 	lastMessage         string
@@ -26,6 +28,7 @@ type fakeExecRuntime struct {
 
 func (r *fakeExecRuntime) Workspace() string { return r.workspace }
 func (r *fakeExecRuntime) Exec(ctx context.Context, stdout io.Writer, stderr io.Writer, name string, args ...string) error {
+	r.execContext = ctx
 	_, _ = ctx, stderr
 	r.lastName = name
 	r.lastArgs = append([]string(nil), args...)
@@ -204,4 +207,72 @@ func (o *capturingOutput) Send(ctx context.Context, payload message.OutboundPayl
 	_ = ctx
 	o.messages = append(o.messages, payload.Text.Text)
 	return nil
+}
+
+func TestRunnerTimeoutPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw                                             string
+		parentDeadline, parentCanceled, wantDeadline, invalid bool
+	}{
+		{name: "unset"},
+		{name: "explicit zero", raw: "0"},
+		{name: "explicit hours", raw: "48h", wantDeadline: true},
+		{name: "parent deadline", parentDeadline: true, wantDeadline: true},
+		{name: "parent cancellation", parentCanceled: true},
+		{name: "invalid persisted setting", raw: "garbage", invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withTempCwd(t, func(root string) {
+				store, err := clistate.NewCwd("ctgbot", "config")
+				if err != nil {
+					t.Fatal(err)
+				}
+				cfg := appstate.New(root, store)
+				if tc.raw != "" {
+					if err := store.PersistString("session.timeout_min", tc.raw); err != nil {
+						t.Fatal(err)
+					}
+				}
+				ctx := context.Background()
+				if tc.parentDeadline {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, time.Minute)
+					defer cancel()
+				}
+				if tc.parentCanceled {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithCancel(ctx)
+					cancel()
+				}
+				runtime := &fakeExecRuntime{workspace: "/workspace", lastMessage: "done"}
+				before := time.Now()
+				_, err = NewRunner(cfg, nil).RunTurn(ctx, runtime, nil, TurnRequest{Prompt: "hello"})
+				if tc.invalid {
+					if err == nil || runtime.execContext != nil {
+						t.Fatalf("invalid config must fail before exec: %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				deadline, ok := runtime.execContext.Deadline()
+				if ok != tc.wantDeadline {
+					t.Fatalf("deadline present = %v, want %v", ok, tc.wantDeadline)
+				}
+				if tc.parentDeadline {
+					want, _ := ctx.Deadline()
+					if !deadline.Equal(want) {
+						t.Fatalf("parent deadline changed: %v != %v", deadline, want)
+					}
+				}
+				if tc.raw == "48h" && (deadline.Before(before.Add(48*time.Hour)) || deadline.After(time.Now().Add(48*time.Hour))) {
+					t.Fatalf("configured deadline not applied: %v", deadline)
+				}
+				if tc.parentCanceled && runtime.execContext.Err() != context.Canceled {
+					t.Fatal("parent cancellation was lost")
+				}
+			})
+		})
+	}
 }
