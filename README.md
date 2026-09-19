@@ -325,6 +325,33 @@ cat > .ctgbot/components/claude/claude/runtime.json <<'JSON'
 JSON
 ```
 
+### Agent container name prefix
+
+Set `container_name_prefix` in the agent component's `runtime.json` (merge it
+with existing settings), for example `.ctgbot/components/codex/codex/runtime.json`:
+
+```json
+{"container_name_prefix": "work-"}
+```
+
+The value replaces the **entire** generated prefix, including any component name
+and separator: `work-` produces `work-<threadID>` and `work-auth` for authentication;
+`work-codex-` produces `work-codex-<threadID>` and `work-codex-auth`. No separator
+or component name is added. Omitted or blank preserves existing names such as
+`ctgbot-codex-<threadID>` and `ctgbot-auth-codex`.
+
+Use a distinct custom prefix for each component/instance sharing a Docker daemon:
+custom prefixes replace the component-name namespace too. Prefixes must start
+with a letter/digit and contain only letters, digits, `.`, `_` or `-`. This setting
+applies to the shared Docker **thread runtime**, not backend-service containers
+or image tags.
+
+Stop/remove old containers before changing the prefix, then restart ctgbot and
+recreate the affected containers. No image rebuild is needed solely for this
+setting. Existing containers are not renamed, adopted or removed automatically;
+a refresh after changing the setting targets the new name. Profiles, thread
+homes and conversation mappings are unchanged.
+
 ### Gmail v2
 
 Gmail v2 watches a mailbox, emits new mail as normal inbound source events,

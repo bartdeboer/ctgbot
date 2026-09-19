@@ -27,6 +27,7 @@ func LoadBindConfig(profilePath string) (BindConfig, error) {
 }
 
 func (c BindConfig) Clean() BindConfig {
+	c.ContainerNamePrefix = strings.TrimSpace(c.ContainerNamePrefix)
 	c.Context = strings.TrimSpace(c.Context)
 	if c.Context != "" {
 		c.Context = filepath.Clean(c.Context)

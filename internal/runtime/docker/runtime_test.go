@@ -23,7 +23,7 @@ func TestTurnSandboxNamePreservesBase62ThreadIDCase(t *testing.T) {
 	}
 	registration := coremodel.Component{Type: "codex", Name: "codex"}
 	want := "ctgbot-codex-" + threadID.String()
-	if got := turnSandboxName(registration, threadID); got != want {
+	if got := turnSandboxName("", registration, threadID); got != want {
 		t.Fatalf("turnSandboxName() = %q, want %q", got, want)
 	}
 }

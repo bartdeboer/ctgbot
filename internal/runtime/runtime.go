@@ -30,6 +30,9 @@ type BindConfig struct {
 	GID         *int                 `json:"gid,omitempty"`
 	NoCache     bool                 `json:"no_cache,omitempty"`
 	Uses        *runtimeimage.Target `json:"uses,omitempty"`
+
+	// ContainerNamePrefix is the complete literal Docker thread/auth name prefix.
+	ContainerNamePrefix string `json:"container_name_prefix,omitempty"`
 }
 
 type ThreadConfig struct {

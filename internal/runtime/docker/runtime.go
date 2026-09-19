@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	goruntime "runtime"
 	"strings"
 	"time"
@@ -101,6 +102,7 @@ func (f *Factory) Bind(
 		registration: registration,
 		profile:      profile,
 		image:        resolveImage(config.Image),
+		namePrefix:   config.ContainerNamePrefix,
 		entrypoint:   strings.TrimSpace(config.Entrypoint),
 		env:          append([]string{}, config.Env...),
 		gpus:         strings.TrimSpace(config.GPUs),
@@ -112,6 +114,7 @@ func (f *Factory) Bind(
 }
 
 type Runtime struct {
+	namePrefix   string
 	rootDir      string
 	sandboxes    sandboxengine.RuntimeManager
 	bridge       *hostbridgebridge.Bridge
@@ -337,13 +340,17 @@ func (r *Runtime) sandbox(
 	if r == nil || r.sandboxes == nil {
 		return nil, nil, fmt.Errorf("missing docker runtime")
 	}
+	prefix, err := resolveContainerNamePrefix(r.namePrefix)
+	if err != nil {
+		return nil, nil, err
+	}
 	securityOpts, err := containerengine.SeccompSecurityOpts(r.seccomp)
 	if err != nil {
 		return nil, nil, err
 	}
 	if threadID.IsNull() {
 		runtimeProfilePath := r.RuntimeComponentProfilePath()
-		spec := sandboxengine.NewBuilder(authSandboxName(r.registration)).
+		spec := sandboxengine.NewBuilder(authSandboxName(prefix, r.registration)).
 			Image(r.image).
 			Entrypoint(r.entrypoint).
 			Workdir(runtimeProfilePath).
@@ -395,7 +402,7 @@ func (r *Runtime) sandbox(
 			cleanup = unregister
 		}
 	}
-	name := turnSandboxName(r.registration, threadID)
+	name := turnSandboxName(prefix, r.registration, threadID)
 	spec := sandboxengine.NewBuilder(name).
 		WorkspaceDir(workspaceHost).
 		ProfileDir(r.profile.Path).
@@ -483,11 +490,30 @@ func (r *Runtime) runtimeNotices(ctx context.Context, sbx *sandboxengine.Sandbox
 	return runtimeFreshnessNotices(container, image, buildassets.Info(), runtimeimage.CurrentGitCommit(ctx, r.rootDir), r.registration.Type)
 }
 
-func authSandboxName(registration coremodel.Component) string {
+var containerNamePrefixPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
+
+func resolveContainerNamePrefix(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if !containerNamePrefixPattern.MatchString(value) {
+		return "", fmt.Errorf("container_name_prefix must start with a letter or digit and contain only letters, digits, dots, underscores or hyphens")
+	}
+	return value, nil
+}
+
+func authSandboxName(prefix string, registration coremodel.Component) string {
+	if prefix != "" {
+		return prefix + "auth"
+	}
 	return safeName("ctgbot-auth-"+registration.Ref(), "ctgbot-auth")
 }
 
-func turnSandboxName(registration coremodel.Component, threadID modeluuid.UUID) string {
+func turnSandboxName(prefix string, registration coremodel.Component, threadID modeluuid.UUID) string {
+	if prefix != "" {
+		return prefix + threadID.String()
+	}
 	return safeName("ctgbot-"+registration.Ref()+"-"+threadID.String(), "ctgbot-runtime")
 }
 
