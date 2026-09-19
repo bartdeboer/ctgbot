@@ -3,6 +3,7 @@ package codex
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 )
@@ -165,4 +166,21 @@ func containsLog(logs []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestUsageSnapshotUnknownVersusZero(t *testing.T) {
+	for _, value := range []string{`{}`, `{"input_tokens":0,"cached_input_tokens":0,"output_tokens":0}`} {
+		writer := newEventWriter(io.Discard, nil)
+		_, err := writer.Write([]byte(`{"type":"turn.completed","usage":` + value + "}\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if value == `{}` {
+			if writer.usage.InputTokens != nil {
+				t.Fatal("unknown became zero")
+			}
+		} else if writer.usage.InputTokens == nil || *writer.usage.InputTokens != 0 {
+			t.Fatal("zero lost")
+		}
+	}
 }

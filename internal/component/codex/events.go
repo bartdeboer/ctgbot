@@ -6,9 +6,13 @@ import (
 	"encoding/json"
 	"io"
 	"strings"
+
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 )
 
 type eventWriter struct {
+	usage          coremodel.MessageUsage
 	dst            io.Writer
 	logf           func(string, ...any)
 	onAgentMessage func(string)
@@ -169,6 +173,17 @@ func (w *eventWriter) handleLine(line string) {
 			}
 		}
 	case "turn.completed":
+		var report struct {
+			Usage struct {
+				Input  *int64 `json:"input_tokens"`
+				Cached *int64 `json:"cached_input_tokens"`
+				Output *int64 `json:"output_tokens"`
+			} `json:"usage"`
+		}
+		if json.Unmarshal([]byte(line), &report) == nil {
+			w.usage = coremodel.MessageUsage{Scope: "reported turn", InputTokens: agentcommon.SumUsage(report.Usage.Input), CachedInputTokens: agentcommon.SumUsage(report.Usage.Cached), OutputTokens: agentcommon.SumUsage(report.Usage.Output)}
+		}
+
 		w.inputTokens = ev.Usage.InputTokens
 		w.cachedInputTokens = ev.Usage.CachedInputTokens
 		w.outputTokens = ev.Usage.OutputTokens

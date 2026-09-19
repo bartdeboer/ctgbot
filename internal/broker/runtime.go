@@ -208,6 +208,7 @@ type agentTurnRuntime struct {
 	componentID           modeluuid.UUID
 	outputs               []coremodel.ThreadMessage
 	lastText              string
+	lastTextMessageID     modeluuid.UUID
 	voiceInput            bool
 	detectedInputLanguage string
 	voiceOutput           bool
@@ -298,6 +299,13 @@ func (r *agentTurnRuntime) Send(ctx context.Context, payload message.OutboundPay
 	r.outputs = append(r.outputs, messages...)
 	if text := strings.TrimSpace(payload.Text.Text); text != "" {
 		r.lastText = text
+		r.lastTextMessageID = modeluuid.UUID{}
+		// Capture identity from this delivery, never look up a database row by text.
+		for _, stored := range messages {
+			if strings.TrimSpace(stored.Text) == text {
+				r.lastTextMessageID = stored.ID
+			}
+		}
 	}
 	return nil
 }

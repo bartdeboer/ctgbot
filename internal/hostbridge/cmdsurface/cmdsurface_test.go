@@ -1,10 +1,14 @@
 package cmdsurface
 
 import (
+	"bytes"
+	"encoding/gob"
+	"reflect"
 	"testing"
 
 	gmailv2component "github.com/bartdeboer/ctgbot/internal/component/gmailv2"
 	llamacppcomponent "github.com/bartdeboer/ctgbot/internal/component/llamacpp"
+	"github.com/bartdeboer/go-clir"
 )
 
 func TestResolveFallsBackToCodexForInvalidRef(t *testing.T) {
@@ -70,4 +74,63 @@ func TestGlobalDirectPrefixesIncludeStatus(t *testing.T) {
 		}
 	}
 	t.Fatalf("GlobalDirectPrefixes() = %#v, want turn", prefixes)
+}
+
+func TestThreadInfoGobForAllProviders(t *testing.T) {
+	RegisterGobTypes(gob.Register)
+	for _, ref := range []string{"copilot/work", "codex/work", "claude/work"} {
+		found := false
+		for _, def := range Resolve(ref).Surface.CommandDefinitions() {
+			if def.Pattern != "thread info" {
+				continue
+			}
+			found = true
+			value, err := def.Build(&clir.Request{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wire bytes.Buffer
+			if err := gob.NewEncoder(&wire).Encode(&value); err != nil {
+				t.Fatal(err)
+			}
+			var decoded any
+			if err := gob.NewDecoder(&wire).Decode(&decoded); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(value, decoded) {
+				t.Fatal("wire changed", ref)
+			}
+		}
+		if !found {
+			t.Fatal("missing thread info", ref)
+		}
+	}
+}
+
+func TestGlobalThreadInfoGob(t *testing.T) {
+	RegisterGobTypes(gob.Register)
+	for _, surface := range GlobalSurfaces() {
+		for _, def := range surface.CommandDefinitions() {
+			if def.Pattern != "thread info" {
+				continue
+			}
+			value, err := def.Build(&clir.Request{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wire bytes.Buffer
+			if err := gob.NewEncoder(&wire).Encode(&value); err != nil {
+				t.Fatal(err)
+			}
+			var decoded any
+			if err := gob.NewDecoder(&wire).Decode(&decoded); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(value, decoded) {
+				t.Fatal("wire changed")
+			}
+			return
+		}
+	}
+	t.Fatal("missing global thread info")
 }

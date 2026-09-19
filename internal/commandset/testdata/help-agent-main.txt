@@ -1,5 +1,5 @@
 Available commands:
-codex [ chat | compact | config | container | goal | interrupt | status | help ] - agent lifecycle and config
+codex [ chat | compact | config | container | goal | interrupt | status | thread | help ] - agent lifecycle and config
 component [ <component> | list | help ] - component setup and inspection
 config [ get | list | set | help ] - global instance config
 container [ refresh | start | stop | help ] - container commands
@@ -10,5 +10,5 @@ send [ <text> | stdin | help ] - send commands
 sendfile [ <path> | stdin | help ] - sendfile commands
 status - Show current thread status
 theater [ <thread> | list | status | help ] - thread subscriptions and shared message boards
-thread [ <thread> | config | heartbeat | label | list | status | wake | help ] - thread messaging, config, and attention controls
+thread [ <thread> | config | heartbeat | info | label | list | status | wake | help ] - thread messaging, config, and attention controls
 turn [ config | info | help ] - current turn metadata and output controls

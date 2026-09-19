@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/bartdeboer/ctgbot/internal/containerengine"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 )
 
 type ExecRuntime interface {
@@ -33,6 +34,7 @@ type TurnOptions struct {
 }
 
 type TurnResult struct {
+	Usage            coremodel.MessageUsage
 	Reply            string
 	ProviderThreadID string
 }
@@ -158,7 +160,7 @@ func parseClaudeOutput(text string) (TurnResult, error) {
 		}
 		reply = strings.Join(parts, "\n\n")
 	}
-	return TurnResult{Reply: reply, ProviderThreadID: strings.TrimSpace(out.SessionID)}, nil
+	return TurnResult{Reply: reply, ProviderThreadID: strings.TrimSpace(out.SessionID), Usage: parseUsage([]byte(text))}, nil
 }
 
 const errorDetailMax = 4000

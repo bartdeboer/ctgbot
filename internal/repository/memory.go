@@ -1454,3 +1454,28 @@ func (r memoryTrustedControllers) RevokeByFingerprint(ctx context.Context, finge
 	}
 	return false, nil
 }
+
+func (r memoryMessages) Finalize(ctx context.Context, id, threadID, componentID modeluuid.UUID, usage coremodel.MessageUsage) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	m, ok := r.s.messages[id]
+	if !ok || m.ThreadID != threadID || m.ComponentID != componentID || m.IsFinal {
+		return fmt.Errorf("final message missing or already finalized")
+	}
+	m.IsFinal, m.Usage, m.UpdatedAt = true, usage, time.Now()
+	r.s.messages[id] = m
+	return nil
+}
+func (r memoryMessages) LatestFinal(ctx context.Context, threadID, componentID modeluuid.UUID) (*coremodel.ThreadMessage, error) {
+	rows, err := r.ListByThreadID(ctx, threadID)
+	if err != nil {
+		return nil, err
+	}
+	for i := len(rows) - 1; i >= 0; i-- {
+		if rows[i].ComponentID == componentID && rows[i].IsFinal {
+			m := rows[i]
+			return &m, nil
+		}
+	}
+	return nil, nil
+}

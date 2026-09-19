@@ -50,3 +50,7 @@ func (s *service) SaveDroppedEvent(ctx context.Context, drop *coremodel.DroppedE
 	}
 	return storage.DroppedEvents().Save(ctx, drop)
 }
+
+func (s *service) FinalizeMessage(ctx context.Context, id, threadID, componentID modeluuid.UUID, usage coremodel.MessageUsage) error {
+	return s.Repository().Messages().Finalize(ctx, id, threadID, componentID, usage)
+}

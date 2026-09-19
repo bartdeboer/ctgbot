@@ -12,6 +12,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/appstate"
 	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
+	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
 )
 
@@ -40,6 +41,7 @@ type TurnOptions struct {
 }
 
 type TurnResult struct {
+	Usage            coremodel.MessageUsage
 	Reply            string
 	ProviderThreadID string
 }
@@ -133,7 +135,7 @@ func (r *Runner) RunTurn(ctx context.Context, runtime ExecRuntime, output Output
 	if lastMessage == "" {
 		return TurnResult{}, fmt.Errorf("codex returned an empty response")
 	}
-	return TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID}, nil
+	return TurnResult{Reply: lastMessage, ProviderThreadID: nextProviderThreadID, Usage: stdout.usage}, nil
 }
 
 type ExecArgs struct {

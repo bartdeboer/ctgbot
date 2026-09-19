@@ -20,7 +20,7 @@ var _ configsurface.ConfigSurface = (*Component)(nil)
 var _ agentcommon.KeepRunningSetter = (*Component)(nil)
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
-	definitions := agentcommon.AgentCommandDefinitions(agentcommon.AgentCommandOptions{Name: "Claude"})
+	definitions := agentcommon.AgentCommandDefinitions(agentcommon.AgentCommandOptions{Name: "Claude", ThreadInfo: true})
 	definitions = append(definitions, configsurface.CommandDefinitions(configsurface.DefinitionOptions{
 		Sources:       agentcommon.AgentCommandSources(),
 		Policy:        agentcommon.AgentCommandPolicy(),

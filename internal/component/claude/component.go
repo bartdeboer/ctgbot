@@ -226,11 +226,12 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		}
 		return nil, runErr
 	}
+	result.Usage.ProviderSessionID = result.ProviderThreadID
 	reply := strings.TrimSpace(result.Reply)
 	if reply == "" {
 		return nil, nil
 	}
-	return &component.TurnResult{Final: &coremodel.ThreadMessage{Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, ComponentID: c.Registration.ID, ActorID: c.Registration.Ref(), ActorLabel: "Claude", Text: reply}}, nil
+	return &component.TurnResult{Final: &coremodel.ThreadMessage{Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, ComponentID: c.Registration.ID, ActorID: c.Registration.Ref(), ActorLabel: "Claude", Text: reply, Usage: result.Usage}}, nil
 }
 
 func componentBindConfig(config runtimepkg.BindConfig, componentConfig ComponentConfig, runtimeProfilePath string) runtimepkg.BindConfig {

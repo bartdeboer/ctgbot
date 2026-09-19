@@ -13,6 +13,7 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/buildassets"
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/component"
+	"github.com/bartdeboer/ctgbot/internal/component/agentcommon"
 	"github.com/bartdeboer/ctgbot/internal/configsurface"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
@@ -39,6 +40,7 @@ type listCommand struct {
 }
 
 type currentStatusCommand struct{}
+type threadInfoCommand struct{}
 
 type statusCommand struct {
 	ThreadRef string
@@ -93,6 +95,7 @@ type messageSendCommand struct {
 func RegisterGobTypes(register func(any)) {
 	register(listCommand{})
 	register(currentStatusCommand{})
+	register(threadInfoCommand{})
 	register(statusCommand{})
 	register(labelSetCommand{})
 	register(componentBindCommand{})
@@ -113,6 +116,13 @@ func (c *Component) Type() string { return Type }
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	return []commandengine.Definition{
+		{
+			Pattern: "thread info",
+			Help:    "Show persisted final-response usage for enabled agents",
+			Build:   func(_ *clir.Request) (any, error) { return threadInfoCommand{}, nil },
+			Sources: []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge},
+			Policy:  simplerbac.Any(simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser),
+		},
 		{
 			Pattern: "status",
 			Help:    "Show current thread status",
@@ -265,6 +275,9 @@ func (c *Component) RegisterCommandHandlers(registry *commandengine.Registry) er
 	if err := commandengine.Register[listCommand](registry, c.handleList); err != nil {
 		return err
 	}
+	if err := commandengine.Register[threadInfoCommand](registry, c.handleThreadInfo); err != nil {
+		return err
+	}
 	if err := commandengine.Register[currentStatusCommand](registry, c.handleCurrentStatus); err != nil {
 		return err
 	}
@@ -312,6 +325,51 @@ func (c *Component) handleList(ctx context.Context, req commandengine.Request, c
 	return commandengine.Result{
 		Text: formatThreadList(threads, requestThreadID(req)),
 	}, nil
+}
+
+func (c *Component) handleThreadInfo(ctx context.Context, req commandengine.Request, _ threadInfoCommand) (commandengine.Result, error) {
+	if c == nil || c.Service == nil || c.Service.Storage == nil {
+		return commandengine.Result{}, fmt.Errorf("missing messaging storage")
+	}
+	threadID, err := c.resolveThreadID(ctx, req, "current")
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	storage := c.Service.Storage
+	thread, err := storage.Threads().GetByID(ctx, threadID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	if thread == nil {
+		return commandengine.Result{}, fmt.Errorf("thread not found")
+	}
+	bindings, err := storage.ChatComponents().ListEnabledByChatID(ctx, thread.ChatID)
+	if err != nil {
+		return commandengine.Result{}, err
+	}
+	var sections []string
+	for _, binding := range bindings {
+		if binding.Role != coremodel.ChatComponentRoleAgent {
+			continue
+		}
+		registration, err := storage.Components().GetByID(ctx, binding.ComponentID)
+		if err != nil {
+			return commandengine.Result{}, err
+		}
+		if registration == nil || !registration.Enabled {
+			continue
+		}
+		text, err := agentcommon.ThreadUsageInfo(ctx, storage, threadID, registration.ID)
+		if err != nil {
+			return commandengine.Result{}, err
+		}
+		sections = append(sections, registration.Ref()+"\n"+text)
+	}
+	sort.Strings(sections)
+	if len(sections) == 0 {
+		return commandengine.Result{Text: "No enabled agents for this thread."}, nil
+	}
+	return commandengine.Result{Text: strings.Join(sections, "\n\n")}, nil
 }
 
 func (c *Component) handleCurrentStatus(ctx context.Context, req commandengine.Request, cmd currentStatusCommand) (commandengine.Result, error) {

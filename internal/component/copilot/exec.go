@@ -19,6 +19,7 @@ type ExecRuntime interface {
 }
 
 type TurnRequest struct {
+	UsagePath         string
 	ProviderThreadID  string
 	PromptPath        string // Already staged in the runtime's mounted component profile.
 	Workspace         string
@@ -83,6 +84,9 @@ func buildExecArgs(request TurnRequest, expected string, resume bool) ([]string,
 		"env", "-u", "GH_TOKEN", "-u", "GITHUB_TOKEN", "copilot", "--output-format=json", "--stream=off", "--no-auto-update", "--no-ask-user",
 		"--no-remote-export", "--disable-builtin-mcps", "--allow-tool=read,write,shell",
 		"--add-dir=/home/agent", "-C", request.Workspace,
+	}
+	if request.UsagePath != "" {
+		args = append(args, "--usage-output-file", request.UsagePath)
 	}
 	// Prompt mode disables memory unless --enable-memory is explicitly supplied.
 	if request.Model != "" {

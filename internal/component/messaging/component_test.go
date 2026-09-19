@@ -709,3 +709,55 @@ func mustParseModelUUID(t *testing.T, value string) modeluuid.UUID {
 	}
 	return id
 }
+
+func TestThreadInfoAggregatesEnabledAgentsDBOnly(t *testing.T) {
+	ctx := t.Context()
+	storage, thread := testMessagingStorage(t, ctx)
+	for i, name := range []string{"work", "other", "disabled"} {
+		registration := testRegisterComponent(t, ctx, storage, "copilot", name)
+		testSaveChatComponent(t, ctx, storage, coremodel.ChatComponent{ChatID: thread.ChatID, ComponentID: registration.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: i != 2})
+		mapping := coremodel.ThreadComponentMapping{ThreadID: thread.ID, ChatID: thread.ChatID, ComponentID: registration.ID, ComponentThreadID: name}
+		if err := storage.ThreadComponentMappings().Save(ctx, &mapping); err != nil {
+			t.Fatal(err)
+		}
+		input := int64(123)
+		session := name
+		if i == 1 {
+			session = "obsolete"
+		}
+		row := coremodel.ThreadMessage{ThreadID: thread.ID, ComponentID: registration.ID, IsFinal: true, Usage: coremodel.MessageUsage{ProviderSessionID: session, InputTokens: &input}}
+		if err := storage.Messages().Append(ctx, &row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, source := range []commandengine.Source{commandengine.SourceMessage, commandengine.SourceHostbridge} {
+		engine, err := commandset.NewEngineForSource(source, New(messagingdomain.New(storage), nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, role := range []simplerbac.Role{simplerbac.RoleRoot, simplerbac.RoleAgent, simplerbac.RoleUser} {
+			req := testMessagingRequest(thread.ID, role)
+			req.Context.Source = source
+			got, err := engine.Run(ctx, req, []string{"thread", "info"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{"copilot/work\n", "Input (including cache): 123", "copilot/other\nNo final-response usage"} {
+				if !strings.Contains(got.Text, want) {
+					t.Fatalf("missing %q: %s", want, got.Text)
+				}
+			}
+			if strings.Contains(got.Text, "disabled") || strings.Contains(got.Text, "telegram") {
+				t.Fatal(got.Text)
+			}
+		}
+	}
+}
+
+func TestThreadInfoNoAgents(t *testing.T) {
+	storage, thread := testMessagingStorage(t, t.Context())
+	got, err := testMessagingEngine(t, storage).Run(t.Context(), testMessagingRequest(thread.ID, simplerbac.RoleUser), []string{"thread", "info"})
+	if err != nil || got.Text != "No enabled agents for this thread." {
+		t.Fatal(got, err)
+	}
+}

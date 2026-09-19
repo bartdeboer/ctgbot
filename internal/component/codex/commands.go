@@ -41,7 +41,7 @@ var suggestedCodexReasoningEfforts = []string{
 
 func (c *Component) CommandDefinitions() []commandengine.Definition {
 	definitions := agentcommon.AgentCommandDefinitions(agentcommon.AgentCommandOptions{
-		Name: "Codex",
+		Name: "Codex", ThreadInfo: true,
 		HiddenAliases: map[string]string{
 			"container refresh": "refresh",
 			"chat purge":        "purge",

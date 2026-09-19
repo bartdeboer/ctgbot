@@ -96,3 +96,26 @@ No goal/compact command, ACP/SDK daemon, cloud delegation or native-host runtime
 
 Sources: [pinned release](https://github.com/github/copilot-cli/releases/tag/v1.0.83),
 [authentication](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli).
+
+## Last response usage
+
+`copilot thread info` (also available for `codex` and `claude`, including via
+Hostbridge) reads the latest finalized response for the current thread/component
+and provider session from the database. It works after restarts and days later
+without starting a container or contacting a provider. Older responses created
+before this feature have no usage; unavailable fields are not reported as zero.
+
+Copilot writes usage into the existing unique temporary prompt directory. ctgbot
+reads its bounded snapshot before cleanup and stores only selected typed counts
+with the final message. Its scope is the provider's end-of-invocation snapshot,
+not a computed last-turn delta. Codex reports turn counts; Claude uses invocation
+model totals (including subagents) where supplied, otherwise explicitly labelled
+main-agent usage. Input includes cache reads/writes; cache-read share is shown only
+when both counts are known. Costs and account balances are not inferred.
+
+This is final-response diagnostics, not complete billing history: failures without
+a final response produce no usage row. A latest final with missing metrics shows
+unavailable, not older counts. Conversation reset/session mismatch hides old usage;
+message-history purge removes the corresponding fields with the messages.
+
+Use `/thread info` to show the same persisted usage grouped by enabled agent (including named components); provider-prefixed commands remain available. This is a DB-only query, not a live usage or balance request.

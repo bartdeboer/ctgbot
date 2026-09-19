@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1118,4 +1119,28 @@ func first(tx *gorm.DB) error {
 		return nil
 	}
 	return tx.Error
+}
+
+func (r *gormMessages) Finalize(ctx context.Context, id, threadID, componentID modeluuid.UUID, usage coremodel.MessageUsage) error {
+	result := r.db.WithContext(ctx).Model(&coremodel.ThreadMessage{}).
+		Where("id = ? AND thread_id = ? AND component_id = ? AND is_final = ?", id, threadID, componentID, false).
+		Updates(map[string]any{"is_final": true, "usage_source_message_id": usage.SourceMessageID, "usage_provider_session_id": usage.ProviderSessionID, "usage_model": usage.Model,
+			"usage_scope": usage.Scope, "usage_input_tokens": usage.InputTokens, "usage_cached_input_tokens": usage.CachedInputTokens,
+			"usage_cache_write_tokens": usage.CacheWriteTokens, "usage_output_tokens": usage.OutputTokens})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("final message missing or already finalized")
+	}
+	return nil
+}
+func (r *gormMessages) LatestFinal(ctx context.Context, threadID, componentID modeluuid.UUID) (*coremodel.ThreadMessage, error) {
+	var m coremodel.ThreadMessage
+	err := r.db.WithContext(ctx).Where("thread_id = ? AND component_id = ? AND is_final = ?", threadID, componentID, true).
+		Order("created_at DESC").Order("id DESC").First(&m).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &m, err
 }

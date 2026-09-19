@@ -53,6 +53,7 @@ type MessageLog interface {
 	ForEachMessage(ctx context.Context, scope component.MessageScope, visit component.MessageVisitor) error
 	StoreInboundMessage(ctx context.Context, inbound component.ResolvedInbound) (*coremodel.ThreadMessage, error)
 	StoreOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []message.Media) error
+	FinalizeMessage(ctx context.Context, id, threadID, componentID modeluuid.UUID, usage coremodel.MessageUsage) error
 }
 
 // ChatComponentRegistry lists components enabled for a specific chat runtime.

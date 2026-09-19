@@ -100,6 +100,7 @@ type BrokerService interface {
 	RelayTarget(ctx context.Context, threadID modeluuid.UUID, binding coremodel.ChatComponent) (*message.ChatTarget, bool, error)
 	StoreInboundMessage(ctx context.Context, inbound component.ResolvedInbound) (*coremodel.ThreadMessage, error)
 	StoreOutboundMessage(ctx context.Context, message *coremodel.ThreadMessage, attachments []message.Media) error
+	FinalizeMessage(ctx context.Context, id, threadID, componentID modeluuid.UUID, usage coremodel.MessageUsage) error
 	DropEvent(ctx context.Context, rejection *inbound.Rejection) (*coremodel.DroppedEvent, error)
 	DropNoticeID(ctx context.Context, drop *coremodel.DroppedEvent) string
 	ResolveDroppedEventID(ctx context.Context, ref string) (modeluuid.UUID, error)

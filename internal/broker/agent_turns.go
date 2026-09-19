@@ -6,6 +6,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 	"github.com/bartdeboer/ctgbot/internal/message"
+	"github.com/bartdeboer/ctgbot/internal/modeluuid"
 )
 
 func (b *Broker) runStoredThreadTurn(
@@ -35,6 +36,7 @@ func (b *Broker) runStoredThreadTurn(
 	for _, agentBinding := range runtime.Agents {
 		turnRuntime.componentID = agentBinding.ComponentID
 		turnRuntime.lastText = ""
+		turnRuntime.lastTextMessageID = modeluuid.UUID{}
 		result, err := b.runAgentTurn(ctx, agentBinding, chat, thread, turnInbound, prompt, turnRuntime)
 		outbound = append(outbound, turnRuntime.outputs...)
 		turnRuntime.outputs = nil
@@ -54,7 +56,20 @@ func (b *Broker) runStoredThreadTurn(
 		if final == nil || strings.TrimSpace(final.Text) == "" {
 			continue
 		}
-		finalAlreadyRelayed := strings.TrimSpace(final.Text) == turnRuntime.LastText()
+		final.IsFinal = true
+		final.Usage.SourceMessageID = turnInbound.ID
+		final.ComponentID = agentBinding.ComponentID
+		finalAlreadyRelayed := strings.TrimSpace(final.Text) == turnRuntime.LastText() && !turnRuntime.lastTextMessageID.IsNull()
+		if finalAlreadyRelayed {
+			if err := b.App.FinalizeMessage(ctx, turnRuntime.lastTextMessageID, thread.ID, agentBinding.ComponentID, final.Usage); err != nil {
+				return outbound, err
+			}
+			for i := range outbound {
+				if outbound[i].ID == turnRuntime.lastTextMessageID {
+					outbound[i].IsFinal, outbound[i].Usage = true, final.Usage
+				}
+			}
+		}
 		if !finalAlreadyRelayed {
 			payload := turnRuntime.applyTurnOutputDefaults(messagePayload(final.Text))
 			message, err := b.storeAndRelayMessageWithPayload(ctx, runtime, chat, thread, *final, agentType(agentBinding), payload)

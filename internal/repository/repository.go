@@ -109,6 +109,9 @@ type ThreadComponentStateRepository interface {
 }
 
 type MessageRepository interface {
+	// Finalize updates an existing exact row only; it must never recreate a deleted message.
+	Finalize(ctx context.Context, id, threadID, componentID modeluuid.UUID, usage coremodel.MessageUsage) error
+	LatestFinal(ctx context.Context, threadID, componentID modeluuid.UUID) (*coremodel.ThreadMessage, error)
 	Append(ctx context.Context, message *coremodel.ThreadMessage) error
 	ListByThreadID(ctx context.Context, threadID modeluuid.UUID) ([]coremodel.ThreadMessage, error)
 	// ListByThreadIDPage returns a forward page ordered by (created_at, id).

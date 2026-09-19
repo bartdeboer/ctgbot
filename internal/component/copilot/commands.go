@@ -22,7 +22,7 @@ var (
 
 func (*Component) CommandDefinitions() []commandengine.Definition {
 	var definitions []commandengine.Definition
-	for _, def := range agentcommon.AgentCommandDefinitions(agentcommon.AgentCommandOptions{Name: "Copilot"}) {
+	for _, def := range agentcommon.AgentCommandDefinitions(agentcommon.AgentCommandOptions{Name: "Copilot", ThreadInfo: true}) {
 		// These would imply unsupported headless goal/compaction semantics.
 		if def.Pattern != "goal" && def.Pattern != "compact" {
 			definitions = append(definitions, def)

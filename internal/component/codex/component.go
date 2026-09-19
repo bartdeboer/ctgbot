@@ -325,6 +325,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		return nil, runErr
 	}
 
+	result.Usage.ProviderSessionID = result.ProviderThreadID
 	reply := strings.TrimSpace(result.Reply)
 	if reply == "" {
 		return nil, nil
@@ -337,6 +338,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 			ActorID:     c.Registration.Ref(),
 			ActorLabel:  "Codex",
 			Text:        reply,
+			Usage:       result.Usage,
 		},
 	}, nil
 }

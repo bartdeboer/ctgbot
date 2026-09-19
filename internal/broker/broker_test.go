@@ -167,6 +167,7 @@ func (c *fakeMessenger) StartChatAction(ctx context.Context, target message.Chat
 }
 
 type fakeAgentRecorder struct {
+	usage        coremodel.MessageUsage
 	prompts      []string
 	homes        []runtimepkg.Profile
 	streamText   string
@@ -228,7 +229,7 @@ func (c *fakeAgent) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		finalText = "done"
 	}
 	return &component.TurnResult{
-		Final: &coremodel.ThreadMessage{Text: finalText},
+		Final: &coremodel.ThreadMessage{Text: finalText, Usage: c.recorder.usage},
 	}, nil
 }
 
@@ -1698,70 +1699,92 @@ func TestQueueResolvedInboundQueuesWhileThreadBusy(t *testing.T) {
 }
 
 func TestHandleInboundSuppressesFinalReplyAlreadySentByAgentOutput(t *testing.T) {
-	root := t.TempDir()
-	storage := repository.NewMemory()
-	messengerRecorder := &fakeMessengerRecorder{}
-	agentRecorder := &fakeAgentRecorder{streamText: "done", finalText: "done"}
-	system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
-	b := newTestBroker(storage, system, nil)
+	for _, stream := range []string{"done", "working"} {
+		t.Run(stream, func(t *testing.T) {
+			root := t.TempDir()
+			storage := repository.NewMemory()
+			messengerRecorder := &fakeMessengerRecorder{}
+			tokens := int64(42)
+			agentRecorder := &fakeAgentRecorder{streamText: stream, finalText: "done", usage: coremodel.MessageUsage{ProviderSessionID: "session", Scope: "reported turn", InputTokens: &tokens}}
+			system := newTestSystem(t, root, storage, messengerRecorder, agentRecorder, nil)
+			b := newTestBroker(storage, system, nil)
 
-	chat := &coremodel.Chat{Label: "team", Enabled: true}
-	if err := storage.Chats().Save(context.Background(), chat); err != nil {
-		t.Fatal(err)
-	}
-	telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
-	codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
-	if err := storage.Components().Save(context.Background(), telegram); err != nil {
-		t.Fatal(err)
-	}
-	if err := storage.Components().Save(context.Background(), codex); err != nil {
-		t.Fatal(err)
-	}
-	for _, binding := range []coremodel.ChatComponent{
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
-		{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
-	} {
-		binding := binding
-		if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
-			t.Fatal(err)
-		}
-	}
+			chat := &coremodel.Chat{Label: "team", Enabled: true}
+			if err := storage.Chats().Save(context.Background(), chat); err != nil {
+				t.Fatal(err)
+			}
+			telegram := &coremodel.Component{Type: "telegram", Name: "telegram", Runtime: "local", Enabled: true, IsDefault: true}
+			codex := &coremodel.Component{Type: "codex", Name: "codex", Runtime: "local", Enabled: true, IsDefault: true}
+			if err := storage.Components().Save(context.Background(), telegram); err != nil {
+				t.Fatal(err)
+			}
+			if err := storage.Components().Save(context.Background(), codex); err != nil {
+				t.Fatal(err)
+			}
+			for _, binding := range []coremodel.ChatComponent{
+				{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleSource, ExternalChannelID: "chat-1", Enabled: true},
+				{ChatID: chat.ID, ComponentID: telegram.ID, Role: coremodel.ChatComponentRoleRelay, ExternalChannelID: "chat-1", Enabled: true},
+				{ChatID: chat.ID, ComponentID: codex.ID, Role: coremodel.ChatComponentRoleAgent, Enabled: true},
+			} {
+				binding := binding
+				if err := storage.ChatComponents().Save(context.Background(), &binding); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
-		ComponentID: telegram.ID,
-		ExternalID:  "msg-1",
-		Payload: message.InboundPayload{
-			ProviderType:      "telegram",
-			ProviderChannelID: "chat-1",
-			ProviderThreadID:  "thread-7",
-			ProviderMessageID: "msg-1",
-			Actor: message.Actor{
-				ID:    "bart",
-				Label: "bart",
-				Roles: []simplerbac.Role{simplerbac.RoleUser},
-			},
-			Text: message.TextMessage{Text: "hello"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("HandleInbound() error = %v", err)
-	}
-	if got, want := len(messengerRecorder.payloads), 1; got != want {
-		t.Fatalf("relay payloads = %d, want %d", got, want)
-	}
-	if messengerRecorder.payloads[0].Text.Text != "done" {
-		t.Fatalf("relay texts = %#v", messengerRecorder.payloads)
-	}
-	if got, want := len(outcome.Outbound), 1; got != want {
-		t.Fatalf("outbound messages = %d, want %d", got, want)
-	}
-	messages, err := storage.Messages().ListByThreadID(context.Background(), outcome.Inbound.ThreadID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := len(messages), 2; got != want {
-		t.Fatalf("stored messages = %d, want %d", got, want)
+			outcome, err := b.HandleInbound(context.Background(), component.InboundEvent{
+				ComponentID: telegram.ID,
+				ExternalID:  "msg-1",
+				Payload: message.InboundPayload{
+					ProviderType:      "telegram",
+					ProviderChannelID: "chat-1",
+					ProviderThreadID:  "thread-7",
+					ProviderMessageID: "msg-1",
+					Actor: message.Actor{
+						ID:    "bart",
+						Label: "bart",
+						Roles: []simplerbac.Role{simplerbac.RoleUser},
+					},
+					Text: message.TextMessage{Text: "hello"},
+				},
+			})
+			if err != nil {
+				t.Fatalf("HandleInbound() error = %v", err)
+			}
+			expected := 1
+			if stream != "done" {
+				expected = 2
+			}
+			if got, want := len(messengerRecorder.payloads), expected; got != want {
+				t.Fatalf("relay payloads = %d, want %d", got, want)
+			}
+			if messengerRecorder.payloads[len(messengerRecorder.payloads)-1].Text.Text != "done" {
+				t.Fatalf("relay texts = %#v", messengerRecorder.payloads)
+			}
+			if got, want := len(outcome.Outbound), expected; got != want {
+				t.Fatalf("outbound messages = %d, want %d", got, want)
+			}
+			messages, err := storage.Messages().ListByThreadID(context.Background(), outcome.Inbound.ThreadID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := len(messages), expected+1; got != want {
+				t.Fatalf("stored messages = %d, want %d", got, want)
+			}
+
+			latest, err := storage.Messages().LatestFinal(t.Context(), outcome.Inbound.ThreadID, codex.ID)
+			if err != nil || latest == nil || latest.ID != outcome.Outbound[len(outcome.Outbound)-1].ID || latest.Usage.InputTokens == nil || *latest.Usage.InputTokens != 42 {
+				t.Fatal(latest, err)
+			}
+			if latest.Usage.SourceMessageID != outcome.Inbound.ID {
+				t.Fatal("source identity lost")
+			}
+			for _, m := range messages {
+				if m.ID != latest.ID && (m.IsFinal || m.Usage.InputTokens != nil) {
+					t.Fatal("usage on intermediate", m.ID)
+				}
+			}
+		})
 	}
 }
 

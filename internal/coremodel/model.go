@@ -236,6 +236,9 @@ type ThreadMessage struct {
 	Text         string
 	MetadataJSON string
 
+	IsFinal bool
+	Usage   MessageUsage `gorm:"embedded;embeddedPrefix:usage_"`
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

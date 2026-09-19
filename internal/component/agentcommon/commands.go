@@ -27,6 +27,7 @@ func RegisterGobTypes(register func(any)) {
 	register(PurgeChat{})
 	register(InterruptTurn{})
 	register(Status{})
+	register(ThreadInfo{})
 	register(Compact{})
 	register(Goal{})
 }
@@ -37,6 +38,7 @@ type KeepRunningSetter interface {
 
 type AgentCommandOptions struct {
 	Name          string
+	ThreadInfo    bool
 	HiddenAliases map[string]string
 }
 
@@ -73,6 +75,9 @@ func AgentCommandDefinitions(opts AgentCommandOptions) []commandengine.Definitio
 		{pattern: "goal", command: Goal{}, help: fmt.Sprintf("Ask %s to show or update its current provider goal", opts.Name), build: buildGoalCommand},
 		{pattern: "interrupt", command: InterruptTurn{}, help: fmt.Sprintf("Interrupt the active %s turn", opts.Name)},
 		{pattern: "status", command: Status{}, help: fmt.Sprintf("Show %s conversation and runtime status", opts.Name)},
+	}
+	if opts.ThreadInfo {
+		entries = append(entries, entry{pattern: "thread info", command: ThreadInfo{}, help: "Show persisted final-response usage without contacting the provider"})
 	}
 	definitions := make([]commandengine.Definition, 0, len(entries))
 	for _, e := range entries {
@@ -136,6 +141,11 @@ func (c *Core) RegisterAgentCommandHandlers(
 	}
 	if err := commandengine.RegisterPattern[InterruptTurn](registry, "interrupt", func(ctx context.Context, req commandengine.Request, _ InterruptTurn) (commandengine.Result, error) {
 		return c.agentInterrupt(ctx, req, componentType)
+	}); err != nil {
+		return err
+	}
+	if err := commandengine.RegisterPattern[ThreadInfo](registry, "thread info", func(ctx context.Context, req commandengine.Request, _ ThreadInfo) (commandengine.Result, error) {
+		return c.threadInfo(ctx, req, componentType)
 	}); err != nil {
 		return err
 	}

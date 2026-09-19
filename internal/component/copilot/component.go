@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -119,8 +120,10 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 		defer stop()
 	}
 	result, runErr := (Runner{}).RunTurn(ctx, commandRuntime{c.Runtime, workspace, turn.Thread.ID, turn.Runtime.Commands()}, TurnRequest{
-		ProviderThreadID: id, PromptPath: path, Workspace: c.Runtime.RuntimeWorkspacePath(workspace), Model: settings.Model, SessionTimeoutSec: c.config.SessionTimeoutSec,
+		ProviderThreadID: id, PromptPath: path, UsagePath: filepath.Join(filepath.Dir(path), "usage.json"), Workspace: c.Runtime.RuntimeWorkspacePath(workspace), Model: settings.Model, SessionTimeoutSec: c.config.SessionTimeoutSec,
 	})
+	usage := readUsage(filepath.Join(c.Runtime.ComponentProfile().Path, filepath.Base(filepath.Dir(path)), "usage.json"))
+	usage.ProviderSessionID = result.ProviderThreadID
 	// Only Runner's validated expected UUID can reach this bind. Invalid/empty
 	// output leaves an existing durable mapping untouched.
 	bindErr := c.BindComponentThreadID(turn.Runtime, result.ProviderThreadID)
@@ -139,7 +142,7 @@ func (c *Component) HandleTurn(ctx context.Context, turn component.Turn) (*compo
 	}
 	return &component.TurnResult{Final: &coremodel.ThreadMessage{
 		Role: coremodel.MessageRoleAgent, Kind: coremodel.MessageKindMessage, ComponentID: c.Registration.ID,
-		ActorID: c.Registration.Ref(), ActorLabel: "Copilot", Text: result.Reply,
+		ActorID: c.Registration.Ref(), ActorLabel: "Copilot", Text: result.Reply, Usage: usage,
 	}}, nil
 }
 
