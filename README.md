@@ -223,6 +223,14 @@ Review request: feature/my-branch is ready.
 EOF
 ```
 
+The normal Gob command transport (TCP and its HTTP wrapper) accepts an encoded
+request envelope up to **50 MiB (52,428,800 bytes)** by default. This includes
+file content, thumbnails and command metadata, not a guaranteed 50 MiB file
+allowance. A 50,000,000-byte file leaves room for ordinary metadata; oversized
+total requests are still rejected. Requests are buffered/copied in memory, not
+streamed. Alias stdin, completion, v2 transport and destination-provider limits
+are separate and unchanged. This does not raise Telegram limits.
+
 ### Workspace command aliases
 
 Hostbridge aliases are configured per workspace. Add only commands you are

@@ -14,7 +14,9 @@ import (
 	"github.com/bartdeboer/ctgbot/internal/identity"
 )
 
-const DefaultMaxCommandRequestBytes int64 = 16 << 20
+// DefaultMaxCommandRequestBytes bounds the entire encoded command, including
+// media, thumbnails and metadata. Requests are buffered/copied, not streamed.
+const DefaultMaxCommandRequestBytes int64 = 50 << 20
 
 var errCommandRequestTooLarge = errors.New("hostbridge command request too large")
 
