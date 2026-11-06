@@ -277,3 +277,20 @@ func TestContainerInterruptMarksInterrupted(t *testing.T) {
 		t.Fatalf("expected interrupted state to be cleared")
 	}
 }
+
+func TestBuildCreateArgsPreservesSeccompProfilePath(t *testing.T) {
+	path := "/Operator Policies/Browser.JSON"
+	args := buildCreateArgs(ContainerSpec{Name: "test", Image: "test", SecurityOpts: []string{"seccomp=" + path}})
+	count := 0
+	for i, arg := range args {
+		if arg == "--security-opt" {
+			count++
+			if i+1 >= len(args) || args[i+1] != "seccomp="+path {
+				t.Fatalf("bad args: %q", args)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("security option count=%d: %q", count, args)
+	}
+}

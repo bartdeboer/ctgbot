@@ -73,6 +73,9 @@ func (s *Service) updateThreadConfig(ctx context.Context, actor coremodel.Actor,
 		return "", "", fmt.Errorf("set thread config denied: missing role")
 	}
 	key = threadconfig.NormalizeKey(key)
+	if key == threadconfig.RuntimeSeccompProfile && !actor.HasRole(simplerbac.RoleRoot) {
+		return "", "", fmt.Errorf("set thread security config denied: Root role required")
+	}
 	if !threadconfig.KnownKey(key) {
 		return "", "", threadconfig.UnknownKey(key)
 	}

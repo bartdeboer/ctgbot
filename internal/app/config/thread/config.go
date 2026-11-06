@@ -10,6 +10,7 @@ import (
 
 	"github.com/bartdeboer/ctgbot/internal/commandengine"
 	"github.com/bartdeboer/ctgbot/internal/configsurface"
+	"github.com/bartdeboer/ctgbot/internal/containerengine"
 	"github.com/bartdeboer/ctgbot/internal/coremodel"
 )
 
@@ -21,6 +22,7 @@ const (
 	VoiceModel             = "voice.model"
 	VoiceDeviceTarget      = "voice.device-target"
 	RuntimePorts           = "runtime.ports"
+	RuntimeSeccompProfile  = "runtime.seccomp_profile"
 )
 
 var keys = []string{
@@ -31,6 +33,7 @@ var keys = []string{
 	VoiceModel,
 	VoiceDeviceTarget,
 	RuntimePorts,
+	RuntimeSeccompProfile,
 }
 
 // Surface exposes a thread row through the shared config surface contract.
@@ -45,6 +48,7 @@ func NewSurface(thread *coremodel.Thread) *Surface {
 
 func Schema() configsurface.ConfigSchema {
 	return configsurface.ConfigSchema{Fields: []configsurface.FieldSchema{
+		{Key: RuntimeSeccompProfile, Help: "Operator-only absolute host seccomp JSON path; affects all thread runtime processes; requires container refresh", Type: configsurface.FieldTypeString, Writable: true},
 		{
 			Key:      VoiceReplyToVoiceInput,
 			Help:     "Reply with generated voice when the incoming message was voice input",
@@ -144,6 +148,8 @@ func Value(thread coremodel.Thread, key string) (string, error) {
 		return strings.TrimSpace(thread.VoiceModel), nil
 	case VoiceDeviceTarget:
 		return strings.TrimSpace(thread.VoiceDeviceTarget), nil
+	case RuntimeSeccompProfile:
+		return thread.RuntimeSeccompProfile, nil
 	case RuntimePorts:
 		return formatStringList(RuntimePortsValue(thread)), nil
 	default:
@@ -178,6 +184,11 @@ func Set(thread *coremodel.Thread, key string, value string) (string, error) {
 		thread.VoiceModel = value
 	case VoiceDeviceTarget:
 		thread.VoiceDeviceTarget = value
+	case RuntimeSeccompProfile:
+		if _, err := containerengine.SeccompProfileSecurityOpts(value); err != nil {
+			return "", err
+		}
+		thread.RuntimeSeccompProfile = value
 	case RuntimePorts:
 		ports, err := parseStringList(value)
 		if err != nil {
@@ -208,6 +219,8 @@ func Unset(thread *coremodel.Thread, key string) (string, error) {
 		thread.VoiceModel = ""
 	case VoiceDeviceTarget:
 		thread.VoiceDeviceTarget = ""
+	case RuntimeSeccompProfile:
+		thread.RuntimeSeccompProfile = ""
 	case RuntimePorts:
 		thread.RuntimePorts = ""
 	default:
@@ -259,7 +272,11 @@ func formatStringList(values []string) string {
 }
 
 func NormalizeKey(key string) string {
-	return strings.ReplaceAll(strings.TrimSpace(strings.ToLower(key)), "_", "-")
+	normalized := strings.ReplaceAll(strings.TrimSpace(strings.ToLower(key)), "_", "-")
+	if normalized == "runtime.seccomp-profile" {
+		return RuntimeSeccompProfile
+	}
+	return normalized
 }
 
 func KnownKey(key string) bool {

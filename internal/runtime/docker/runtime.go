@@ -377,9 +377,15 @@ func (r *Runtime) sandbox(
 	env := append([]string{}, r.env...)
 	env = append(env, "CTGBOT_COMPONENT_REF="+r.registration.Ref())
 	env = withHomeEnv(env, homeRuntime)
-	ports, err := r.threadPorts(ctx, threadID)
+	threadConfig, err := r.resolveThreadConfig(ctx, threadID)
 	if err != nil {
 		return nil, nil, err
+	}
+	if threadConfig.SeccompProfile != "" {
+		securityOpts, err = containerengine.SeccompProfileSecurityOpts(threadConfig.SeccompProfile)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	mounts := []sandboxengine.Mount{
 		{Source: r.profile.Path, Target: runtimeProfilePath},
@@ -415,7 +421,7 @@ func (r *Runtime) sandbox(
 		Workdir(workspaceRuntime).
 		User(r.user).
 		GPUs(r.gpus).
-		Ports(ports).
+		Ports(threadConfig.Ports).
 		Env(env).
 		Mounts(mounts).
 		SecurityOpts(securityOpts).
@@ -425,15 +431,11 @@ func (r *Runtime) sandbox(
 	return r.sandboxes.CreateSandbox(spec), cleanup, nil
 }
 
-func (r *Runtime) threadPorts(ctx context.Context, threadID modeluuid.UUID) ([]string, error) {
+func (r *Runtime) resolveThreadConfig(ctx context.Context, threadID modeluuid.UUID) (runtimepkg.ThreadConfig, error) {
 	if r == nil || r.threadConfig == nil || threadID.IsNull() {
-		return nil, nil
+		return runtimepkg.ThreadConfig{}, nil
 	}
-	config, err := r.threadConfig.RuntimeThreadConfig(ctx, threadID)
-	if err != nil {
-		return nil, err
-	}
-	return append([]string{}, config.Ports...), nil
+	return r.threadConfig.RuntimeThreadConfig(ctx, threadID)
 }
 
 func (r *Runtime) idleCmd() []string {

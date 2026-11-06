@@ -93,6 +93,7 @@ type Thread struct {
 	VoiceModel             string
 	VoiceDeviceTarget      string
 	RuntimePorts           string
+	RuntimeSeccompProfile  string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

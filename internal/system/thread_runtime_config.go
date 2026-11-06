@@ -22,6 +22,7 @@ func (r threadRuntimeConfigResolver) RuntimeThreadConfig(ctx context.Context, th
 		return runtimepkg.ThreadConfig{}, err
 	}
 	return runtimepkg.ThreadConfig{
-		Ports: threadconfig.RuntimePortsValue(*thread),
+		Ports:          threadconfig.RuntimePortsValue(*thread),
+		SeccompProfile: thread.RuntimeSeccompProfile,
 	}, nil
 }

@@ -36,7 +36,8 @@ type BindConfig struct {
 }
 
 type ThreadConfig struct {
-	Ports []string
+	Ports          []string
+	SeccompProfile string
 }
 
 type ThreadConfigResolver interface {

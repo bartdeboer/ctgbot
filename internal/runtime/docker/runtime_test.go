@@ -507,3 +507,67 @@ func equalStrings(a []string, b []string) bool {
 	}
 	return true
 }
+
+func TestSandboxThreadSeccompIsolation(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "Browser Policy.JSON")
+	if err := os.WriteFile(path, []byte(`{"defaultAction":"SCMP_ACT_ERRNO","syscalls":[]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	selected := modeluuid.New()
+	resolver := staticThreadConfigResolver{threadID: selected, config: runtimepkg.ThreadConfig{SeccompProfile: path, Ports: []string{"18451:8080"}}}
+	factory := New(root, filepath.Join(root, "components"), fakeSandboxManager{}, nil).WithThreadConfigResolver(resolver)
+	registration := coremodel.Component{Type: "mockagent", Name: "seccomp", Runtime: "docker"}
+	runtime := factory.Bind(registration, factory.ComponentProfile(registration), runtimepkg.BindConfig{}).(*Runtime)
+	for _, tc := range []struct {
+		name string
+		id   modeluuid.UUID
+		want []string
+	}{
+		{"selected", selected, []string{"seccomp=" + path}},
+		{"other", modeluuid.New(), nil},
+		{"auth", modeluuid.UUID{}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sb, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), tc.id, nil, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			if !equalStrings(sb.SecurityOpts, tc.want) {
+				t.Fatalf("security opts %v, want %v", sb.SecurityOpts, tc.want)
+			}
+		})
+	}
+	// An explicit thread profile also overrides a non-default component mode;
+	// other threads and the auth slot retain that mode exactly.
+	runtime.seccomp = "unconfined"
+	for _, id := range []modeluuid.UUID{selected, modeluuid.New(), {}} {
+		want := []string{"seccomp=unconfined"}
+		if id == selected {
+			want = []string{"seccomp=" + path}
+		}
+		sb, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), id, nil, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cleanup()
+		if !equalStrings(sb.SecurityOpts, want) {
+			t.Fatalf("component override: %v, want %v", sb.SecurityOpts, want)
+		}
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), selected, nil, false); err == nil {
+		t.Fatal("missing policy accepted")
+	}
+	// The unselected and auth paths must not read the selected thread's policy.
+	for _, id := range []modeluuid.UUID{modeluuid.New(), {}} {
+		_, cleanup, err := runtime.sandbox(context.Background(), filepath.Join(root, "workspace"), id, nil, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cleanup()
+	}
+}

@@ -697,3 +697,30 @@ func gormMessageTexts(messages []coremodel.ThreadMessage) []string {
 	}
 	return out
 }
+
+func TestThreadSeccompProfilePersistsAndClears(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	row := &coremodel.Thread{ID: modeluuid.New(), RuntimeSeccompProfile: "/Operator/Browser.JSON", RuntimePorts: "18451:8080"}
+	if err := store.Threads().Save(ctx, row); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Threads().GetByID(ctx, row.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.RuntimeSeccompProfile != row.RuntimeSeccompProfile || loaded.RuntimePorts != row.RuntimePorts {
+		t.Fatalf("bad reload: %+v", loaded)
+	}
+	loaded.RuntimeSeccompProfile = ""
+	if err := store.Threads().Save(ctx, loaded); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = store.Threads().GetByID(ctx, row.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.RuntimeSeccompProfile != "" || loaded.RuntimePorts != row.RuntimePorts {
+		t.Fatalf("bad clear: %+v", loaded)
+	}
+}
