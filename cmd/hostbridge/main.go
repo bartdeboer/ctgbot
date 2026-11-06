@@ -212,6 +212,16 @@ func parseOrRenderHelp(
 	args []string,
 	helpWriter io.Writer,
 ) (commandengine.Request, bool, error) {
+	// Alias arguments belong to the host command, including trailing help tokens.
+	// Still use the typed parser/authorization; alias validation remains server-side.
+	if len(args) >= 2 && args[0] == "run" && strings.TrimSpace(args[1]) != "" {
+		if _, wrapperHelp := commandengine.ParseHelpRequest(args[1:2]); wrapperHelp {
+			err := router.FPrintHelpWithOptions(ctx, helpWriter, []string{"run"}, []commandengine.HelpOption{commandengine.HelpLitDepth(2)}, base.Context.Actor)
+			return commandengine.Request{}, true, err
+		}
+		req, err := router.Parse(ctx, base, args)
+		return req, false, err
+	}
 	if helpReq, ok := commandengine.ParseHelpRequest(args); ok {
 		if hostbridgeTextCommandHelpShouldWin(helpReq.Scope) {
 			renderHostbridgeTextCommandHelp(helpWriter, helpReq.Scope[0])
